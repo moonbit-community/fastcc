@@ -7,7 +7,12 @@ struct CondState {
 
 ///|
 struct Preprocessor {
-  lexer : Lexer
+  mut lexer : Lexer
+  lexer_stack : Array[Lexer]
+  held_stack : Array[Token?]
+  path_stack : Array[String]
+  mut current_path : String
+  mut next_file_id : Int
   diags : DiagBag
   macros : Map[String, Array[Token]]
   pending : Array[Token]
@@ -19,6 +24,11 @@ struct Preprocessor {
 fn new_preprocessor(file : SourceFile, diags : DiagBag) -> Preprocessor {
   {
     lexer: new_lexer(file, diags),
+    lexer_stack: [],
+    held_stack: [],
+    path_stack: [],
+    current_path: file.path,
+    next_file_id: file.id + 1,
     diags,
     macros: {},
     pending: [],
@@ -43,12 +53,34 @@ fn add_pp_error(pp : Preprocessor, loc : SrcLoc, message : String) -> Unit {
 
 ///|
 fn next_input_token(pp : Preprocessor) -> Token {
-  match pp.held {
-    None => next_token(pp.lexer)
-    Some(tok) => {
-      pp.held = None
-      tok
+  while true {
+    match pp.held {
+      Some(tok) => {
+        pp.held = None
+        return tok
+      }
+      None => {
+        let tok = next_token(pp.lexer)
+        if tok.kind == Eof && pp.lexer_stack.length() > 0 {
+          match pp.lexer_stack.pop() {
+            Some(prev) => pp.lexer = prev
+            None => ()
+          }
+          match pp.held_stack.pop() {
+            Some(prev_held) => pp.held = prev_held
+            None => ()
+          }
+          match pp.path_stack.pop() {
+            Some(prev_path) => pp.current_path = prev_path
+            None => ()
+          }
+          continue
+        }
+        return tok
+      }
     }
+  } else {
+    { kind: Eof, lexeme: "", loc: lexer_loc(pp.lexer), line_start: false }
   }
 }
 
@@ -72,6 +104,97 @@ fn slice_tokens(tokens : Array[Token], start : Int) -> Array[Token] {
     return []
   }
   tokens[start:tokens.length()].to_array()
+}
+
+///|
+fn slice_string(text : String, start : Int, end : Int) -> String {
+  try text[start:end] catch {
+    _ => ""
+  } noraise {
+    view => view.to_string()
+  }
+}
+
+///|
+fn dir_name(path : String) -> String {
+  match path.rev_find("/") {
+    None => ""
+    Some(idx) => slice_string(path, 0, idx)
+  }
+}
+
+///|
+fn strip_quotes(lexeme : String) -> String {
+  let len = lexeme.length()
+  if len >= 2 && lexeme[0] == 34 && lexeme[len - 1] == 34 {
+    return slice_string(lexeme, 1, len - 1)
+  }
+  lexeme
+}
+
+///|
+fn parse_include_path(
+  pp : Preprocessor,
+  args : Array[Token],
+  loc : SrcLoc,
+) -> String? {
+  if args.length() == 0 {
+    add_pp_error(pp, loc, "missing include path")
+    return None
+  }
+  if args[0].kind == StrLit {
+    return Some(strip_quotes(args[0].lexeme))
+  }
+  if args[0].kind == Lt {
+    let parts : Array[String] = []
+    let mut i = 1
+    while i < args.length() {
+      if args[i].kind == Gt {
+        return Some(parts.join(""))
+      }
+      parts.push(args[i].lexeme)
+      i = i + 1
+    }
+    add_pp_error(pp, loc, "unterminated include path")
+    return None
+  }
+  add_pp_error(pp, loc, "invalid include path")
+  None
+}
+
+///|
+fn resolve_include_path(pp : Preprocessor, path : String) -> String {
+  if path.has_prefix("/") {
+    return path
+  }
+  let base = dir_name(pp.current_path)
+  if base == "" {
+    return path
+  }
+  if base.has_suffix("/") {
+    base + path
+  } else {
+    base + "/" + path
+  }
+}
+
+///|
+fn include_file(pp : Preprocessor, path : String, loc : SrcLoc) -> Unit {
+  let resolved = resolve_include_path(pp, path)
+  try @fs.read_file_to_string(resolved) catch {
+    err => add_pp_error(pp, loc, "failed to read include: \{err.to_string()}")
+  } noraise {
+    text => {
+      let file = { id: pp.next_file_id, path: resolved, text }
+      pp.next_file_id = pp.next_file_id + 1
+      pp.lexer_stack.push(pp.lexer)
+      pp.held_stack.push(pp.held)
+      pp.held = None
+      pp.path_stack.push(pp.current_path)
+      pp.lexer = new_lexer(file, pp.diags)
+      pp.current_path = resolved
+    }
+  }
 }
 
 ///|
@@ -252,7 +375,10 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
   }
   if name == "include" {
     if current_active(pp) {
-      add_pp_error(pp, name_tok.loc, "#include not implemented")
+      match parse_include_path(pp, args, name_tok.loc) {
+        Some(path) => include_file(pp, path, name_tok.loc)
+        None => ()
+      }
     }
     return
   }

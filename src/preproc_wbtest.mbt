@@ -43,3 +43,15 @@ test "preprocess defined operator" {
   let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
   @json.inspect(items, content=["KwInt:int", "Ident:x", "Semicolon:;"])
 }
+
+///|
+test "preprocess include" {
+  let path = "/tmp/tinyccmbt_include_test.h"
+  @fs.write_string_to_file(path, "int inc;") catch {
+    err => fail("write include failed: \{err.to_string()}")
+  }
+  let (toks, bag) = pp_tokens("#include \"\{path}\"")
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=["KwInt:int", "Ident:inc", "Semicolon:;"])
+}
