@@ -88,3 +88,24 @@ test "preprocess if expression" {
   let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
   @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
 }
+
+///|
+test "preprocess whitespace before paren" {
+  let (toks, bag) = pp_tokens("#define F(x) x\nint y = F (1);")
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=[
+    "KwInt:int", "Ident:y", "Assign:=", "Ident:F", "LParen:(", "IntLit:1", "RParen:)",
+    "Semicolon:;",
+  ])
+}
+
+///|
+test "preprocess recursion guard" {
+  let (toks, bag) = pp_tokens("#define A A\nint z = A;")
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=[
+    "KwInt:int", "Ident:z", "Assign:=", "Ident:A", "Semicolon:;",
+  ])
+}

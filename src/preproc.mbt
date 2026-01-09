@@ -33,6 +33,7 @@ struct Preprocessor {
   pending : Array[Token]
   mut held : Token?
   cond_stack : Array[CondState]
+  expanding : Array[String]
 }
 
 ///|
@@ -50,6 +51,7 @@ fn new_preprocessor(file : SourceFile, diags : DiagBag) -> Preprocessor {
     pending: [],
     held: None,
     cond_stack: [],
+    expanding: [],
   }
 }
 
@@ -402,6 +404,32 @@ fn normalize_macro_args(
 }
 
 ///|
+fn is_adjacent(left : Token, right : Token) -> Bool {
+  left.loc.file_id == right.loc.file_id &&
+  right.loc.offset == left.loc.offset + left.lexeme.length()
+}
+
+///|
+fn is_expanding(pp : Preprocessor, name : String) -> Bool {
+  for n in pp.expanding {
+    if n == name {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn push_expanding(pp : Preprocessor, name : String) -> Unit {
+  pp.expanding.push(name)
+}
+
+///|
+fn pop_expanding(pp : Preprocessor) -> Unit {
+  ignore(pp.expanding.pop())
+}
+
+///|
 fn stringize_tokens(tokens : Array[Token]) -> String {
   if tokens.length() == 0 {
     return ""
@@ -444,7 +472,8 @@ fn lookup_param_index(params : Array[String], name : String) -> Int? {
 ///|
 fn substitute_macro(
   macro_def : Macro,
-  args : Array[Array[Token]],
+  raw_args : Array[Array[Token]],
+  expanded_args : Array[Array[Token]],
   loc : SrcLoc,
 ) -> Array[Token] {
   if !macro_def.is_function {
@@ -460,7 +489,11 @@ fn substitute_macro(
       if next_tok.kind == Ident {
         match lookup_param_index(params, next_tok.lexeme) {
           Some(idx) => {
-            let arg_tokens = if idx < args.length() { args[idx] } else { [] }
+            let arg_tokens = if idx < raw_args.length() {
+              raw_args[idx]
+            } else {
+              []
+            }
             out.push(make_string_literal(stringize_tokens(arg_tokens), loc))
             i = i + 2
             continue
@@ -484,7 +517,11 @@ fn substitute_macro(
       if next_tok.kind == Ident {
         match lookup_param_index(params, next_tok.lexeme) {
           Some(idx) =>
-            next_tokens = if idx < args.length() { args[idx] } else { [] }
+            next_tokens = if idx < raw_args.length() {
+              raw_args[idx]
+            } else {
+              []
+            }
           None => next_tokens = [next_tok]
         }
       } else {
@@ -513,7 +550,11 @@ fn substitute_macro(
     if tok.kind == Ident {
       match lookup_param_index(params, tok.lexeme) {
         Some(idx) => {
-          let arg_tokens = if idx < args.length() { args[idx] } else { [] }
+          let arg_tokens = if idx < expanded_args.length() {
+            expanded_args[idx]
+          } else {
+            []
+          }
           for t in arg_tokens {
             out.push({
               kind: t.kind,
@@ -526,6 +567,121 @@ fn substitute_macro(
           continue
         }
         None => ()
+      }
+    }
+    out.push(tok)
+    i = i + 1
+  }
+  out
+}
+
+///|
+fn read_macro_args_from_tokens(
+  pp : Preprocessor,
+  tokens : Array[Token],
+  start : Int,
+  loc : SrcLoc,
+) -> (Array[Array[Token]], Int)? {
+  let args : Array[Array[Token]] = []
+  let mut current : Array[Token] = []
+  let mut depth = 0
+  let mut i = start
+  while i < tokens.length() {
+    let tok = tokens[i]
+    if tok.kind == LParen {
+      depth = depth + 1
+      current.push(tok)
+      i = i + 1
+      continue
+    }
+    if tok.kind == RParen {
+      if depth == 0 {
+        if current.length() > 0 || args.length() > 0 {
+          args.push(current)
+        }
+        return Some((args, i + 1))
+      }
+      depth = depth - 1
+      current.push(tok)
+      i = i + 1
+      continue
+    }
+    if tok.kind == Comma && depth == 0 {
+      args.push(current)
+      current = []
+      i = i + 1
+      continue
+    }
+    current.push(tok)
+    i = i + 1
+  }
+  add_pp_error(pp, loc, "unterminated macro invocation")
+  None
+}
+
+///|
+fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
+  let out : Array[Token] = []
+  let mut i = 0
+  while i < tokens.length() {
+    let tok = tokens[i]
+    if tok.kind == Ident &&
+      pp.macros.contains(tok.lexeme) &&
+      !is_expanding(pp, tok.lexeme) {
+      match pp.macros.get(tok.lexeme) {
+        None => ()
+        Some(macro_def) =>
+          if macro_def.is_function {
+            if i + 1 < tokens.length() && tokens[i + 1].kind == LParen {
+              match read_macro_args_from_tokens(pp, tokens, i + 2, tok.loc) {
+                None => {
+                  out.push(tok)
+                  i = i + 1
+                  continue
+                }
+                Some((raw_args, next_i)) =>
+                  match normalize_macro_args(macro_def, raw_args, tok.loc) {
+                    None => {
+                      add_pp_error(pp, tok.loc, "macro argument count mismatch")
+                      out.push(tok)
+                      i = next_i
+                      continue
+                    }
+                    Some(norm_raw) => {
+                      push_expanding(pp, tok.lexeme)
+                      let expanded_args = norm_raw.map(arg => expand_tokens(
+                        pp, arg,
+                      ))
+                      let replaced = substitute_macro(
+                        macro_def,
+                        norm_raw,
+                        expanded_args,
+                        tok.loc,
+                      )
+                      let expanded = expand_tokens(pp, replaced)
+                      pop_expanding(pp)
+                      for t in expanded {
+                        out.push(t)
+                      }
+                      i = next_i
+                      continue
+                    }
+                  }
+              }
+            }
+            out.push(tok)
+            i = i + 1
+            continue
+          } else {
+            push_expanding(pp, tok.lexeme)
+            let expanded = expand_tokens(pp, macro_def.replacement)
+            pop_expanding(pp)
+            for t in expanded {
+              out.push(t)
+            }
+            i = i + 1
+            continue
+          }
       }
     }
     out.push(tok)
@@ -1024,12 +1180,15 @@ fn next_pp_token(pp : Preprocessor) -> Token {
       continue
     }
     if tok.kind == Ident && pp.macros.contains(tok.lexeme) {
+      if is_expanding(pp, tok.lexeme) {
+        return tok
+      }
       match pp.macros.get(tok.lexeme) {
         None => ()
         Some(macro_def) =>
           if macro_def.is_function {
             let next_tok = next_raw_token(pp)
-            if next_tok.kind != LParen {
+            if next_tok.kind != LParen || !is_adjacent(tok, next_tok) {
               push_back(pp, next_tok)
               return tok
             }
@@ -1042,11 +1201,18 @@ fn next_pp_token(pp : Preprocessor) -> Token {
                     return tok
                   }
                   Some(norm_args) => {
-                    let expanded = substitute_macro(
+                    push_expanding(pp, tok.lexeme)
+                    let expanded_args = norm_args.map(arg => expand_tokens(
+                      pp, arg,
+                    ))
+                    let replaced = substitute_macro(
                       macro_def,
                       norm_args,
+                      expanded_args,
                       tok.loc,
                     )
+                    let expanded = expand_tokens(pp, replaced)
+                    pop_expanding(pp)
                     if expanded.length() > 0 {
                       push_tokens(pp, expanded)
                     }
@@ -1055,7 +1221,10 @@ fn next_pp_token(pp : Preprocessor) -> Token {
                 }
             }
           } else {
-            push_tokens(pp, macro_def.replacement)
+            push_expanding(pp, tok.lexeme)
+            let expanded = expand_tokens(pp, macro_def.replacement)
+            pop_expanding(pp)
+            push_tokens(pp, expanded)
             continue
           }
       }
