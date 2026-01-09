@@ -4,10 +4,24 @@ enum CType {
   Int
   Pointer(CType)
   Array(elem~ : CType, size~ : Int?)
-  Struct(name~ : String)
-  Union(name~ : String)
-  Enum(name~ : String)
+  Struct(name~ : String, fields~ : Array[Field]?)
+  Union(name~ : String, fields~ : Array[Field]?)
+  Enum(name~ : String, items~ : Array[EnumItem]?)
   Function(return_type~ : CType, params~ : Array[CType])
+} derive(Show, Eq, ToJson)
+
+///|
+struct Field {
+  name : String
+  ty : CType
+  loc : SrcLoc
+} derive(Show, Eq, ToJson)
+
+///|
+struct EnumItem {
+  name : String
+  value : Expr?
+  loc : SrcLoc
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -48,6 +62,7 @@ enum Decl {
   FuncDecl(FuncDecl)
   Var(VarDecl)
   Typedef(name~ : String, ty~ : CType, loc~ : SrcLoc)
+  TagDef(ty~ : CType, loc~ : SrcLoc)
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -97,6 +112,8 @@ enum Expr {
   Binary(op~ : BinaryOp, left~ : Expr, right~ : Expr, loc~ : SrcLoc)
   Conditional(cond~ : Expr, then_expr~ : Expr, else_expr~ : Expr, loc~ : SrcLoc)
   Call(callee~ : Expr, args~ : Array[Expr], loc~ : SrcLoc)
+  Index(base~ : Expr, index~ : Expr, loc~ : SrcLoc)
+  Member(base~ : Expr, name~ : String, is_arrow~ : Bool, loc~ : SrcLoc)
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -116,5 +133,6 @@ enum Stmt {
   Return(value~ : Expr?, loc~ : SrcLoc)
   ExprStmt(expr~ : Expr, loc~ : SrcLoc)
   DeclStmt(decl~ : VarDecl, loc~ : SrcLoc)
+  TagDef(ty~ : CType, loc~ : SrcLoc)
   Empty(loc~ : SrcLoc)
 } derive(Show, Eq, ToJson)

@@ -75,6 +75,40 @@ test "sem accepts function pointer call" {
 }
 
 ///|
+test "sem accepts struct access" {
+  let (_, bag) = check_text(
+    "struct S { int x; int y; }; int main(){struct S s; s.x = 1; return s.y;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts arrow access" {
+  let (_, bag) = check_text(
+    "struct S { int x; }; int main(){struct S s; struct S *p = &s; p->x = 1; return p->x;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts enum constants" {
+  let (_, bag) = check_text("enum E { A = 1, B }; int main(){return A + B;}")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts array indexing" {
+  let (_, bag) = check_text("int a[3]; int main(){return a[1];}")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem rejects enum assignment" {
+  let (_, bag) = check_text("enum { A = 1 }; int main(){A = 2;}")
+  assert_true(has_errors(bag))
+}
+
+///|
 test "sem rejects control flow outside context" {
   let (_, bag) = check_text("int main(){case 1: return 0;}")
   assert_true(has_errors(bag))

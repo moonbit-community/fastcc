@@ -4,6 +4,7 @@ struct Parser {
   mut index : Int
   diags : DiagBag
   type_aliases : Map[String, CType]
+  mut anon_tag_id : Int
 }
 
 ///|
@@ -21,7 +22,7 @@ fn collect_tokens(pp : Preprocessor) -> Array[Token] {
 
 ///|
 fn new_parser(tokens : Array[Token], diags : DiagBag) -> Parser {
-  { tokens, index: 0, diags, type_aliases: {} }
+  { tokens, index: 0, diags, type_aliases: {}, anon_tag_id: 0 }
 }
 
 ///|
@@ -48,61 +49,71 @@ fn parse_decl(p : Parser) -> Decl? {
   match parse_decl_specs(p) {
     None => None
     Some((base_type, _loc, is_typedef)) =>
-      match parse_declarator(p, base_type) {
-        None => None
-        Some(decl) =>
-          if is_typedef {
-            expect(p, Semicolon, "expected ';' after typedef") |> ignore
-            p.type_aliases.set(decl.name, decl.ty)
-            Some(Decl::Typedef(name=decl.name, ty=decl.ty, loc=decl.loc))
-          } else {
-            match decl.params {
-              Some(params) if decl.ty is CType::Function(return_type~, ..) =>
-                if match_token(p, LBrace) is Some(lbrace) {
-                  let body = parse_compound_stmt(p, lbrace.loc)
-                  Some(
-                    Decl::FuncDef({
-                      name: decl.name,
-                      return_type,
-                      params,
-                      body,
-                      loc: decl.loc,
-                    }),
-                  )
-                } else {
-                  expect(
-                    p,
-                    Semicolon,
-                    "expected ';' after function declaration",
-                  )
+      if match_token(p, Semicolon) is Some(semi) {
+        if is_typedef {
+          add_parse_error(p, semi.loc, "typedef requires a declarator")
+          None
+        } else {
+          Some(Decl::TagDef(ty=base_type, loc=semi.loc))
+        }
+      } else {
+        match parse_declarator(p, base_type) {
+          None => None
+          Some(decl) =>
+            if is_typedef {
+              expect(p, Semicolon, "expected ';' after typedef") |> ignore
+              p.type_aliases.set(decl.name, decl.ty)
+              Some(Decl::Typedef(name=decl.name, ty=decl.ty, loc=decl.loc))
+            } else {
+              match decl.params {
+                Some(params) if decl.ty is CType::Function(return_type~, ..) =>
+                  if match_token(p, LBrace) is Some(lbrace) {
+                    let body = parse_compound_stmt(p, lbrace.loc)
+                    Some(
+                      Decl::FuncDef({
+                        name: decl.name,
+                        return_type,
+                        params,
+                        body,
+                        loc: decl.loc,
+                      }),
+                    )
+                  } else {
+                    expect(
+                      p,
+                      Semicolon,
+                      "expected ';' after function declaration",
+                    )
+                    |> ignore
+                    Some(
+                      Decl::FuncDecl({
+                        name: decl.name,
+                        return_type,
+                        params,
+                        loc: decl.loc,
+                      }),
+                    )
+                  }
+                _ => {
+                  let init = if match_token(p, Assign) is Some(_) {
+                    Some(parse_expr(p))
+                  } else {
+                    None
+                  }
+                  expect(p, Semicolon, "expected ';' after declaration")
                   |> ignore
                   Some(
-                    Decl::FuncDecl({
+                    Decl::Var({
                       name: decl.name,
-                      return_type,
-                      params,
+                      ty: decl.ty,
+                      init,
                       loc: decl.loc,
                     }),
                   )
                 }
-              _ => {
-                let init = if match_token(p, Assign) is Some(_) {
-                  Some(parse_expr(p))
-                } else {
-                  None
-                }
-                expect(p, Semicolon, "expected ';' after declaration") |> ignore
-                Some(
-                  Decl::Var({
-                    name: decl.name,
-                    ty: decl.ty,
-                    init,
-                    loc: decl.loc,
-                  }),
-                )
               }
             }
-          }
+        }
       }
   }
 }
@@ -131,9 +142,9 @@ fn parse_type_spec(p : Parser) -> (CType, SrcLoc)? {
       let consumed = advance_token(p)
       Some((CType::Void, consumed.loc))
     }
-    KwStruct => parse_tagged_type(p, name => CType::Struct(name~))
-    KwUnion => parse_tagged_type(p, name => CType::Union(name~))
-    KwEnum => parse_tagged_type(p, name => CType::Enum(name~))
+    KwStruct => parse_struct_type(p, is_union=false)
+    KwUnion => parse_struct_type(p, is_union=true)
+    KwEnum => parse_enum_type(p)
     Ident =>
       match p.type_aliases.get(tok.lexeme) {
         Some(aliased) => {
@@ -247,30 +258,135 @@ fn parse_array_size(p : Parser) -> Int? {
 }
 
 ///|
-fn parse_tagged_type(p : Parser, ctor : (String) -> CType) -> (CType, SrcLoc)? {
+fn next_anon_tag(p : Parser) -> String {
+  p.anon_tag_id = p.anon_tag_id + 1
+  "__anon_tag_\{p.anon_tag_id}"
+}
+
+///|
+fn parse_struct_type(p : Parser, is_union~ : Bool) -> (CType, SrcLoc)? {
   let kw = advance_token(p)
-  let name = if peek_token(p).kind == Ident {
+  let mut name = if peek_token(p).kind == Ident {
     advance_token(p).lexeme
   } else {
     ""
   }
   if match_token(p, LBrace) is Some(_) {
-    skip_brace_block(p)
+    let fields = parse_struct_fields(p)
+    expect(p, RBrace, "expected '}' after fields") |> ignore
+    if name == "" {
+      name = next_anon_tag(p)
+    }
+    let ty = if is_union {
+      CType::Union(name~, fields=Some(fields))
+    } else {
+      CType::Struct(name~, fields=Some(fields))
+    }
+    return Some((ty, kw.loc))
   }
-  Some((ctor(name), kw.loc))
+  if name == "" {
+    add_parse_error(p, kw.loc, "expected tag name or '{'")
+    return None
+  }
+  let ty = if is_union {
+    CType::Union(name~, fields=None)
+  } else {
+    CType::Struct(name~, fields=None)
+  }
+  Some((ty, kw.loc))
 }
 
 ///|
-fn skip_brace_block(p : Parser) -> Unit {
-  let mut depth = 1
-  while depth > 0 && !is_at_end(p) {
-    let tok = advance_token(p)
-    if tok.kind == LBrace {
-      depth = depth + 1
-    } else if tok.kind == RBrace {
-      depth = depth - 1
+fn parse_struct_fields(p : Parser) -> Array[Field] {
+  let fields : Array[Field] = []
+  while !is_at_end(p) && peek_token(p).kind != RBrace {
+    match parse_decl_specs(p) {
+      None => {
+        synchronize(p)
+        break
+      }
+      Some((base, loc, is_typedef)) => {
+        if is_typedef {
+          add_parse_error(p, loc, "typedef not allowed in struct field")
+        }
+        let mut any_field = false
+        match parse_declarator(p, base) {
+          None => ()
+          Some(decl) => {
+            any_field = true
+            fields.push({ name: decl.name, ty: decl.ty, loc: decl.loc })
+          }
+        }
+        while match_token(p, Comma) is Some(_) {
+          match parse_declarator(p, base) {
+            None => ()
+            Some(decl) => {
+              any_field = true
+              fields.push({ name: decl.name, ty: decl.ty, loc: decl.loc })
+            }
+          }
+        }
+        if !any_field {
+          add_parse_error(p, loc, "expected field declarator")
+        }
+        expect(p, Semicolon, "expected ';' after struct field") |> ignore
+      }
     }
   }
+  fields
+}
+
+///|
+fn parse_enum_type(p : Parser) -> (CType, SrcLoc)? {
+  let kw = advance_token(p)
+  let mut name = if peek_token(p).kind == Ident {
+    advance_token(p).lexeme
+  } else {
+    ""
+  }
+  if match_token(p, LBrace) is Some(_) {
+    let items = parse_enum_items(p)
+    expect(p, RBrace, "expected '}' after enum") |> ignore
+    if name == "" {
+      name = next_anon_tag(p)
+    }
+    return Some((CType::Enum(name~, items=Some(items)), kw.loc))
+  }
+  if name == "" {
+    add_parse_error(p, kw.loc, "expected enum name or '{'")
+    return None
+  }
+  Some((CType::Enum(name~, items=None), kw.loc))
+}
+
+///|
+fn parse_enum_items(p : Parser) -> Array[EnumItem] {
+  let items : Array[EnumItem] = []
+  if peek_token(p).kind == RBrace {
+    return items
+  }
+  while true {
+    let name_tok = expect_ident(p, "expected enumerator name")
+    match name_tok {
+      None => ()
+      Some(tok) => {
+        let value = if match_token(p, Assign) is Some(_) {
+          Some(parse_expr_cond(p))
+        } else {
+          None
+        }
+        items.push({ name: tok.lexeme, value, loc: tok.loc })
+      }
+    }
+    if match_token(p, Comma) is Some(_) {
+      if peek_token(p).kind == RBrace {
+        break
+      }
+      continue
+    }
+    break
+  }
+  items
 }
 
 ///|
@@ -450,30 +566,38 @@ fn parse_stmt(p : Parser) -> Stmt {
   if is_type_start(p, tok) {
     match parse_decl_specs(p) {
       Some((base, _type_loc, is_typedef)) =>
-        match parse_declarator(p, base) {
-          Some(decl) => {
-            if is_typedef {
-              expect(p, Semicolon, "expected ';' after typedef") |> ignore
-              p.type_aliases.set(decl.name, decl.ty)
-              return Stmt::Empty(loc=decl.loc)
-            }
-            let init = if match_token(p, Assign) is Some(_) {
-              Some(parse_expr(p))
-            } else {
-              None
-            }
-            expect(p, Semicolon, "expected ';' after declaration") |> ignore
-            let decl_stmt = {
-              name: decl.name,
-              ty: decl.ty,
-              init,
-              loc: decl.loc,
-            }
-            return Stmt::DeclStmt(decl=decl_stmt, loc=decl.loc)
+        if match_token(p, Semicolon) is Some(semi) {
+          if is_typedef {
+            add_parse_error(p, semi.loc, "typedef requires a declarator")
+            return Stmt::Empty(loc=semi.loc)
           }
-          None => {
-            synchronize(p)
-            return Stmt::Empty(loc=tok.loc)
+          return Stmt::TagDef(ty=base, loc=semi.loc)
+        } else {
+          match parse_declarator(p, base) {
+            Some(decl) => {
+              if is_typedef {
+                expect(p, Semicolon, "expected ';' after typedef") |> ignore
+                p.type_aliases.set(decl.name, decl.ty)
+                return Stmt::Empty(loc=decl.loc)
+              }
+              let init = if match_token(p, Assign) is Some(_) {
+                Some(parse_expr(p))
+              } else {
+                None
+              }
+              expect(p, Semicolon, "expected ';' after declaration") |> ignore
+              let decl_stmt = {
+                name: decl.name,
+                ty: decl.ty,
+                init,
+                loc: decl.loc,
+              }
+              return Stmt::DeclStmt(decl=decl_stmt, loc=decl.loc)
+            }
+            None => {
+              synchronize(p)
+              return Stmt::Empty(loc=tok.loc)
+            }
           }
         }
       None => {
@@ -563,30 +687,39 @@ fn parse_for_init(p : Parser) -> Stmt? {
   if is_type_start(p, peek_token(p)) {
     match parse_decl_specs(p) {
       Some((base, _type_loc, is_typedef)) =>
-        match parse_declarator(p, base) {
-          Some(decl) => {
-            if is_typedef {
-              expect(p, Semicolon, "expected ';' after typedef") |> ignore
-              p.type_aliases.set(decl.name, decl.ty)
+        if match_token(p, Semicolon) is Some(semi) {
+          if is_typedef {
+            add_parse_error(p, semi.loc, "typedef requires a declarator")
+            return None
+          }
+          return Some(Stmt::TagDef(ty=base, loc=semi.loc))
+        } else {
+          match parse_declarator(p, base) {
+            Some(decl) => {
+              if is_typedef {
+                expect(p, Semicolon, "expected ';' after typedef") |> ignore
+                p.type_aliases.set(decl.name, decl.ty)
+                return None
+              }
+              let init = if match_token(p, Assign) is Some(_) {
+                Some(parse_expr(p))
+              } else {
+                None
+              }
+              expect(p, Semicolon, "expected ';' after for declaration")
+              |> ignore
+              let decl_stmt = {
+                name: decl.name,
+                ty: decl.ty,
+                init,
+                loc: decl.loc,
+              }
+              return Some(Stmt::DeclStmt(decl=decl_stmt, loc=decl.loc))
+            }
+            None => {
+              synchronize(p)
               return None
             }
-            let init = if match_token(p, Assign) is Some(_) {
-              Some(parse_expr(p))
-            } else {
-              None
-            }
-            expect(p, Semicolon, "expected ';' after for declaration") |> ignore
-            let decl_stmt = {
-              name: decl.name,
-              ty: decl.ty,
-              init,
-              loc: decl.loc,
-            }
-            return Some(Stmt::DeclStmt(decl=decl_stmt, loc=decl.loc))
-          }
-          None => {
-            synchronize(p)
-            return None
           }
         }
       None => {
@@ -892,12 +1025,45 @@ fn parse_expr_postfix(p : Parser) -> Expr {
   let mut expr = parse_expr_primary(p)
   while true {
     match match_token(p, LParen) {
-      None => break
       Some(tok) => {
         let args = parse_call_args(p)
         expr = Expr::Call(callee=expr, args~, loc=tok.loc)
+        continue
       }
+      None => ()
     }
+    match match_token(p, LBracket) {
+      Some(tok) => {
+        let index = parse_expr(p)
+        expect(p, RBracket, "expected ']' after index") |> ignore
+        expr = Expr::Index(base=expr, index~, loc=tok.loc)
+        continue
+      }
+      None => ()
+    }
+    match match_token(p, Dot) {
+      Some(tok) => {
+        let name = match expect_ident(p, "expected field name") {
+          None => ""
+          Some(id) => id.lexeme
+        }
+        expr = Expr::Member(base=expr, name~, is_arrow=false, loc=tok.loc)
+        continue
+      }
+      None => ()
+    }
+    match match_token(p, Arrow) {
+      Some(tok) => {
+        let name = match expect_ident(p, "expected field name") {
+          None => ""
+          Some(id) => id.lexeme
+        }
+        expr = Expr::Member(base=expr, name~, is_arrow=true, loc=tok.loc)
+        continue
+      }
+      None => ()
+    }
+    break
   }
   expr
 }
@@ -960,6 +1126,8 @@ fn expr_loc(expr : Expr) -> SrcLoc {
     Expr::Binary(loc~, ..) => loc
     Expr::Conditional(loc~, ..) => loc
     Expr::Call(loc~, ..) => loc
+    Expr::Index(loc~, ..) => loc
+    Expr::Member(loc~, ..) => loc
   }
 }
 

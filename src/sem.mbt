@@ -12,6 +12,10 @@ struct SemContext {
   function_defs : Map[String, Bool]
   locals : Array[Map[String, CType]]
   type_aliases : Map[String, CType]
+  struct_defs : Map[String, Array[Field]]
+  union_defs : Map[String, Array[Field]]
+  enum_defs : Map[String, Array[EnumItem]]
+  enum_consts : Map[String, CType]
   mut labels_defined : Map[String, Bool]
   mut labels_used : Array[(String, SrcLoc)]
   mut loop_depth : Int
@@ -27,6 +31,10 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     function_defs: {},
     locals: [],
     type_aliases: {},
+    struct_defs: {},
+    union_defs: {},
+    enum_defs: {},
+    enum_consts: {},
     labels_defined: {},
     labels_used: [],
     loop_depth: 0,
@@ -45,11 +53,135 @@ fn check_translation_unit(unit : TranslationUnit, diags : DiagBag) -> Unit {
 ///|
 fn check_decl(ctx : SemContext, decl : Decl) -> Unit {
   match decl {
-    Decl::Var(var_decl) => check_var_decl(ctx, var_decl, is_local=false)
-    Decl::FuncDecl(func_decl) => check_func_decl(ctx, func_decl)
-    Decl::FuncDef(func_def) => check_func_def(ctx, func_def)
-    Decl::Typedef(name~, ty~, ..) => ctx.type_aliases.set(name, ty)
+    Decl::Var(var_decl) => {
+      register_type_defs(ctx, var_decl.ty, var_decl.loc)
+      check_var_decl(ctx, var_decl, is_local=false)
+    }
+    Decl::FuncDecl(func_decl) => {
+      register_type_defs(ctx, func_decl.return_type, func_decl.loc)
+      for param in func_decl.params {
+        register_type_defs(ctx, param.ty, param.loc)
+      }
+      check_func_decl(ctx, func_decl)
+    }
+    Decl::FuncDef(func_def) => {
+      register_type_defs(ctx, func_def.return_type, func_def.loc)
+      for param in func_def.params {
+        register_type_defs(ctx, param.ty, param.loc)
+      }
+      check_func_def(ctx, func_def)
+    }
+    Decl::Typedef(name~, ty~, loc~) => {
+      register_type_defs(ctx, ty, loc)
+      ctx.type_aliases.set(name, ty)
+    }
+    Decl::TagDef(ty~, loc~) => register_type_defs(ctx, ty, loc)
   }
+}
+
+///|
+fn register_type_defs(ctx : SemContext, ty : CType, loc : SrcLoc) -> Unit {
+  match ty {
+    CType::Struct(name~, fields~) =>
+      register_struct_def(ctx, name, fields, is_union=false, loc)
+    CType::Union(name~, fields~) =>
+      register_struct_def(ctx, name, fields, is_union=true, loc)
+    CType::Enum(name~, items~) => register_enum_def(ctx, name, items, loc)
+    CType::Pointer(inner) => register_type_defs(ctx, inner, loc)
+    CType::Array(elem~, ..) => register_type_defs(ctx, elem, loc)
+    CType::Function(return_type~, params~) => {
+      register_type_defs(ctx, return_type, loc)
+      for param_ty in params {
+        register_type_defs(ctx, param_ty, loc)
+      }
+    }
+    _ => ()
+  }
+}
+
+///|
+fn register_struct_def(
+  ctx : SemContext,
+  name : String,
+  fields : Array[Field]?,
+  is_union~ : Bool,
+  loc : SrcLoc,
+) -> Unit {
+  if name == "" {
+    return
+  }
+  let incoming = match fields {
+    None => []
+    Some(val) => val
+  }
+  if is_union {
+    match ctx.union_defs.get(name) {
+      None => ctx.union_defs.set(name, incoming)
+      Some(existing) =>
+        if existing.length() > 0 && incoming.length() > 0 {
+          add_sem_error(ctx, loc, "redefinition of '\{name}'")
+        } else if existing.length() == 0 && incoming.length() > 0 {
+          ctx.union_defs.set(name, incoming)
+        }
+    }
+  } else {
+    match ctx.struct_defs.get(name) {
+      None => ctx.struct_defs.set(name, incoming)
+      Some(existing) =>
+        if existing.length() > 0 && incoming.length() > 0 {
+          add_sem_error(ctx, loc, "redefinition of '\{name}'")
+        } else if existing.length() == 0 && incoming.length() > 0 {
+          ctx.struct_defs.set(name, incoming)
+        }
+    }
+  }
+  if incoming.length() > 0 {
+    for field in incoming {
+      register_type_defs(ctx, field.ty, field.loc)
+    }
+  }
+}
+
+///|
+fn register_enum_def(
+  ctx : SemContext,
+  name : String,
+  items : Array[EnumItem]?,
+  loc : SrcLoc,
+) -> Unit {
+  if name == "" {
+    return
+  }
+  let incoming = match items {
+    None => []
+    Some(val) => val
+  }
+  match ctx.enum_defs.get(name) {
+    None => ctx.enum_defs.set(name, incoming)
+    Some(existing) =>
+      if existing.length() > 0 && incoming.length() > 0 {
+        add_sem_error(ctx, loc, "redefinition of '\{name}'")
+      } else if existing.length() == 0 && incoming.length() > 0 {
+        ctx.enum_defs.set(name, incoming)
+      }
+  }
+  if incoming.length() > 0 {
+    for item in incoming {
+      define_enum_const(ctx, item)
+    }
+  }
+}
+
+///|
+fn define_enum_const(ctx : SemContext, item : EnumItem) -> Unit {
+  let conflict = ctx.enum_consts.contains(item.name) ||
+    ctx.globals.contains(item.name) ||
+    ctx.functions.contains(item.name)
+  if conflict {
+    add_sem_error(ctx, item.loc, "redefinition of '\{item.name}'")
+    return
+  }
+  ctx.enum_consts.set(item.name, CType::Int)
 }
 
 ///|
@@ -93,6 +225,9 @@ fn add_function_sig(
   loc : SrcLoc,
   is_def~ : Bool,
 ) -> Unit {
+  if ctx.enum_consts.contains(name) {
+    add_sem_error(ctx, loc, "redefinition of '\{name}'")
+  }
   if ctx.functions.contains(name) {
     match ctx.functions.get(name) {
       Some(existing) =>
@@ -119,14 +254,14 @@ fn add_function_sig(
 
 ///|
 fn func_sig_eq(a : FuncSig, b : FuncSig) -> Bool {
-  if a.return_type != b.return_type {
+  if !type_eq(a.return_type, b.return_type) {
     return false
   }
   if a.params.length() != b.params.length() {
     return false
   }
   for i = 0; i < a.params.length(); i = i + 1 {
-    if a.params[i] != b.params[i] {
+    if !type_eq(a.params[i], b.params[i]) {
       return false
     }
   }
@@ -135,6 +270,7 @@ fn func_sig_eq(a : FuncSig, b : FuncSig) -> Bool {
 
 ///|
 fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
+  register_type_defs(ctx, decl.ty, decl.loc)
   if decl.ty == CType::Void {
     add_sem_error(ctx, decl.loc, "variable '\{decl.name}' has void type")
   }
@@ -147,7 +283,7 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
     None => ()
     Some(expr) => {
       let init_ty = type_of_expr(ctx, expr)
-      if init_ty != decl.ty {
+      if !type_eq(init_ty, decl.ty) {
         add_sem_error(
           ctx,
           decl.loc,
@@ -249,7 +385,7 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
           let expr_ty = type_of_expr(ctx, expr)
           if return_type == CType::Void {
             add_sem_error(ctx, loc, "void function should not return a value")
-          } else if expr_ty != return_type {
+          } else if !type_eq(expr_ty, return_type) {
             add_sem_error(
               ctx,
               loc,
@@ -260,6 +396,7 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
       }
     Stmt::ExprStmt(expr~, ..) => type_of_expr(ctx, expr) |> ignore
     Stmt::DeclStmt(decl~, ..) => check_var_decl(ctx, decl, is_local=true)
+    Stmt::TagDef(ty~, loc~) => register_type_defs(ctx, ty, loc)
     Stmt::Empty(..) => ()
   }
 }
@@ -297,10 +434,48 @@ fn check_label_uses(ctx : SemContext) -> Unit {
 }
 
 ///|
+fn type_eq(a : CType, b : CType) -> Bool {
+  match (a, b) {
+    (CType::Void, CType::Void) => true
+    (CType::Int, CType::Int) => true
+    (CType::Pointer(inner_a), CType::Pointer(inner_b)) =>
+      type_eq(inner_a, inner_b)
+    (
+      CType::Array(elem=elem_a, size=size_a),
+      CType::Array(elem=elem_b, size=size_b),
+    ) => size_a == size_b && type_eq(elem_a, elem_b)
+    (
+      CType::Function(return_type=a_ret, params=a_params),
+      CType::Function(return_type=b_ret, params=b_params),
+    ) => {
+      if !type_eq(a_ret, b_ret) {
+        return false
+      }
+      if a_params.length() != b_params.length() {
+        return false
+      }
+      for i = 0; i < a_params.length(); i = i + 1 {
+        if !type_eq(a_params[i], b_params[i]) {
+          return false
+        }
+      }
+      true
+    }
+    (CType::Struct(name=a_name, ..), CType::Struct(name=b_name, ..)) =>
+      a_name == b_name
+    (CType::Union(name=a_name, ..), CType::Union(name=b_name, ..)) =>
+      a_name == b_name
+    (CType::Enum(name=a_name, ..), CType::Enum(name=b_name, ..)) =>
+      a_name == b_name
+    _ => false
+  }
+}
+
+///|
 fn is_int_like(ty : CType) -> Bool {
   match ty {
     CType::Int => true
-    CType::Enum(_) => true
+    CType::Enum(..) => true
     _ => false
   }
 }
@@ -326,16 +501,144 @@ fn decay_type(ty : CType) -> CType {
 }
 
 ///|
+fn lookup_struct_fields(
+  ctx : SemContext,
+  name : String,
+  is_union~ : Bool,
+) -> Array[Field]? {
+  let defs = if is_union { ctx.union_defs } else { ctx.struct_defs }
+  match defs.get(name) {
+    None => None
+    Some(fields) => if fields.length() == 0 { None } else { Some(fields) }
+  }
+}
+
+///|
+fn find_field(fields : Array[Field], name : String) -> Field? {
+  for field in fields {
+    if field.name == name {
+      return Some(field)
+    }
+  }
+  None
+}
+
+///|
+fn member_access_type(
+  ctx : SemContext,
+  base_ty : CType,
+  name : String,
+  is_arrow~ : Bool,
+  loc : SrcLoc,
+) -> CType? {
+  let obj_ty = if is_arrow {
+    match base_ty {
+      CType::Pointer(inner) => inner
+      _ => {
+        add_sem_error(ctx, loc, "arrow operator requires pointer")
+        return None
+      }
+    }
+  } else {
+    base_ty
+  }
+  match obj_ty {
+    CType::Struct(name=tag, fields=field_list) => {
+      let fields = match field_list {
+        Some(vals) => Some(vals)
+        None => lookup_struct_fields(ctx, tag, is_union=false)
+      }
+      match fields {
+        None => {
+          add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
+          None
+        }
+        Some(list) =>
+          match find_field(list, name) {
+            Some(field) => Some(field.ty)
+            None => {
+              add_sem_error(ctx, loc, "unknown field '\{name}'")
+              None
+            }
+          }
+      }
+    }
+    CType::Union(name=tag, fields=field_list) => {
+      let fields = match field_list {
+        Some(vals) => Some(vals)
+        None => lookup_struct_fields(ctx, tag, is_union=true)
+      }
+      match fields {
+        None => {
+          add_sem_error(ctx, loc, "incomplete union '\{tag}'")
+          None
+        }
+        Some(list) =>
+          match find_field(list, name) {
+            Some(field) => Some(field.ty)
+            None => {
+              add_sem_error(ctx, loc, "unknown field '\{name}'")
+              None
+            }
+          }
+      }
+    }
+    _ => {
+      add_sem_error(ctx, loc, "member access on non-aggregate")
+      None
+    }
+  }
+}
+
+///|
+fn index_access_type(
+  ctx : SemContext,
+  base_ty : CType,
+  index_ty : CType,
+  loc : SrcLoc,
+) -> CType? {
+  if !is_int_like(index_ty) {
+    add_sem_error(ctx, loc, "array index must be int")
+  }
+  match base_ty {
+    CType::Pointer(elem) => Some(elem)
+    CType::Array(elem~, ..) => Some(elem)
+    _ => {
+      add_sem_error(ctx, loc, "subscripted value is not an array")
+      None
+    }
+  }
+}
+
+///|
 fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
   match expr {
     Expr::Ident(name~, loc~) =>
-      match lookup_value(ctx, name) {
-        Some(ty) => Some(ty)
-        None => {
-          add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
-          None
+      if ctx.enum_consts.contains(name) {
+        add_sem_error(ctx, loc, "expression is not assignable")
+        None
+      } else {
+        match lookup_value(ctx, name) {
+          Some(ty) => Some(ty)
+          None => {
+            add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
+            None
+          }
         }
       }
+    Expr::Index(base~, index~, loc~) =>
+      match
+        index_access_type(
+          ctx,
+          type_of_expr(ctx, base),
+          type_of_expr(ctx, index),
+          loc,
+        ) {
+        Some(ty) => Some(ty)
+        None => None
+      }
+    Expr::Member(base~, name~, is_arrow~, loc~) =>
+      member_access_type(ctx, type_of_expr(ctx, base), name, is_arrow~, loc)
     Expr::Unary(op=UnaryOp::Deref, expr=inner, loc~) => {
       let inner_ty = type_of_expr(ctx, inner)
       match inner_ty {
@@ -400,42 +703,26 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
     Expr::Binary(op~, left~, right~, loc~) =>
       match op {
         BinaryOp::Assign =>
-          match left {
-            Expr::Ident(name~, loc~) =>
-              match lookup_value(ctx, name) {
-                Some(lhs_ty) => {
-                  match lhs_ty {
-                    CType::Array(_) | CType::Function(..) => {
-                      add_sem_error(
-                        ctx, loc, "assignment to non-modifiable lvalue",
-                      )
-                      return CType::Int
-                    }
-                    _ => ()
-                  }
-                  let rhs_ty = type_of_expr(ctx, right)
-                  if lhs_ty != rhs_ty {
-                    add_sem_error(
-                      ctx,
-                      loc,
-                      "cannot assign '\{type_to_string(rhs_ty)}' to '\{type_to_string(lhs_ty)}'",
-                    )
-                  }
-                  lhs_ty
+          match type_of_lvalue(ctx, left) {
+            Some(lhs_ty) => {
+              match lhs_ty {
+                CType::Array(_) | CType::Function(..) => {
+                  add_sem_error(ctx, loc, "assignment to non-modifiable lvalue")
+                  return CType::Int
                 }
-                None => {
-                  add_sem_error(
-                    ctx,
-                    loc,
-                    "assignment to undeclared identifier '\{name}'",
-                  )
-                  CType::Int
-                }
+                _ => ()
               }
-            _ => {
-              add_sem_error(ctx, loc, "assignment target must be an identifier")
-              CType::Int
+              let rhs_ty = type_of_expr(ctx, right)
+              if !type_eq(lhs_ty, rhs_ty) {
+                add_sem_error(
+                  ctx,
+                  loc,
+                  "cannot assign '\{type_to_string(rhs_ty)}' to '\{type_to_string(lhs_ty)}'",
+                )
+              }
+              lhs_ty
             }
+            None => CType::Int
           }
         BinaryOp::Comma => {
           type_of_expr(ctx, left) |> ignore
@@ -476,7 +763,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
             CType::Pointer(pointee) =>
               match rhs_ty {
                 CType::Pointer(other) => {
-                  if pointee != other {
+                  if !type_eq(pointee, other) {
                     add_sem_error(ctx, loc, "pointer subtraction type mismatch")
                   }
                   return CType::Int
@@ -508,7 +795,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
             CType::Pointer(pointee) =>
               match rhs_ty {
                 CType::Pointer(other) => {
-                  if pointee != other {
+                  if !type_eq(pointee, other) {
                     add_sem_error(ctx, loc, "pointer comparison type mismatch")
                   }
                   return CType::Int
@@ -543,11 +830,28 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
       check_cond_expr(ctx, cond)
       let then_ty = type_of_expr(ctx, then_expr)
       let else_ty = type_of_expr(ctx, else_expr)
-      if then_ty != else_ty {
+      if !type_eq(then_ty, else_ty) {
         add_sem_error(ctx, loc, "conditional operator type mismatch")
       }
       then_ty
     }
+    Expr::Index(base~, index~, loc~) =>
+      match
+        index_access_type(
+          ctx,
+          type_of_expr(ctx, base),
+          type_of_expr(ctx, index),
+          loc,
+        ) {
+        Some(ty) => decay_type(ty)
+        None => CType::Int
+      }
+    Expr::Member(base~, name~, is_arrow~, loc~) =>
+      match
+        member_access_type(ctx, type_of_expr(ctx, base), name, is_arrow~, loc) {
+        Some(ty) => decay_type(ty)
+        None => CType::Int
+      }
     Expr::Call(callee~, args~, loc~) => {
       let callee_ty = type_of_expr(ctx, callee)
       let fn_ty = match callee_ty {
@@ -566,7 +870,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
           } else {
             for i = 0; i < params.length(); i = i + 1 {
               let arg_ty = type_of_expr(ctx, args[i])
-              if arg_ty != params[i] {
+              if !type_eq(arg_ty, params[i]) {
                 add_sem_error(ctx, loc, "argument type mismatch in call")
                 break
               }
@@ -610,7 +914,7 @@ fn declare_global(
   ty : CType,
   loc : SrcLoc,
 ) -> Unit {
-  if ctx.globals.contains(name) {
+  if ctx.enum_consts.contains(name) || ctx.globals.contains(name) {
     add_sem_error(ctx, loc, "redefinition of global '\{name}'")
   } else {
     ctx.globals.set(name, ty)
@@ -633,7 +937,11 @@ fn lookup_value(ctx : SemContext, name : String) -> CType? {
       match ctx.functions.get(name) {
         Some(sig) =>
           Some(CType::Function(return_type=sig.return_type, params=sig.params))
-        None => None
+        None =>
+          match ctx.enum_consts.get(name) {
+            Some(ty) => Some(ty)
+            None => None
+          }
       }
   }
 }
@@ -664,9 +972,9 @@ fn type_to_string(ty : CType) -> String {
         None => type_to_string(elem) + "[]"
         Some(n) => type_to_string(elem) + "[\{n}]"
       }
-    CType::Struct(name~) => "struct " + name
-    CType::Union(name~) => "union " + name
-    CType::Enum(name~) => "enum " + name
+    CType::Struct(name~, ..) => "struct " + name
+    CType::Union(name~, ..) => "union " + name
+    CType::Enum(name~, ..) => "enum " + name
     CType::Function(return_type~, params~) => {
       let args = params.map(type_to_string).join(", ")
       "fn(\{args}) -> \{type_to_string(return_type)}"
