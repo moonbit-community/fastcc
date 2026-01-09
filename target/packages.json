@@ -1,9 +1,118 @@
 {
   "source_dir": "/Users/agent/Projects/tinycc.mbt",
   "name": "hackwaly/tinycc",
-  "packages": [],
+  "packages": [
+    {
+      "is-main": true,
+      "is-third-party": false,
+      "root-path": "/Users/agent/Projects/tinycc.mbt/src",
+      "root": "hackwaly/tinycc",
+      "rel": "",
+      "files": {
+        "/Users/agent/Projects/tinycc.mbt/src/diag.mbt": {
+          "backend": [
+            "Wasm",
+            "WasmGC",
+            "Js",
+            "Native",
+            "LLVM"
+          ],
+          "optlevel": [
+            "Release",
+            "Debug"
+          ]
+        },
+        "/Users/agent/Projects/tinycc.mbt/src/lexer.mbt": {
+          "backend": [
+            "Wasm",
+            "WasmGC",
+            "Js",
+            "Native",
+            "LLVM"
+          ],
+          "optlevel": [
+            "Release",
+            "Debug"
+          ]
+        },
+        "/Users/agent/Projects/tinycc.mbt/src/main.mbt": {
+          "backend": [
+            "Wasm",
+            "WasmGC",
+            "Js",
+            "Native",
+            "LLVM"
+          ],
+          "optlevel": [
+            "Release",
+            "Debug"
+          ]
+        },
+        "/Users/agent/Projects/tinycc.mbt/src/preproc.mbt": {
+          "backend": [
+            "Wasm",
+            "WasmGC",
+            "Js",
+            "Native",
+            "LLVM"
+          ],
+          "optlevel": [
+            "Release",
+            "Debug"
+          ]
+        },
+        "/Users/agent/Projects/tinycc.mbt/src/source.mbt": {
+          "backend": [
+            "Wasm",
+            "WasmGC",
+            "Js",
+            "Native",
+            "LLVM"
+          ],
+          "optlevel": [
+            "Release",
+            "Debug"
+          ]
+        },
+        "/Users/agent/Projects/tinycc.mbt/src/tokens.mbt": {
+          "backend": [
+            "Wasm",
+            "WasmGC",
+            "Js",
+            "Native",
+            "LLVM"
+          ],
+          "optlevel": [
+            "Release",
+            "Debug"
+          ]
+        }
+      },
+      "wbtest-files": {
+        "/Users/agent/Projects/tinycc.mbt/src/lexer_wbtest.mbt": {
+          "backend": [
+            "Wasm",
+            "WasmGC",
+            "Js",
+            "Native",
+            "LLVM"
+          ],
+          "optlevel": [
+            "Release",
+            "Debug"
+          ]
+        }
+      },
+      "test-files": {},
+      "mbt-md-files": {},
+      "deps": [],
+      "wbtest-deps": [],
+      "test-deps": [],
+      "artifact": "/Users/agent/Projects/tinycc.mbt/target/wasm-gc/release/check/tinycc.mi"
+    }
+  ],
   "deps": [],
   "backend": "wasm-gc",
   "opt_level": "release",
-  "source": null
+  "source": "src"
 }

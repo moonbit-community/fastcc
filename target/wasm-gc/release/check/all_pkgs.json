@@ -1,3 +1,9 @@
 {
-  "packages": []
+  "packages": [
+    {
+      "root": "hackwaly/tinycc",
+      "rel": "",
+      "artifact": "/Users/agent/Projects/tinycc.mbt/target/wasm-gc/release/check/tinycc.mi"
+    }
+  ]
 }
