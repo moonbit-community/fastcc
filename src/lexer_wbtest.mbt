@@ -3,8 +3,15 @@ fn lex_tokens(text : String) -> (Array[Token], DiagBag) {
   let bag = new_diag_bag()
   let map = new_source_map()
   let file = add_file(map, "<test>", text)
-  let pp = new_preprocessor(file, bag)
-  let out = dump_tokens(pp, 512)
+  let lexer = new_lexer(file, bag)
+  let out : Array[Token] = []
+  while out.length() < 512 {
+    let tok = next_token(lexer)
+    out.push(tok)
+    if tok.kind == Eof {
+      break
+    }
+  }
   (out.filter(tok => tok.kind != Eof), bag)
 }
 

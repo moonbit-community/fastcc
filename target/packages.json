@@ -101,6 +101,19 @@
             "Release",
             "Debug"
           ]
+        },
+        "/Users/agent/Projects/tinycc.mbt/src/preproc_wbtest.mbt": {
+          "backend": [
+            "Wasm",
+            "WasmGC",
+            "Js",
+            "Native",
+            "LLVM"
+          ],
+          "optlevel": [
+            "Release",
+            "Debug"
+          ]
         }
       },
       "test-files": {},
