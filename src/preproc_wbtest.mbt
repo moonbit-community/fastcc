@@ -55,3 +55,36 @@ test "preprocess include" {
   let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
   @json.inspect(items, content=["KwInt:int", "Ident:inc", "Semicolon:;"])
 }
+
+///|
+test "preprocess function-like macro" {
+  let (toks, bag) = pp_tokens("#define ADD(a,b) a + b\nint x = ADD(1, 2);")
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=[
+    "KwInt:int", "Ident:x", "Assign:=", "IntLit:1", "Plus:+", "IntLit:2", "Semicolon:;",
+  ])
+}
+
+///|
+test "preprocess stringize and paste" {
+  let (toks, bag) = pp_tokens(
+    "#define STR(x) #x\n#define CAT(a,b) a ## b\nchar* s = STR(hi);\nint xy = CAT(x, y);",
+  )
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=[
+    "KwChar:char", "Star:*", "Ident:s", "Assign:=", "StrLit:\"hi\"", "Semicolon:;",
+    "KwInt:int", "Ident:xy", "Assign:=", "Ident:xy", "Semicolon:;",
+  ])
+}
+
+///|
+test "preprocess if expression" {
+  let (toks, bag) = pp_tokens(
+    "#define A 4\n#if A + 2 * 3 == 10\nint ok;\n#endif",
+  )
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
+}
