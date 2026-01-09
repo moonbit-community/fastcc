@@ -47,7 +47,41 @@ test "sem rejects undeclared identifier" {
 ///|
 test "parse control flow and logical ops" {
   let (_, bag) = check_text(
-    "int main(){int x=0;if(1){x=1;}else{x=2;}while(1){break;}do{x=x+1;}while(x<1);for(int i=0;i<3;i=i+1){continue;}switch(x){case 1: x=2; break; default: x=3;}label: goto label;return (1?2:3,4);}",
+    "int main(){int x=0;if(1){x=1;}else{x=2;}while(1){break;}do{x=x+1;}while(x<1);for(int i=0;i<3;i=i+1){continue;}switch(x){case 1 ... 3: x=2; break; default: x=3;}label: goto label;return (1?2:3,4);}",
   )
   assert_true(!has_errors(bag))
+}
+
+///|
+test "parse typedef and function pointer" {
+  let (_, bag) = check_text(
+    "typedef int myint; myint a[3]; int *fp(int); int (*pf)(int); int main(){return 0;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts pointer ops" {
+  let (_, bag) = check_text("int x; int *p; int main(){p = &x; return *p;}")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts function pointer call" {
+  let (_, bag) = check_text(
+    "int f(int a){return a;} int (*pf)(int) = f; int main(){return pf(1);}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem rejects control flow outside context" {
+  let (_, bag) = check_text("int main(){case 1: return 0;}")
+  assert_true(has_errors(bag))
+  let (_, bag2) = check_text("int main(){break;}")
+  assert_true(has_errors(bag2))
+  let (_, bag3) = check_text("int main(){continue;}")
+  assert_true(has_errors(bag3))
+  let (_, bag4) = check_text("int main(){goto missing;}")
+  assert_true(has_errors(bag4))
 }

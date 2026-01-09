@@ -11,11 +11,27 @@ struct SemContext {
   functions : Map[String, FuncSig]
   function_defs : Map[String, Bool]
   locals : Array[Map[String, CType]]
+  type_aliases : Map[String, CType]
+  mut labels_defined : Map[String, Bool]
+  mut labels_used : Array[(String, SrcLoc)]
+  mut loop_depth : Int
+  mut switch_depth : Int
 }
 
 ///|
 fn new_sem_context(diags : DiagBag) -> SemContext {
-  { diags, globals: {}, functions: {}, function_defs: {}, locals: [] }
+  {
+    diags,
+    globals: {},
+    functions: {},
+    function_defs: {},
+    locals: [],
+    type_aliases: {},
+    labels_defined: {},
+    labels_used: [],
+    loop_depth: 0,
+    switch_depth: 0,
+  }
 }
 
 ///|
@@ -32,6 +48,7 @@ fn check_decl(ctx : SemContext, decl : Decl) -> Unit {
     Decl::Var(var_decl) => check_var_decl(ctx, var_decl, is_local=false)
     Decl::FuncDecl(func_decl) => check_func_decl(ctx, func_decl)
     Decl::FuncDef(func_def) => check_func_def(ctx, func_def)
+    Decl::Typedef(name~, ty~, ..) => ctx.type_aliases.set(name, ty)
   }
 }
 
@@ -45,11 +62,20 @@ fn check_func_decl(ctx : SemContext, func_decl : FuncDecl) -> Unit {
 fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
   let sig = func_sig_from_params(func_def.return_type, func_def.params)
   add_function_sig(ctx, func_def.name, sig, func_def.loc, is_def=true)
+  ctx.labels_defined = {}
+  ctx.labels_used = []
+  ctx.loop_depth = 0
+  ctx.switch_depth = 0
   push_scope(ctx)
   for param in func_def.params {
-    declare_local(ctx, param.name, param.ty, param.loc)
+    if param.name == "" {
+      add_sem_error(ctx, param.loc, "parameter name missing in definition")
+    } else {
+      declare_local(ctx, param.name, param.ty, param.loc)
+    }
   }
   check_stmt(ctx, func_def.body, func_def.return_type)
+  check_label_uses(ctx)
   pop_scope(ctx)
 }
 
@@ -152,10 +178,10 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
     }
     Stmt::While(cond~, body~, ..) => {
       check_cond_expr(ctx, cond)
-      check_stmt(ctx, body, return_type)
+      with_loop(ctx, () => check_stmt(ctx, body, return_type))
     }
     Stmt::DoWhile(cond~, body~, ..) => {
-      check_stmt(ctx, body, return_type)
+      with_loop(ctx, () => check_stmt(ctx, body, return_type))
       check_cond_expr(ctx, cond)
     }
     Stmt::For(init~, cond~, step~, body~, ..) => {
@@ -172,22 +198,47 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
         None => ()
         Some(expr) => type_of_expr(ctx, expr) |> ignore
       }
-      check_stmt(ctx, body, return_type)
+      with_loop(ctx, () => check_stmt(ctx, body, return_type))
       pop_scope(ctx)
     }
     Stmt::Switch(cond~, body~, ..) => {
       check_cond_expr(ctx, cond)
-      check_stmt(ctx, body, return_type)
+      with_switch(ctx, () => check_stmt(ctx, body, return_type))
     }
-    Stmt::Case(expr~, body~, ..) => {
+    Stmt::Case(expr~, end_expr~, body~, ..) => {
+      if ctx.switch_depth == 0 {
+        add_sem_error(ctx, expr_loc(expr), "case outside of switch")
+      }
       check_cond_expr(ctx, expr)
+      match end_expr {
+        None => ()
+        Some(end_value) => check_cond_expr(ctx, end_value)
+      }
       check_stmt(ctx, body, return_type)
     }
-    Stmt::Default(body~, ..) => check_stmt(ctx, body, return_type)
-    Stmt::Label(body~, ..) => check_stmt(ctx, body, return_type)
-    Stmt::Goto(..) => ()
-    Stmt::Break(..) => ()
-    Stmt::Continue(..) => ()
+    Stmt::Default(body~, loc~) => {
+      if ctx.switch_depth == 0 {
+        add_sem_error(ctx, loc, "default outside of switch")
+      }
+      check_stmt(ctx, body, return_type)
+    }
+    Stmt::Label(name~, body~, loc~) => {
+      if ctx.labels_defined.contains(name) {
+        add_sem_error(ctx, loc, "duplicate label '\{name}'")
+      } else {
+        ctx.labels_defined.set(name, true)
+      }
+      check_stmt(ctx, body, return_type)
+    }
+    Stmt::Goto(name~, loc~) => ctx.labels_used.push((name, loc))
+    Stmt::Break(loc~) =>
+      if ctx.loop_depth == 0 && ctx.switch_depth == 0 {
+        add_sem_error(ctx, loc, "cannot break outside of loop or switch")
+      }
+    Stmt::Continue(loc~) =>
+      if ctx.loop_depth == 0 {
+        add_sem_error(ctx, loc, "cannot continue outside of loop")
+      }
     Stmt::Return(value~, loc~) =>
       match value {
         None =>
@@ -216,8 +267,89 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
 ///|
 fn check_cond_expr(ctx : SemContext, expr : Expr) -> Unit {
   let ty = type_of_expr(ctx, expr)
-  if ty != CType::Int {
+  if !is_scalar(ty) {
     add_sem_error(ctx, expr_loc(expr), "condition expression must be int")
+  }
+}
+
+///|
+fn with_loop(ctx : SemContext, f : () -> Unit) -> Unit {
+  ctx.loop_depth = ctx.loop_depth + 1
+  f()
+  ctx.loop_depth = ctx.loop_depth - 1
+}
+
+///|
+fn with_switch(ctx : SemContext, f : () -> Unit) -> Unit {
+  ctx.switch_depth = ctx.switch_depth + 1
+  f()
+  ctx.switch_depth = ctx.switch_depth - 1
+}
+
+///|
+fn check_label_uses(ctx : SemContext) -> Unit {
+  for item in ctx.labels_used {
+    let (name, loc) = item
+    if !ctx.labels_defined.contains(name) {
+      add_sem_error(ctx, loc, "undefined label '\{name}'")
+    }
+  }
+}
+
+///|
+fn is_int_like(ty : CType) -> Bool {
+  match ty {
+    CType::Int => true
+    CType::Enum(_) => true
+    _ => false
+  }
+}
+
+///|
+fn is_scalar(ty : CType) -> Bool {
+  if is_int_like(ty) {
+    return true
+  }
+  match ty {
+    CType::Pointer(_) => true
+    _ => false
+  }
+}
+
+///|
+fn decay_type(ty : CType) -> CType {
+  match ty {
+    CType::Array(elem~, ..) => CType::Pointer(elem)
+    CType::Function(..) => CType::Pointer(ty)
+    _ => ty
+  }
+}
+
+///|
+fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
+  match expr {
+    Expr::Ident(name~, loc~) =>
+      match lookup_value(ctx, name) {
+        Some(ty) => Some(ty)
+        None => {
+          add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
+          None
+        }
+      }
+    Expr::Unary(op=UnaryOp::Deref, expr=inner, loc~) => {
+      let inner_ty = type_of_expr(ctx, inner)
+      match inner_ty {
+        CType::Pointer(pointee) => Some(pointee)
+        _ => {
+          add_sem_error(ctx, loc, "cannot dereference non-pointer")
+          None
+        }
+      }
+    }
+    _ => {
+      add_sem_error(ctx, expr_loc(expr), "expression is not assignable")
+      None
+    }
   }
 }
 
@@ -227,19 +359,44 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
     Expr::IntLit(..) => CType::Int
     Expr::Ident(name~, loc~) =>
       match lookup_value(ctx, name) {
-        Some(ty) => ty
+        Some(ty) => decay_type(ty)
         None => {
           add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
           CType::Int
         }
       }
-    Expr::Unary(expr~, loc~, ..) => {
-      let inner = type_of_expr(ctx, expr)
-      if inner != CType::Int {
-        add_sem_error(ctx, loc, "unary operator expects int")
+    Expr::Unary(op~, expr~, loc~) =>
+      match op {
+        UnaryOp::Addr =>
+          match type_of_lvalue(ctx, expr) {
+            Some(ty) => CType::Pointer(ty)
+            None => CType::Int
+          }
+        UnaryOp::Deref => {
+          let inner = type_of_expr(ctx, expr)
+          match inner {
+            CType::Pointer(pointee) => pointee
+            _ => {
+              add_sem_error(ctx, loc, "cannot dereference non-pointer")
+              CType::Int
+            }
+          }
+        }
+        UnaryOp::Not => {
+          let inner = type_of_expr(ctx, expr)
+          if !is_scalar(inner) {
+            add_sem_error(ctx, loc, "unary operator expects scalar")
+          }
+          CType::Int
+        }
+        UnaryOp::Plus | UnaryOp::Minus | UnaryOp::BitNot => {
+          let inner = type_of_expr(ctx, expr)
+          if !is_int_like(inner) {
+            add_sem_error(ctx, loc, "unary operator expects int")
+          }
+          CType::Int
+        }
       }
-      CType::Int
-    }
     Expr::Binary(op~, left~, right~, loc~) =>
       match op {
         BinaryOp::Assign =>
@@ -247,6 +404,15 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
             Expr::Ident(name~, loc~) =>
               match lookup_value(ctx, name) {
                 Some(lhs_ty) => {
+                  match lhs_ty {
+                    CType::Array(_) | CType::Function(..) => {
+                      add_sem_error(
+                        ctx, loc, "assignment to non-modifiable lvalue",
+                      )
+                      return CType::Int
+                    }
+                    _ => ()
+                  }
                   let rhs_ty = type_of_expr(ctx, right)
                   if lhs_ty != rhs_ty {
                     add_sem_error(
@@ -275,10 +441,99 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
           type_of_expr(ctx, left) |> ignore
           type_of_expr(ctx, right)
         }
+        BinaryOp::Add => {
+          let lhs_ty = type_of_expr(ctx, left)
+          let rhs_ty = type_of_expr(ctx, right)
+          match lhs_ty {
+            CType::Pointer(pointee) =>
+              if is_int_like(rhs_ty) {
+                return CType::Pointer(pointee)
+              } else {
+                add_sem_error(ctx, loc, "invalid operands to '+'")
+                return CType::Int
+              }
+            _ => ()
+          }
+          match rhs_ty {
+            CType::Pointer(pointee) =>
+              if is_int_like(lhs_ty) {
+                return CType::Pointer(pointee)
+              } else {
+                add_sem_error(ctx, loc, "invalid operands to '+'")
+                return CType::Int
+              }
+            _ => ()
+          }
+          if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
+            add_sem_error(ctx, loc, "binary operator expects int operands")
+          }
+          CType::Int
+        }
+        BinaryOp::Sub => {
+          let lhs_ty = type_of_expr(ctx, left)
+          let rhs_ty = type_of_expr(ctx, right)
+          match lhs_ty {
+            CType::Pointer(pointee) =>
+              match rhs_ty {
+                CType::Pointer(other) => {
+                  if pointee != other {
+                    add_sem_error(ctx, loc, "pointer subtraction type mismatch")
+                  }
+                  return CType::Int
+                }
+                _ =>
+                  if is_int_like(rhs_ty) {
+                    return CType::Pointer(pointee)
+                  } else {
+                    add_sem_error(ctx, loc, "invalid operands to '-'")
+                    return CType::Int
+                  }
+              }
+            _ => ()
+          }
+          if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
+            add_sem_error(ctx, loc, "binary operator expects int operands")
+          }
+          CType::Int
+        }
+        BinaryOp::Eq
+        | BinaryOp::Ne
+        | BinaryOp::Lt
+        | BinaryOp::Le
+        | BinaryOp::Gt
+        | BinaryOp::Ge => {
+          let lhs_ty = type_of_expr(ctx, left)
+          let rhs_ty = type_of_expr(ctx, right)
+          match lhs_ty {
+            CType::Pointer(pointee) =>
+              match rhs_ty {
+                CType::Pointer(other) => {
+                  if pointee != other {
+                    add_sem_error(ctx, loc, "pointer comparison type mismatch")
+                  }
+                  return CType::Int
+                }
+                _ => ()
+              }
+            _ => ()
+          }
+          if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
+            add_sem_error(ctx, loc, "binary operator expects int operands")
+          }
+          CType::Int
+        }
+        BinaryOp::LogAnd | BinaryOp::LogOr => {
+          let lhs_ty = type_of_expr(ctx, left)
+          let rhs_ty = type_of_expr(ctx, right)
+          if !is_scalar(lhs_ty) || !is_scalar(rhs_ty) {
+            add_sem_error(ctx, loc, "binary operator expects scalar operands")
+          }
+          CType::Int
+        }
         _ => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
-          if lhs_ty != CType::Int || rhs_ty != CType::Int {
+          if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
             add_sem_error(ctx, loc, "binary operator expects int operands")
           }
           CType::Int
@@ -295,8 +550,17 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
     }
     Expr::Call(callee~, args~, loc~) => {
       let callee_ty = type_of_expr(ctx, callee)
-      match callee_ty {
-        CType::Function(return_type~, params~) => {
+      let fn_ty = match callee_ty {
+        CType::Function(..) => Some(callee_ty)
+        CType::Pointer(inner) =>
+          match inner {
+            CType::Function(..) => Some(inner)
+            _ => None
+          }
+        _ => None
+      }
+      match fn_ty {
+        Some(CType::Function(return_type~, params~)) => {
           if params.length() != args.length() {
             add_sem_error(ctx, loc, "argument count mismatch in call")
           } else {
@@ -395,6 +659,14 @@ fn type_to_string(ty : CType) -> String {
     CType::Void => "void"
     CType::Int => "int"
     CType::Pointer(inner) => type_to_string(inner) + "*"
+    CType::Array(elem~, size~) =>
+      match size {
+        None => type_to_string(elem) + "[]"
+        Some(n) => type_to_string(elem) + "[\{n}]"
+      }
+    CType::Struct(name~) => "struct " + name
+    CType::Union(name~) => "union " + name
+    CType::Enum(name~) => "enum " + name
     CType::Function(return_type~, params~) => {
       let args = params.map(type_to_string).join(", ")
       "fn(\{args}) -> \{type_to_string(return_type)}"

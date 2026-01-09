@@ -3,6 +3,10 @@ enum CType {
   Void
   Int
   Pointer(CType)
+  Array(elem~ : CType, size~ : Int?)
+  Struct(name~ : String)
+  Union(name~ : String)
+  Enum(name~ : String)
   Function(return_type~ : CType, params~ : Array[CType])
 } derive(Show, Eq, ToJson)
 
@@ -43,6 +47,7 @@ enum Decl {
   FuncDef(FuncDef)
   FuncDecl(FuncDecl)
   Var(VarDecl)
+  Typedef(name~ : String, ty~ : CType, loc~ : SrcLoc)
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -56,6 +61,8 @@ enum UnaryOp {
   Minus
   Not
   BitNot
+  Addr
+  Deref
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -100,7 +107,7 @@ enum Stmt {
   DoWhile(cond~ : Expr, body~ : Stmt, loc~ : SrcLoc)
   For(init~ : Stmt?, cond~ : Expr?, step~ : Expr?, body~ : Stmt, loc~ : SrcLoc)
   Switch(cond~ : Expr, body~ : Stmt, loc~ : SrcLoc)
-  Case(expr~ : Expr, body~ : Stmt, loc~ : SrcLoc)
+  Case(expr~ : Expr, end_expr~ : Expr?, body~ : Stmt, loc~ : SrcLoc)
   Default(body~ : Stmt, loc~ : SrcLoc)
   Label(name~ : String, body~ : Stmt, loc~ : SrcLoc)
   Goto(name~ : String, loc~ : SrcLoc)
