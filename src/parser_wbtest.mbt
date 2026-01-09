@@ -47,7 +47,7 @@ test "sem rejects undeclared identifier" {
 ///|
 test "parse control flow and logical ops" {
   let (_, bag) = check_text(
-    "int main(){if(1){return 1;}else{return 2;}while(1){break;}for(int i=0;i<3;i=i+1){continue;}return 1&&0||1;}",
+    "int main(){int x=0;if(1){x=1;}else{x=2;}while(1){break;}do{x=x+1;}while(x<1);for(int i=0;i<3;i=i+1){continue;}switch(x){case 1: x=2; break; default: x=3;}label: goto label;return (1?2:3,4);}",
   )
   assert_true(!has_errors(bag))
 }

@@ -154,6 +154,10 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
       check_cond_expr(ctx, cond)
       check_stmt(ctx, body, return_type)
     }
+    Stmt::DoWhile(cond~, body~, ..) => {
+      check_stmt(ctx, body, return_type)
+      check_cond_expr(ctx, cond)
+    }
     Stmt::For(init~, cond~, step~, body~, ..) => {
       push_scope(ctx)
       match init {
@@ -171,6 +175,17 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
       check_stmt(ctx, body, return_type)
       pop_scope(ctx)
     }
+    Stmt::Switch(cond~, body~, ..) => {
+      check_cond_expr(ctx, cond)
+      check_stmt(ctx, body, return_type)
+    }
+    Stmt::Case(expr~, body~, ..) => {
+      check_cond_expr(ctx, expr)
+      check_stmt(ctx, body, return_type)
+    }
+    Stmt::Default(body~, ..) => check_stmt(ctx, body, return_type)
+    Stmt::Label(body~, ..) => check_stmt(ctx, body, return_type)
+    Stmt::Goto(..) => ()
     Stmt::Break(..) => ()
     Stmt::Continue(..) => ()
     Stmt::Return(value~, loc~) =>
@@ -256,6 +271,10 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
               CType::Int
             }
           }
+        BinaryOp::Comma => {
+          type_of_expr(ctx, left) |> ignore
+          type_of_expr(ctx, right)
+        }
         _ => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
@@ -265,6 +284,15 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
           CType::Int
         }
       }
+    Expr::Conditional(cond~, then_expr~, else_expr~, loc~) => {
+      check_cond_expr(ctx, cond)
+      let then_ty = type_of_expr(ctx, then_expr)
+      let else_ty = type_of_expr(ctx, else_expr)
+      if then_ty != else_ty {
+        add_sem_error(ctx, loc, "conditional operator type mismatch")
+      }
+      then_ty
+    }
     Expr::Call(callee~, args~, loc~) => {
       let callee_ty = type_of_expr(ctx, callee)
       match callee_ty {

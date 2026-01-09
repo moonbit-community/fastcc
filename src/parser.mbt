@@ -178,14 +178,31 @@ fn parse_stmt(p : Parser) -> Stmt {
   if match_token(p, LBrace) is Some(lbrace) {
     return parse_compound_stmt(p, lbrace.loc)
   }
+  if match_token(p, KwCase) is Some(case_tok) {
+    let expr = parse_expr(p)
+    expect(p, Colon, "expected ':' after case") |> ignore
+    let body = parse_stmt(p)
+    return Stmt::Case(expr~, body~, loc=case_tok.loc)
+  }
+  if match_token(p, KwDefault) is Some(def_tok) {
+    expect(p, Colon, "expected ':' after default") |> ignore
+    let body = parse_stmt(p)
+    return Stmt::Default(body~, loc=def_tok.loc)
+  }
   if match_token(p, KwIf) is Some(if_tok) {
     return parse_if_stmt(p, if_tok.loc)
   }
   if match_token(p, KwWhile) is Some(while_tok) {
     return parse_while_stmt(p, while_tok.loc)
   }
+  if match_token(p, KwDo) is Some(do_tok) {
+    return parse_do_while_stmt(p, do_tok.loc)
+  }
   if match_token(p, KwFor) is Some(for_tok) {
     return parse_for_stmt(p, for_tok.loc)
+  }
+  if match_token(p, KwSwitch) is Some(sw_tok) {
+    return parse_switch_stmt(p, sw_tok.loc)
   }
   if match_token(p, KwBreak) is Some(break_tok) {
     expect(p, Semicolon, "expected ';' after break") |> ignore
@@ -194,6 +211,20 @@ fn parse_stmt(p : Parser) -> Stmt {
   if match_token(p, KwContinue) is Some(cont_tok) {
     expect(p, Semicolon, "expected ';' after continue") |> ignore
     return Stmt::Continue(loc=cont_tok.loc)
+  }
+  if match_token(p, KwGoto) is Some(goto_tok) {
+    let name = match expect_ident(p, "expected label after goto") {
+      None => ""
+      Some(tok) => tok.lexeme
+    }
+    expect(p, Semicolon, "expected ';' after goto") |> ignore
+    return Stmt::Goto(name~, loc=goto_tok.loc)
+  }
+  if tok.kind == Ident && peek_kind(p, 1) == Colon {
+    let label_tok = advance_token(p)
+    expect(p, Colon, "expected ':' after label") |> ignore
+    let body = parse_stmt(p)
+    return Stmt::Label(name=label_tok.lexeme, body~, loc=label_tok.loc)
   }
   if match_token(p, KwReturn) is Some(ret_tok) {
     if match_token(p, Semicolon) is Some(_) {
@@ -260,6 +291,17 @@ fn parse_while_stmt(p : Parser, loc : SrcLoc) -> Stmt {
 }
 
 ///|
+fn parse_do_while_stmt(p : Parser, loc : SrcLoc) -> Stmt {
+  let body = parse_stmt(p)
+  expect(p, KwWhile, "expected while after do") |> ignore
+  expect(p, LParen, "expected '(' after while") |> ignore
+  let cond = parse_expr(p)
+  expect(p, RParen, "expected ')' after do-while condition") |> ignore
+  expect(p, Semicolon, "expected ';' after do-while") |> ignore
+  Stmt::DoWhile(cond~, body~, loc~)
+}
+
+///|
 fn parse_for_stmt(p : Parser, loc : SrcLoc) -> Stmt {
   expect(p, LParen, "expected '(' after for") |> ignore
   let init = parse_for_init(p)
@@ -279,6 +321,15 @@ fn parse_for_stmt(p : Parser, loc : SrcLoc) -> Stmt {
   }
   let body = parse_stmt(p)
   Stmt::For(init~, cond~, step~, body~, loc~)
+}
+
+///|
+fn parse_switch_stmt(p : Parser, loc : SrcLoc) -> Stmt {
+  expect(p, LParen, "expected '(' after switch") |> ignore
+  let cond = parse_expr(p)
+  expect(p, RParen, "expected ')' after switch condition") |> ignore
+  let body = parse_stmt(p)
+  Stmt::Switch(cond~, body~, loc~)
 }
 
 ///|
@@ -318,7 +369,17 @@ fn parse_for_init(p : Parser) -> Stmt? {
 
 ///|
 fn parse_expr(p : Parser) -> Expr {
-  parse_expr_eq(p)
+  parse_expr_comma(p)
+}
+
+///|
+fn parse_expr_comma(p : Parser) -> Expr {
+  let mut expr = parse_expr_eq(p)
+  while match_token(p, Comma) is Some(tok) {
+    let right = parse_expr_eq(p)
+    expr = Expr::Binary(op=BinaryOp::Comma, left=expr, right~, loc=tok.loc)
+  }
+  expr
 }
 
 ///|
@@ -335,7 +396,16 @@ fn parse_expr_eq(p : Parser) -> Expr {
 
 ///|
 fn parse_expr_cond(p : Parser) -> Expr {
-  parse_expr_lor(p)
+  let cond = parse_expr_lor(p)
+  match match_token(p, Question) {
+    None => cond
+    Some(tok) => {
+      let then_expr = parse_expr(p)
+      expect(p, Colon, "expected ':' in conditional expression") |> ignore
+      let else_expr = parse_expr_cond(p)
+      Expr::Conditional(cond~, then_expr~, else_expr~, loc=tok.loc)
+    }
+  }
 }
 
 ///|
@@ -632,6 +702,7 @@ fn expr_loc(expr : Expr) -> SrcLoc {
     Expr::Ident(loc~, ..) => loc
     Expr::Unary(loc~, ..) => loc
     Expr::Binary(loc~, ..) => loc
+    Expr::Conditional(loc~, ..) => loc
     Expr::Call(loc~, ..) => loc
   }
 }
@@ -647,6 +718,20 @@ fn peek_token(p : Parser) -> Token {
     return p.tokens[p.index]
   }
   p.tokens[p.tokens.length() - 1]
+}
+
+///|
+fn peek_token_at(p : Parser, offset : Int) -> Token {
+  let idx = p.index + offset
+  if idx >= 0 && idx < p.tokens.length() {
+    return p.tokens[idx]
+  }
+  p.tokens[p.tokens.length() - 1]
+}
+
+///|
+fn peek_kind(p : Parser, offset : Int) -> TokenKind {
+  peek_token_at(p, offset).kind
 }
 
 ///|
