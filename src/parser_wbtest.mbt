@@ -139,6 +139,28 @@ test "sem rejects non-constant enum value" {
 }
 
 ///|
+test "parse aggregate initializers" {
+  let (_, bag) = check_text(
+    "int a[2][2] = {{1,2},{3,4}}; struct S { int x; int y; }; struct S s = { .y = 2, .x = 1 }; int main(){return a[0][1] + s.x + s.y;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "parse bitfields and qualifiers" {
+  let (_, bag) = check_text(
+    "struct S { unsigned int a:3; int : 2; const int b; }; int main(){struct S s = { .b = 1 }; return 0;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem rejects non-integer bitfield" {
+  let (_, bag) = check_text("struct S { float f:3; }; int main(){return 0;}")
+  assert_true(has_errors(bag))
+}
+
+///|
 test "sem rejects control flow outside context" {
   let (_, bag) = check_text("int main(){case 1: return 0;}")
   assert_true(has_errors(bag))

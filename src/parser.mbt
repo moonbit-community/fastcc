@@ -150,61 +150,384 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
 }
 
 ///|
-fn parse_decl_specs(p : Parser) -> (CType, SrcLoc, Bool)? {
-  let mut is_typedef = false
-  if match_token(p, KwTypedef) is Some(_) {
-    is_typedef = true
-  }
-  match parse_type_spec(p) {
-    None => None
-    Some((ty, loc)) => Some((ty, loc, is_typedef))
+fn empty_qual() -> TypeQual {
+  { is_const: false, is_volatile: false, is_restrict: false }
+}
+
+///|
+fn merge_qual(a : TypeQual, b : TypeQual) -> TypeQual {
+  {
+    is_const: a.is_const || b.is_const,
+    is_volatile: a.is_volatile || b.is_volatile,
+    is_restrict: a.is_restrict || b.is_restrict,
   }
 }
 
 ///|
-fn parse_type_spec(p : Parser) -> (CType, SrcLoc)? {
-  let tok = peek_token(p)
-  match tok.kind {
-    KwInt => {
-      let consumed = advance_token(p)
-      Some((CType::Int, consumed.loc))
-    }
-    KwVoid => {
-      let consumed = advance_token(p)
-      Some((CType::Void, consumed.loc))
-    }
-    KwStruct => parse_struct_type(p, is_union=false)
-    KwUnion => parse_struct_type(p, is_union=true)
-    KwEnum => parse_enum_type(p)
-    Ident =>
-      match p.type_aliases.get(tok.lexeme) {
-        Some(aliased) => {
-          let consumed = advance_token(p)
-          Some((aliased, consumed.loc))
-        }
-        None => {
-          add_parse_error(p, tok.loc, "expected type specifier")
-          None
-        }
-      }
-    _ => {
-      add_parse_error(p, tok.loc, "expected type specifier")
-      None
-    }
+fn qual_is_empty(qual : TypeQual) -> Bool {
+  !qual.is_const && !qual.is_volatile && !qual.is_restrict
+}
+
+///|
+fn with_const(qual : TypeQual) -> TypeQual {
+  {
+    is_const: true,
+    is_volatile: qual.is_volatile,
+    is_restrict: qual.is_restrict,
   }
+}
+
+///|
+fn with_volatile(qual : TypeQual) -> TypeQual {
+  { is_const: qual.is_const, is_volatile: true, is_restrict: qual.is_restrict }
+}
+
+///|
+fn with_restrict(qual : TypeQual) -> TypeQual {
+  { is_const: qual.is_const, is_volatile: qual.is_volatile, is_restrict: true }
+}
+
+///|
+fn apply_qualifiers(ty : CType, qual : TypeQual) -> CType {
+  if qual_is_empty(qual) {
+    return ty
+  }
+  match ty {
+    CType::Qualified(qual=existing, base~) =>
+      CType::Qualified(qual=merge_qual(existing, qual), base~)
+    _ => CType::Qualified(qual~, base=ty)
+  }
+}
+
+///|
+fn strip_type_qualifiers(ty : CType) -> CType {
+  match ty {
+    CType::Qualified(base~, ..) => strip_type_qualifiers(base)
+    _ => ty
+  }
+}
+
+///|
+fn parse_type_qualifiers(p : Parser) -> TypeQual {
+  let mut qual = empty_qual()
+  while true {
+    match peek_token(p).kind {
+      KwConst => {
+        qual = with_const(qual)
+        ignore(advance_token(p))
+        continue
+      }
+      KwVolatile => {
+        qual = with_volatile(qual)
+        ignore(advance_token(p))
+        continue
+      }
+      KwRestrict => {
+        qual = with_restrict(qual)
+        ignore(advance_token(p))
+        continue
+      }
+      _ => ()
+    }
+    break
+  }
+  qual
+}
+
+///|
+fn parse_type_specifiers(
+  p : Parser,
+  allow_storage~ : Bool,
+  allow_typedef~ : Bool,
+) -> (CType, SrcLoc, Bool)? {
+  let mut is_typedef = false
+  let mut saw_any = false
+  let mut start_loc = peek_token(p).loc
+  let mut qual = empty_qual()
+  let mut signedness = 0
+  let mut short_seen = false
+  let mut long_count = 0
+  let mut saw_char = false
+  let mut saw_int = false
+  let mut saw_bool = false
+  let mut saw_float = false
+  let mut saw_double = false
+  let mut saw_void = false
+  let mut base : CType? = None
+  while true {
+    let tok = peek_token(p)
+    match tok.kind {
+      KwTypedef => {
+        if allow_typedef {
+          is_typedef = true
+        } else {
+          add_parse_error(p, tok.loc, "unexpected typedef")
+        }
+        ignore(advance_token(p))
+        saw_any = true
+        continue
+      }
+      KwExtern | KwStatic | KwAuto | KwRegister | KwInline =>
+        if allow_storage {
+          ignore(advance_token(p))
+          saw_any = true
+          continue
+        } else {
+          add_parse_error(p, tok.loc, "storage class not allowed here")
+          ignore(advance_token(p))
+          saw_any = true
+          continue
+        }
+      KwConst => {
+        qual = with_const(qual)
+        ignore(advance_token(p))
+        saw_any = true
+        continue
+      }
+      KwVolatile => {
+        qual = with_volatile(qual)
+        ignore(advance_token(p))
+        saw_any = true
+        continue
+      }
+      KwRestrict => {
+        qual = with_restrict(qual)
+        ignore(advance_token(p))
+        saw_any = true
+        continue
+      }
+      KwSigned => {
+        if signedness == 2 {
+          add_parse_error(p, tok.loc, "signed/unsigned conflict")
+        } else {
+          signedness = 1
+        }
+        ignore(advance_token(p))
+        saw_any = true
+        continue
+      }
+      KwUnsigned => {
+        if signedness == 1 {
+          add_parse_error(p, tok.loc, "signed/unsigned conflict")
+        } else {
+          signedness = 2
+        }
+        ignore(advance_token(p))
+        saw_any = true
+        continue
+      }
+      KwShort => {
+        short_seen = true
+        ignore(advance_token(p))
+        saw_any = true
+        continue
+      }
+      KwLong => {
+        long_count = long_count + 1
+        ignore(advance_token(p))
+        saw_any = true
+        continue
+      }
+      KwInt => {
+        saw_int = true
+        ignore(advance_token(p))
+        saw_any = true
+        continue
+      }
+      KwChar => {
+        saw_char = true
+        ignore(advance_token(p))
+        saw_any = true
+        continue
+      }
+      KwBool => {
+        saw_bool = true
+        ignore(advance_token(p))
+        saw_any = true
+        continue
+      }
+      KwFloat => {
+        saw_float = true
+        ignore(advance_token(p))
+        saw_any = true
+        continue
+      }
+      KwDouble => {
+        saw_double = true
+        ignore(advance_token(p))
+        saw_any = true
+        continue
+      }
+      KwVoid => {
+        saw_void = true
+        ignore(advance_token(p))
+        saw_any = true
+        continue
+      }
+      KwStruct =>
+        match base {
+          Some(_) => {
+            add_parse_error(p, tok.loc, "multiple type specifiers")
+            break
+          }
+          None =>
+            match parse_struct_type(p, is_union=false) {
+              Some((ty, loc)) => {
+                base = Some(ty)
+                start_loc = loc
+                saw_any = true
+                continue
+              }
+              None => return None
+            }
+        }
+      KwUnion =>
+        match base {
+          Some(_) => {
+            add_parse_error(p, tok.loc, "multiple type specifiers")
+            break
+          }
+          None =>
+            match parse_struct_type(p, is_union=true) {
+              Some((ty, loc)) => {
+                base = Some(ty)
+                start_loc = loc
+                saw_any = true
+                continue
+              }
+              None => return None
+            }
+        }
+      KwEnum =>
+        match base {
+          Some(_) => {
+            add_parse_error(p, tok.loc, "multiple type specifiers")
+            break
+          }
+          None =>
+            match parse_enum_type(p) {
+              Some((ty, loc)) => {
+                base = Some(ty)
+                start_loc = loc
+                saw_any = true
+                continue
+              }
+              None => return None
+            }
+        }
+      Ident =>
+        match p.type_aliases.get(tok.lexeme) {
+          Some(aliased) =>
+            match base {
+              Some(_) => {
+                add_parse_error(p, tok.loc, "multiple type specifiers")
+                break
+              }
+              None => {
+                ignore(advance_token(p))
+                base = Some(aliased)
+                start_loc = tok.loc
+                saw_any = true
+                continue
+              }
+            }
+          None => ()
+        }
+      _ => ()
+    }
+    break
+  }
+  if !saw_any {
+    return None
+  }
+  let invalid_combo = saw_void ||
+    saw_bool ||
+    saw_float ||
+    saw_double ||
+    saw_char ||
+    saw_int ||
+    short_seen ||
+    long_count > 0 ||
+    signedness != 0
+  if base is Some(_) && invalid_combo {
+    add_parse_error(p, start_loc, "invalid type specifier combination")
+  }
+  let ty = match base {
+    Some(val) => val
+    None =>
+      if saw_void {
+        CType::Void
+      } else if saw_bool {
+        CType::Bool
+      } else if saw_float || saw_double {
+        if long_count > 0 && saw_double {
+          CType::Float(kind=CFloatKind::LongDouble)
+        } else if saw_double {
+          CType::Float(kind=CFloatKind::Double)
+        } else if long_count > 0 {
+          add_parse_error(p, start_loc, "invalid long float")
+          CType::Float(kind=CFloatKind::Float)
+        } else {
+          CType::Float(kind=CFloatKind::Float)
+        }
+      } else {
+        let kind = if saw_char {
+          CIntKind::Char
+        } else if short_seen {
+          CIntKind::Short
+        } else if long_count >= 2 {
+          CIntKind::LongLong
+        } else if long_count == 1 {
+          CIntKind::Long
+        } else {
+          CIntKind::Int
+        }
+        let unsigned = signedness == 2
+        CType::Int(kind~, unsigned~)
+      }
+  }
+  if ty is CType::Void && (signedness != 0 || short_seen || long_count > 0) {
+    add_parse_error(p, start_loc, "invalid modifiers for void")
+  }
+  if ty is CType::Bool && signedness != 0 {
+    add_parse_error(p, start_loc, "invalid modifiers for _Bool")
+  }
+  let qualified = apply_qualifiers(ty, qual)
+  Some((qualified, start_loc, is_typedef))
+}
+
+///|
+fn parse_decl_specs(
+  p : Parser,
+  allow_storage? : Bool = true,
+) -> (CType, SrcLoc, Bool)? {
+  parse_type_specifiers(p, allow_storage~, allow_typedef=true)
+}
+
+///|
+fn parse_type_spec(p : Parser) -> (CType, SrcLoc)? {
+  match parse_type_specifiers(p, allow_storage=false, allow_typedef=false) {
+    None => None
+    Some((ty, loc, _)) => Some((ty, loc))
+  }
+}
+
+///|
+fn parse_pointer_chain(p : Parser, ty_in : CType) -> CType {
+  let mut ty = ty_in
+  while match_token(p, Star) is Some(_) {
+    let qual = parse_type_qualifiers(p)
+    ty = CType::Pointer(ty)
+    ty = apply_qualifiers(ty, qual)
+  }
+  ty
 }
 
 ///|
 fn parse_type_name(p : Parser) -> CType? {
   match parse_type_spec(p) {
     None => None
-    Some((base, _loc)) => {
-      let mut ty = base
-      while match_token(p, Star) is Some(_) {
-        ty = CType::Pointer(ty)
-      }
-      Some(ty)
-    }
+    Some((base, _loc)) => Some(parse_pointer_chain(p, base))
   }
 }
 
@@ -221,10 +544,7 @@ fn parse_declarator(p : Parser, base : CType) -> Declarator? {
   if is_paren_pointer_declarator(p) {
     return parse_paren_pointer_declarator(p, base)
   }
-  let mut ty = base
-  while match_token(p, Star) is Some(_) {
-    ty = CType::Pointer(ty)
-  }
+  let ty = parse_pointer_chain(p, base)
   let name_tok = expect_ident(p, "expected identifier")
   match name_tok {
     None => None
@@ -236,18 +556,128 @@ fn parse_declarator(p : Parser, base : CType) -> Declarator? {
 }
 
 ///|
-fn parse_init_declarator(p : Parser, base : CType) -> (Declarator, Expr?)? {
+fn parse_init_declarator(
+  p : Parser,
+  base : CType,
+) -> (Declarator, Initializer?)? {
   match parse_declarator(p, base) {
     None => None
     Some(decl) => {
       let init = if match_token(p, Assign) is Some(_) {
-        Some(parse_expr_eq(p))
+        Some(parse_initializer(p))
       } else {
         None
       }
       Some((decl, init))
     }
   }
+}
+
+///|
+fn parse_field_declarator(
+  p : Parser,
+  base : CType,
+  fallback_loc : SrcLoc,
+) -> Declarator? {
+  if is_paren_pointer_declarator(p) {
+    expect(p, LParen, "expected '(' in declarator") |> ignore
+    let quals : Array[TypeQual] = []
+    while match_token(p, Star) is Some(_) {
+      quals.push(parse_type_qualifiers(p))
+    }
+    let name_tok = if peek_token(p).kind == Ident {
+      Some(advance_token(p))
+    } else {
+      None
+    }
+    expect(p, RParen, "expected ')' in declarator") |> ignore
+    let (ty, params) = parse_declarator_suffix(p, base)
+    let mut wrapped = ty
+    for qual in quals {
+      wrapped = CType::Pointer(wrapped)
+      wrapped = apply_qualifiers(wrapped, qual)
+    }
+    let (name, loc) = match name_tok {
+      Some(tok) => (tok.lexeme, tok.loc)
+      None => ("", fallback_loc)
+    }
+    return Some({ name, ty: wrapped, params, loc })
+  }
+  let ty = parse_pointer_chain(p, base)
+  let (name, loc) = if peek_token(p).kind == Ident {
+    let name_tok = advance_token(p)
+    (name_tok.lexeme, name_tok.loc)
+  } else {
+    ("", fallback_loc)
+  }
+  let (ty, params) = parse_declarator_suffix(p, ty)
+  Some({ name, ty, params, loc })
+}
+
+///|
+fn parse_initializer(p : Parser) -> Initializer {
+  if match_token(p, LBrace) is Some(lbrace) {
+    let items : Array[InitItem] = []
+    if match_token(p, RBrace) is Some(_) {
+      return Initializer::List(items~, loc=lbrace.loc)
+    }
+    while true {
+      let (designators, item_loc) = parse_designator_list(p)
+      let value = parse_initializer(p)
+      items.push({ designators, value, loc: item_loc })
+      if match_token(p, Comma) is Some(_) {
+        if match_token(p, RBrace) is Some(_) {
+          break
+        }
+        continue
+      }
+      expect(p, RBrace, "expected '}' after initializer list") |> ignore
+      break
+    }
+    return Initializer::List(items~, loc=lbrace.loc)
+  }
+  let expr = parse_expr_eq(p)
+  Initializer::Expr(expr~, loc=expr_loc(expr))
+}
+
+///|
+fn parse_designator_list(p : Parser) -> (Array[InitDesignator], SrcLoc) {
+  let designators : Array[InitDesignator] = []
+  let mut start_loc = peek_token(p).loc
+  while true {
+    if match_token(p, Dot) is Some(dot_tok) {
+      start_loc = dot_tok.loc
+      let name = match expect_ident(p, "expected field name") {
+        None => ""
+        Some(id) => id.lexeme
+      }
+      designators.push(InitDesignator::Field(name~, loc=dot_tok.loc))
+      continue
+    }
+    if match_token(p, LBracket) is Some(lbrack) {
+      start_loc = lbrack.loc
+      let index = parse_expr_cond(p)
+      expect(p, RBracket, "expected ']' after designator") |> ignore
+      designators.push(InitDesignator::Index(expr=index, loc=lbrack.loc))
+      continue
+    }
+    if peek_token(p).kind == Ident && peek_kind(p, 1) == Colon {
+      let name_tok = advance_token(p)
+      start_loc = name_tok.loc
+      expect(p, Colon, "expected ':' after designator") |> ignore
+      designators.push(
+        InitDesignator::Field(name=name_tok.lexeme, loc=name_tok.loc),
+      )
+      continue
+    }
+    break
+  }
+  if designators.length() > 0 {
+    if match_token(p, Assign) is None {
+      add_parse_error(p, peek_token(p).loc, "expected '=' after designator")
+    }
+  }
+  (designators, start_loc)
 }
 
 ///|
@@ -258,9 +688,9 @@ fn is_paren_pointer_declarator(p : Parser) -> Bool {
 ///|
 fn parse_paren_pointer_declarator(p : Parser, base : CType) -> Declarator? {
   expect(p, LParen, "expected '(' in declarator") |> ignore
-  let mut stars = 0
+  let quals : Array[TypeQual] = []
   while match_token(p, Star) is Some(_) {
-    stars = stars + 1
+    quals.push(parse_type_qualifiers(p))
   }
   let name_tok = expect_ident(p, "expected identifier")
   expect(p, RParen, "expected ')' in declarator") |> ignore
@@ -269,10 +699,9 @@ fn parse_paren_pointer_declarator(p : Parser, base : CType) -> Declarator? {
     Some(tok) => {
       let (ty, params) = parse_declarator_suffix(p, base)
       let mut wrapped = ty
-      let mut i = 0
-      while i < stars {
+      for qual in quals {
         wrapped = CType::Pointer(wrapped)
-        i = i + 1
+        wrapped = apply_qualifiers(wrapped, qual)
       }
       Some({ name: tok.lexeme, ty: wrapped, params, loc: tok.loc })
     }
@@ -360,7 +789,7 @@ fn parse_struct_type(p : Parser, is_union~ : Bool) -> (CType, SrcLoc)? {
 fn parse_struct_fields(p : Parser) -> Array[Field] {
   let fields : Array[Field] = []
   while !is_at_end(p) && peek_token(p).kind != RBrace {
-    match parse_decl_specs(p) {
+    match parse_decl_specs(p, allow_storage=false) {
       None => {
         synchronize(p)
         break
@@ -370,21 +799,41 @@ fn parse_struct_fields(p : Parser) -> Array[Field] {
           add_parse_error(p, loc, "typedef not allowed in struct field")
         }
         let mut any_field = false
-        match parse_declarator(p, base) {
-          None => ()
-          Some(decl) => {
-            any_field = true
-            fields.push({ name: decl.name, ty: decl.ty, loc: decl.loc })
+        while true {
+          let decl = if peek_token(p).kind == Colon {
+            Some({ name: "", ty: base, params: None, loc })
+          } else {
+            parse_field_declarator(p, base, loc)
           }
-        }
-        while match_token(p, Comma) is Some(_) {
-          match parse_declarator(p, base) {
+          let bit_width = if match_token(p, Colon) is Some(_) {
+            Some(parse_expr_cond(p))
+          } else {
+            None
+          }
+          match decl {
             None => ()
-            Some(decl) => {
-              any_field = true
-              fields.push({ name: decl.name, ty: decl.ty, loc: decl.loc })
+            Some(field_decl) => {
+              let stripped = strip_type_qualifiers(field_decl.ty)
+              let allow_anon = field_decl.name == "" &&
+                bit_width is None &&
+                (stripped is CType::Struct(..) || stripped is CType::Union(..))
+              if field_decl.name != "" || bit_width is Some(_) || allow_anon {
+                any_field = true
+                fields.push({
+                  name: field_decl.name,
+                  ty: field_decl.ty,
+                  bit_width,
+                  loc: field_decl.loc,
+                })
+              } else {
+                add_parse_error(p, loc, "expected field declarator")
+              }
             }
           }
+          if match_token(p, Comma) is Some(_) {
+            continue
+          }
+          break
         }
         if !any_field {
           add_parse_error(p, loc, "expected field declarator")
@@ -511,9 +960,9 @@ fn parse_param_declarator(
 ) -> Param? {
   if is_paren_pointer_declarator(p) {
     expect(p, LParen, "expected '(' in declarator") |> ignore
-    let mut stars = 0
+    let quals : Array[TypeQual] = []
     while match_token(p, Star) is Some(_) {
-      stars = stars + 1
+      quals.push(parse_type_qualifiers(p))
     }
     let name_tok = if peek_token(p).kind == Ident {
       Some(advance_token(p))
@@ -523,10 +972,9 @@ fn parse_param_declarator(
     expect(p, RParen, "expected ')' in declarator") |> ignore
     let (ty, _params) = parse_declarator_suffix(p, base)
     let mut wrapped = ty
-    let mut i = 0
-    while i < stars {
+    for qual in quals {
       wrapped = CType::Pointer(wrapped)
-      i = i + 1
+      wrapped = apply_qualifiers(wrapped, qual)
     }
     let (name, loc) = match name_tok {
       Some(tok) => (tok.lexeme, tok.loc)
@@ -534,10 +982,7 @@ fn parse_param_declarator(
     }
     return Some({ name, ty: wrapped, loc })
   }
-  let mut ty = base
-  while match_token(p, Star) is Some(_) {
-    ty = CType::Pointer(ty)
-  }
+  let ty = parse_pointer_chain(p, base)
   if peek_token(p).kind == Ident {
     let name_tok = advance_token(p)
     let (ty, _params) = parse_declarator_suffix(p, ty)
@@ -1279,8 +1724,24 @@ fn parse_expr_primary(p : Parser) -> Expr {
 ///|
 fn is_type_start(p : Parser, tok : Token) -> Bool {
   match tok.kind {
-    KwInt => true
     KwVoid => true
+    KwBool => true
+    KwChar => true
+    KwShort => true
+    KwInt => true
+    KwLong => true
+    KwFloat => true
+    KwDouble => true
+    KwSigned => true
+    KwUnsigned => true
+    KwConst => true
+    KwVolatile => true
+    KwRestrict => true
+    KwExtern => true
+    KwStatic => true
+    KwAuto => true
+    KwRegister => true
+    KwInline => true
     KwStruct => true
     KwUnion => true
     KwEnum => true

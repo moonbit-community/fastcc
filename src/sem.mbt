@@ -43,6 +43,127 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
 }
 
 ///|
+fn default_int_type() -> CType {
+  CType::Int(kind=CIntKind::Int, unsigned=false)
+}
+
+///|
+fn strip_qualifiers(ty : CType) -> CType {
+  match ty {
+    CType::Qualified(base~, ..) => strip_qualifiers(base)
+    CType::Pointer(inner) => CType::Pointer(strip_qualifiers(inner))
+    CType::Array(elem~, size~) =>
+      CType::Array(elem=strip_qualifiers(elem), size~)
+    CType::Function(return_type~, params~) =>
+      CType::Function(
+        return_type=strip_qualifiers(return_type),
+        params=params.map(strip_qualifiers),
+      )
+    _ => ty
+  }
+}
+
+///|
+fn is_void_type(ty : CType) -> Bool {
+  strip_qualifiers(ty) is CType::Void
+}
+
+///|
+fn int_rank(kind : CIntKind) -> Int {
+  match kind {
+    CIntKind::Char => 1
+    CIntKind::Short => 2
+    CIntKind::Int => 3
+    CIntKind::Long => 4
+    CIntKind::LongLong => 5
+  }
+}
+
+///|
+fn float_rank(kind : CFloatKind) -> Int {
+  match kind {
+    CFloatKind::Float => 1
+    CFloatKind::Double => 2
+    CFloatKind::LongDouble => 3
+  }
+}
+
+///|
+fn is_float_type(ty : CType) -> Bool {
+  match strip_qualifiers(ty) {
+    CType::Float(..) => true
+    _ => false
+  }
+}
+
+///|
+fn to_int_type(ty : CType) -> CType {
+  match strip_qualifiers(ty) {
+    CType::Int(kind~, unsigned~) => CType::Int(kind~, unsigned~)
+    CType::Bool => default_int_type()
+    CType::Enum(..) => default_int_type()
+    _ => default_int_type()
+  }
+}
+
+///|
+fn common_int_type(lhs : CType, rhs : CType) -> CType {
+  let left = to_int_type(lhs)
+  let right = to_int_type(rhs)
+  match (left, right) {
+    (
+      CType::Int(kind=l_kind, unsigned=l_unsigned),
+      CType::Int(kind=r_kind, unsigned=r_unsigned),
+    ) => {
+      let rank = if int_rank(l_kind) >= int_rank(r_kind) {
+        l_kind
+      } else {
+        r_kind
+      }
+      let unsigned = l_unsigned || r_unsigned
+      CType::Int(kind=rank, unsigned~)
+    }
+    _ => default_int_type()
+  }
+}
+
+///|
+fn arithmetic_result_type(lhs : CType, rhs : CType) -> CType {
+  let left = strip_qualifiers(lhs)
+  let right = strip_qualifiers(rhs)
+  match (left, right) {
+    (CType::Float(kind=l_kind), CType::Float(kind=r_kind)) =>
+      if float_rank(l_kind) >= float_rank(r_kind) {
+        CType::Float(kind=l_kind)
+      } else {
+        CType::Float(kind=r_kind)
+      }
+    (CType::Float(kind~), _) => CType::Float(kind~)
+    (_, CType::Float(kind~)) => CType::Float(kind~)
+    _ => common_int_type(lhs, rhs)
+  }
+}
+
+///|
+fn is_arithmetic(ty : CType) -> Bool {
+  is_int_like(ty) || is_float_type(ty)
+}
+
+///|
+fn can_assign(dst : CType, src : CType) -> Bool {
+  let dst_ty = strip_qualifiers(dst)
+  let src_ty = strip_qualifiers(src)
+  if is_arithmetic(dst_ty) && is_arithmetic(src_ty) {
+    return true
+  }
+  match (dst_ty, src_ty) {
+    (CType::Pointer(inner_a), CType::Pointer(inner_b)) =>
+      type_eq(inner_a, inner_b)
+    _ => type_eq(dst_ty, src_ty)
+  }
+}
+
+///|
 fn check_translation_unit(unit : TranslationUnit, diags : DiagBag) -> Unit {
   let ctx = new_sem_context(diags)
   for decl in unit.decls {
@@ -82,6 +203,7 @@ fn check_decl(ctx : SemContext, decl : Decl) -> Unit {
 ///|
 fn register_type_defs(ctx : SemContext, ty : CType, loc : SrcLoc) -> Unit {
   match ty {
+    CType::Qualified(base~, ..) => register_type_defs(ctx, base, loc)
     CType::Struct(name~, fields~) =>
       register_struct_def(ctx, name, fields, is_union=false, loc)
     CType::Union(name~, fields~) =>
@@ -138,6 +260,26 @@ fn register_struct_def(
   if incoming.length() > 0 {
     for field in incoming {
       register_type_defs(ctx, field.ty, field.loc)
+      match field.bit_width {
+        None => ()
+        Some(expr) => {
+          if !is_int_like(field.ty) {
+            add_sem_error(ctx, field.loc, "bitfields must have integer type")
+          }
+          match const_int_from_expr(expr) {
+            None =>
+              add_sem_error(ctx, field.loc, "bitfield width must be constant")
+            Some(width) => {
+              if width < 0 {
+                add_sem_error(ctx, field.loc, "negative width in bit-field")
+              }
+              if width == 0 && field.name != "" {
+                add_sem_error(ctx, field.loc, "zero width for bit-field")
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
@@ -383,7 +525,7 @@ fn func_sig_eq(a : FuncSig, b : FuncSig) -> Bool {
 ///|
 fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
   register_type_defs(ctx, decl.ty, decl.loc)
-  match decl.ty {
+  match strip_qualifiers(decl.ty) {
     CType::Function(return_type~, params~) => {
       if decl.init is Some(_) {
         add_sem_error(
@@ -398,7 +540,7 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
     }
     _ => ()
   }
-  if decl.ty == CType::Void {
+  if is_void_type(decl.ty) {
     add_sem_error(ctx, decl.loc, "variable '\{decl.name}' has void type")
   }
   if is_local {
@@ -408,17 +550,234 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
   }
   match decl.init {
     None => ()
-    Some(expr) => {
+    Some(init) => check_initializer(ctx, decl.ty, init, decl.loc)
+  }
+}
+
+///|
+fn check_initializer(
+  ctx : SemContext,
+  ty : CType,
+  init : Initializer,
+  loc : SrcLoc,
+) -> Unit {
+  match init {
+    Initializer::Expr(expr~, ..) => {
       let init_ty = type_of_expr(ctx, expr)
-      if !type_eq(init_ty, decl.ty) {
+      if !can_assign(ty, init_ty) {
         add_sem_error(
           ctx,
-          decl.loc,
-          "cannot assign '\{type_to_string(init_ty)}' to '\{type_to_string(decl.ty)}'",
+          loc,
+          "cannot assign '\{type_to_string(init_ty)}' to '\{type_to_string(ty)}'",
         )
       }
     }
+    Initializer::List(items~, ..) => check_initializer_list(ctx, ty, items, loc)
   }
+}
+
+///|
+fn check_initializer_list(
+  ctx : SemContext,
+  ty : CType,
+  items : Array[InitItem],
+  loc : SrcLoc,
+) -> Unit {
+  match strip_qualifiers(ty) {
+    CType::Array(elem~, size~) => {
+      let mut count = 0
+      for item in items {
+        let target = if item.designators.length() > 0 {
+          resolve_designator_type(ctx, ty, item.designators, item.loc)
+        } else {
+          Some(elem)
+        }
+        match target {
+          None => ()
+          Some(target_ty) =>
+            check_initializer(ctx, target_ty, item.value, item.loc)
+        }
+        if item.designators.length() == 0 {
+          count = count + 1
+        }
+      }
+      match size {
+        None => ()
+        Some(n) =>
+          if count > n {
+            add_sem_error(ctx, loc, "too many initializers for array")
+          }
+      }
+    }
+    CType::Struct(name=tag, fields=field_list) => {
+      let fields = match field_list {
+        Some(list) => Some(list)
+        None => lookup_struct_fields(ctx, tag, is_union=false)
+      }
+      match fields {
+        None => add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
+        Some(list) =>
+          check_struct_initializer(ctx, ty, list, items, is_union=false, loc)
+      }
+    }
+    CType::Union(name=tag, fields=field_list) => {
+      let fields = match field_list {
+        Some(list) => Some(list)
+        None => lookup_struct_fields(ctx, tag, is_union=true)
+      }
+      match fields {
+        None => add_sem_error(ctx, loc, "incomplete union '\{tag}'")
+        Some(list) =>
+          check_struct_initializer(ctx, ty, list, items, is_union=true, loc)
+      }
+    }
+    _ => add_sem_error(ctx, loc, "initializer list for non-aggregate")
+  }
+}
+
+///|
+fn check_struct_initializer(
+  ctx : SemContext,
+  ty : CType,
+  fields : Array[Field],
+  items : Array[InitItem],
+  is_union~ : Bool,
+  loc : SrcLoc,
+) -> Unit {
+  let mut index = 0
+  let mut saw = 0
+  for item in items {
+    if item.designators.length() > 0 {
+      match resolve_designator_type(ctx, ty, item.designators, item.loc) {
+        None => ()
+        Some(target_ty) =>
+          check_initializer(ctx, target_ty, item.value, item.loc)
+      }
+    } else {
+      match next_init_field(fields, index) {
+        None =>
+          add_sem_error(ctx, item.loc, "too many initializers for aggregate")
+        Some((field, next_index)) => {
+          check_initializer(ctx, field.ty, item.value, item.loc)
+          index = next_index
+          if is_union {
+            saw = saw + 1
+            if saw > 1 {
+              add_sem_error(ctx, item.loc, "too many initializers for union")
+            }
+          }
+        }
+      }
+    }
+  }
+  if is_union && items.length() == 0 && fields.length() == 0 {
+    add_sem_error(ctx, loc, "incomplete union")
+  }
+}
+
+///|
+fn next_init_field(fields : Array[Field], start : Int) -> (Field, Int)? {
+  let mut i = start
+  while i < fields.length() {
+    let field = fields[i]
+    if field.name == "" && field.bit_width is Some(_) {
+      i = i + 1
+      continue
+    }
+    return Some((field, i + 1))
+  }
+  None
+}
+
+///|
+fn const_int_from_expr(expr : Expr) -> Int? {
+  match expr {
+    Expr::IntLit(value~, ..) => Some(parse_int_value(value))
+    _ => None
+  }
+}
+
+///|
+fn resolve_designator_type(
+  ctx : SemContext,
+  ty : CType,
+  designators : Array[InitDesignator],
+  loc : SrcLoc,
+) -> CType? {
+  let mut current = strip_qualifiers(ty)
+  for des in designators {
+    match des {
+      InitDesignator::Index(expr~, ..) =>
+        match strip_qualifiers(current) {
+          CType::Array(elem~, size~) => {
+            match size {
+              None => ()
+              Some(n) =>
+                match const_int_from_expr(expr) {
+                  None => ()
+                  Some(v) =>
+                    if v < 0 || v >= n {
+                      add_sem_error(ctx, loc, "array designator out of bounds")
+                    }
+                }
+            }
+            current = elem
+          }
+          _ => {
+            add_sem_error(ctx, loc, "array designator on non-array type")
+            return None
+          }
+        }
+      InitDesignator::Field(name~, ..) =>
+        match strip_qualifiers(current) {
+          CType::Struct(name=tag, fields=field_list) => {
+            let fields = match field_list {
+              Some(list) => Some(list)
+              None => lookup_struct_fields(ctx, tag, is_union=false)
+            }
+            match fields {
+              None => {
+                add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
+                return None
+              }
+              Some(list) =>
+                match find_field(list, name) {
+                  Some(field) => current = field.ty
+                  None => {
+                    add_sem_error(ctx, loc, "unknown field '\{name}'")
+                    return None
+                  }
+                }
+            }
+          }
+          CType::Union(name=tag, fields=field_list) => {
+            let fields = match field_list {
+              Some(list) => Some(list)
+              None => lookup_struct_fields(ctx, tag, is_union=true)
+            }
+            match fields {
+              None => {
+                add_sem_error(ctx, loc, "incomplete union '\{tag}'")
+                return None
+              }
+              Some(list) =>
+                match find_field(list, name) {
+                  Some(field) => current = field.ty
+                  None => {
+                    add_sem_error(ctx, loc, "unknown field '\{name}'")
+                    return None
+                  }
+                }
+            }
+          }
+          _ => {
+            add_sem_error(ctx, loc, "field designator on non-aggregate")
+            return None
+          }
+        }
+    }
+  }
+  Some(current)
 }
 
 ///|
@@ -505,14 +864,14 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
     Stmt::Return(value~, loc~) =>
       match value {
         None =>
-          if return_type != CType::Void {
+          if !is_void_type(return_type) {
             add_sem_error(ctx, loc, "non-void function must return a value")
           }
         Some(expr) => {
           let expr_ty = type_of_expr(ctx, expr)
-          if return_type == CType::Void {
+          if is_void_type(return_type) {
             add_sem_error(ctx, loc, "void function should not return a value")
-          } else if !type_eq(expr_ty, return_type) {
+          } else if !can_assign(return_type, expr_ty) {
             add_sem_error(
               ctx,
               loc,
@@ -535,7 +894,7 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
 fn check_cond_expr(ctx : SemContext, expr : Expr) -> Unit {
   let ty = type_of_expr(ctx, expr)
   if !is_scalar(ty) {
-    add_sem_error(ctx, expr_loc(expr), "condition expression must be int")
+    add_sem_error(ctx, expr_loc(expr), "condition expression must be scalar")
   }
 }
 
@@ -565,9 +924,16 @@ fn check_label_uses(ctx : SemContext) -> Unit {
 
 ///|
 fn type_eq(a : CType, b : CType) -> Bool {
-  match (a, b) {
+  let lhs = strip_qualifiers(a)
+  let rhs = strip_qualifiers(b)
+  match (lhs, rhs) {
     (CType::Void, CType::Void) => true
-    (CType::Int, CType::Int) => true
+    (CType::Bool, CType::Bool) => true
+    (
+      CType::Int(kind=a_kind, unsigned=a_unsigned),
+      CType::Int(kind=b_kind, unsigned=b_unsigned),
+    ) => a_kind == b_kind && a_unsigned == b_unsigned
+    (CType::Float(kind=a_kind), CType::Float(kind=b_kind)) => a_kind == b_kind
     (CType::Pointer(inner_a), CType::Pointer(inner_b)) =>
       type_eq(inner_a, inner_b)
     (
@@ -603,8 +969,9 @@ fn type_eq(a : CType, b : CType) -> Bool {
 
 ///|
 fn is_int_like(ty : CType) -> Bool {
-  match ty {
-    CType::Int => true
+  match strip_qualifiers(ty) {
+    CType::Int(..) => true
+    CType::Bool => true
     CType::Enum(..) => true
     _ => false
   }
@@ -612,10 +979,10 @@ fn is_int_like(ty : CType) -> Bool {
 
 ///|
 fn is_scalar(ty : CType) -> Bool {
-  if is_int_like(ty) {
+  if is_int_like(ty) || is_float_type(ty) {
     return true
   }
-  match ty {
+  match strip_qualifiers(ty) {
     CType::Pointer(_) => true
     _ => false
   }
@@ -623,7 +990,7 @@ fn is_scalar(ty : CType) -> Bool {
 
 ///|
 fn decay_type(ty : CType) -> CType {
-  match ty {
+  match strip_qualifiers(ty) {
     CType::Array(elem~, ..) => CType::Pointer(elem)
     CType::Function(..) => CType::Pointer(ty)
     _ => ty
@@ -662,7 +1029,7 @@ fn member_access_type(
   loc : SrcLoc,
 ) -> CType? {
   let obj_ty = if is_arrow {
-    match base_ty {
+    match strip_qualifiers(base_ty) {
       CType::Pointer(inner) => inner
       _ => {
         add_sem_error(ctx, loc, "arrow operator requires pointer")
@@ -672,7 +1039,7 @@ fn member_access_type(
   } else {
     base_ty
   }
-  match obj_ty {
+  match strip_qualifiers(obj_ty) {
     CType::Struct(name=tag, fields=field_list) => {
       let fields = match field_list {
         Some(vals) => Some(vals)
@@ -730,7 +1097,7 @@ fn index_access_type(
   if !is_int_like(index_ty) {
     add_sem_error(ctx, loc, "array index must be int")
   }
-  match base_ty {
+  match strip_qualifiers(base_ty) {
     CType::Pointer(elem) => Some(elem)
     CType::Array(elem~, ..) => Some(elem)
     _ => {
@@ -771,7 +1138,7 @@ fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
       member_access_type(ctx, type_of_expr(ctx, base), name, is_arrow~, loc)
     Expr::Unary(op=UnaryOp::Deref, expr=inner, loc~) => {
       let inner_ty = type_of_expr(ctx, inner)
-      match inner_ty {
+      match strip_qualifiers(inner_ty) {
         CType::Pointer(pointee) => Some(pointee)
         _ => {
           add_sem_error(ctx, loc, "cannot dereference non-pointer")
@@ -789,13 +1156,13 @@ fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
 ///|
 fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
   match expr {
-    Expr::IntLit(..) => CType::Int
+    Expr::IntLit(..) => default_int_type()
     Expr::Ident(name~, loc~) =>
       match lookup_value(ctx, name) {
         Some(ty) => decay_type(ty)
         None => {
           add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
-          CType::Int
+          default_int_type()
         }
       }
     Expr::Unary(op~, expr~, loc~) =>
@@ -803,15 +1170,15 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
         UnaryOp::Addr =>
           match type_of_lvalue(ctx, expr) {
             Some(ty) => CType::Pointer(ty)
-            None => CType::Int
+            None => default_int_type()
           }
         UnaryOp::Deref => {
           let inner = type_of_expr(ctx, expr)
-          match inner {
+          match strip_qualifiers(inner) {
             CType::Pointer(pointee) => pointee
             _ => {
               add_sem_error(ctx, loc, "cannot dereference non-pointer")
-              CType::Int
+              default_int_type()
             }
           }
         }
@@ -820,37 +1187,47 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
           if !is_scalar(inner) {
             add_sem_error(ctx, loc, "unary operator expects scalar")
           }
-          CType::Int
+          default_int_type()
         }
-        UnaryOp::Plus | UnaryOp::Minus | UnaryOp::BitNot => {
+        UnaryOp::Plus | UnaryOp::Minus => {
+          let inner = type_of_expr(ctx, expr)
+          if !is_arithmetic(inner) {
+            add_sem_error(ctx, loc, "unary operator expects arithmetic")
+          }
+          if is_float_type(inner) {
+            strip_qualifiers(inner)
+          } else {
+            common_int_type(inner, inner)
+          }
+        }
+        UnaryOp::BitNot => {
           let inner = type_of_expr(ctx, expr)
           if !is_int_like(inner) {
             add_sem_error(ctx, loc, "unary operator expects int")
           }
-          CType::Int
+          common_int_type(inner, inner)
         }
         UnaryOp::PreInc
         | UnaryOp::PreDec
         | UnaryOp::PostInc
         | UnaryOp::PostDec =>
           match type_of_lvalue(ctx, expr) {
-            None => CType::Int
+            None => default_int_type()
             Some(ty) => {
-              let mut result = ty
-              match ty {
+              match strip_qualifiers(ty) {
                 CType::Array(_) | CType::Function(..) => {
                   add_sem_error(ctx, loc, "invalid operand to increment")
-                  result = CType::Int
+                  return default_int_type()
                 }
                 _ => ()
               }
-              if !is_int_like(ty) {
-                match ty {
+              if !is_arithmetic(ty) {
+                match strip_qualifiers(ty) {
                   CType::Pointer(_) => ()
                   _ => add_sem_error(ctx, loc, "invalid operand to increment")
                 }
               }
-              result
+              ty
             }
           }
       }
@@ -861,26 +1238,26 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
     }
     Expr::SizeofExpr(expr~, ..) => {
       type_of_expr(ctx, expr) |> ignore
-      CType::Int
+      default_int_type()
     }
     Expr::SizeofType(ty~, loc~) => {
       register_type_defs(ctx, ty, loc)
-      CType::Int
+      default_int_type()
     }
     Expr::Binary(op~, left~, right~, loc~) =>
       match op {
         BinaryOp::Assign =>
           match type_of_lvalue(ctx, left) {
             Some(lhs_ty) => {
-              match lhs_ty {
+              match strip_qualifiers(lhs_ty) {
                 CType::Array(_) | CType::Function(..) => {
                   add_sem_error(ctx, loc, "assignment to non-modifiable lvalue")
-                  return CType::Int
+                  return default_int_type()
                 }
                 _ => ()
               }
               let rhs_ty = type_of_expr(ctx, right)
-              if !type_eq(lhs_ty, rhs_ty) {
+              if !can_assign(lhs_ty, rhs_ty) {
                 add_sem_error(
                   ctx,
                   loc,
@@ -889,7 +1266,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
               }
               lhs_ty
             }
-            None => CType::Int
+            None => default_int_type()
           }
         BinaryOp::Comma => {
           type_of_expr(ctx, left) |> ignore
@@ -898,57 +1275,61 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
         BinaryOp::Add => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
-          match lhs_ty {
+          match strip_qualifiers(lhs_ty) {
             CType::Pointer(pointee) =>
               if is_int_like(rhs_ty) {
                 return CType::Pointer(pointee)
               } else {
                 add_sem_error(ctx, loc, "invalid operands to '+'")
-                return CType::Int
+                return default_int_type()
               }
             _ => ()
           }
-          match rhs_ty {
+          match strip_qualifiers(rhs_ty) {
             CType::Pointer(pointee) =>
               if is_int_like(lhs_ty) {
                 return CType::Pointer(pointee)
               } else {
                 add_sem_error(ctx, loc, "invalid operands to '+'")
-                return CType::Int
+                return default_int_type()
               }
             _ => ()
           }
-          if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
-            add_sem_error(ctx, loc, "binary operator expects int operands")
+          if !is_arithmetic(lhs_ty) || !is_arithmetic(rhs_ty) {
+            add_sem_error(
+              ctx, loc, "binary operator expects arithmetic operands",
+            )
           }
-          CType::Int
+          arithmetic_result_type(lhs_ty, rhs_ty)
         }
         BinaryOp::Sub => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
-          match lhs_ty {
+          match strip_qualifiers(lhs_ty) {
             CType::Pointer(pointee) =>
-              match rhs_ty {
+              match strip_qualifiers(rhs_ty) {
                 CType::Pointer(other) => {
                   if !type_eq(pointee, other) {
                     add_sem_error(ctx, loc, "pointer subtraction type mismatch")
                   }
-                  return CType::Int
+                  return default_int_type()
                 }
                 _ =>
                   if is_int_like(rhs_ty) {
                     return CType::Pointer(pointee)
                   } else {
                     add_sem_error(ctx, loc, "invalid operands to '-'")
-                    return CType::Int
+                    return default_int_type()
                   }
               }
             _ => ()
           }
-          if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
-            add_sem_error(ctx, loc, "binary operator expects int operands")
+          if !is_arithmetic(lhs_ty) || !is_arithmetic(rhs_ty) {
+            add_sem_error(
+              ctx, loc, "binary operator expects arithmetic operands",
+            )
           }
-          CType::Int
+          arithmetic_result_type(lhs_ty, rhs_ty)
         }
         BinaryOp::Eq
         | BinaryOp::Ne
@@ -958,23 +1339,25 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
         | BinaryOp::Ge => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
-          match lhs_ty {
+          match strip_qualifiers(lhs_ty) {
             CType::Pointer(pointee) =>
-              match rhs_ty {
+              match strip_qualifiers(rhs_ty) {
                 CType::Pointer(other) => {
                   if !type_eq(pointee, other) {
                     add_sem_error(ctx, loc, "pointer comparison type mismatch")
                   }
-                  return CType::Int
+                  return default_int_type()
                 }
                 _ => ()
               }
             _ => ()
           }
-          if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
-            add_sem_error(ctx, loc, "binary operator expects int operands")
+          if !is_arithmetic(lhs_ty) || !is_arithmetic(rhs_ty) {
+            add_sem_error(
+              ctx, loc, "binary operator expects arithmetic operands",
+            )
           }
-          CType::Int
+          default_int_type()
         }
         BinaryOp::LogAnd | BinaryOp::LogOr => {
           let lhs_ty = type_of_expr(ctx, left)
@@ -982,21 +1365,39 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
           if !is_scalar(lhs_ty) || !is_scalar(rhs_ty) {
             add_sem_error(ctx, loc, "binary operator expects scalar operands")
           }
-          CType::Int
+          default_int_type()
         }
-        _ => {
+        BinaryOp::Mul | BinaryOp::Div => {
+          let lhs_ty = type_of_expr(ctx, left)
+          let rhs_ty = type_of_expr(ctx, right)
+          if !is_arithmetic(lhs_ty) || !is_arithmetic(rhs_ty) {
+            add_sem_error(
+              ctx, loc, "binary operator expects arithmetic operands",
+            )
+          }
+          arithmetic_result_type(lhs_ty, rhs_ty)
+        }
+        BinaryOp::Mod
+        | BinaryOp::Shl
+        | BinaryOp::Shr
+        | BinaryOp::BitAnd
+        | BinaryOp::BitXor
+        | BinaryOp::BitOr => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
           if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
             add_sem_error(ctx, loc, "binary operator expects int operands")
           }
-          CType::Int
+          common_int_type(lhs_ty, rhs_ty)
         }
       }
     Expr::Conditional(cond~, then_expr~, else_expr~, loc~) => {
       check_cond_expr(ctx, cond)
       let then_ty = type_of_expr(ctx, then_expr)
       let else_ty = type_of_expr(ctx, else_expr)
+      if is_arithmetic(then_ty) && is_arithmetic(else_ty) {
+        return arithmetic_result_type(then_ty, else_ty)
+      }
       if !type_eq(then_ty, else_ty) {
         add_sem_error(ctx, loc, "conditional operator type mismatch")
       }
@@ -1011,21 +1412,21 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
           loc,
         ) {
         Some(ty) => decay_type(ty)
-        None => CType::Int
+        None => default_int_type()
       }
     Expr::Member(base~, name~, is_arrow~, loc~) =>
       match
         member_access_type(ctx, type_of_expr(ctx, base), name, is_arrow~, loc) {
         Some(ty) => decay_type(ty)
-        None => CType::Int
+        None => default_int_type()
       }
     Expr::Call(callee~, args~, loc~) => {
       let callee_ty = type_of_expr(ctx, callee)
-      let fn_ty = match callee_ty {
-        CType::Function(..) => Some(callee_ty)
+      let fn_ty = match strip_qualifiers(callee_ty) {
+        CType::Function(..) => Some(strip_qualifiers(callee_ty))
         CType::Pointer(inner) =>
-          match inner {
-            CType::Function(..) => Some(inner)
+          match strip_qualifiers(inner) {
+            CType::Function(..) => Some(strip_qualifiers(inner))
             _ => None
           }
         _ => None
@@ -1037,7 +1438,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
           } else {
             for i = 0; i < params.length(); i = i + 1 {
               let arg_ty = type_of_expr(ctx, args[i])
-              if !type_eq(arg_ty, params[i]) {
+              if !can_assign(params[i], arg_ty) {
                 add_sem_error(ctx, loc, "argument type mismatch in call")
                 break
               }
@@ -1047,7 +1448,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
         }
         _ => {
           add_sem_error(ctx, loc, "call target is not a function")
-          CType::Int
+          default_int_type()
         }
       }
     }
@@ -1106,7 +1507,7 @@ fn lookup_value(ctx : SemContext, name : String) -> CType? {
           Some(CType::Function(return_type=sig.return_type, params=sig.params))
         None =>
           if ctx.enum_consts.contains(name) {
-            Some(CType::Int)
+            Some(default_int_type())
           } else {
             None
           }
@@ -1130,10 +1531,60 @@ fn add_sem_error(ctx : SemContext, loc : SrcLoc, message : String) -> Unit {
 }
 
 ///|
+fn int_kind_to_string(kind : CIntKind) -> String {
+  match kind {
+    CIntKind::Char => "char"
+    CIntKind::Short => "short"
+    CIntKind::Int => "int"
+    CIntKind::Long => "long"
+    CIntKind::LongLong => "long long"
+  }
+}
+
+///|
+fn float_kind_to_string(kind : CFloatKind) -> String {
+  match kind {
+    CFloatKind::Float => "float"
+    CFloatKind::Double => "double"
+    CFloatKind::LongDouble => "long double"
+  }
+}
+
+///|
+fn qual_to_string(qual : TypeQual) -> String {
+  let parts : Array[String] = []
+  if qual.is_const {
+    parts.push("const")
+  }
+  if qual.is_volatile {
+    parts.push("volatile")
+  }
+  if qual.is_restrict {
+    parts.push("restrict")
+  }
+  if parts.length() == 0 {
+    ""
+  } else {
+    parts.join(" ") + " "
+  }
+}
+
+///|
 fn type_to_string(ty : CType) -> String {
   match ty {
+    CType::Qualified(qual~, base~) =>
+      qual_to_string(qual) + type_to_string(base)
     CType::Void => "void"
-    CType::Int => "int"
+    CType::Bool => "_Bool"
+    CType::Int(kind~, unsigned~) => {
+      let base = int_kind_to_string(kind)
+      if unsigned {
+        "unsigned " + base
+      } else {
+        base
+      }
+    }
+    CType::Float(kind~) => float_kind_to_string(kind)
     CType::Pointer(inner) => type_to_string(inner) + "*"
     CType::Array(elem~, size~) =>
       match size {

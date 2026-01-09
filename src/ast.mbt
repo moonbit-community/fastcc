@@ -1,19 +1,46 @@
 ///|
+struct TypeQual {
+  is_const : Bool
+  is_volatile : Bool
+  is_restrict : Bool
+} derive(Show, Eq, ToJson)
+
+///|
+enum CIntKind {
+  Char
+  Short
+  Int
+  Long
+  LongLong
+} derive(Show, Eq, ToJson)
+
+///|
+enum CFloatKind {
+  Float
+  Double
+  LongDouble
+} derive(Show, Eq, ToJson)
+
+///|
 enum CType {
   Void
-  Int
+  Bool
+  Int(kind~ : CIntKind, unsigned~ : Bool)
+  Float(kind~ : CFloatKind)
   Pointer(CType)
   Array(elem~ : CType, size~ : Int?)
   Struct(name~ : String, fields~ : Array[Field]?)
   Union(name~ : String, fields~ : Array[Field]?)
   Enum(name~ : String, items~ : Array[EnumItem]?)
   Function(return_type~ : CType, params~ : Array[CType])
+  Qualified(qual~ : TypeQual, base~ : CType)
 } derive(Show, Eq, ToJson)
 
 ///|
 struct Field {
   name : String
   ty : CType
+  bit_width : Expr?
   loc : SrcLoc
 } derive(Show, Eq, ToJson)
 
@@ -52,7 +79,7 @@ struct FuncDecl {
 struct VarDecl {
   name : String
   ty : CType
-  init : Expr?
+  init : Initializer?
   loc : SrcLoc
 } derive(Show, Eq, ToJson)
 
@@ -121,6 +148,25 @@ enum Expr {
   Call(callee~ : Expr, args~ : Array[Expr], loc~ : SrcLoc)
   Index(base~ : Expr, index~ : Expr, loc~ : SrcLoc)
   Member(base~ : Expr, name~ : String, is_arrow~ : Bool, loc~ : SrcLoc)
+} derive(Show, Eq, ToJson)
+
+///|
+enum InitDesignator {
+  Index(expr~ : Expr, loc~ : SrcLoc)
+  Field(name~ : String, loc~ : SrcLoc)
+} derive(Show, Eq, ToJson)
+
+///|
+struct InitItem {
+  designators : Array[InitDesignator]
+  value : Initializer
+  loc : SrcLoc
+} derive(Show, Eq, ToJson)
+
+///|
+enum Initializer {
+  Expr(expr~ : Expr, loc~ : SrcLoc)
+  List(items~ : Array[InitItem], loc~ : SrcLoc)
 } derive(Show, Eq, ToJson)
 
 ///|
