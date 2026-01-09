@@ -1,0 +1,3 @@
+[submodule "refs/tinycc"]
+	path = refs/tinycc
+	url = https://github.com/TinyCC/tinycc.git

@@ -1,0 +1,9 @@
+{
+  "source_dir": "/Users/agent/Projects/tinycc.mbt",
+  "name": "hackwaly/tinycc",
+  "packages": [],
+  "deps": [],
+  "backend": "wasm-gc",
+  "opt_level": "release",
+  "source": null
+}
