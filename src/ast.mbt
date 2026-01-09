@@ -66,12 +66,19 @@ enum BinaryOp {
   Mul
   Div
   Mod
+  Shl
+  Shr
   Eq
   Ne
   Lt
   Le
   Gt
   Ge
+  BitAnd
+  BitXor
+  BitOr
+  LogAnd
+  LogOr
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -86,6 +93,11 @@ enum Expr {
 ///|
 enum Stmt {
   Compound(stmts~ : Array[Stmt], loc~ : SrcLoc)
+  If(cond~ : Expr, then_branch~ : Stmt, else_branch~ : Stmt?, loc~ : SrcLoc)
+  While(cond~ : Expr, body~ : Stmt, loc~ : SrcLoc)
+  For(init~ : Stmt?, cond~ : Expr?, step~ : Expr?, body~ : Stmt, loc~ : SrcLoc)
+  Break(loc~ : SrcLoc)
+  Continue(loc~ : SrcLoc)
   Return(value~ : Expr?, loc~ : SrcLoc)
   ExprStmt(expr~ : Expr, loc~ : SrcLoc)
   DeclStmt(decl~ : VarDecl, loc~ : SrcLoc)

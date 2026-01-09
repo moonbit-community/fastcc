@@ -43,3 +43,11 @@ test "sem rejects undeclared identifier" {
   let (_, bag) = check_text("int main(){return x;}")
   assert_true(has_errors(bag))
 }
+
+///|
+test "parse control flow and logical ops" {
+  let (_, bag) = check_text(
+    "int main(){if(1){return 1;}else{return 2;}while(1){break;}for(int i=0;i<3;i=i+1){continue;}return 1&&0||1;}",
+  )
+  assert_true(!has_errors(bag))
+}

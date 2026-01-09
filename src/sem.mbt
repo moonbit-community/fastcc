@@ -142,6 +142,37 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
       }
       pop_scope(ctx)
     }
+    Stmt::If(cond~, then_branch~, else_branch~, ..) => {
+      check_cond_expr(ctx, cond)
+      check_stmt(ctx, then_branch, return_type)
+      match else_branch {
+        None => ()
+        Some(stmt) => check_stmt(ctx, stmt, return_type)
+      }
+    }
+    Stmt::While(cond~, body~, ..) => {
+      check_cond_expr(ctx, cond)
+      check_stmt(ctx, body, return_type)
+    }
+    Stmt::For(init~, cond~, step~, body~, ..) => {
+      push_scope(ctx)
+      match init {
+        None => ()
+        Some(stmt) => check_stmt(ctx, stmt, return_type)
+      }
+      match cond {
+        None => ()
+        Some(expr) => check_cond_expr(ctx, expr)
+      }
+      match step {
+        None => ()
+        Some(expr) => type_of_expr(ctx, expr) |> ignore
+      }
+      check_stmt(ctx, body, return_type)
+      pop_scope(ctx)
+    }
+    Stmt::Break(..) => ()
+    Stmt::Continue(..) => ()
     Stmt::Return(value~, loc~) =>
       match value {
         None =>
@@ -164,6 +195,14 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
     Stmt::ExprStmt(expr~, ..) => type_of_expr(ctx, expr) |> ignore
     Stmt::DeclStmt(decl~, ..) => check_var_decl(ctx, decl, is_local=true)
     Stmt::Empty(..) => ()
+  }
+}
+
+///|
+fn check_cond_expr(ctx : SemContext, expr : Expr) -> Unit {
+  let ty = type_of_expr(ctx, expr)
+  if ty != CType::Int {
+    add_sem_error(ctx, expr_loc(expr), "condition expression must be int")
   }
 }
 
