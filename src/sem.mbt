@@ -15,7 +15,7 @@ struct SemContext {
   struct_defs : Map[String, Array[Field]]
   union_defs : Map[String, Array[Field]]
   enum_defs : Map[String, Array[EnumItem]]
-  enum_consts : Map[String, CType]
+  enum_consts : Map[String, Int]
   mut labels_defined : Map[String, Bool]
   mut labels_used : Array[(String, SrcLoc)]
   mut loop_depth : Int
@@ -166,22 +166,134 @@ fn register_enum_def(
       }
   }
   if incoming.length() > 0 {
+    let mut value = 0
     for item in incoming {
-      define_enum_const(ctx, item)
+      let current = match item.value {
+        None => value
+        Some(expr) => eval_const_expr(ctx, expr, item.loc)
+      }
+      define_enum_const(ctx, item.name, item.loc, current)
+      value = current + 1
     }
   }
 }
 
 ///|
-fn define_enum_const(ctx : SemContext, item : EnumItem) -> Unit {
-  let conflict = ctx.enum_consts.contains(item.name) ||
-    ctx.globals.contains(item.name) ||
-    ctx.functions.contains(item.name)
+fn define_enum_const(
+  ctx : SemContext,
+  name : String,
+  loc : SrcLoc,
+  value : Int,
+) -> Unit {
+  let mut conflict = ctx.enum_consts.contains(name)
+  if !conflict && ctx.globals.contains(name) {
+    conflict = true
+  }
+  if !conflict && ctx.functions.contains(name) {
+    conflict = true
+  }
   if conflict {
-    add_sem_error(ctx, item.loc, "redefinition of '\{item.name}'")
+    add_sem_error(ctx, loc, "redefinition of '\{name}'")
     return
   }
-  ctx.enum_consts.set(item.name, CType::Int)
+  ctx.enum_consts.set(name, value)
+}
+
+///|
+fn parse_int_value(text : String) -> Int {
+  try @strconv.parse_int(text, base=0) catch {
+    _ => 0
+  } noraise {
+    v => v
+  }
+}
+
+///|
+fn eval_const_expr(ctx : SemContext, expr : Expr, loc : SrcLoc) -> Int {
+  match expr {
+    Expr::IntLit(value~, ..) => parse_int_value(value)
+    Expr::Ident(name~, ..) =>
+      match ctx.enum_consts.get(name) {
+        Some(v) => v
+        None => {
+          add_sem_error(ctx, loc, "invalid enum constant expression")
+          0
+        }
+      }
+    Expr::Unary(op~, expr~, ..) => {
+      let v = eval_const_expr(ctx, expr, loc)
+      match op {
+        UnaryOp::Plus => v
+        UnaryOp::Minus => 0 - v
+        UnaryOp::BitNot => v ^ -1
+        UnaryOp::Not => if v == 0 { 1 } else { 0 }
+        _ => {
+          add_sem_error(ctx, loc, "invalid enum constant expression")
+          0
+        }
+      }
+    }
+    Expr::Binary(op~, left~, right~, ..) => {
+      let lhs = eval_const_expr(ctx, left, loc)
+      let rhs = eval_const_expr(ctx, right, loc)
+      match op {
+        BinaryOp::Add => lhs + rhs
+        BinaryOp::Sub => lhs - rhs
+        BinaryOp::Mul => lhs * rhs
+        BinaryOp::Div =>
+          if rhs == 0 {
+            add_sem_error(ctx, loc, "division by zero in enum constant")
+            0
+          } else {
+            lhs / rhs
+          }
+        BinaryOp::Mod =>
+          if rhs == 0 {
+            add_sem_error(ctx, loc, "division by zero in enum constant")
+            0
+          } else {
+            lhs % rhs
+          }
+        BinaryOp::Shl => lhs << rhs
+        BinaryOp::Shr => lhs >> rhs
+        BinaryOp::BitAnd => lhs & rhs
+        BinaryOp::BitOr => lhs | rhs
+        BinaryOp::BitXor => lhs ^ rhs
+        BinaryOp::Eq => if lhs == rhs { 1 } else { 0 }
+        BinaryOp::Ne => if lhs != rhs { 1 } else { 0 }
+        BinaryOp::Lt => if lhs < rhs { 1 } else { 0 }
+        BinaryOp::Le => if lhs <= rhs { 1 } else { 0 }
+        BinaryOp::Gt => if lhs > rhs { 1 } else { 0 }
+        BinaryOp::Ge => if lhs >= rhs { 1 } else { 0 }
+        BinaryOp::LogAnd => if lhs != 0 && rhs != 0 { 1 } else { 0 }
+        BinaryOp::LogOr => if lhs != 0 || rhs != 0 { 1 } else { 0 }
+        BinaryOp::Comma => rhs
+        _ => {
+          add_sem_error(ctx, loc, "invalid enum constant expression")
+          0
+        }
+      }
+    }
+    Expr::Conditional(cond~, then_expr~, else_expr~, ..) =>
+      if eval_const_expr(ctx, cond, loc) != 0 {
+        eval_const_expr(ctx, then_expr, loc)
+      } else {
+        eval_const_expr(ctx, else_expr, loc)
+      }
+    Expr::Cast(expr~, ..) => eval_const_expr(ctx, expr, loc)
+    Expr::SizeofExpr(..) => {
+      add_sem_error(ctx, loc, "sizeof not supported in enum constant")
+      0
+    }
+    Expr::SizeofType(..) => {
+      add_sem_error(ctx, loc, "sizeof not supported in enum constant")
+      0
+    }
+    _ => {
+      add_sem_error(ctx, loc, "invalid enum constant expression")
+      0
+    }
+  }
 }
 
 ///|
@@ -271,6 +383,21 @@ fn func_sig_eq(a : FuncSig, b : FuncSig) -> Bool {
 ///|
 fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
   register_type_defs(ctx, decl.ty, decl.loc)
+  match decl.ty {
+    CType::Function(return_type~, params~) => {
+      if decl.init is Some(_) {
+        add_sem_error(
+          ctx,
+          decl.loc,
+          "function declaration cannot have initializer",
+        )
+      }
+      let sig = { return_type, params }
+      add_function_sig(ctx, decl.name, sig, decl.loc, is_def=false)
+      return
+    }
+    _ => ()
+  }
   if decl.ty == CType::Void {
     add_sem_error(ctx, decl.loc, "variable '\{decl.name}' has void type")
   }
@@ -395,7 +522,10 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
         }
       }
     Stmt::ExprStmt(expr~, ..) => type_of_expr(ctx, expr) |> ignore
-    Stmt::DeclStmt(decl~, ..) => check_var_decl(ctx, decl, is_local=true)
+    Stmt::DeclStmt(decls~, ..) =>
+      for decl in decls {
+        check_var_decl(ctx, decl, is_local=true)
+      }
     Stmt::TagDef(ty~, loc~) => register_type_defs(ctx, ty, loc)
     Stmt::Empty(..) => ()
   }
@@ -699,7 +829,44 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
           }
           CType::Int
         }
+        UnaryOp::PreInc
+        | UnaryOp::PreDec
+        | UnaryOp::PostInc
+        | UnaryOp::PostDec =>
+          match type_of_lvalue(ctx, expr) {
+            None => CType::Int
+            Some(ty) => {
+              let mut result = ty
+              match ty {
+                CType::Array(_) | CType::Function(..) => {
+                  add_sem_error(ctx, loc, "invalid operand to increment")
+                  result = CType::Int
+                }
+                _ => ()
+              }
+              if !is_int_like(ty) {
+                match ty {
+                  CType::Pointer(_) => ()
+                  _ => add_sem_error(ctx, loc, "invalid operand to increment")
+                }
+              }
+              result
+            }
+          }
       }
+    Expr::Cast(ty~, expr~, loc~) => {
+      register_type_defs(ctx, ty, loc)
+      type_of_expr(ctx, expr) |> ignore
+      ty
+    }
+    Expr::SizeofExpr(expr~, ..) => {
+      type_of_expr(ctx, expr) |> ignore
+      CType::Int
+    }
+    Expr::SizeofType(ty~, loc~) => {
+      register_type_defs(ctx, ty, loc)
+      CType::Int
+    }
     Expr::Binary(op~, left~, right~, loc~) =>
       match op {
         BinaryOp::Assign =>
@@ -938,9 +1105,10 @@ fn lookup_value(ctx : SemContext, name : String) -> CType? {
         Some(sig) =>
           Some(CType::Function(return_type=sig.return_type, params=sig.params))
         None =>
-          match ctx.enum_consts.get(name) {
-            Some(ty) => Some(ty)
-            None => None
+          if ctx.enum_consts.contains(name) {
+            Some(CType::Int)
+          } else {
+            None
           }
       }
   }

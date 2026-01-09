@@ -61,6 +61,22 @@ test "parse typedef and function pointer" {
 }
 
 ///|
+test "parse multiple declarators" {
+  let (_, bag) = check_text(
+    "int a, *b; int f(int), g(int); int main(){int x=1, y=2; return x + y;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "parse casts and sizeof" {
+  let (_, bag) = check_text(
+    "int main(){int x=0; x++; ++x; return sizeof x + sizeof(int) + (int)x;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
 test "sem accepts pointer ops" {
   let (_, bag) = check_text("int x; int *p; int main(){p = &x; return *p;}")
   assert_true(!has_errors(bag))
@@ -97,6 +113,14 @@ test "sem accepts enum constants" {
 }
 
 ///|
+test "sem accepts enum constant expressions" {
+  let (_, bag) = check_text(
+    "enum { A = 1, B, C = A + 3, D }; int main(){return A + B + C + D;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
 test "sem accepts array indexing" {
   let (_, bag) = check_text("int a[3]; int main(){return a[1];}")
   assert_true(!has_errors(bag))
@@ -105,6 +129,12 @@ test "sem accepts array indexing" {
 ///|
 test "sem rejects enum assignment" {
   let (_, bag) = check_text("enum { A = 1 }; int main(){A = 2;}")
+  assert_true(has_errors(bag))
+}
+
+///|
+test "sem rejects non-constant enum value" {
+  let (_, bag) = check_text("int x; enum E { A = x }; int main(){return 0;}")
   assert_true(has_errors(bag))
 }
 

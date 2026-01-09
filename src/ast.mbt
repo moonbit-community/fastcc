@@ -78,6 +78,10 @@ enum UnaryOp {
   BitNot
   Addr
   Deref
+  PreInc
+  PreDec
+  PostInc
+  PostDec
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -109,6 +113,9 @@ enum Expr {
   IntLit(value~ : String, loc~ : SrcLoc)
   Ident(name~ : String, loc~ : SrcLoc)
   Unary(op~ : UnaryOp, expr~ : Expr, loc~ : SrcLoc)
+  Cast(ty~ : CType, expr~ : Expr, loc~ : SrcLoc)
+  SizeofExpr(expr~ : Expr, loc~ : SrcLoc)
+  SizeofType(ty~ : CType, loc~ : SrcLoc)
   Binary(op~ : BinaryOp, left~ : Expr, right~ : Expr, loc~ : SrcLoc)
   Conditional(cond~ : Expr, then_expr~ : Expr, else_expr~ : Expr, loc~ : SrcLoc)
   Call(callee~ : Expr, args~ : Array[Expr], loc~ : SrcLoc)
@@ -132,7 +139,7 @@ enum Stmt {
   Continue(loc~ : SrcLoc)
   Return(value~ : Expr?, loc~ : SrcLoc)
   ExprStmt(expr~ : Expr, loc~ : SrcLoc)
-  DeclStmt(decl~ : VarDecl, loc~ : SrcLoc)
+  DeclStmt(decls~ : Array[VarDecl], loc~ : SrcLoc)
   TagDef(ty~ : CType, loc~ : SrcLoc)
   Empty(loc~ : SrcLoc)
 } derive(Show, Eq, ToJson)

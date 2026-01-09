@@ -37,7 +37,10 @@ fn parse_translation_unit_with(p : Parser) -> TranslationUnit {
   let decls : Array[Decl] = []
   while !is_at_end(p) {
     match parse_decl(p) {
-      Some(decl) => decls.push(decl)
+      Some(items) =>
+        for item in items {
+          decls.push(item)
+        }
       None => synchronize(p)
     }
   }
@@ -45,7 +48,7 @@ fn parse_translation_unit_with(p : Parser) -> TranslationUnit {
 }
 
 ///|
-fn parse_decl(p : Parser) -> Decl? {
+fn parse_decl(p : Parser) -> Array[Decl]? {
   match parse_decl_specs(p) {
     None => None
     Some((base_type, _loc, is_typedef)) =>
@@ -54,66 +57,94 @@ fn parse_decl(p : Parser) -> Decl? {
           add_parse_error(p, semi.loc, "typedef requires a declarator")
           None
         } else {
-          Some(Decl::TagDef(ty=base_type, loc=semi.loc))
+          Some([Decl::TagDef(ty=base_type, loc=semi.loc)])
         }
       } else {
-        match parse_declarator(p, base_type) {
-          None => None
-          Some(decl) =>
-            if is_typedef {
-              expect(p, Semicolon, "expected ';' after typedef") |> ignore
-              p.type_aliases.set(decl.name, decl.ty)
-              Some(Decl::Typedef(name=decl.name, ty=decl.ty, loc=decl.loc))
-            } else {
-              match decl.params {
-                Some(params) if decl.ty is CType::Function(return_type~, ..) =>
-                  if match_token(p, LBrace) is Some(lbrace) {
-                    let body = parse_compound_stmt(p, lbrace.loc)
-                    Some(
-                      Decl::FuncDef({
-                        name: decl.name,
-                        return_type,
-                        params,
-                        body,
-                        loc: decl.loc,
-                      }),
-                    )
-                  } else {
-                    expect(
-                      p,
-                      Semicolon,
-                      "expected ';' after function declaration",
-                    )
-                    |> ignore
-                    Some(
-                      Decl::FuncDecl({
-                        name: decl.name,
-                        return_type,
-                        params,
-                        loc: decl.loc,
-                      }),
-                    )
-                  }
-                _ => {
-                  let init = if match_token(p, Assign) is Some(_) {
-                    Some(parse_expr(p))
-                  } else {
-                    None
-                  }
-                  expect(p, Semicolon, "expected ';' after declaration")
-                  |> ignore
-                  Some(
-                    Decl::Var({
-                      name: decl.name,
-                      ty: decl.ty,
-                      init,
-                      loc: decl.loc,
-                    }),
+        let decls : Array[Decl] = []
+        while true {
+          match parse_init_declarator(p, base_type) {
+            None => {
+              synchronize(p)
+              return None
+            }
+            Some((decl, init)) =>
+              if is_typedef {
+                if init is Some(_) {
+                  add_parse_error(
+                    p,
+                    decl.loc,
+                    "typedef cannot have initializer",
                   )
                 }
+                p.type_aliases.set(decl.name, decl.ty)
+                decls.push(
+                  Decl::Typedef(name=decl.name, ty=decl.ty, loc=decl.loc),
+                )
+              } else {
+                match decl.params {
+                  Some(params) if decl.ty is CType::Function(return_type~, ..) =>
+                    if match_token(p, LBrace) is Some(lbrace) {
+                      if init is Some(_) {
+                        add_parse_error(
+                          p,
+                          decl.loc,
+                          "function cannot have initializer",
+                        )
+                      }
+                      if decls.length() > 0 {
+                        add_parse_error(
+                          p,
+                          decl.loc,
+                          "function definition cannot be mixed with other declarators",
+                        )
+                      }
+                      let body = parse_compound_stmt(p, lbrace.loc)
+                      decls.push(
+                        Decl::FuncDef({
+                          name: decl.name,
+                          return_type,
+                          params,
+                          body,
+                          loc: decl.loc,
+                        }),
+                      )
+                      return Some(decls)
+                    } else {
+                      if init is Some(_) {
+                        add_parse_error(
+                          p,
+                          decl.loc,
+                          "function declaration cannot have initializer",
+                        )
+                      }
+                      decls.push(
+                        Decl::FuncDecl({
+                          name: decl.name,
+                          return_type,
+                          params,
+                          loc: decl.loc,
+                        }),
+                      )
+                    }
+                  _ =>
+                    decls.push(
+                      Decl::Var({
+                        name: decl.name,
+                        ty: decl.ty,
+                        init,
+                        loc: decl.loc,
+                      }),
+                    )
+                }
               }
-            }
+          }
+          if match_token(p, Comma) is Some(_) {
+            continue
+          }
+          break
         }
+        expect(p, Semicolon, "expected ';' after declaration") |> ignore
+        Some(decls)
       }
   }
 }
@@ -164,6 +195,20 @@ fn parse_type_spec(p : Parser) -> (CType, SrcLoc)? {
 }
 
 ///|
+fn parse_type_name(p : Parser) -> CType? {
+  match parse_type_spec(p) {
+    None => None
+    Some((base, _loc)) => {
+      let mut ty = base
+      while match_token(p, Star) is Some(_) {
+        ty = CType::Pointer(ty)
+      }
+      Some(ty)
+    }
+  }
+}
+
+///|
 struct Declarator {
   name : String
   ty : CType
@@ -186,6 +231,21 @@ fn parse_declarator(p : Parser, base : CType) -> Declarator? {
     Some(tok) => {
       let (ty, params) = parse_declarator_suffix(p, ty)
       Some({ name: tok.lexeme, ty, params, loc: tok.loc })
+    }
+  }
+}
+
+///|
+fn parse_init_declarator(p : Parser, base : CType) -> (Declarator, Expr?)? {
+  match parse_declarator(p, base) {
+    None => None
+    Some(decl) => {
+      let init = if match_token(p, Assign) is Some(_) {
+        Some(parse_expr_eq(p))
+      } else {
+        None
+      }
+      Some((decl, init))
     }
   }
 }
@@ -573,32 +633,61 @@ fn parse_stmt(p : Parser) -> Stmt {
           }
           return Stmt::TagDef(ty=base, loc=semi.loc)
         } else {
-          match parse_declarator(p, base) {
-            Some(decl) => {
-              if is_typedef {
-                expect(p, Semicolon, "expected ';' after typedef") |> ignore
-                p.type_aliases.set(decl.name, decl.ty)
-                return Stmt::Empty(loc=decl.loc)
+          let decls : Array[VarDecl] = []
+          let mut decl_loc = tok.loc
+          let mut saw_decl = false
+          while true {
+            match parse_init_declarator(p, base) {
+              None => {
+                synchronize(p)
+                return Stmt::Empty(loc=tok.loc)
               }
-              let init = if match_token(p, Assign) is Some(_) {
-                Some(parse_expr(p))
-              } else {
-                None
+              Some((decl, init)) => {
+                if !saw_decl {
+                  decl_loc = decl.loc
+                  saw_decl = true
+                }
+                if is_typedef {
+                  if init is Some(_) {
+                    add_parse_error(
+                      p,
+                      decl.loc,
+                      "typedef cannot have initializer",
+                    )
+                  }
+                  p.type_aliases.set(decl.name, decl.ty)
+                } else {
+                  let mut actual_init = init
+                  if decl.ty is CType::Function(..) && actual_init is Some(_) {
+                    add_parse_error(
+                      p,
+                      decl.loc,
+                      "function declaration cannot have initializer",
+                    )
+                    actual_init = None
+                  }
+                  decls.push({
+                    name: decl.name,
+                    ty: decl.ty,
+                    init: actual_init,
+                    loc: decl.loc,
+                  })
+                }
               }
-              expect(p, Semicolon, "expected ';' after declaration") |> ignore
-              let decl_stmt = {
-                name: decl.name,
-                ty: decl.ty,
-                init,
-                loc: decl.loc,
-              }
-              return Stmt::DeclStmt(decl=decl_stmt, loc=decl.loc)
             }
-            None => {
-              synchronize(p)
-              return Stmt::Empty(loc=tok.loc)
+            if match_token(p, Comma) is Some(_) {
+              continue
             }
+            break
           }
+          expect(p, Semicolon, "expected ';' after declaration") |> ignore
+          if is_typedef {
+            return Stmt::Empty(loc=decl_loc)
+          }
+          if saw_decl {
+            return Stmt::DeclStmt(decls~, loc=decl_loc)
+          }
+          return Stmt::Empty(loc=tok.loc)
         }
       None => {
         synchronize(p)
@@ -694,33 +783,58 @@ fn parse_for_init(p : Parser) -> Stmt? {
           }
           return Some(Stmt::TagDef(ty=base, loc=semi.loc))
         } else {
-          match parse_declarator(p, base) {
-            Some(decl) => {
-              if is_typedef {
-                expect(p, Semicolon, "expected ';' after typedef") |> ignore
-                p.type_aliases.set(decl.name, decl.ty)
+          let decls : Array[VarDecl] = []
+          let mut decl_loc = peek_token(p).loc
+          let mut saw_decl = false
+          while true {
+            match parse_init_declarator(p, base) {
+              None => {
+                synchronize(p)
                 return None
               }
-              let init = if match_token(p, Assign) is Some(_) {
-                Some(parse_expr(p))
-              } else {
-                None
+              Some((decl, init)) => {
+                if !saw_decl {
+                  decl_loc = decl.loc
+                  saw_decl = true
+                }
+                if is_typedef {
+                  if init is Some(_) {
+                    add_parse_error(
+                      p,
+                      decl.loc,
+                      "typedef cannot have initializer",
+                    )
+                  }
+                  p.type_aliases.set(decl.name, decl.ty)
+                } else {
+                  let mut actual_init = init
+                  if decl.ty is CType::Function(..) && actual_init is Some(_) {
+                    add_parse_error(
+                      p,
+                      decl.loc,
+                      "function declaration cannot have initializer",
+                    )
+                    actual_init = None
+                  }
+                  decls.push({
+                    name: decl.name,
+                    ty: decl.ty,
+                    init: actual_init,
+                    loc: decl.loc,
+                  })
+                }
               }
-              expect(p, Semicolon, "expected ';' after for declaration")
-              |> ignore
-              let decl_stmt = {
-                name: decl.name,
-                ty: decl.ty,
-                init,
-                loc: decl.loc,
-              }
-              return Some(Stmt::DeclStmt(decl=decl_stmt, loc=decl.loc))
             }
-            None => {
-              synchronize(p)
-              return None
+            if match_token(p, Comma) is Some(_) {
+              continue
             }
+            break
           }
+          expect(p, Semicolon, "expected ';' after for declaration") |> ignore
+          if is_typedef || !saw_decl {
+            return None
+          }
+          return Some(Stmt::DeclStmt(decls~, loc=decl_loc))
         }
       None => {
         synchronize(p)
@@ -975,6 +1089,51 @@ fn parse_expr_prod(p : Parser) -> Expr {
 
 ///|
 fn parse_expr_unary(p : Parser) -> Expr {
+  if match_token(p, KwSizeof) is Some(tok) {
+    if peek_kind(p, 0) == LParen && is_type_start(p, peek_token_at(p, 1)) {
+      expect(p, LParen, "expected '(' after sizeof") |> ignore
+      match parse_type_name(p) {
+        None => {
+          add_parse_error(p, tok.loc, "expected type name after sizeof")
+          return Expr::IntLit(value="0", loc=tok.loc)
+        }
+        Some(ty) => {
+          expect(p, RParen, "expected ')' after sizeof type") |> ignore
+          return Expr::SizeofType(ty~, loc=tok.loc)
+        }
+      }
+    }
+    let expr = parse_expr_unary(p)
+    return Expr::SizeofExpr(expr~, loc=tok.loc)
+  }
+  if peek_kind(p, 0) == LParen && is_type_start(p, peek_token_at(p, 1)) {
+    let lparen = advance_token(p)
+    match parse_type_name(p) {
+      None => {
+        add_parse_error(p, lparen.loc, "expected type name in cast")
+        return Expr::IntLit(value="0", loc=lparen.loc)
+      }
+      Some(ty) => {
+        expect(p, RParen, "expected ')' after cast type") |> ignore
+        let expr = parse_expr_unary(p)
+        return Expr::Cast(ty~, expr~, loc=lparen.loc)
+      }
+    }
+  }
+  match match_token(p, PlusPlus) {
+    Some(tok) => {
+      let expr = parse_expr_unary(p)
+      return Expr::Unary(op=UnaryOp::PreInc, expr~, loc=tok.loc)
+    }
+    None => ()
+  }
+  match match_token(p, MinusMinus) {
+    Some(tok) => {
+      let expr = parse_expr_unary(p)
+      return Expr::Unary(op=UnaryOp::PreDec, expr~, loc=tok.loc)
+    }
+    None => ()
+  }
   match match_token(p, Plus) {
     Some(tok) => {
       let expr = parse_expr_unary(p)
@@ -1063,6 +1222,20 @@ fn parse_expr_postfix(p : Parser) -> Expr {
       }
       None => ()
     }
+    match match_token(p, PlusPlus) {
+      Some(tok) => {
+        expr = Expr::Unary(op=UnaryOp::PostInc, expr~, loc=tok.loc)
+        continue
+      }
+      None => ()
+    }
+    match match_token(p, MinusMinus) {
+      Some(tok) => {
+        expr = Expr::Unary(op=UnaryOp::PostDec, expr~, loc=tok.loc)
+        continue
+      }
+      None => ()
+    }
     break
   }
   expr
@@ -1123,6 +1296,9 @@ fn expr_loc(expr : Expr) -> SrcLoc {
     Expr::IntLit(loc~, ..) => loc
     Expr::Ident(loc~, ..) => loc
     Expr::Unary(loc~, ..) => loc
+    Expr::Cast(loc~, ..) => loc
+    Expr::SizeofExpr(loc~, ..) => loc
+    Expr::SizeofType(loc~, ..) => loc
     Expr::Binary(loc~, ..) => loc
     Expr::Conditional(loc~, ..) => loc
     Expr::Call(loc~, ..) => loc
