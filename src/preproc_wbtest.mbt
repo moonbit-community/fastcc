@@ -9,6 +9,22 @@ fn pp_tokens(text : String) -> (Array[Token], DiagBag) {
 }
 
 ///|
+fn pp_tokens_with_paths(
+  text : String,
+  paths : Array[String],
+) -> (Array[Token], DiagBag) {
+  let bag = new_diag_bag()
+  let map = new_source_map()
+  let file = add_file(map, "<test>", text)
+  let pp = new_preprocessor(file, bag)
+  for path in paths {
+    add_include_path(pp, path)
+  }
+  let out = dump_tokens(pp, 512)
+  (out.filter(tok => tok.kind != Eof), bag)
+}
+
+///|
 test "preprocess define expansion" {
   let (toks, bag) = pp_tokens("#define X 1\nint a = X;")
   assert_true(!has_errors(bag))
@@ -57,6 +73,36 @@ test "preprocess include" {
 }
 
 ///|
+test "preprocess include with macro" {
+  let path = "/tmp/tinyccmbt_include_macro.h"
+  @fs.write_string_to_file(path, "int inc2;") catch {
+    err => fail("write include failed: \{err.to_string()}")
+  }
+  let (toks, bag) = pp_tokens("#define HDR \"\{path}\"\n#include HDR")
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=["KwInt:int", "Ident:inc2", "Semicolon:;"])
+}
+
+///|
+test "preprocess include search path" {
+  let dir = "/tmp/tinyccmbt_include_dir"
+  if !@fs.path_exists(dir) {
+    @fs.create_dir(dir) catch {
+      err => fail("create include dir failed: \{err.to_string()}")
+    }
+  }
+  let path = dir + "/inc.h"
+  @fs.write_string_to_file(path, "int inc3;") catch {
+    err => fail("write include failed: \{err.to_string()}")
+  }
+  let (toks, bag) = pp_tokens_with_paths("#include <inc.h>", [dir])
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=["KwInt:int", "Ident:inc3", "Semicolon:;"])
+}
+
+///|
 test "preprocess function-like macro" {
   let (toks, bag) = pp_tokens("#define ADD(a,b) a + b\nint x = ADD(1, 2);")
   assert_true(!has_errors(bag))
@@ -84,6 +130,14 @@ test "preprocess if expression" {
   let (toks, bag) = pp_tokens(
     "#define A 4\n#if A + 2 * 3 == 10\nint ok;\n#endif",
   )
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
+}
+
+///|
+test "preprocess if macro expression" {
+  let (toks, bag) = pp_tokens("#define A 1 + 2\n#if A == 3\nint ok;\n#endif")
   assert_true(!has_errors(bag))
   let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
   @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])

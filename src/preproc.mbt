@@ -757,6 +757,52 @@ fn normalize_macro_tokens(tokens : Array[Token]) -> Array[Token] {
 }
 
 ///|
+fn expand_if_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
+  let out : Array[Token] = []
+  let mut segment : Array[Token] = []
+  let mut i = 0
+  while i < tokens.length() {
+    let tok = tokens[i]
+    if tok.kind == Ident && tok.lexeme == "defined" {
+      if segment.length() > 0 {
+        let expanded = expand_tokens(pp, segment)
+        for t in expanded {
+          out.push(t)
+        }
+        segment = []
+      }
+      out.push(tok)
+      i = i + 1
+      if i < tokens.length() && tokens[i].kind == LParen {
+        out.push(tokens[i])
+        i = i + 1
+        if i < tokens.length() {
+          out.push(tokens[i])
+          i = i + 1
+        }
+        if i < tokens.length() && tokens[i].kind == RParen {
+          out.push(tokens[i])
+          i = i + 1
+        }
+      } else if i < tokens.length() {
+        out.push(tokens[i])
+        i = i + 1
+      }
+      continue
+    }
+    segment.push(tok)
+    i = i + 1
+  }
+  if segment.length() > 0 {
+    let expanded = expand_tokens(pp, segment)
+    for t in expanded {
+      out.push(t)
+    }
+  }
+  out
+}
+
+///|
 fn push_tokens(pp : Preprocessor, tokens : Array[Token]) -> Unit {
   let mut i = tokens.length()
   while i > 0 {
@@ -1128,12 +1174,14 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     return
   }
   if name == "if" {
-    let cond = eval_if_expr(pp, args, name_tok.loc)
+    let expanded = expand_if_tokens(pp, args)
+    let cond = eval_if_expr(pp, expanded, name_tok.loc)
     push_cond(pp, cond)
     return
   }
   if name == "elif" {
-    let cond = eval_if_expr(pp, args, name_tok.loc)
+    let expanded = expand_if_tokens(pp, args)
+    let cond = eval_if_expr(pp, expanded, name_tok.loc)
     update_elif(pp, cond, name_tok.loc)
     return
   }
@@ -1147,7 +1195,8 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
   }
   if name == "include" {
     if current_active(pp) {
-      match parse_include_path(pp, args, name_tok.loc) {
+      let expanded = expand_tokens(pp, args)
+      match parse_include_path(pp, expanded, name_tok.loc) {
         Some(spec) => include_file(pp, spec, name_tok.loc)
         None => ()
       }
