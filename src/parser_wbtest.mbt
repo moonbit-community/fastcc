@@ -161,6 +161,22 @@ test "sem rejects non-integer bitfield" {
 }
 
 ///|
+test "sem accepts storage classes" {
+  let (_, bag) = check_text(
+    "static int x; extern int y; int main(){register int r=1; return r + x;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem rejects invalid global storage" {
+  let (_, bag) = check_text("auto int x; int main(){return 0;}")
+  assert_true(has_errors(bag))
+  let (_, bag2) = check_text("register int y; int main(){return 0;}")
+  assert_true(has_errors(bag2))
+}
+
+///|
 test "sem rejects control flow outside context" {
   let (_, bag) = check_text("int main(){case 1: return 0;}")
   assert_true(has_errors(bag))

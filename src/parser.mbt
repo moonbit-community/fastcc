@@ -51,7 +51,11 @@ fn parse_translation_unit_with(p : Parser) -> TranslationUnit {
 fn parse_decl(p : Parser) -> Array[Decl]? {
   match parse_decl_specs(p) {
     None => None
-    Some((base_type, _loc, is_typedef)) =>
+    Some(specs) => {
+      let base_type = specs.ty
+      let is_typedef = specs.is_typedef
+      let storage = specs.storage
+      let is_inline = specs.is_inline
       if match_token(p, Semicolon) is Some(semi) {
         if is_typedef {
           add_parse_error(p, semi.loc, "typedef requires a declarator")
@@ -104,6 +108,8 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
                           name: decl.name,
                           return_type,
                           params,
+                          storage,
+                          is_inline,
                           body,
                           loc: decl.loc,
                         }),
@@ -122,19 +128,30 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
                           name: decl.name,
                           return_type,
                           params,
+                          storage,
+                          is_inline,
                           loc: decl.loc,
                         }),
                       )
                     }
-                  _ =>
+                  _ => {
+                    if is_inline {
+                      add_parse_error(
+                        p,
+                        decl.loc,
+                        "inline can only apply to functions",
+                      )
+                    }
                     decls.push(
                       Decl::Var({
                         name: decl.name,
                         ty: decl.ty,
                         init,
+                        storage,
                         loc: decl.loc,
                       }),
                     )
+                  }
                 }
               }
           }
@@ -146,6 +163,7 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
         expect(p, Semicolon, "expected ';' after declaration") |> ignore
         Some(decls)
       }
+    }
   }
 }
 
@@ -235,12 +253,23 @@ fn parse_type_qualifiers(p : Parser) -> TypeQual {
 }
 
 ///|
+struct DeclSpecs {
+  ty : CType
+  loc : SrcLoc
+  is_typedef : Bool
+  storage : StorageClass
+  is_inline : Bool
+}
+
+///|
 fn parse_type_specifiers(
   p : Parser,
   allow_storage~ : Bool,
   allow_typedef~ : Bool,
-) -> (CType, SrcLoc, Bool)? {
+) -> DeclSpecs? {
   let mut is_typedef = false
+  let mut storage = StorageClass::Default
+  let mut is_inline = false
   let mut saw_any = false
   let mut start_loc = peek_token(p).loc
   let mut qual = empty_qual()
@@ -259,6 +288,9 @@ fn parse_type_specifiers(
     match tok.kind {
       KwTypedef => {
         if allow_typedef {
+          if is_typedef || storage != StorageClass::Default {
+            add_parse_error(p, tok.loc, "multiple storage classes")
+          }
           is_typedef = true
         } else {
           add_parse_error(p, tok.loc, "unexpected typedef")
@@ -269,6 +301,34 @@ fn parse_type_specifiers(
       }
       KwExtern | KwStatic | KwAuto | KwRegister | KwInline =>
         if allow_storage {
+          match tok.kind {
+            KwInline => is_inline = true
+            KwExtern => {
+              if storage != StorageClass::Default || is_typedef {
+                add_parse_error(p, tok.loc, "multiple storage classes")
+              }
+              storage = StorageClass::Extern
+            }
+            KwStatic => {
+              if storage != StorageClass::Default || is_typedef {
+                add_parse_error(p, tok.loc, "multiple storage classes")
+              }
+              storage = StorageClass::Static
+            }
+            KwAuto => {
+              if storage != StorageClass::Default || is_typedef {
+                add_parse_error(p, tok.loc, "multiple storage classes")
+              }
+              storage = StorageClass::Auto
+            }
+            KwRegister => {
+              if storage != StorageClass::Default || is_typedef {
+                add_parse_error(p, tok.loc, "multiple storage classes")
+              }
+              storage = StorageClass::Register
+            }
+            _ => ()
+          }
           ignore(advance_token(p))
           saw_any = true
           continue
@@ -493,14 +553,11 @@ fn parse_type_specifiers(
     add_parse_error(p, start_loc, "invalid modifiers for _Bool")
   }
   let qualified = apply_qualifiers(ty, qual)
-  Some((qualified, start_loc, is_typedef))
+  Some({ ty: qualified, loc: start_loc, is_typedef, storage, is_inline })
 }
 
 ///|
-fn parse_decl_specs(
-  p : Parser,
-  allow_storage? : Bool = true,
-) -> (CType, SrcLoc, Bool)? {
+fn parse_decl_specs(p : Parser, allow_storage? : Bool = true) -> DeclSpecs? {
   parse_type_specifiers(p, allow_storage~, allow_typedef=true)
 }
 
@@ -508,7 +565,7 @@ fn parse_decl_specs(
 fn parse_type_spec(p : Parser) -> (CType, SrcLoc)? {
   match parse_type_specifiers(p, allow_storage=false, allow_typedef=false) {
     None => None
-    Some((ty, loc, _)) => Some((ty, loc))
+    Some(specs) => Some((specs.ty, specs.loc))
   }
 }
 
@@ -794,7 +851,10 @@ fn parse_struct_fields(p : Parser) -> Array[Field] {
         synchronize(p)
         break
       }
-      Some((base, loc, is_typedef)) => {
+      Some(specs) => {
+        let base = specs.ty
+        let loc = specs.loc
+        let is_typedef = specs.is_typedef
         if is_typedef {
           add_parse_error(p, loc, "typedef not allowed in struct field")
         }
@@ -1070,7 +1130,11 @@ fn parse_stmt(p : Parser) -> Stmt {
   }
   if is_type_start(p, tok) {
     match parse_decl_specs(p) {
-      Some((base, _type_loc, is_typedef)) =>
+      Some(specs) => {
+        let base = specs.ty
+        let is_typedef = specs.is_typedef
+        let storage = specs.storage
+        let is_inline = specs.is_inline
         if match_token(p, Semicolon) is Some(semi) {
           if is_typedef {
             add_parse_error(p, semi.loc, "typedef requires a declarator")
@@ -1111,10 +1175,18 @@ fn parse_stmt(p : Parser) -> Stmt {
                     )
                     actual_init = None
                   }
+                  if is_inline {
+                    add_parse_error(
+                      p,
+                      decl.loc,
+                      "inline can only apply to functions",
+                    )
+                  }
                   decls.push({
                     name: decl.name,
                     ty: decl.ty,
                     init: actual_init,
+                    storage,
                     loc: decl.loc,
                   })
                 }
@@ -1134,6 +1206,7 @@ fn parse_stmt(p : Parser) -> Stmt {
           }
           return Stmt::Empty(loc=tok.loc)
         }
+      }
       None => {
         synchronize(p)
         return Stmt::Empty(loc=tok.loc)
@@ -1220,7 +1293,11 @@ fn parse_for_init(p : Parser) -> Stmt? {
   }
   if is_type_start(p, peek_token(p)) {
     match parse_decl_specs(p) {
-      Some((base, _type_loc, is_typedef)) =>
+      Some(specs) => {
+        let base = specs.ty
+        let is_typedef = specs.is_typedef
+        let storage = specs.storage
+        let is_inline = specs.is_inline
         if match_token(p, Semicolon) is Some(semi) {
           if is_typedef {
             add_parse_error(p, semi.loc, "typedef requires a declarator")
@@ -1261,10 +1338,18 @@ fn parse_for_init(p : Parser) -> Stmt? {
                     )
                     actual_init = None
                   }
+                  if is_inline {
+                    add_parse_error(
+                      p,
+                      decl.loc,
+                      "inline can only apply to functions",
+                    )
+                  }
                   decls.push({
                     name: decl.name,
                     ty: decl.ty,
                     init: actual_init,
+                    storage,
                     loc: decl.loc,
                   })
                 }
@@ -1281,6 +1366,7 @@ fn parse_for_init(p : Parser) -> Stmt? {
           }
           return Some(Stmt::DeclStmt(decls~, loc=decl_loc))
         }
+      }
       None => {
         synchronize(p)
         return None

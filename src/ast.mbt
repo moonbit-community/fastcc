@@ -22,6 +22,15 @@ enum CFloatKind {
 } derive(Show, Eq, ToJson)
 
 ///|
+enum StorageClass {
+  Default
+  Extern
+  Static
+  Auto
+  Register
+} derive(Show, Eq, ToJson)
+
+///|
 enum CType {
   Void
   Bool
@@ -63,6 +72,8 @@ struct FuncDef {
   name : String
   return_type : CType
   params : Array[Param]
+  storage : StorageClass
+  is_inline : Bool
   body : Stmt
   loc : SrcLoc
 } derive(Show, Eq, ToJson)
@@ -72,6 +83,8 @@ struct FuncDecl {
   name : String
   return_type : CType
   params : Array[Param]
+  storage : StorageClass
+  is_inline : Bool
   loc : SrcLoc
 } derive(Show, Eq, ToJson)
 
@@ -80,6 +93,7 @@ struct VarDecl {
   name : String
   ty : CType
   init : Initializer?
+  storage : StorageClass
   loc : SrcLoc
 } derive(Show, Eq, ToJson)
 

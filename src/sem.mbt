@@ -80,6 +80,17 @@ fn int_rank(kind : CIntKind) -> Int {
 }
 
 ///|
+fn int_bits(kind : CIntKind) -> Int {
+  match kind {
+    CIntKind::Char => 8
+    CIntKind::Short => 16
+    CIntKind::Int => 32
+    CIntKind::Long => 64
+    CIntKind::LongLong => 64
+  }
+}
+
+///|
 fn float_rank(kind : CFloatKind) -> Int {
   match kind {
     CFloatKind::Float => 1
@@ -97,9 +108,14 @@ fn is_float_type(ty : CType) -> Bool {
 }
 
 ///|
-fn to_int_type(ty : CType) -> CType {
+fn promote_int_type(ty : CType) -> CType {
   match strip_qualifiers(ty) {
-    CType::Int(kind~, unsigned~) => CType::Int(kind~, unsigned~)
+    CType::Int(kind~, unsigned~) =>
+      if int_rank(kind) < int_rank(CIntKind::Int) {
+        default_int_type()
+      } else {
+        CType::Int(kind~, unsigned~)
+      }
     CType::Bool => default_int_type()
     CType::Enum(..) => default_int_type()
     _ => default_int_type()
@@ -108,20 +124,36 @@ fn to_int_type(ty : CType) -> CType {
 
 ///|
 fn common_int_type(lhs : CType, rhs : CType) -> CType {
-  let left = to_int_type(lhs)
-  let right = to_int_type(rhs)
+  let left = promote_int_type(lhs)
+  let right = promote_int_type(rhs)
   match (left, right) {
     (
       CType::Int(kind=l_kind, unsigned=l_unsigned),
       CType::Int(kind=r_kind, unsigned=r_unsigned),
     ) => {
-      let rank = if int_rank(l_kind) >= int_rank(r_kind) {
-        l_kind
-      } else {
-        r_kind
+      if l_unsigned == r_unsigned {
+        let rank = if int_rank(l_kind) >= int_rank(r_kind) {
+          l_kind
+        } else {
+          r_kind
+        }
+        return CType::Int(kind=rank, unsigned=l_unsigned)
       }
-      let unsigned = l_unsigned || r_unsigned
-      CType::Int(kind=rank, unsigned~)
+      let (u_kind, u_unsigned, s_kind) = if l_unsigned {
+        (l_kind, true, r_kind)
+      } else {
+        (r_kind, true, l_kind)
+      }
+      if int_rank(u_kind) >= int_rank(s_kind) {
+        return CType::Int(kind=u_kind, unsigned=u_unsigned)
+      }
+      let u_bits = int_bits(u_kind)
+      let s_bits = int_bits(s_kind)
+      if s_bits > u_bits {
+        CType::Int(kind=s_kind, unsigned=false)
+      } else {
+        CType::Int(kind=s_kind, unsigned=true)
+      }
     }
     _ => default_int_type()
   }
@@ -160,6 +192,29 @@ fn can_assign(dst : CType, src : CType) -> Bool {
     (CType::Pointer(inner_a), CType::Pointer(inner_b)) =>
       type_eq(inner_a, inner_b)
     _ => type_eq(dst_ty, src_ty)
+  }
+}
+
+///|
+fn check_storage_class(
+  ctx : SemContext,
+  storage : StorageClass,
+  loc : SrcLoc,
+  is_local~ : Bool,
+  is_function~ : Bool,
+) -> Unit {
+  if is_function {
+    match storage {
+      StorageClass::Auto | StorageClass::Register =>
+        add_sem_error(ctx, loc, "invalid storage class for function")
+      _ => ()
+    }
+  } else if !is_local {
+    match storage {
+      StorageClass::Auto | StorageClass::Register =>
+        add_sem_error(ctx, loc, "invalid storage class for global")
+      _ => ()
+    }
   }
 }
 
@@ -440,12 +495,26 @@ fn eval_const_expr(ctx : SemContext, expr : Expr, loc : SrcLoc) -> Int {
 
 ///|
 fn check_func_decl(ctx : SemContext, func_decl : FuncDecl) -> Unit {
+  check_storage_class(
+    ctx,
+    func_decl.storage,
+    func_decl.loc,
+    is_local=false,
+    is_function=true,
+  )
   let sig = func_sig_from_params(func_decl.return_type, func_decl.params)
   add_function_sig(ctx, func_decl.name, sig, func_decl.loc, is_def=false)
 }
 
 ///|
 fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
+  check_storage_class(
+    ctx,
+    func_def.storage,
+    func_def.loc,
+    is_local=false,
+    is_function=true,
+  )
   let sig = func_sig_from_params(func_def.return_type, func_def.params)
   add_function_sig(ctx, func_def.name, sig, func_def.loc, is_def=true)
   ctx.labels_defined = {}
@@ -527,6 +596,13 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
   register_type_defs(ctx, decl.ty, decl.loc)
   match strip_qualifiers(decl.ty) {
     CType::Function(return_type~, params~) => {
+      check_storage_class(
+        ctx,
+        decl.storage,
+        decl.loc,
+        is_local~,
+        is_function=true,
+      )
       if decl.init is Some(_) {
         add_sem_error(
           ctx,
@@ -540,6 +616,7 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
     }
     _ => ()
   }
+  check_storage_class(ctx, decl.storage, decl.loc, is_local~, is_function=false)
   if is_void_type(decl.ty) {
     add_sem_error(ctx, decl.loc, "variable '\{decl.name}' has void type")
   }
