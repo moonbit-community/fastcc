@@ -1,0 +1,570 @@
+///|
+struct Arm64Emitter {
+  code : Array[UInt]
+}
+
+///|
+fn new_arm64_emitter() -> Arm64Emitter {
+  { code: [] }
+}
+
+///|
+fn emit32(emitter : Arm64Emitter, insn : UInt) -> Unit {
+  emitter.code.push(insn)
+}
+
+///|
+fn u64_mask(bits : Int) -> UInt64 {
+  if bits <= 0 {
+    return 0
+  }
+  let one : UInt64 = 1
+  (one << bits) - 1
+}
+
+///|
+fn arm64_encode_bimm64(value : UInt64) -> Int {
+  let mut x = value
+  let neg = (x & 1) != 0
+  if neg {
+    x = x.lnot()
+  }
+  if x == 0 {
+    return -1
+  }
+  let mut rep = 64
+  if x >> 2 == (x & u64_mask(64 - 2)) {
+    rep = 2
+    x = x & u64_mask(2)
+  } else if x >> 4 == (x & u64_mask(64 - 4)) {
+    rep = 4
+    x = x & u64_mask(4)
+  } else if x >> 8 == (x & u64_mask(64 - 8)) {
+    rep = 8
+    x = x & u64_mask(8)
+  } else if x >> 16 == (x & u64_mask(64 - 16)) {
+    rep = 16
+    x = x & u64_mask(16)
+  } else if x >> 32 == (x & u64_mask(64 - 32)) {
+    rep = 32
+    x = x & u64_mask(32)
+  }
+  let mut pos = 0
+  if (x & u64_mask(32)) == 0 {
+    x = x >> 32
+    pos = pos + 32
+  }
+  if (x & u64_mask(16)) == 0 {
+    x = x >> 16
+    pos = pos + 16
+  }
+  if (x & u64_mask(8)) == 0 {
+    x = x >> 8
+    pos = pos + 8
+  }
+  if (x & u64_mask(4)) == 0 {
+    x = x >> 4
+    pos = pos + 4
+  }
+  if (x & u64_mask(2)) == 0 {
+    x = x >> 2
+    pos = pos + 2
+  }
+  if (x & u64_mask(1)) == 0 {
+    x = x >> 1
+    pos = pos + 1
+  }
+  let mut len = 0
+  if (x.lnot() & u64_mask(32)) == 0 {
+    x = x >> 32
+    len = len + 32
+  }
+  if (x.lnot() & u64_mask(16)) == 0 {
+    x = x >> 16
+    len = len + 16
+  }
+  if (x.lnot() & u64_mask(8)) == 0 {
+    x = x >> 8
+    len = len + 8
+  }
+  if (x.lnot() & u64_mask(4)) == 0 {
+    x = x >> 4
+    len = len + 4
+  }
+  if (x.lnot() & u64_mask(2)) == 0 {
+    x = x >> 2
+    len = len + 2
+  }
+  if (x.lnot() & u64_mask(1)) == 0 {
+    x = x >> 1
+    len = len + 1
+  }
+  if x != 0 {
+    return -1
+  }
+  let mut pos1 = pos
+  let mut len1 = len
+  if neg {
+    pos1 = (pos1 + len1) & (rep - 1)
+    len1 = rep - len1
+  }
+  (0x1000 & (rep << 6)) |
+  ((((rep - 1) ^ 31) << 1) & 63) |
+  (((rep - pos1) & (rep - 1)) << 6) |
+  (len1 - 1)
+}
+
+///|
+fn arm64_movi(reg : UInt, value : UInt64) -> UInt {
+  let m : UInt64 = 0xffff
+  if (value & m.lnot()) == 0 {
+    return (0x52800000 : UInt64).lor(reg.to_uint64()).lor(value << 5).to_uint()
+  }
+  if (value & (m << 16).lnot()) == 0 {
+    return (0x52a00000 : UInt64).lor(reg.to_uint64()).lor(value >> 11).to_uint()
+  }
+  if (value & (m << 32).lnot()) == 0 {
+    return (0xd2c00000 : UInt64).lor(reg.to_uint64()).lor(value >> 27).to_uint()
+  }
+  if (value & (m << 48).lnot()) == 0 {
+    return (0xd2e00000 : UInt64).lor(reg.to_uint64()).lor(value >> 43).to_uint()
+  }
+  if (value & m.lnot()) == m << 16 {
+    return (0x12800000 : UInt64)
+      .lor(reg.to_uint64())
+      .lor((value.lnot() << 5) & 0x1fffe0)
+      .to_uint()
+  }
+  if (value & (m << 16).lnot()) == m {
+    return (0x12a00000 : UInt64)
+      .lor(reg.to_uint64())
+      .lor((value.lnot() >> 11) & 0x1fffe0)
+      .to_uint()
+  }
+  if value.lor(m).lnot() == 0 {
+    return (0x92800000 : UInt64)
+      .lor(reg.to_uint64())
+      .lor((value.lnot() << 5) & 0x1fffe0)
+      .to_uint()
+  }
+  if value.lor(m << 16).lnot() == 0 {
+    return (0x92a00000 : UInt64)
+      .lor(reg.to_uint64())
+      .lor((value.lnot() >> 11) & 0x1fffe0)
+      .to_uint()
+  }
+  if value.lor(m << 32).lnot() == 0 {
+    return (0x92c00000 : UInt64)
+      .lor(reg.to_uint64())
+      .lor((value.lnot() >> 27) & 0x1fffe0)
+      .to_uint()
+  }
+  if value.lor(m << 48).lnot() == 0 {
+    return (0x92e00000 : UInt64)
+      .lor(reg.to_uint64())
+      .lor((value.lnot() >> 43) & 0x1fffe0)
+      .to_uint()
+  }
+  if value >> 32 == 0 {
+    let e = arm64_encode_bimm64(value | (value << 32))
+    if e >= 0 {
+      return (0x320003e0 : UInt64)
+        .lor(reg.to_uint64())
+        .lor(e.to_uint64() << 10)
+        .to_uint()
+    }
+  }
+  let e64 = arm64_encode_bimm64(value)
+  if e64 >= 0 {
+    return (0xb20003e0 : UInt64)
+      .lor(reg.to_uint64())
+      .lor(e64.to_uint64() << 10)
+      .to_uint()
+  }
+  0
+}
+
+///|
+fn arm64_movimm(emitter : Arm64Emitter, reg : UInt, value : UInt64) -> Unit {
+  let insn = arm64_movi(reg, value)
+  if insn != 0 {
+    emit32(emitter, insn)
+    return
+  }
+  let mut z = 0
+  let mut m = 0
+  let mut mov1 : UInt64 = 0xd2800000
+  let mut x1 = value
+  let mask16 : UInt64 = 0xffff
+  let mut i = 0
+  while i < 64 {
+    if ((value >> i) & mask16) == 0 {
+      z = z + 1
+    }
+    if ((value.lnot() >> i) & mask16) == 0 {
+      m = m + 1
+    }
+    i = i + 16
+  }
+  if m > z {
+    x1 = value.lnot()
+    mov1 = 0x92800000
+  }
+  i = 0
+  while i < 64 {
+    let chunk = (x1 >> i) & mask16
+    if chunk != 0 {
+      let insn1 = mov1
+        .lor(reg.to_uint64())
+        .lor(chunk << 5)
+        .lor(i.to_uint64() << 17)
+        .to_uint()
+      emit32(emitter, insn1)
+      i = i + 16
+      break
+    }
+    i = i + 16
+  }
+  while i < 64 {
+    let chunk = (value >> i) & mask16
+    if chunk != 0 {
+      let insn1 = (0xf2800000 : UInt64)
+        .lor(reg.to_uint64())
+        .lor(chunk << 5)
+        .lor(i.to_uint64() << 17)
+        .to_uint()
+      emit32(emitter, insn1)
+    }
+    i = i + 16
+  }
+}
+
+///|
+fn arm64_spoff(emitter : Arm64Emitter, reg : UInt, off : UInt64) -> Unit {
+  let sub = off >> 63
+  let mut off1 = off
+  if sub != 0 {
+    off1 = (0 : UInt64) - off
+  }
+  if off1 < (4096 : UInt64) {
+    let insn = (0x910003e0 : UInt64)
+      .lor(sub << 30)
+      .lor(reg.to_uint64())
+      .lor(off1 << 10)
+      .to_uint()
+    emit32(emitter, insn)
+  } else {
+    arm64_movimm(emitter, 30, off1)
+    let insn = (0x8b3e63e0 : UInt64)
+      .lor(sub << 30)
+      .lor(reg.to_uint64())
+      .to_uint()
+    emit32(emitter, insn)
+  }
+}
+
+///|
+fn arm64_check_offset(invert : Bool, sz_ : Int, off : UInt64) -> UInt64 {
+  let sz = sz_
+  let mask32 : UInt = (0xfff : UInt) << sz
+  let mask32_u64 = mask32.to_uint64()
+  let mask32_not_u64 = mask32.lnot().to_uint64()
+  let neg_off = (0 : UInt64) - off
+  if (off & mask32_not_u64) == 0 ||
+    off < (256 : UInt64) ||
+    neg_off <= (256 : UInt64) {
+    return if invert { off } else { 0 }
+  } else if (off & mask32_u64) != 0 {
+    return if invert { off & mask32_u64 } else { off & mask32_not_u64 }
+  } else {
+    let mask9 : UInt = 0x1ff
+    let mask9_u64 = mask9.to_uint64()
+    let mask9_not_u64 = mask9.lnot().to_uint64()
+    if (off & mask9_u64) != 0 {
+      return if invert { off & mask9_u64 } else { off & mask9_not_u64 }
+    }
+  }
+  if invert {
+    0
+  } else {
+    off
+  }
+}
+
+///|
+fn arm64_ldrx(
+  emitter : Arm64Emitter,
+  sg : Bool,
+  sz_ : Int,
+  dst : UInt,
+  bas : UInt,
+  off : UInt64,
+) -> Unit {
+  let sz = sz_
+  let sg1 = if sz >= 2 { false } else { sg }
+  let sg_bit : UInt64 = if sg1 { 1 } else { 0 }
+  let mask32 : UInt = (0xfff : UInt) << sz
+  let mask32_not_u64 = mask32.lnot().to_uint64()
+  if (off & mask32_not_u64) == 0 {
+    let insn = (0x39400000 : UInt64)
+      .lor(dst.to_uint64())
+      .lor(bas.to_uint64() << 5)
+      .lor(off << (10 - sz))
+      .lor(sg_bit << 23)
+      .lor(sz.to_uint64() << 30)
+      .to_uint()
+    emit32(emitter, insn)
+  } else if off < (256 : UInt64) || (0 : UInt64) - off <= (256 : UInt64) {
+    let insn = (0x38400000 : UInt64)
+      .lor(dst.to_uint64())
+      .lor(bas.to_uint64() << 5)
+      .lor((off & (0x1ff : UInt64)) << 12)
+      .lor(sg_bit << 23)
+      .lor(sz.to_uint64() << 30)
+      .to_uint()
+    emit32(emitter, insn)
+  } else {
+    arm64_movimm(emitter, 30, off)
+    let sg_enc : UInt64 = if sg1 { 2 } else { 1 }
+    let insn = (0x38206800 : UInt64)
+      .lor(dst.to_uint64())
+      .lor(bas.to_uint64() << 5)
+      .lor((30 : UInt64) << 16)
+      .lor(sg_enc << 22)
+      .lor(sz.to_uint64() << 30)
+      .to_uint()
+    emit32(emitter, insn)
+  }
+}
+
+///|
+fn arm64_ldrv(
+  emitter : Arm64Emitter,
+  sz_ : Int,
+  dst : UInt,
+  bas : UInt,
+  off : UInt64,
+) -> Unit {
+  let sz = sz_
+  let mask32 : UInt = (0xfff : UInt) << sz
+  let mask32_not_u64 = mask32.lnot().to_uint64()
+  if (off & mask32_not_u64) == 0 {
+    let insn = (0x3d400000 : UInt64)
+      .lor(dst.to_uint64())
+      .lor(bas.to_uint64() << 5)
+      .lor(off << (10 - sz))
+      .lor((sz & 4).to_uint64() << 21)
+      .lor((sz & 3).to_uint64() << 30)
+      .to_uint()
+    emit32(emitter, insn)
+  } else if off < (256 : UInt64) || (0 : UInt64) - off <= (256 : UInt64) {
+    let insn = (0x3c400000 : UInt64)
+      .lor(dst.to_uint64())
+      .lor(bas.to_uint64() << 5)
+      .lor((off & (0x1ff : UInt64)) << 12)
+      .lor((sz & 4).to_uint64() << 21)
+      .lor((sz & 3).to_uint64() << 30)
+      .to_uint()
+    emit32(emitter, insn)
+  } else {
+    arm64_movimm(emitter, 30, off)
+    let insn = (0x3c606800 : UInt64)
+      .lor(dst.to_uint64())
+      .lor(bas.to_uint64() << 5)
+      .lor((30 : UInt64) << 16)
+      .lor(sz.to_uint64() << 30)
+      .lor((sz & 4).to_uint64() << 21)
+      .to_uint()
+    emit32(emitter, insn)
+  }
+}
+
+///|
+fn arm64_ldrs(emitter : Arm64Emitter, reg : UInt, size : Int) -> Unit {
+  match size {
+    0 => ()
+    1 => arm64_ldrx(emitter, false, 0, reg, reg, 0)
+    2 => arm64_ldrx(emitter, false, 1, reg, reg, 0)
+    3 => {
+      arm64_ldrx(emitter, false, 1, 30, reg, 0)
+      arm64_ldrx(emitter, false, 0, reg, reg, 2)
+      let insn = (0x2a0043c0 : UInt64)
+        .lor(reg.to_uint64())
+        .lor(reg.to_uint64() << 16)
+        .to_uint()
+      emit32(emitter, insn)
+    }
+    4 => arm64_ldrx(emitter, false, 2, reg, reg, 0)
+    5 => {
+      arm64_ldrx(emitter, false, 2, 30, reg, 0)
+      arm64_ldrx(emitter, false, 0, reg, reg, 4)
+      let insn = (0xaa0083c0 : UInt64)
+        .lor(reg.to_uint64())
+        .lor(reg.to_uint64() << 16)
+        .to_uint()
+      emit32(emitter, insn)
+    }
+    6 => {
+      arm64_ldrx(emitter, false, 2, 30, reg, 0)
+      arm64_ldrx(emitter, false, 1, reg, reg, 4)
+      let insn = (0xaa0083c0 : UInt64)
+        .lor(reg.to_uint64())
+        .lor(reg.to_uint64() << 16)
+        .to_uint()
+      emit32(emitter, insn)
+    }
+    7 => {
+      arm64_ldrx(emitter, false, 2, 30, reg, 0)
+      arm64_ldrx(emitter, false, 2, reg, reg, 3)
+      let insn1 = (0x53087c00 : UInt64)
+        .lor(reg.to_uint64())
+        .lor(reg.to_uint64() << 5)
+        .to_uint()
+      emit32(emitter, insn1)
+      let insn2 = (0xaa0083c0 : UInt64)
+        .lor(reg.to_uint64())
+        .lor(reg.to_uint64() << 16)
+        .to_uint()
+      emit32(emitter, insn2)
+    }
+    8 => arm64_ldrx(emitter, false, 3, reg, reg, 0)
+    9 => {
+      arm64_ldrx(emitter, false, 0, reg + 1, reg, 8)
+      arm64_ldrx(emitter, false, 3, reg, reg, 0)
+    }
+    10 => {
+      arm64_ldrx(emitter, false, 1, reg + 1, reg, 8)
+      arm64_ldrx(emitter, false, 3, reg, reg, 0)
+    }
+    11 => {
+      arm64_ldrx(emitter, false, 2, reg + 1, reg, 7)
+      let insn = (0x53087c00 : UInt64)
+        .lor((reg + 1).to_uint64())
+        .lor((reg + 1).to_uint64() << 5)
+        .to_uint()
+      emit32(emitter, insn)
+      arm64_ldrx(emitter, false, 3, reg, reg, 0)
+    }
+    12 => {
+      arm64_ldrx(emitter, false, 2, reg + 1, reg, 8)
+      arm64_ldrx(emitter, false, 3, reg, reg, 0)
+    }
+    13 => {
+      arm64_ldrx(emitter, false, 3, reg + 1, reg, 5)
+      let insn = (0xd358fc00 : UInt64)
+        .lor((reg + 1).to_uint64())
+        .lor((reg + 1).to_uint64() << 5)
+        .to_uint()
+      emit32(emitter, insn)
+      arm64_ldrx(emitter, false, 3, reg, reg, 0)
+    }
+    14 => {
+      arm64_ldrx(emitter, false, 3, reg + 1, reg, 6)
+      let insn = (0xd350fc00 : UInt64)
+        .lor((reg + 1).to_uint64())
+        .lor((reg + 1).to_uint64() << 5)
+        .to_uint()
+      emit32(emitter, insn)
+      arm64_ldrx(emitter, false, 3, reg, reg, 0)
+    }
+    15 => {
+      arm64_ldrx(emitter, false, 3, reg + 1, reg, 7)
+      let insn = (0xd348fc00 : UInt64)
+        .lor((reg + 1).to_uint64())
+        .lor((reg + 1).to_uint64() << 5)
+        .to_uint()
+      emit32(emitter, insn)
+      arm64_ldrx(emitter, false, 3, reg, reg, 0)
+    }
+    16 => {
+      let insn = (0xa9400000 : UInt64)
+        .lor(reg.to_uint64())
+        .lor((reg + 1).to_uint64() << 10)
+        .lor(reg.to_uint64() << 5)
+        .to_uint()
+      emit32(emitter, insn)
+    }
+    _ => ()
+  }
+}
+
+///|
+fn arm64_strx(
+  emitter : Arm64Emitter,
+  sz_ : Int,
+  dst : UInt,
+  bas : UInt,
+  off : UInt64,
+) -> Unit {
+  let sz = sz_
+  let mask32 : UInt = (0xfff : UInt) << sz
+  let mask32_not_u64 = mask32.lnot().to_uint64()
+  if (off & mask32_not_u64) == 0 {
+    let insn = (0x39000000 : UInt64)
+      .lor(dst.to_uint64())
+      .lor(bas.to_uint64() << 5)
+      .lor(off << (10 - sz))
+      .lor(sz.to_uint64() << 30)
+      .to_uint()
+    emit32(emitter, insn)
+  } else if off < (256 : UInt64) || (0 : UInt64) - off <= (256 : UInt64) {
+    let insn = (0x38000000 : UInt64)
+      .lor(dst.to_uint64())
+      .lor(bas.to_uint64() << 5)
+      .lor((off & (0x1ff : UInt64)) << 12)
+      .lor(sz.to_uint64() << 30)
+      .to_uint()
+    emit32(emitter, insn)
+  } else {
+    arm64_movimm(emitter, 30, off)
+    let insn = (0x38206800 : UInt64)
+      .lor(dst.to_uint64())
+      .lor(bas.to_uint64() << 5)
+      .lor((30 : UInt64) << 16)
+      .lor(sz.to_uint64() << 30)
+      .to_uint()
+    emit32(emitter, insn)
+  }
+}
+
+///|
+fn arm64_strv(
+  emitter : Arm64Emitter,
+  sz_ : Int,
+  dst : UInt,
+  bas : UInt,
+  off : UInt64,
+) -> Unit {
+  let sz = sz_
+  let mask32 : UInt = (0xfff : UInt) << sz
+  let mask32_not_u64 = mask32.lnot().to_uint64()
+  if (off & mask32_not_u64) == 0 {
+    let insn = (0x3d000000 : UInt64)
+      .lor(dst.to_uint64())
+      .lor(bas.to_uint64() << 5)
+      .lor(off << (10 - sz))
+      .lor((sz & 4).to_uint64() << 21)
+      .lor((sz & 3).to_uint64() << 30)
+      .to_uint()
+    emit32(emitter, insn)
+  } else if off < (256 : UInt64) || (0 : UInt64) - off <= (256 : UInt64) {
+    let insn = (0x3c000000 : UInt64)
+      .lor(dst.to_uint64())
+      .lor(bas.to_uint64() << 5)
+      .lor((off & (0x1ff : UInt64)) << 12)
+      .lor((sz & 4).to_uint64() << 21)
+      .lor((sz & 3).to_uint64() << 30)
+      .to_uint()
+    emit32(emitter, insn)
+  } else {
+    arm64_movimm(emitter, 30, off)
+    let insn = (0x3c206800 : UInt64)
+      .lor(dst.to_uint64())
+      .lor(bas.to_uint64() << 5)
+      .lor((30 : UInt64) << 16)
+      .lor(sz.to_uint64() << 30)
+      .lor((sz & 4).to_uint64() << 21)
+      .to_uint()
+    emit32(emitter, insn)
+  }
+}
