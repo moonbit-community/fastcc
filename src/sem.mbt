@@ -100,6 +100,34 @@ fn float_rank(kind : CFloatKind) -> Int {
 }
 
 ///|
+fn int_size(kind : CIntKind) -> Int {
+  match kind {
+    CIntKind::Char => 1
+    CIntKind::Short => 2
+    CIntKind::Int => 4
+    CIntKind::Long => 8
+    CIntKind::LongLong => 8
+  }
+}
+
+///|
+fn float_size(kind : CFloatKind) -> Int {
+  match kind {
+    CFloatKind::Float => 4
+    CFloatKind::Double => 8
+    CFloatKind::LongDouble => 16
+  }
+}
+
+///|
+fn align_to(value : Int, align : Int) -> Int {
+  if align <= 1 {
+    return value
+  }
+  (value + align - 1) / align * align
+}
+
+///|
 fn is_float_type(ty : CType) -> Bool {
   match strip_qualifiers(ty) {
     CType::Float(..) => true
@@ -215,6 +243,207 @@ fn check_storage_class(
         add_sem_error(ctx, loc, "invalid storage class for global")
       _ => ()
     }
+  }
+}
+
+///|
+fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
+  match strip_qualifiers(ty) {
+    CType::Void => {
+      add_sem_error(ctx, loc, "invalid application of sizeof to void")
+      None
+    }
+    CType::Bool => Some((1, 1))
+    CType::Int(kind~, ..) => {
+      let size = int_size(kind)
+      Some((size, size))
+    }
+    CType::Float(kind~) => {
+      let size = float_size(kind)
+      Some((size, size))
+    }
+    CType::Pointer(_) => Some((8, 8))
+    CType::Enum(..) => Some((4, 4))
+    CType::Function(..) => {
+      add_sem_error(ctx, loc, "invalid application of sizeof to function")
+      None
+    }
+    CType::Array(elem~, size~) => {
+      let (elem_size, elem_align) = match type_size_align(ctx, elem, loc) {
+        None => return None
+        Some(v) => v
+      }
+      match size {
+        None => {
+          add_sem_error(ctx, loc, "sizeof incomplete array")
+          None
+        }
+        Some(n) => Some((elem_size * n, elem_align))
+      }
+    }
+    CType::Struct(name=tag, fields=field_list) =>
+      match ensure_struct_fields(ctx, tag, field_list, is_union=false, loc) {
+        None => None
+        Some(fields) => Some(struct_size_align(ctx, fields, loc))
+      }
+    CType::Union(name=tag, fields=field_list) =>
+      match ensure_struct_fields(ctx, tag, field_list, is_union=true, loc) {
+        None => None
+        Some(fields) => Some(union_size_align(ctx, fields, loc))
+      }
+    CType::Qualified(base~, ..) => type_size_align(ctx, base, loc)
+  }
+}
+
+///|
+fn ensure_struct_fields(
+  ctx : SemContext,
+  tag : String,
+  fields : Array[Field]?,
+  is_union~ : Bool,
+  loc : SrcLoc,
+) -> Array[Field]? {
+  match fields {
+    Some(list) => Some(list)
+    None =>
+      if is_union {
+        match ctx.union_defs.get(tag) {
+          Some(list) if list.length() > 0 => Some(list)
+          _ => {
+            add_sem_error(ctx, loc, "incomplete union '\{tag}'")
+            None
+          }
+        }
+      } else {
+        match ctx.struct_defs.get(tag) {
+          Some(list) if list.length() > 0 => Some(list)
+          _ => {
+            add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
+            None
+          }
+        }
+      }
+  }
+}
+
+///|
+fn struct_size_align(
+  ctx : SemContext,
+  fields : Array[Field],
+  loc : SrcLoc,
+) -> (Int, Int) {
+  let mut size = 0
+  let mut align = 1
+  let mut bit_unit_bits = 0
+  let mut bit_offset = 0
+  let mut bit_unit_size = 0
+  for field in fields {
+    match field.bit_width {
+      Some(expr) => {
+        let width = match const_int_from_expr(expr) {
+          Some(v) => v
+          None => 0
+        }
+        let base = strip_qualifiers(field.ty)
+        let (base_size, base_align) = match type_size_align(ctx, base, loc) {
+          None => (0, 1)
+          Some(v) => v
+        }
+        let unit_bits = base_size * 8
+        align = if base_align > align { base_align } else { align }
+        if width == 0 {
+          size = align_to(size, base_align)
+          bit_unit_bits = 0
+          bit_offset = 0
+          bit_unit_size = 0
+          continue
+        }
+        if bit_unit_bits == 0 ||
+          bit_unit_bits != unit_bits ||
+          width > unit_bits - bit_offset {
+          size = align_to(size, base_align)
+          bit_unit_bits = unit_bits
+          bit_unit_size = base_size
+          bit_offset = 0
+        }
+        bit_offset = bit_offset + width
+        if bit_offset == bit_unit_bits {
+          size = size + bit_unit_size
+          bit_unit_bits = 0
+          bit_unit_size = 0
+          bit_offset = 0
+        }
+      }
+      None => {
+        if bit_unit_bits != 0 {
+          size = size + bit_unit_size
+          bit_unit_bits = 0
+          bit_unit_size = 0
+          bit_offset = 0
+        }
+        let (field_size, field_align) = match
+          type_size_align(ctx, field.ty, loc) {
+          None => (0, 1)
+          Some(v) => v
+        }
+        size = align_to(size, field_align)
+        size = size + field_size
+        align = if field_align > align { field_align } else { align }
+      }
+    }
+  }
+  if bit_unit_bits != 0 {
+    size = size + bit_unit_size
+  }
+  size = align_to(size, align)
+  (size, align)
+}
+
+///|
+fn union_size_align(
+  ctx : SemContext,
+  fields : Array[Field],
+  loc : SrcLoc,
+) -> (Int, Int) {
+  let mut size = 0
+  let mut align = 1
+  for field in fields {
+    let base = strip_qualifiers(field.ty)
+    let (field_size, field_align) = match field.bit_width {
+      Some(_) =>
+        match type_size_align(ctx, base, loc) {
+          None => (0, 1)
+          Some(v) => v
+        }
+      None =>
+        match type_size_align(ctx, field.ty, loc) {
+          None => (0, 1)
+          Some(v) => v
+        }
+    }
+    if field_size > size {
+      size = field_size
+    }
+    if field_align > align {
+      align = field_align
+    }
+  }
+  size = align_to(size, align)
+  (size, align)
+}
+
+///|
+fn type_for_sizeof(ctx : SemContext, expr : Expr) -> CType {
+  match expr {
+    Expr::Ident(name~, loc~) =>
+      match lookup_value(ctx, name) {
+        Some(ty) => ty
+        None => {
+          add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
+          default_int_type()
+        }
+      }
+    _ => type_of_expr(ctx, expr)
   }
 }
 
@@ -1314,11 +1543,13 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
       ty
     }
     Expr::SizeofExpr(expr~, ..) => {
-      type_of_expr(ctx, expr) |> ignore
+      let ty = type_for_sizeof(ctx, expr)
+      type_size_align(ctx, ty, expr_loc(expr)) |> ignore
       default_int_type()
     }
     Expr::SizeofType(ty~, loc~) => {
       register_type_defs(ctx, ty, loc)
+      type_size_align(ctx, ty, loc) |> ignore
       default_int_type()
     }
     Expr::Binary(op~, left~, right~, loc~) =>
