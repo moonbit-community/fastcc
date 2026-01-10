@@ -425,7 +425,7 @@ fn struct_size_align(
   for field in fields {
     match field.bit_width {
       Some(expr) => {
-        let width = match const_int_from_expr(expr) {
+        let width = match const_int_from_expr(ctx, expr, field.loc) {
           Some(v) => v
           None => 0
         }
@@ -635,9 +635,8 @@ fn register_struct_def(
           if !is_int_like(field.ty) {
             add_sem_error(ctx, field.loc, "bitfields must have integer type")
           }
-          match const_int_from_expr(expr) {
-            None =>
-              add_sem_error(ctx, field.loc, "bitfield width must be constant")
+          match const_int_from_expr(ctx, expr, field.loc) {
+            None => ()
             Some(width) => {
               if width < 0 {
                 add_sem_error(ctx, field.loc, "negative width in bit-field")
@@ -738,91 +737,112 @@ fn parse_int_value(text : String) -> Int {
 }
 
 ///|
-fn eval_const_expr(ctx : SemContext, expr : Expr, loc : SrcLoc) -> Int {
+fn eval_const_expr_value(
+  ctx : SemContext,
+  expr : Expr,
+  loc : SrcLoc,
+) -> (Int, Bool) {
   match expr {
-    Expr::IntLit(value~, ..) => parse_int_value(value)
+    Expr::IntLit(value~, ..) => (parse_int_value(value), true)
     Expr::Ident(name~, ..) =>
       match ctx.enum_consts.get(name) {
-        Some(v) => v
+        Some(v) => (v, true)
         None => {
-          add_sem_error(ctx, loc, "invalid enum constant expression")
-          0
+          add_sem_error(ctx, loc, "invalid constant expression")
+          (0, false)
         }
       }
     Expr::Unary(op~, expr~, ..) => {
-      let v = eval_const_expr(ctx, expr, loc)
+      let (v, ok) = eval_const_expr_value(ctx, expr, loc)
+      if !ok {
+        return (0, false)
+      }
       match op {
-        UnaryOp::Plus => v
-        UnaryOp::Minus => 0 - v
-        UnaryOp::BitNot => v ^ -1
-        UnaryOp::Not => if v == 0 { 1 } else { 0 }
+        UnaryOp::Plus => (v, true)
+        UnaryOp::Minus => (0 - v, true)
+        UnaryOp::BitNot => (v ^ -1, true)
+        UnaryOp::Not => (if v == 0 { 1 } else { 0 }, true)
         _ => {
-          add_sem_error(ctx, loc, "invalid enum constant expression")
-          0
+          add_sem_error(ctx, loc, "invalid constant expression")
+          (0, false)
         }
       }
     }
     Expr::Binary(op~, left~, right~, ..) => {
-      let lhs = eval_const_expr(ctx, left, loc)
-      let rhs = eval_const_expr(ctx, right, loc)
+      let (lhs, ok_lhs) = eval_const_expr_value(ctx, left, loc)
+      let (rhs, ok_rhs) = eval_const_expr_value(ctx, right, loc)
+      if !ok_lhs || !ok_rhs {
+        return (0, false)
+      }
       match op {
-        BinaryOp::Add => lhs + rhs
-        BinaryOp::Sub => lhs - rhs
-        BinaryOp::Mul => lhs * rhs
+        BinaryOp::Add => (lhs + rhs, true)
+        BinaryOp::Sub => (lhs - rhs, true)
+        BinaryOp::Mul => (lhs * rhs, true)
         BinaryOp::Div =>
           if rhs == 0 {
-            add_sem_error(ctx, loc, "division by zero in enum constant")
-            0
+            add_sem_error(ctx, loc, "division by zero in constant expression")
+            (0, false)
           } else {
-            lhs / rhs
+            (lhs / rhs, true)
           }
         BinaryOp::Mod =>
           if rhs == 0 {
-            add_sem_error(ctx, loc, "division by zero in enum constant")
-            0
+            add_sem_error(ctx, loc, "division by zero in constant expression")
+            (0, false)
           } else {
-            lhs % rhs
+            (lhs % rhs, true)
           }
-        BinaryOp::Shl => lhs << rhs
-        BinaryOp::Shr => lhs >> rhs
-        BinaryOp::BitAnd => lhs & rhs
-        BinaryOp::BitOr => lhs | rhs
-        BinaryOp::BitXor => lhs ^ rhs
-        BinaryOp::Eq => if lhs == rhs { 1 } else { 0 }
-        BinaryOp::Ne => if lhs != rhs { 1 } else { 0 }
-        BinaryOp::Lt => if lhs < rhs { 1 } else { 0 }
-        BinaryOp::Le => if lhs <= rhs { 1 } else { 0 }
-        BinaryOp::Gt => if lhs > rhs { 1 } else { 0 }
-        BinaryOp::Ge => if lhs >= rhs { 1 } else { 0 }
-        BinaryOp::LogAnd => if lhs != 0 && rhs != 0 { 1 } else { 0 }
-        BinaryOp::LogOr => if lhs != 0 || rhs != 0 { 1 } else { 0 }
-        BinaryOp::Comma => rhs
+        BinaryOp::Shl => (lhs << rhs, true)
+        BinaryOp::Shr => (lhs >> rhs, true)
+        BinaryOp::BitAnd => (lhs & rhs, true)
+        BinaryOp::BitOr => (lhs | rhs, true)
+        BinaryOp::BitXor => (lhs ^ rhs, true)
+        BinaryOp::Eq => (if lhs == rhs { 1 } else { 0 }, true)
+        BinaryOp::Ne => (if lhs != rhs { 1 } else { 0 }, true)
+        BinaryOp::Lt => (if lhs < rhs { 1 } else { 0 }, true)
+        BinaryOp::Le => (if lhs <= rhs { 1 } else { 0 }, true)
+        BinaryOp::Gt => (if lhs > rhs { 1 } else { 0 }, true)
+        BinaryOp::Ge => (if lhs >= rhs { 1 } else { 0 }, true)
+        BinaryOp::LogAnd => (if lhs != 0 && rhs != 0 { 1 } else { 0 }, true)
+        BinaryOp::LogOr => (if lhs != 0 || rhs != 0 { 1 } else { 0 }, true)
+        BinaryOp::Comma => (rhs, true)
         _ => {
-          add_sem_error(ctx, loc, "invalid enum constant expression")
-          0
+          add_sem_error(ctx, loc, "invalid constant expression")
+          (0, false)
         }
       }
     }
-    Expr::Conditional(cond~, then_expr~, else_expr~, ..) =>
-      if eval_const_expr(ctx, cond, loc) != 0 {
-        eval_const_expr(ctx, then_expr, loc)
-      } else {
-        eval_const_expr(ctx, else_expr, loc)
+    Expr::Conditional(cond~, then_expr~, else_expr~, ..) => {
+      let (cond_val, ok) = eval_const_expr_value(ctx, cond, loc)
+      if !ok {
+        return (0, false)
       }
-    Expr::Cast(expr~, ..) => eval_const_expr(ctx, expr, loc)
+      if cond_val != 0 {
+        eval_const_expr_value(ctx, then_expr, loc)
+      } else {
+        eval_const_expr_value(ctx, else_expr, loc)
+      }
+    }
+    Expr::Cast(expr~, ..) => eval_const_expr_value(ctx, expr, loc)
     Expr::SizeofExpr(..) => {
-      add_sem_error(ctx, loc, "sizeof not supported in enum constant")
-      0
+      add_sem_error(ctx, loc, "sizeof not supported in constant expression")
+      (0, false)
     }
     Expr::SizeofType(..) => {
-      add_sem_error(ctx, loc, "sizeof not supported in enum constant")
-      0
+      add_sem_error(ctx, loc, "sizeof not supported in constant expression")
+      (0, false)
     }
     _ => {
-      add_sem_error(ctx, loc, "invalid enum constant expression")
-      0
+      add_sem_error(ctx, loc, "invalid constant expression")
+      (0, false)
     }
   }
+}
+
+///|
+fn eval_const_expr(ctx : SemContext, expr : Expr, loc : SrcLoc) -> Int {
+  let (value, _) = eval_const_expr_value(ctx, expr, loc)
+  value
 }
 
 ///|
@@ -924,6 +944,44 @@ fn func_sig_eq(a : FuncSig, b : FuncSig) -> Bool {
 }
 
 ///|
+fn apply_inferred_array_size(ty : CType, size : Int) -> CType {
+  match ty {
+    CType::Qualified(qual~, base~) => {
+      let updated = apply_inferred_array_size(base, size)
+      CType::Qualified(qual~, base=updated)
+    }
+    CType::Array(elem~, size=arr_size) =>
+      match arr_size {
+        None => CType::Array(elem~, size=Some(size))
+        Some(_) => ty
+      }
+    _ => ty
+  }
+}
+
+///|
+fn update_decl_type(
+  ctx : SemContext,
+  name : String,
+  ty : CType,
+  is_local~ : Bool,
+) -> Unit {
+  if is_local {
+    if ctx.locals.length() == 0 {
+      return
+    }
+    let idx = ctx.locals.length() - 1
+    let scope = ctx.locals[idx]
+    if scope.contains(name) {
+      scope.set(name, ty)
+      ctx.locals[idx] = scope
+    }
+  } else if ctx.globals.contains(name) {
+    ctx.globals.set(name, ty)
+  }
+}
+
+///|
 fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
   register_type_defs(ctx, decl.ty, decl.loc)
   match strip_qualifiers(decl.ty) {
@@ -959,7 +1017,14 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
   }
   match decl.init {
     None => ()
-    Some(init) => check_initializer(ctx, decl.ty, init, decl.loc)
+    Some(init) =>
+      match check_initializer(ctx, decl.ty, init, decl.loc) {
+        None => ()
+        Some(size) => {
+          let updated = apply_inferred_array_size(decl.ty, size)
+          update_decl_type(ctx, decl.name, updated, is_local~)
+        }
+      }
   }
 }
 
@@ -969,7 +1034,7 @@ fn check_initializer(
   ty : CType,
   init : Initializer,
   loc : SrcLoc,
-) -> Unit {
+) -> Int? {
   match init {
     Initializer::Expr(expr~, ..) => {
       let init_ty = type_of_expr(ctx, expr)
@@ -980,6 +1045,7 @@ fn check_initializer(
           "cannot assign '\{type_to_string(init_ty)}' to '\{type_to_string(ty)}'",
         )
       }
+      None
     }
     Initializer::List(items~, ..) => check_initializer_list(ctx, ty, items, loc)
   }
@@ -991,12 +1057,26 @@ fn check_initializer_list(
   ty : CType,
   items : Array[InitItem],
   loc : SrcLoc,
-) -> Unit {
+) -> Int? {
   match strip_qualifiers(ty) {
     CType::Array(elem~, size~) => {
-      let mut count = 0
+      let mut next_index = 0
+      let mut max_index = -1
       for item in items {
+        let mut index = next_index
+        let mut has_index = false
         let target = if item.designators.length() > 0 {
+          match item.designators[0] {
+            InitDesignator::Index(expr~, loc=des_loc) =>
+              match const_int_from_expr(ctx, expr, des_loc) {
+                None => ()
+                Some(v) => {
+                  index = v
+                  has_index = true
+                }
+              }
+            _ => ()
+          }
           resolve_designator_type(ctx, ty, item.designators, item.loc)
         } else {
           Some(elem)
@@ -1004,18 +1084,35 @@ fn check_initializer_list(
         match target {
           None => ()
           Some(target_ty) =>
-            check_initializer(ctx, target_ty, item.value, item.loc)
+            check_initializer(ctx, target_ty, item.value, item.loc) |> ignore
         }
-        if item.designators.length() == 0 {
-          count = count + 1
+        if has_index {
+          if size is None && index < 0 {
+            add_sem_error(ctx, item.loc, "array designator out of bounds")
+          }
+        } else {
+          match size {
+            None => ()
+            Some(n) =>
+              if index >= n {
+                add_sem_error(ctx, item.loc, "too many initializers for array")
+              }
+          }
+        }
+        if index >= 0 && index > max_index {
+          max_index = index
+        }
+        if has_index {
+          if index >= 0 {
+            next_index = index + 1
+          }
+        } else {
+          next_index = next_index + 1
         }
       }
       match size {
-        None => ()
-        Some(n) =>
-          if count > n {
-            add_sem_error(ctx, loc, "too many initializers for array")
-          }
+        None => if max_index < 0 { Some(0) } else { Some(max_index + 1) }
+        Some(_) => None
       }
     }
     CType::Struct(name=tag, fields=field_list) => {
@@ -1028,6 +1125,7 @@ fn check_initializer_list(
         Some(list) =>
           check_struct_initializer(ctx, ty, list, items, is_union=false, loc)
       }
+      None
     }
     CType::Union(name=tag, fields=field_list) => {
       let fields = match field_list {
@@ -1039,8 +1137,12 @@ fn check_initializer_list(
         Some(list) =>
           check_struct_initializer(ctx, ty, list, items, is_union=true, loc)
       }
+      None
     }
-    _ => add_sem_error(ctx, loc, "initializer list for non-aggregate")
+    _ => {
+      add_sem_error(ctx, loc, "initializer list for non-aggregate")
+      None
+    }
   }
 }
 
@@ -1057,17 +1159,31 @@ fn check_struct_initializer(
   let mut saw = 0
   for item in items {
     if item.designators.length() > 0 {
+      match item.designators[0] {
+        InitDesignator::Field(name~, ..) =>
+          match find_field_index(fields, name) {
+            None => ()
+            Some(idx) => index = idx + 1
+          }
+        _ => ()
+      }
       match resolve_designator_type(ctx, ty, item.designators, item.loc) {
         None => ()
         Some(target_ty) =>
-          check_initializer(ctx, target_ty, item.value, item.loc)
+          check_initializer(ctx, target_ty, item.value, item.loc) |> ignore
+      }
+      if is_union {
+        saw = saw + 1
+        if saw > 1 {
+          add_sem_error(ctx, item.loc, "too many initializers for union")
+        }
       }
     } else {
       match next_init_field(fields, index) {
         None =>
           add_sem_error(ctx, item.loc, "too many initializers for aggregate")
         Some((field, next_index)) => {
-          check_initializer(ctx, field.ty, item.value, item.loc)
+          check_initializer(ctx, field.ty, item.value, item.loc) |> ignore
           index = next_index
           if is_union {
             saw = saw + 1
@@ -1099,10 +1215,12 @@ fn next_init_field(fields : Array[Field], start : Int) -> (Field, Int)? {
 }
 
 ///|
-fn const_int_from_expr(expr : Expr) -> Int? {
-  match expr {
-    Expr::IntLit(value~, ..) => Some(parse_int_value(value))
-    _ => None
+fn const_int_from_expr(ctx : SemContext, expr : Expr, loc : SrcLoc) -> Int? {
+  let (value, ok) = eval_const_expr_value(ctx, expr, loc)
+  if ok {
+    Some(value)
+  } else {
+    None
   }
 }
 
@@ -1116,13 +1234,13 @@ fn resolve_designator_type(
   let mut current = strip_qualifiers(ty)
   for des in designators {
     match des {
-      InitDesignator::Index(expr~, ..) =>
+      InitDesignator::Index(expr~, loc=des_loc) =>
         match strip_qualifiers(current) {
           CType::Array(elem~, size~) => {
             match size {
               None => ()
               Some(n) =>
-                match const_int_from_expr(expr) {
+                match const_int_from_expr(ctx, expr, des_loc) {
                   None => ()
                   Some(v) =>
                     if v < 0 || v >= n {
@@ -1424,6 +1542,16 @@ fn find_field(fields : Array[Field], name : String) -> Field? {
   for field in fields {
     if field.name == name {
       return Some(field)
+    }
+  }
+  None
+}
+
+///|
+fn find_field_index(fields : Array[Field], name : String) -> Int? {
+  for i = 0; i < fields.length(); i = i + 1 {
+    if fields[i].name == name {
+      return Some(i)
     }
   }
   None

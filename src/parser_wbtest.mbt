@@ -153,6 +153,44 @@ test "parse aggregate initializers" {
 }
 
 ///|
+test "sem infers array size from initializer" {
+  let (_, bag) = check_text("int a[] = {1,2}; int main(){return sizeof(a);}")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem infers array size with designator" {
+  let (_, bag) = check_text(
+    "int a[] = { [2] = 1 }; int main(){return sizeof(a);}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts enum bitfield width" {
+  let (_, bag) = check_text(
+    "enum { W = 3 }; struct S { int a: W; }; int main(){return 0;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem rejects non-const designator index" {
+  let (_, bag) = check_text(
+    "int x; int a[2] = { [x] = 1 }; int main(){return 0;}",
+  )
+  assert_true(has_errors(bag))
+}
+
+///|
+test "sem rejects multiple union designators" {
+  let (_, bag) = check_text(
+    "union U { int a; int b; }; union U u = { .a = 1, .b = 2 };",
+  )
+  assert_true(has_errors(bag))
+}
+
+///|
 test "parse bitfields and qualifiers" {
   let (_, bag) = check_text(
     "struct S { unsigned int a:3; int : 2; const int b; }; int main(){struct S s = { .b = 1 }; return 0;}",
