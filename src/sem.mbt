@@ -824,13 +824,19 @@ fn eval_const_expr_value(
       }
     }
     Expr::Cast(expr~, ..) => eval_const_expr_value(ctx, expr, loc)
-    Expr::SizeofExpr(..) => {
-      add_sem_error(ctx, loc, "sizeof not supported in constant expression")
-      (0, false)
+    Expr::SizeofExpr(expr~, loc~) => {
+      let ty = type_for_sizeof(ctx, expr)
+      match type_size_align(ctx, ty, loc) {
+        None => (0, false)
+        Some((size, _)) => (size, true)
+      }
     }
-    Expr::SizeofType(..) => {
-      add_sem_error(ctx, loc, "sizeof not supported in constant expression")
-      (0, false)
+    Expr::SizeofType(ty~, loc~) => {
+      register_type_defs(ctx, ty, loc)
+      match type_size_align(ctx, ty, loc) {
+        None => (0, false)
+        Some((size, _)) => (size, true)
+      }
     }
     _ => {
       add_sem_error(ctx, loc, "invalid constant expression")

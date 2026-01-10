@@ -121,6 +121,12 @@ test "sem accepts enum constant expressions" {
 }
 
 ///|
+test "sem accepts sizeof in enum constant" {
+  let (_, bag) = check_text("enum { A = sizeof(int) }; int main(){return A;}")
+  assert_true(!has_errors(bag))
+}
+
+///|
 test "sem rejects sizeof incomplete enum" {
   let (_, bag) = check_text("enum E; int main(){return sizeof(enum E);}")
   assert_true(has_errors(bag))
@@ -167,9 +173,25 @@ test "sem infers array size with designator" {
 }
 
 ///|
+test "sem accepts sizeof in designator index" {
+  let (_, bag) = check_text(
+    "int a[] = { [sizeof(int)] = 1 }; int main(){return sizeof(a);}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
 test "sem accepts enum bitfield width" {
   let (_, bag) = check_text(
     "enum { W = 3 }; struct S { int a: W; }; int main(){return 0;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts sizeof in bitfield width" {
+  let (_, bag) = check_text(
+    "struct S { int a: sizeof(int); }; int main(){return 0;}",
   )
   assert_true(!has_errors(bag))
 }
