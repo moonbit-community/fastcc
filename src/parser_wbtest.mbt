@@ -121,6 +121,12 @@ test "sem accepts enum constant expressions" {
 }
 
 ///|
+test "sem rejects sizeof incomplete enum" {
+  let (_, bag) = check_text("enum E; int main(){return sizeof(enum E);}")
+  assert_true(has_errors(bag))
+}
+
+///|
 test "sem accepts array indexing" {
   let (_, bag) = check_text("int a[3]; int main(){return a[1];}")
   assert_true(!has_errors(bag))

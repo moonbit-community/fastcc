@@ -16,6 +16,7 @@ struct SemContext {
   union_defs : Map[String, Array[Field]]
   enum_defs : Map[String, Array[EnumItem]]
   enum_consts : Map[String, Int]
+  enum_types : Map[String, CType]
   mut labels_defined : Map[String, Bool]
   mut labels_used : Array[(String, SrcLoc)]
   mut loop_depth : Int
@@ -35,6 +36,7 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     union_defs: {},
     enum_defs: {},
     enum_consts: {},
+    enum_types: {},
     labels_defined: {},
     labels_used: [],
     loop_depth: 0,
@@ -45,6 +47,51 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
 ///|
 fn default_int_type() -> CType {
   CType::Int(kind=CIntKind::Int, unsigned=false)
+}
+
+///|
+fn enum_int_type_from_range(min_value : Int, max_value : Int) -> CType {
+  let max_int = 2147483647
+  let min_int = -2147483647 - 1
+  if min_value >= 0 {
+    CType::Int(kind=CIntKind::Int, unsigned=true)
+  } else if min_value < min_int || max_value > max_int {
+    CType::Int(kind=CIntKind::LongLong, unsigned=false)
+  } else {
+    CType::Int(kind=CIntKind::Int, unsigned=false)
+  }
+}
+
+///|
+fn enum_type_from_items(ctx : SemContext, items : Array[EnumItem]) -> CType {
+  let mut value = 0
+  let mut min_value = 0
+  let mut max_value = 0
+  let mut has_value = false
+  for item in items {
+    let current = match item.value {
+      None => value
+      Some(expr) => eval_const_expr(ctx, expr, item.loc)
+    }
+    if !has_value {
+      min_value = current
+      max_value = current
+      has_value = true
+    } else {
+      if current < min_value {
+        min_value = current
+      }
+      if current > max_value {
+        max_value = current
+      }
+    }
+    value = current + 1
+  }
+  if has_value {
+    enum_int_type_from_range(min_value, max_value)
+  } else {
+    default_int_type()
+  }
 }
 
 ///|
@@ -136,7 +183,19 @@ fn is_float_type(ty : CType) -> Bool {
 }
 
 ///|
-fn promote_int_type(ty : CType) -> CType {
+fn enum_type_for_arith(ctx : SemContext, ty : CType) -> CType {
+  match strip_qualifiers(ty) {
+    CType::Enum(name~, ..) =>
+      match ctx.enum_types.get(name) {
+        Some(base) => base
+        None => default_int_type()
+      }
+    _ => ty
+  }
+}
+
+///|
+fn promote_int_type(ctx : SemContext, ty : CType) -> CType {
   match strip_qualifiers(ty) {
     CType::Int(kind~, unsigned~) =>
       if int_rank(kind) < int_rank(CIntKind::Int) {
@@ -145,15 +204,15 @@ fn promote_int_type(ty : CType) -> CType {
         CType::Int(kind~, unsigned~)
       }
     CType::Bool => default_int_type()
-    CType::Enum(..) => default_int_type()
+    CType::Enum(..) => promote_int_type(ctx, enum_type_for_arith(ctx, ty))
     _ => default_int_type()
   }
 }
 
 ///|
-fn common_int_type(lhs : CType, rhs : CType) -> CType {
-  let left = promote_int_type(lhs)
-  let right = promote_int_type(rhs)
+fn common_int_type(ctx : SemContext, lhs : CType, rhs : CType) -> CType {
+  let left = promote_int_type(ctx, lhs)
+  let right = promote_int_type(ctx, rhs)
   match (left, right) {
     (
       CType::Int(kind=l_kind, unsigned=l_unsigned),
@@ -188,7 +247,7 @@ fn common_int_type(lhs : CType, rhs : CType) -> CType {
 }
 
 ///|
-fn arithmetic_result_type(lhs : CType, rhs : CType) -> CType {
+fn arithmetic_result_type(ctx : SemContext, lhs : CType, rhs : CType) -> CType {
   let left = strip_qualifiers(lhs)
   let right = strip_qualifiers(rhs)
   match (left, right) {
@@ -200,7 +259,7 @@ fn arithmetic_result_type(lhs : CType, rhs : CType) -> CType {
       }
     (CType::Float(kind~), _) => CType::Float(kind~)
     (_, CType::Float(kind~)) => CType::Float(kind~)
-    _ => common_int_type(lhs, rhs)
+    _ => common_int_type(ctx, lhs, rhs)
   }
 }
 
@@ -263,7 +322,33 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
       Some((size, size))
     }
     CType::Pointer(_) => Some((8, 8))
-    CType::Enum(..) => Some((4, 4))
+    CType::Enum(name~, items~) => {
+      let enum_ty = match ctx.enum_types.get(name) {
+        Some(base) => Some(base)
+        None =>
+          match items {
+            None => {
+              add_sem_error(ctx, loc, "incomplete enum '\{name}'")
+              None
+            }
+            Some(list) =>
+              if list.length() == 0 {
+                add_sem_error(ctx, loc, "incomplete enum '\{name}'")
+                None
+              } else {
+                let base = enum_type_from_items(ctx, list)
+                if name != "" {
+                  ctx.enum_types.set(name, base)
+                }
+                Some(base)
+              }
+          }
+      }
+      match enum_ty {
+        None => None
+        Some(base) => type_size_align(ctx, base, loc)
+      }
+    }
     CType::Function(..) => {
       add_sem_error(ctx, loc, "invalid application of sizeof to function")
       None
@@ -593,13 +678,31 @@ fn register_enum_def(
   }
   if incoming.length() > 0 {
     let mut value = 0
+    let mut min_value = 0
+    let mut max_value = 0
+    let mut has_value = false
     for item in incoming {
       let current = match item.value {
         None => value
         Some(expr) => eval_const_expr(ctx, expr, item.loc)
       }
       define_enum_const(ctx, item.name, item.loc, current)
+      if !has_value {
+        min_value = current
+        max_value = current
+        has_value = true
+      } else {
+        if current < min_value {
+          min_value = current
+        }
+        if current > max_value {
+          max_value = current
+        }
+      }
       value = current + 1
+    }
+    if has_value {
+      ctx.enum_types.set(name, enum_int_type_from_range(min_value, max_value))
     }
   }
 }
@@ -1503,7 +1606,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
           if is_float_type(inner) {
             strip_qualifiers(inner)
           } else {
-            common_int_type(inner, inner)
+            common_int_type(ctx, inner, inner)
           }
         }
         UnaryOp::BitNot => {
@@ -1511,7 +1614,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
           if !is_int_like(inner) {
             add_sem_error(ctx, loc, "unary operator expects int")
           }
-          common_int_type(inner, inner)
+          common_int_type(ctx, inner, inner)
         }
         UnaryOp::PreInc
         | UnaryOp::PreDec
@@ -1608,7 +1711,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
               ctx, loc, "binary operator expects arithmetic operands",
             )
           }
-          arithmetic_result_type(lhs_ty, rhs_ty)
+          arithmetic_result_type(ctx, lhs_ty, rhs_ty)
         }
         BinaryOp::Sub => {
           let lhs_ty = type_of_expr(ctx, left)
@@ -1637,7 +1740,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
               ctx, loc, "binary operator expects arithmetic operands",
             )
           }
-          arithmetic_result_type(lhs_ty, rhs_ty)
+          arithmetic_result_type(ctx, lhs_ty, rhs_ty)
         }
         BinaryOp::Eq
         | BinaryOp::Ne
@@ -1683,7 +1786,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
               ctx, loc, "binary operator expects arithmetic operands",
             )
           }
-          arithmetic_result_type(lhs_ty, rhs_ty)
+          arithmetic_result_type(ctx, lhs_ty, rhs_ty)
         }
         BinaryOp::Mod
         | BinaryOp::Shl
@@ -1696,7 +1799,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
           if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
             add_sem_error(ctx, loc, "binary operator expects int operands")
           }
-          common_int_type(lhs_ty, rhs_ty)
+          common_int_type(ctx, lhs_ty, rhs_ty)
         }
       }
     Expr::Conditional(cond~, then_expr~, else_expr~, loc~) => {
@@ -1704,7 +1807,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
       let then_ty = type_of_expr(ctx, then_expr)
       let else_ty = type_of_expr(ctx, else_expr)
       if is_arithmetic(then_ty) && is_arithmetic(else_ty) {
-        return arithmetic_result_type(then_ty, else_ty)
+        return arithmetic_result_type(ctx, then_ty, else_ty)
       }
       if !type_eq(then_ty, else_ty) {
         add_sem_error(ctx, loc, "conditional operator type mismatch")
