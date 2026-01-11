@@ -275,3 +275,11 @@ test "sem accepts compound assignments and floats" {
   )
   assert_true(!has_errors(bag))
 }
+
+///|
+test "sem accepts integer suffixes" {
+  let (_, bag) = check_text(
+    "enum { A = sizeof(1L), B = sizeof(1LL), C = sizeof(1u) }; int main(){unsigned long x = 1UL; return A + B + C + x;}",
+  )
+  assert_true(!has_errors(bag))
+}

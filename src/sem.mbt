@@ -751,6 +751,31 @@ fn trim_int_literal(text : String) -> String {
 }
 
 ///|
+fn int_literal_type(text : String) -> CType {
+  let end = int_literal_end(text)
+  if end >= text.length() {
+    return default_int_type()
+  }
+  let suffix = slice_string_sem(text, end, text.length()).to_lower()
+  let unsigned = suffix.contains("u")
+  let long_count = if suffix.contains("ll") {
+    2
+  } else if suffix.contains("l") {
+    1
+  } else {
+    0
+  }
+  let kind = if long_count >= 2 {
+    CIntKind::LongLong
+  } else if long_count == 1 {
+    CIntKind::Long
+  } else {
+    CIntKind::Int
+  }
+  CType::Int(kind~, unsigned~)
+}
+
+///|
 fn int_literal_end(text : String) -> Int {
   let len = text.length()
   if len == 0 {
@@ -1853,7 +1878,7 @@ fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
 ///|
 fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
   match expr {
-    Expr::IntLit(..) => default_int_type()
+    Expr::IntLit(value~, ..) => int_literal_type(value)
     Expr::FloatLit(value~, ..) => float_type_from_literal(value)
     Expr::CharLit(..) => default_int_type()
     Expr::StringLit(..) => CType::Pointer(char_type())
