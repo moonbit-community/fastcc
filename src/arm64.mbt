@@ -19,6 +19,20 @@ fn emitter_pc(emitter : Arm64Emitter) -> Int {
 }
 
 ///|
+fn intr(r : Int) -> Int {
+  if r < 19 {
+    r
+  } else {
+    30
+  }
+}
+
+///|
+fn fltr(r : Int) -> Int {
+  r - 20
+}
+
+///|
 fn u64_mask(bits : Int) -> UInt64 {
   if bits <= 0 {
     return 0
@@ -325,6 +339,84 @@ fn gen_fill_nops(emitter : Arm64Emitter, bytes : Int) -> Unit raise {
     emit32(emitter, 0xd503201f)
     remaining = remaining - 4
   }
+}
+
+///|
+fn arm64_vset_VT_CMP(op : Int) -> Unit {
+  if op >= TOK_ULT && op <= TOK_GT {
+    let idx = vtop_index()
+    vstack[idx].cmp_r = vstack[idx].r
+    vset_VT_CMP(0x80)
+  }
+}
+
+///|
+fn arm64_load_cmp(
+  emitter : Arm64Emitter,
+  r : Int,
+  sv_index : Int,
+) -> Unit raise {
+  vstack[sv_index].r = vstack[sv_index].cmp_r
+  if (vstack[sv_index].c_i & 1) != 0 {
+    vpushi(1)
+    arm64_gen_opil(emitter, '^', 0)
+  }
+  if r != vstack[sv_index].r {
+    load(emitter, r, sv_index)
+    vstack[sv_index].r = r
+  }
+}
+
+///|
+fn gjmp_cond(emitter : Arm64Emitter, op : Int, t : Int) -> Int raise {
+  let idx = vtop_index()
+  let bt = vstack[idx].type_t & VT_BTYPE
+  let inv = op & 1
+  vstack[idx].r = vstack[idx].cmp_r
+  if bt == VT_LDOUBLE {
+    let f = fltr(gv(RC_FLOAT))
+    let a0 = get_reg(RC_INT)
+    vpushi(0)
+    vstack[vtop_index()].r = a0
+    let b0 = get_reg(RC_INT)
+    let a = intr(a0)
+    let b = intr(b0)
+    emit32(emitter, (0x4e083c00 : Int).lor(a).lor(f << 5).reinterpret_as_uint())
+    emit32(emitter, (0x4e183c00 : Int).lor(b).lor(f << 5).reinterpret_as_uint())
+    emit32(
+      emitter,
+      (0xaa000400 : Int).lor(a).lor(a << 5).lor(b << 16).reinterpret_as_uint(),
+    )
+    let inv_bit = if inv != 0 { 1 } else { 0 }
+    emit32(
+      emitter,
+      (0xb4000040 : Int).lor(a).lor(inv_bit << 24).reinterpret_as_uint(),
+    )
+    vpop()
+  } else if bt == VT_FLOAT || bt == VT_DOUBLE {
+    let a = fltr(gv(RC_FLOAT))
+    let is_double = if bt != VT_FLOAT { 1 } else { 0 }
+    emit32(
+      emitter,
+      (0x1e202008 : Int).lor(a << 5).lor(is_double << 22).reinterpret_as_uint(),
+    )
+    let inv_bit = if inv != 0 { 1 } else { 0 }
+    emit32(emitter, (0x54000040 : Int).lor(inv_bit).reinterpret_as_uint())
+  } else {
+    let ll = bt == VT_PTR || bt == VT_LLONG
+    let a = intr(gv(RC_INT))
+    let inv_bit = if inv != 0 { 1 } else { 0 }
+    let ll_bit = if ll { 1 } else { 0 }
+    emit32(
+      emitter,
+      (0x34000040 : Int)
+      .lor(a)
+      .lor(inv_bit << 24)
+      .lor(ll_bit << 31)
+      .reinterpret_as_uint(),
+    )
+  }
+  gjmp(emitter, t)
 }
 
 ///|
