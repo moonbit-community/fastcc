@@ -108,6 +108,7 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
                           name: decl.name,
                           return_type,
                           params,
+                          varargs: decl.varargs,
                           storage,
                           is_inline,
                           body,
@@ -128,6 +129,7 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
                           name: decl.name,
                           return_type,
                           params,
+                          varargs: decl.varargs,
                           storage,
                           is_inline,
                           loc: decl.loc,
@@ -589,7 +591,7 @@ fn parse_type_name(p : Parser) -> CType? {
         Some(parse_paren_pointer_abstract(p, base))
       } else {
         let ty = parse_pointer_chain(p, base)
-        let (full, _params) = parse_declarator_suffix(p, ty)
+        let (full, _params, _varargs) = parse_declarator_suffix(p, ty)
         Some(full)
       }
   }
@@ -600,6 +602,7 @@ struct Declarator {
   name : String
   ty : CType
   params : Array[Param]?
+  varargs : Bool
   loc : SrcLoc
 }
 
@@ -613,8 +616,8 @@ fn parse_declarator(p : Parser, base : CType) -> Declarator? {
   match name_tok {
     None => None
     Some(tok) => {
-      let (ty, params) = parse_declarator_suffix(p, ty)
-      Some({ name: tok.lexeme, ty, params, loc: tok.loc })
+      let (ty, params, varargs) = parse_declarator_suffix(p, ty)
+      Some({ name: tok.lexeme, ty, params, varargs, loc: tok.loc })
     }
   }
 }
@@ -655,7 +658,7 @@ fn parse_field_declarator(
       None
     }
     expect(p, RParen, "expected ')' in declarator") |> ignore
-    let (ty, params) = parse_declarator_suffix(p, base)
+    let (ty, params, varargs) = parse_declarator_suffix(p, base)
     let mut wrapped = ty
     for qual in quals {
       wrapped = CType::Pointer(wrapped)
@@ -665,7 +668,7 @@ fn parse_field_declarator(
       Some(tok) => (tok.lexeme, tok.loc)
       None => ("", fallback_loc)
     }
-    return Some({ name, ty: wrapped, params, loc })
+    return Some({ name, ty: wrapped, params, varargs, loc })
   }
   let ty = parse_pointer_chain(p, base)
   let (name, loc) = if peek_token(p).kind == Ident {
@@ -674,8 +677,8 @@ fn parse_field_declarator(
   } else {
     ("", fallback_loc)
   }
-  let (ty, params) = parse_declarator_suffix(p, ty)
-  Some({ name, ty, params, loc })
+  let (ty, params, varargs) = parse_declarator_suffix(p, ty)
+  Some({ name, ty, params, varargs, loc })
 }
 
 ///|
@@ -761,13 +764,13 @@ fn parse_paren_pointer_declarator(p : Parser, base : CType) -> Declarator? {
   match name_tok {
     None => None
     Some(tok) => {
-      let (ty, params) = parse_declarator_suffix(p, base)
+      let (ty, params, varargs) = parse_declarator_suffix(p, base)
       let mut wrapped = ty
       for qual in quals {
         wrapped = CType::Pointer(wrapped)
         wrapped = apply_qualifiers(wrapped, qual)
       }
-      Some({ name: tok.lexeme, ty: wrapped, params, loc: tok.loc })
+      Some({ name: tok.lexeme, ty: wrapped, params, varargs, loc: tok.loc })
     }
   }
 }
@@ -780,7 +783,7 @@ fn parse_paren_pointer_abstract(p : Parser, base : CType) -> CType {
     quals.push(parse_type_qualifiers(p))
   }
   expect(p, RParen, "expected ')' in declarator") |> ignore
-  let (ty, _params) = parse_declarator_suffix(p, base)
+  let (ty, _params, _varargs) = parse_declarator_suffix(p, base)
   let mut wrapped = ty
   for qual in quals {
     wrapped = CType::Pointer(wrapped)
@@ -790,22 +793,27 @@ fn parse_paren_pointer_abstract(p : Parser, base : CType) -> CType {
 }
 
 ///|
-fn parse_declarator_suffix(p : Parser, ty_in : CType) -> (CType, Array[Param]?) {
+fn parse_declarator_suffix(
+  p : Parser,
+  ty_in : CType,
+) -> (CType, Array[Param]?, Bool) {
   let mut ty = ty_in
+  let mut varargs = false
   while match_token(p, LBracket) is Some(_) {
     let size = parse_array_size(p)
     expect(p, RBracket, "expected ']' after array size") |> ignore
     ty = CType::Array(elem=ty, size~)
   }
   let params = if match_token(p, LParen) is Some(_) {
-    let params = parse_param_list(p)
+    let (params, has_varargs) = parse_param_list(p)
+    varargs = has_varargs
     let param_types = params.map(param => param.ty)
-    ty = CType::Function(return_type=ty, params=param_types)
+    ty = CType::Function(return_type=ty, params=param_types, varargs~)
     Some(params)
   } else {
     None
   }
-  (ty, params)
+  (ty, params, varargs)
 }
 
 ///|
@@ -885,7 +893,7 @@ fn parse_struct_fields(p : Parser) -> Array[Field] {
         let mut any_field = false
         while true {
           let decl = if peek_token(p).kind == Colon {
-            Some({ name: "", ty: base, params: None, loc })
+            Some({ name: "", ty: base, params: None, varargs: false, loc })
           } else {
             parse_field_declarator(p, base, loc)
           }
@@ -983,15 +991,20 @@ fn parse_enum_items(p : Parser) -> Array[EnumItem] {
 }
 
 ///|
-fn parse_param_list(p : Parser) -> Array[Param] {
+fn parse_param_list(p : Parser) -> (Array[Param], Bool) {
   let params : Array[Param] = []
+  let mut varargs = false
   if match_token(p, RParen) is Some(_) {
-    return params
+    return (params, varargs)
+  }
+  if match_token(p, Ellipsis) is Some(_) {
+    expect(p, RParen, "expected ')' after '...'") |> ignore
+    return (params, true)
   }
   if peek_token(p).kind == KwVoid {
     let void_tok = advance_token(p)
     if match_token(p, RParen) is Some(_) {
-      return params
+      return (params, varargs)
     }
     match parse_param_after_base(p, CType::Void, void_tok.loc) {
       Some(param) => params.push(param)
@@ -1009,6 +1022,11 @@ fn parse_param_list(p : Parser) -> Array[Param] {
   }
   while true {
     if match_token(p, Comma) is Some(_) {
+      if match_token(p, Ellipsis) is Some(_) {
+        varargs = true
+        expect(p, RParen, "expected ')' after '...'") |> ignore
+        break
+      }
       match parse_type_spec(p) {
         Some((base, type_loc)) =>
           match parse_param_after_base(p, base, type_loc) {
@@ -1022,7 +1040,7 @@ fn parse_param_list(p : Parser) -> Array[Param] {
     expect(p, RParen, "expected ')' after parameter list") |> ignore
     break
   }
-  params
+  (params, varargs)
 }
 
 ///|
@@ -1054,7 +1072,7 @@ fn parse_param_declarator(
       None
     }
     expect(p, RParen, "expected ')' in declarator") |> ignore
-    let (ty, _params) = parse_declarator_suffix(p, base)
+    let (ty, _params, _varargs) = parse_declarator_suffix(p, base)
     let mut wrapped = ty
     for qual in quals {
       wrapped = CType::Pointer(wrapped)
@@ -1069,7 +1087,7 @@ fn parse_param_declarator(
   let ty = parse_pointer_chain(p, base)
   if peek_token(p).kind == Ident {
     let name_tok = advance_token(p)
-    let (ty, _params) = parse_declarator_suffix(p, ty)
+    let (ty, _params, _varargs) = parse_declarator_suffix(p, ty)
     return Some({ name: name_tok.lexeme, ty, loc: name_tok.loc })
   }
   Some({ name: "", ty, loc: fallback_loc })

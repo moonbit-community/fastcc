@@ -41,7 +41,7 @@ enum CType {
   Struct(name~ : String, fields~ : Array[Field]?)
   Union(name~ : String, fields~ : Array[Field]?)
   Enum(name~ : String, items~ : Array[EnumItem]?)
-  Function(return_type~ : CType, params~ : Array[CType])
+  Function(return_type~ : CType, params~ : Array[CType], varargs~ : Bool)
   Qualified(qual~ : TypeQual, base~ : CType)
 } derive(Show, Eq, ToJson)
 
@@ -72,6 +72,7 @@ struct FuncDef {
   name : String
   return_type : CType
   params : Array[Param]
+  varargs : Bool
   storage : StorageClass
   is_inline : Bool
   body : Stmt
@@ -83,6 +84,7 @@ struct FuncDecl {
   name : String
   return_type : CType
   params : Array[Param]
+  varargs : Bool
   storage : StorageClass
   is_inline : Bool
   loc : SrcLoc

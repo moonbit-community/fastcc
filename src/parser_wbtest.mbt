@@ -291,3 +291,9 @@ test "parse abstract declarators in sizeof" {
   )
   assert_true(!has_errors(bag))
 }
+
+///|
+test "sem accepts varargs call" {
+  let (_, bag) = check_text("int f(int, ...); int main(){return f(1, 2, 3);}")
+  assert_true(!has_errors(bag))
+}

@@ -2,6 +2,7 @@
 struct FuncSig {
   return_type : CType
   params : Array[CType]
+  varargs : Bool
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -106,10 +107,11 @@ fn strip_qualifiers(ty : CType) -> CType {
     CType::Pointer(inner) => CType::Pointer(strip_qualifiers(inner))
     CType::Array(elem~, size~) =>
       CType::Array(elem=strip_qualifiers(elem), size~)
-    CType::Function(return_type~, params~) =>
+    CType::Function(return_type~, params~, varargs~) =>
       CType::Function(
         return_type=strip_qualifiers(return_type),
         params=params.map(strip_qualifiers),
+        varargs~,
       )
     _ => ty
   }
@@ -587,7 +589,7 @@ fn register_type_defs(ctx : SemContext, ty : CType, loc : SrcLoc) -> Unit {
     CType::Enum(name~, items~) => register_enum_def(ctx, name, items, loc)
     CType::Pointer(inner) => register_type_defs(ctx, inner, loc)
     CType::Array(elem~, ..) => register_type_defs(ctx, elem, loc)
-    CType::Function(return_type~, params~) => {
+    CType::Function(return_type~, params~, ..) => {
       register_type_defs(ctx, return_type, loc)
       for param_ty in params {
         register_type_defs(ctx, param_ty, loc)
@@ -990,7 +992,11 @@ fn check_func_decl(ctx : SemContext, func_decl : FuncDecl) -> Unit {
     is_local=false,
     is_function=true,
   )
-  let sig = func_sig_from_params(func_decl.return_type, func_decl.params)
+  let sig = func_sig_from_params(
+    func_decl.return_type,
+    func_decl.params,
+    func_decl.varargs,
+  )
   add_function_sig(ctx, func_decl.name, sig, func_decl.loc, is_def=false)
 }
 
@@ -1003,7 +1009,11 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
     is_local=false,
     is_function=true,
   )
-  let sig = func_sig_from_params(func_def.return_type, func_def.params)
+  let sig = func_sig_from_params(
+    func_def.return_type,
+    func_def.params,
+    func_def.varargs,
+  )
   add_function_sig(ctx, func_def.name, sig, func_def.loc, is_def=true)
   ctx.labels_defined = {}
   ctx.labels_used = []
@@ -1023,9 +1033,13 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
 }
 
 ///|
-fn func_sig_from_params(return_type : CType, params : Array[Param]) -> FuncSig {
+fn func_sig_from_params(
+  return_type : CType,
+  params : Array[Param],
+  varargs : Bool,
+) -> FuncSig {
   let param_types = params.map(p => p.ty)
-  { return_type, params: param_types }
+  { return_type, params: param_types, varargs }
 }
 
 ///|
@@ -1065,6 +1079,9 @@ fn add_function_sig(
 
 ///|
 fn func_sig_eq(a : FuncSig, b : FuncSig) -> Bool {
+  if a.varargs != b.varargs {
+    return false
+  }
   if !type_eq(a.return_type, b.return_type) {
     return false
   }
@@ -1121,7 +1138,7 @@ fn update_decl_type(
 fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
   register_type_defs(ctx, decl.ty, decl.loc)
   match strip_qualifiers(decl.ty) {
-    CType::Function(return_type~, params~) => {
+    CType::Function(return_type~, params~, varargs~) => {
       check_storage_class(
         ctx,
         decl.storage,
@@ -1136,7 +1153,7 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
           "function declaration cannot have initializer",
         )
       }
-      let sig = { return_type, params }
+      let sig = { return_type, params, varargs }
       add_function_sig(ctx, decl.name, sig, decl.loc, is_def=false)
       return
     }
@@ -1645,10 +1662,13 @@ fn type_eq(a : CType, b : CType) -> Bool {
       CType::Array(elem=elem_b, size=size_b),
     ) => size_a == size_b && type_eq(elem_a, elem_b)
     (
-      CType::Function(return_type=a_ret, params=a_params),
-      CType::Function(return_type=b_ret, params=b_params),
+      CType::Function(return_type=a_ret, params=a_params, varargs=a_varargs),
+      CType::Function(return_type=b_ret, params=b_params, varargs=b_varargs),
     ) => {
       if !type_eq(a_ret, b_ret) {
+        return false
+      }
+      if a_varargs != b_varargs {
         return false
       }
       if a_params.length() != b_params.length() {
@@ -2170,16 +2190,24 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
         _ => None
       }
       match fn_ty {
-        Some(CType::Function(return_type~, params~)) => {
-          if params.length() != args.length() {
+        Some(CType::Function(return_type~, params~, varargs~)) => {
+          if varargs {
+            if args.length() < params.length() {
+              add_sem_error(ctx, loc, "argument count mismatch in call")
+            }
+          } else if params.length() != args.length() {
             add_sem_error(ctx, loc, "argument count mismatch in call")
+          }
+          let limit = if args.length() < params.length() {
+            args.length()
           } else {
-            for i = 0; i < params.length(); i = i + 1 {
-              let arg_ty = type_of_expr(ctx, args[i])
-              if !can_assign(params[i], arg_ty) {
-                add_sem_error(ctx, loc, "argument type mismatch in call")
-                break
-              }
+            params.length()
+          }
+          for i = 0; i < limit; i = i + 1 {
+            let arg_ty = type_of_expr(ctx, args[i])
+            if !can_assign(params[i], arg_ty) {
+              add_sem_error(ctx, loc, "argument type mismatch in call")
+              break
             }
           }
           return_type
@@ -2357,7 +2385,13 @@ fn lookup_value(ctx : SemContext, name : String) -> CType? {
     None =>
       match ctx.functions.get(name) {
         Some(sig) =>
-          Some(CType::Function(return_type=sig.return_type, params=sig.params))
+          Some(
+            CType::Function(
+              return_type=sig.return_type,
+              params=sig.params,
+              varargs=sig.varargs,
+            ),
+          )
         None =>
           if ctx.enum_consts.contains(name) {
             Some(default_int_type())
@@ -2447,9 +2481,18 @@ fn type_to_string(ty : CType) -> String {
     CType::Struct(name~, ..) => "struct " + name
     CType::Union(name~, ..) => "union " + name
     CType::Enum(name~, ..) => "enum " + name
-    CType::Function(return_type~, params~) => {
+    CType::Function(return_type~, params~, varargs~) => {
       let args = params.map(type_to_string).join(", ")
-      "fn(\{args}) -> \{type_to_string(return_type)}"
+      let rendered = if varargs {
+        if args == "" {
+          "..."
+        } else {
+          "\{args}, ..."
+        }
+      } else {
+        args
+      }
+      "fn(\{rendered}) -> \{type_to_string(return_type)}"
     }
   }
 }
