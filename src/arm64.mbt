@@ -63,13 +63,28 @@ let reg_classes : Array[Int] = [
 ]
 
 ///|
+const R_AARCH64_ADR_GOT_PAGE : Int = 311
+
+///|
+const R_AARCH64_LD64_GOT_LO12_NC : Int = 312
+
+///|
+struct Reloc {
+  offset : Int
+  kind : Int
+  sym : Sym
+  addend : Int64
+}
+
+///|
 struct Arm64Emitter {
   code : Array[UInt]
+  relocs : Array[Reloc]
 }
 
 ///|
 fn new_arm64_emitter() -> Arm64Emitter {
-  { code: [] }
+  { code: [], relocs: [] }
 }
 
 ///|
@@ -80,6 +95,22 @@ fn emit32(emitter : Arm64Emitter, insn : UInt) -> Unit {
 ///|
 fn emitter_pc(emitter : Arm64Emitter) -> Int {
   emitter.code.length() << 2
+}
+
+///|
+fn greloca(
+  emitter : Arm64Emitter,
+  sym : Sym,
+  offset : Int,
+  kind : Int,
+  addend : Int64,
+) -> Unit {
+  emitter.relocs.push({ offset, kind, sym, addend })
+}
+
+///|
+fn greloc(emitter : Arm64Emitter, sym : Sym, offset : Int, kind : Int) -> Unit {
+  greloca(emitter, sym, offset, kind, 0)
 }
 
 ///|
@@ -811,12 +842,58 @@ fn arm64_check_offset(invert : Bool, sz_ : Int, off : UInt64) -> UInt64 {
 
 ///|
 fn arm64_sym(
-  _emitter : Arm64Emitter,
-  _r : UInt,
-  _sym : Sym,
-  _addend : UInt64,
-) -> Unit raise {
-  fail("arm64_sym unimplemented")
+  emitter : Arm64Emitter,
+  r : UInt,
+  sym : Sym,
+  addend : UInt64,
+) -> Unit {
+  let ind0 = emitter_pc(emitter)
+  greloca(emitter, sym, ind0, R_AARCH64_ADR_GOT_PAGE, 0)
+  emit32(emitter, (0x90000000 : UInt64).lor(r.to_uint64()).to_uint())
+  let ind1 = emitter_pc(emitter)
+  greloca(emitter, sym, ind1, R_AARCH64_LD64_GOT_LO12_NC, 0)
+  emit32(
+    emitter,
+    (0xf9400000 : UInt64).lor(r.to_uint64()).lor(r.to_uint64() << 5).to_uint(),
+  )
+  if addend != 0 {
+    if (addend & (0xfff : UInt64)) != 0 {
+      emit32(
+        emitter,
+        (0x91000000 : UInt64)
+        .lor(r.to_uint64())
+        .lor(r.to_uint64() << 5)
+        .lor((addend & (0xfff : UInt64)) << 10)
+        .to_uint(),
+      )
+    }
+    if addend > (0xfff : UInt64) {
+      if (addend & (0xfff000 : UInt64)) != 0 {
+        emit32(
+          emitter,
+          (0x91400000 : UInt64)
+          .lor(r.to_uint64())
+          .lor(r.to_uint64() << 5)
+          .lor(((addend >> 12) & (0xfff : UInt64)) << 10)
+          .to_uint(),
+        )
+      }
+      if addend > (0xffffff : UInt64) {
+        let t : UInt = if r != (0 : UInt) { 0 } else { 1 }
+        emit32(emitter, (0xf81f0fe0 : UInt64).lor(t.to_uint64()).to_uint())
+        arm64_movimm(emitter, t, addend & (0xffffff : UInt64).lnot())
+        emit32(
+          emitter,
+          (0x8b000000 : UInt64)
+          .lor(t.to_uint64() << 16)
+          .lor(r.to_uint64() << 5)
+          .lor(r.to_uint64())
+          .to_uint(),
+        )
+        emit32(emitter, (0xf84107e0 : UInt64).lor(t.to_uint64()).to_uint())
+      }
+    }
+  }
 }
 
 ///|

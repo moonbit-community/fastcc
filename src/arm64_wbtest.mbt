@@ -139,3 +139,19 @@ test "arm64 gen opic add immediate" {
   assert_eq(emitter.code.length(), 1)
   assert_eq(emitter.code[0], (0x11001441 : UInt))
 }
+
+///|
+test "arm64 sym emits relocations" {
+  let emitter = new_arm64_emitter()
+  let sym = { id: 7 }
+  arm64_sym(emitter, 0, sym, 0)
+  assert_eq(emitter.code.length(), 2)
+  assert_eq(emitter.code[0], (0x90000000 : UInt))
+  assert_eq(emitter.code[1], (0xf9400000 : UInt))
+  assert_eq(emitter.relocs.length(), 2)
+  assert_eq(emitter.relocs[0].offset, 0)
+  assert_eq(emitter.relocs[0].kind, R_AARCH64_ADR_GOT_PAGE)
+  assert_eq(emitter.relocs[0].sym.id, 7)
+  assert_eq(emitter.relocs[1].offset, 4)
+  assert_eq(emitter.relocs[1].kind, R_AARCH64_LD64_GOT_LO12_NC)
+}
