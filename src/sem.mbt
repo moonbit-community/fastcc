@@ -284,9 +284,14 @@ fn can_assign(dst : CType, src : CType) -> Bool {
   }
   match (dst_ty, src_ty) {
     (CType::Pointer(inner_a), CType::Pointer(inner_b)) =>
-      type_eq(inner_a, inner_b)
+      pointer_compatible(inner_a, inner_b)
     _ => type_eq(dst_ty, src_ty)
   }
+}
+
+///|
+fn pointer_compatible(a : CType, b : CType) -> Bool {
+  type_eq(a, b) || is_void_type(a) || is_void_type(b)
 }
 
 ///|
@@ -2067,7 +2072,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
             CType::Pointer(pointee) =>
               match strip_qualifiers(rhs_ty) {
                 CType::Pointer(other) => {
-                  if !type_eq(pointee, other) {
+                  if !pointer_compatible(pointee, other) {
                     add_sem_error(ctx, loc, "pointer subtraction type mismatch")
                   }
                   return default_int_type()
@@ -2101,7 +2106,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
             CType::Pointer(pointee) =>
               match strip_qualifiers(rhs_ty) {
                 CType::Pointer(other) => {
-                  if !type_eq(pointee, other) {
+                  if !pointer_compatible(pointee, other) {
                     add_sem_error(ctx, loc, "pointer comparison type mismatch")
                   }
                   return default_int_type()

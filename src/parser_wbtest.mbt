@@ -297,3 +297,11 @@ test "sem accepts varargs call" {
   let (_, bag) = check_text("int f(int, ...); int main(){return f(1, 2, 3);}")
   assert_true(!has_errors(bag))
 }
+
+///|
+test "sem accepts void pointer compatibility" {
+  let (_, bag) = check_text(
+    "int x; void *p; int *q; int main(){q = &x; p = q; q = p; return p == q;}",
+  )
+  assert_true(!has_errors(bag))
+}
