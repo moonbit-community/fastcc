@@ -89,3 +89,43 @@ test "arm64 gjmp_addr emits branch encoding" {
   }
   assert_eq(emitter.code[1], (0x14000002 : UInt))
 }
+
+///|
+fn push_sv(type_t : Int, r : Int, c_i : Int64) -> Int {
+  vstack.push({
+    type_t,
+    r,
+    r2: VT_CONST,
+    jtrue: 0,
+    jfalse: 0,
+    c_i,
+    cmp_op: 0,
+    cmp_r: 0,
+  })
+  vstack.length() - 1
+}
+
+///|
+test "arm64 iconst sign extension" {
+  vstack.clear()
+  let idx = push_sv(VT_INT, VT_CONST, (0x80000000 : Int64))
+  let val = arm64_iconst(idx)
+  guard val is Some(v) else { fail("expected value") }
+  assert_eq(v, (0xffffffff80000000 : UInt64))
+}
+
+///|
+test "arm64 iconst unsigned truncation" {
+  vstack.clear()
+  let idx = push_sv(VT_INT | VT_UNSIGNED, VT_CONST, (0x80000000 : Int64))
+  let val = arm64_iconst(idx)
+  guard val is Some(v) else { fail("expected value") }
+  assert_eq(v, (0x80000000 : UInt64))
+}
+
+///|
+test "arm64 iconst non-const returns none" {
+  vstack.clear()
+  let idx = push_sv(VT_INT, VT_LOCAL, 0)
+  assert_eq(arm64_iconst(idx), None)
+}
