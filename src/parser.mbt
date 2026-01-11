@@ -584,7 +584,14 @@ fn parse_pointer_chain(p : Parser, ty_in : CType) -> CType {
 fn parse_type_name(p : Parser) -> CType? {
   match parse_type_spec(p) {
     None => None
-    Some((base, _loc)) => Some(parse_pointer_chain(p, base))
+    Some((base, _loc)) =>
+      if is_paren_pointer_declarator(p) {
+        Some(parse_paren_pointer_abstract(p, base))
+      } else {
+        let ty = parse_pointer_chain(p, base)
+        let (full, _params) = parse_declarator_suffix(p, ty)
+        Some(full)
+      }
   }
 }
 
@@ -763,6 +770,23 @@ fn parse_paren_pointer_declarator(p : Parser, base : CType) -> Declarator? {
       Some({ name: tok.lexeme, ty: wrapped, params, loc: tok.loc })
     }
   }
+}
+
+///|
+fn parse_paren_pointer_abstract(p : Parser, base : CType) -> CType {
+  expect(p, LParen, "expected '(' in declarator") |> ignore
+  let quals : Array[TypeQual] = []
+  while match_token(p, Star) is Some(_) {
+    quals.push(parse_type_qualifiers(p))
+  }
+  expect(p, RParen, "expected ')' in declarator") |> ignore
+  let (ty, _params) = parse_declarator_suffix(p, base)
+  let mut wrapped = ty
+  for qual in quals {
+    wrapped = CType::Pointer(wrapped)
+    wrapped = apply_qualifiers(wrapped, qual)
+  }
+  wrapped
 }
 
 ///|

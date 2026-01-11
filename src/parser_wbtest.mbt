@@ -283,3 +283,11 @@ test "sem accepts integer suffixes" {
   )
   assert_true(!has_errors(bag))
 }
+
+///|
+test "parse abstract declarators in sizeof" {
+  let (_, bag) = check_text(
+    "int f(int); int main(){return sizeof(int (*)(int)) + sizeof(int[3]);}",
+  )
+  assert_true(!has_errors(bag))
+}
