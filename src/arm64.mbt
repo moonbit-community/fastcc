@@ -14,6 +14,11 @@ fn emit32(emitter : Arm64Emitter, insn : UInt) -> Unit {
 }
 
 ///|
+fn emitter_pc(emitter : Arm64Emitter) -> Int {
+  emitter.code.length() << 2
+}
+
+///|
 fn u64_mask(bits : Int) -> UInt64 {
   if bits <= 0 {
     return 0
@@ -258,6 +263,67 @@ fn gsym_addr(emitter : Arm64Emitter, t_ : Int, a_ : Int) -> Unit raise {
     }
     emitter.code[idx] = insn
     t = next
+  }
+}
+
+///|
+fn gsym(emitter : Arm64Emitter, t : Int) -> Unit raise {
+  if t != 0 {
+    gsym_addr(emitter, t, emitter_pc(emitter))
+  }
+}
+
+///|
+fn gind(emitter : Arm64Emitter) -> Int {
+  emitter_pc(emitter)
+}
+
+///|
+fn gjmp(emitter : Arm64Emitter, t : Int) -> Int {
+  let r = emitter_pc(emitter)
+  emit32(emitter, t.reinterpret_as_uint())
+  r
+}
+
+///|
+fn gjmp_addr(emitter : Arm64Emitter, a : Int) -> Unit raise {
+  let ind = emitter_pc(emitter)
+  if a - ind + 0x8000000 >= 0x10000000 {
+    fail("branch out of range")
+  }
+  let imm = ((a - ind) >> 2) & 0x3ffffff
+  let insn = (0x14000000 : Int).lor(imm).reinterpret_as_uint()
+  emit32(emitter, insn)
+}
+
+///|
+fn gjmp_append(emitter : Arm64Emitter, n : Int, t : Int) -> Int {
+  let mut t1 = t
+  let mut n1 = n
+  if n1 != 0 {
+    while true {
+      let idx = n1 >> 2
+      let next = emitter.code[idx].reinterpret_as_int()
+      if next == 0 {
+        emitter.code[idx] = t1.reinterpret_as_uint()
+        break
+      }
+      n1 = next
+    }
+    t1 = n
+  }
+  t1
+}
+
+///|
+fn gen_fill_nops(emitter : Arm64Emitter, bytes : Int) -> Unit raise {
+  let mut remaining = bytes
+  if (remaining & 3) != 0 {
+    fail("alignment of code section not multiple of 4")
+  }
+  while remaining > 0 {
+    emit32(emitter, 0xd503201f)
+    remaining = remaining - 4
   }
 }
 

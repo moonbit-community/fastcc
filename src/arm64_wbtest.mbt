@@ -61,7 +61,31 @@ test "arm64 gsym_addr patches branches" {
   emitter.code.push(0)
   emitter.code.push((8 : UInt))
   emitter.code.push(0)
-  gsym_addr(emitter, 4, 12)
+  gsym_addr(emitter, 4, 12) catch {
+    err => fail("unexpected gsym_addr error: \{err.to_string()}")
+  }
   assert_eq(emitter.code[1], (0x14000002 : UInt))
   assert_eq(emitter.code[2], (0xd503201f : UInt))
+}
+
+///|
+test "arm64 gjmp helpers build and append chains" {
+  let emitter = new_arm64_emitter()
+  emit32(emitter, 0)
+  let t1 = gjmp(emitter, 0)
+  let t2 = gjmp(emitter, 0)
+  let merged = gjmp_append(emitter, t1, t2)
+  assert_eq(merged, t1)
+  assert_eq(emitter.code[1], t2.reinterpret_as_uint())
+  assert_eq(emitter.code[2], (0 : UInt))
+}
+
+///|
+test "arm64 gjmp_addr emits branch encoding" {
+  let emitter = new_arm64_emitter()
+  emit32(emitter, 0)
+  gjmp_addr(emitter, 12) catch {
+    err => fail("unexpected gjmp_addr error: \{err.to_string()}")
+  }
+  assert_eq(emitter.code[1], (0x14000002 : UInt))
 }
