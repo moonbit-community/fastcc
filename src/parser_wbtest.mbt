@@ -313,3 +313,37 @@ test "typedef scope does not leak" {
   )
   assert_true(!has_errors(bag))
 }
+
+///|
+test "sem accepts null pointer constants" {
+  let (_, bag) = check_text("int *p; int main(){p = 0; return p == 0;}")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts pointer conditional with null" {
+  let (_, bag) = check_text("int *p; int main(){return (1 ? p : 0) == p;}")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem adjusts array parameters to pointers" {
+  let (_, bag) = check_text(
+    "int f(int a[]); int main(){int b[2]; return f(b);}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem adjusts function parameters to pointers" {
+  let (_, bag) = check_text(
+    "int cb(int); int f(int g(int)); int main(){return f(cb);}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts reversed array indexing" {
+  let (_, bag) = check_text("int a[2]; int main(){return 1[a];}")
+  assert_true(!has_errors(bag))
+}

@@ -118,6 +118,14 @@ fn strip_qualifiers(ty : CType) -> CType {
 }
 
 ///|
+fn strip_top_qualifiers(ty : CType) -> CType {
+  match ty {
+    CType::Qualified(base~, ..) => base
+    _ => ty
+  }
+}
+
+///|
 fn is_void_type(ty : CType) -> Bool {
   strip_qualifiers(ty) is CType::Void
 }
@@ -989,6 +997,44 @@ fn eval_const_expr(ctx : SemContext, expr : Expr, loc : SrcLoc) -> Int {
 }
 
 ///|
+fn try_eval_int_const(ctx : SemContext, expr : Expr) -> Int? {
+  match expr {
+    Expr::IntLit(value~, ..) => Some(parse_int_value(value))
+    Expr::CharLit(value~, ..) => Some(value)
+    Expr::Ident(name~, ..) => ctx.enum_consts.get(name)
+    Expr::Unary(op~, expr~, ..) =>
+      match op {
+        UnaryOp::Plus =>
+          match try_eval_int_const(ctx, expr) {
+            Some(v) => Some(v)
+            None => None
+          }
+        UnaryOp::Minus =>
+          match try_eval_int_const(ctx, expr) {
+            Some(v) => Some(0 - v)
+            None => None
+          }
+        _ => None
+      }
+    Expr::Cast(ty~, expr~, ..) =>
+      if is_pointer_type(ty) || is_int_like(ty) {
+        try_eval_int_const(ctx, expr)
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
+fn is_null_pointer_expr(ctx : SemContext, expr : Expr) -> Bool {
+  match try_eval_int_const(ctx, expr) {
+    Some(v) => v == 0
+    None => false
+  }
+}
+
+///|
 fn check_func_decl(ctx : SemContext, func_decl : FuncDecl) -> Unit {
   check_storage_class(
     ctx,
@@ -1029,7 +1075,8 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
     if param.name == "" {
       add_sem_error(ctx, param.loc, "parameter name missing in definition")
     } else {
-      declare_local(ctx, param.name, param.ty, param.loc)
+      let param_ty = adjust_param_type_for_local(param.ty)
+      declare_local(ctx, param.name, param_ty, param.loc)
     }
   }
   check_stmt(ctx, func_def.body, func_def.return_type)
@@ -1043,7 +1090,7 @@ fn func_sig_from_params(
   params : Array[Param],
   varargs : Bool,
 ) -> FuncSig {
-  let param_types = params.map(p => p.ty)
+  let param_types = params.map(p => adjust_param_type_for_sig(p.ty))
   { return_type, params: param_types, varargs }
 }
 
@@ -1213,7 +1260,8 @@ fn check_initializer(
                 }
               } else {
                 let init_ty = type_of_expr(ctx, expr)
-                if !can_assign(ty, init_ty) {
+                if !can_assign(ty, init_ty) &&
+                  !(is_pointer_type(ty) && is_null_pointer_expr(ctx, expr)) {
                   add_sem_error(
                     ctx,
                     loc,
@@ -1224,7 +1272,8 @@ fn check_initializer(
               }
             _ => {
               let init_ty = type_of_expr(ctx, expr)
-              if !can_assign(ty, init_ty) {
+              if !can_assign(ty, init_ty) &&
+                !(is_pointer_type(ty) && is_null_pointer_expr(ctx, expr)) {
                 add_sem_error(
                   ctx,
                   loc,
@@ -1597,7 +1646,8 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
           let expr_ty = type_of_expr(ctx, expr)
           if is_void_type(return_type) {
             add_sem_error(ctx, loc, "void function should not return a value")
-          } else if !can_assign(return_type, expr_ty) {
+          } else if !can_assign(return_type, expr_ty) &&
+            !(is_pointer_type(return_type) && is_null_pointer_expr(ctx, expr)) {
             add_sem_error(
               ctx,
               loc,
@@ -1726,12 +1776,47 @@ fn is_scalar(ty : CType) -> Bool {
 }
 
 ///|
+fn is_pointer_type(ty : CType) -> Bool {
+  match strip_qualifiers(ty) {
+    CType::Pointer(_) => true
+    _ => false
+  }
+}
+
+///|
+fn is_void_pointer_type(ty : CType) -> Bool {
+  match strip_qualifiers(ty) {
+    CType::Pointer(inner) => is_void_type(inner)
+    _ => false
+  }
+}
+
+///|
 fn decay_type(ty : CType) -> CType {
   match strip_qualifiers(ty) {
     CType::Array(elem~, ..) => CType::Pointer(elem)
     CType::Function(..) => CType::Pointer(ty)
     _ => ty
   }
+}
+
+///|
+fn adjust_param_type_for_local(ty : CType) -> CType {
+  match ty {
+    CType::Qualified(qual~, base~) => {
+      let adjusted = adjust_param_type_for_local(base)
+      CType::Qualified(qual~, base=adjusted)
+    }
+    CType::Array(elem~, ..) => CType::Pointer(elem)
+    CType::Function(..) => CType::Pointer(ty)
+    _ => ty
+  }
+}
+
+///|
+fn adjust_param_type_for_sig(ty : CType) -> CType {
+  let adjusted = adjust_param_type_for_local(ty)
+  strip_top_qualifiers(adjusted)
 }
 
 ///|
@@ -1841,16 +1926,27 @@ fn index_access_type(
   index_ty : CType,
   loc : SrcLoc,
 ) -> CType? {
-  if !is_int_like(index_ty) {
-    add_sem_error(ctx, loc, "array index must be int")
-  }
-  match strip_qualifiers(base_ty) {
-    CType::Pointer(elem) => Some(elem)
-    CType::Array(elem~, ..) => Some(elem)
-    _ => {
-      add_sem_error(ctx, loc, "subscripted value is not an array")
-      None
+  if is_int_like(index_ty) {
+    match strip_qualifiers(base_ty) {
+      CType::Pointer(elem) => Some(elem)
+      CType::Array(elem~, ..) => Some(elem)
+      _ => {
+        add_sem_error(ctx, loc, "subscripted value is not an array")
+        None
+      }
     }
+  } else if is_int_like(base_ty) {
+    match strip_qualifiers(index_ty) {
+      CType::Pointer(elem) => Some(elem)
+      CType::Array(elem~, ..) => Some(elem)
+      _ => {
+        add_sem_error(ctx, loc, "array index must be int")
+        None
+      }
+    }
+  } else {
+    add_sem_error(ctx, loc, "array index must be int")
+    None
   }
 }
 
@@ -2009,7 +2105,8 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
                 _ => ()
               }
               let rhs_ty = type_of_expr(ctx, right)
-              if !can_assign(lhs_ty, rhs_ty) {
+              if !can_assign(lhs_ty, rhs_ty) &&
+                !(is_pointer_type(lhs_ty) && is_null_pointer_expr(ctx, right)) {
                 add_sem_error(
                   ctx,
                   loc,
@@ -2111,7 +2208,17 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
                   }
                   return default_int_type()
                 }
-                _ => ()
+                _ =>
+                  if is_int_like(rhs_ty) && is_null_pointer_expr(ctx, right) {
+                    return default_int_type()
+                  }
+              }
+            _ => ()
+          }
+          match strip_qualifiers(rhs_ty) {
+            CType::Pointer(_) =>
+              if is_int_like(lhs_ty) && is_null_pointer_expr(ctx, left) {
+                return default_int_type()
               }
             _ => ()
           }
@@ -2158,6 +2265,29 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
       check_cond_expr(ctx, cond)
       let then_ty = type_of_expr(ctx, then_expr)
       let else_ty = type_of_expr(ctx, else_expr)
+      match (strip_qualifiers(then_ty), strip_qualifiers(else_ty)) {
+        (CType::Pointer(a), CType::Pointer(b)) => {
+          if !pointer_compatible(a, b) {
+            add_sem_error(ctx, loc, "conditional operator type mismatch")
+          }
+          if is_void_pointer_type(then_ty) {
+            return then_ty
+          }
+          if is_void_pointer_type(else_ty) {
+            return else_ty
+          }
+          return then_ty
+        }
+        (CType::Pointer(_), _) =>
+          if is_int_like(else_ty) && is_null_pointer_expr(ctx, else_expr) {
+            return then_ty
+          }
+        (_, CType::Pointer(_)) =>
+          if is_int_like(then_ty) && is_null_pointer_expr(ctx, then_expr) {
+            return else_ty
+          }
+        _ => ()
+      }
       if is_arithmetic(then_ty) && is_arithmetic(else_ty) {
         return arithmetic_result_type(ctx, then_ty, else_ty)
       }
@@ -2210,7 +2340,8 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
           }
           for i = 0; i < limit; i = i + 1 {
             let arg_ty = type_of_expr(ctx, args[i])
-            if !can_assign(params[i], arg_ty) {
+            if !can_assign(params[i], arg_ty) &&
+              !(is_pointer_type(params[i]) && is_null_pointer_expr(ctx, args[i])) {
               add_sem_error(ctx, loc, "argument type mismatch in call")
               break
             }
