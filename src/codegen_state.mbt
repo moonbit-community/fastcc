@@ -44,6 +44,12 @@ const VT_UNSIGNED : Int = 0x0010
 const VT_CONST : Int = 0x0030
 
 ///|
+const VT_LLOCAL : Int = 0x0031
+
+///|
+const VT_LOCAL : Int = 0x0032
+
+///|
 const VT_CMP : Int = 0x0033
 
 ///|
@@ -51,6 +57,15 @@ const VT_JMP : Int = 0x0034
 
 ///|
 const VT_JMPI : Int = 0x0035
+
+///|
+const VT_VALMASK : Int = 0x003f
+
+///|
+const VT_LVAL : Int = 0x0100
+
+///|
+const VT_SYM : Int = 0x0200
 
 ///|
 const TOK_LAND : Int = 0x90
@@ -101,7 +116,7 @@ struct SValue {
   mut r2 : Int
   mut jtrue : Int
   mut jfalse : Int
-  c_i : Int
+  c_i : Int64
   mut cmp_op : Int
   mut cmp_r : Int
 }
@@ -122,7 +137,7 @@ fn vpushi(value : Int) -> Unit {
     r2: VT_CONST,
     jtrue: 0,
     jfalse: 0,
-    c_i: value,
+    c_i: value.to_int64(),
     cmp_op: 0,
     cmp_r: 0,
   })

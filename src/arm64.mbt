@@ -357,7 +357,7 @@ fn arm64_load_cmp(
   sv_index : Int,
 ) -> Unit raise {
   vstack[sv_index].r = vstack[sv_index].cmp_r
-  if (vstack[sv_index].c_i & 1) != 0 {
+  if (vstack[sv_index].c_i & 1L) != 0 {
     vpushi(1)
     arm64_gen_opil(emitter, '^', 0)
   }
@@ -417,6 +417,31 @@ fn gjmp_cond(emitter : Arm64Emitter, op : Int, t : Int) -> Int raise {
     )
   }
   gjmp(emitter, t)
+}
+
+///|
+fn arm64_iconst(sv_index : Int) -> UInt64? {
+  let sv = vstack[sv_index]
+  let mask = VT_VALMASK | VT_LVAL | VT_SYM
+  if (sv.r & mask) != VT_CONST {
+    return None
+  }
+  let t = sv.type_t
+  let bt = t & VT_BTYPE
+  if bt == VT_LLONG || bt == VT_PTR {
+    return Some(sv.c_i.reinterpret_as_uint64())
+  }
+  let low = sv.c_i.reinterpret_as_uint64() & (0xffffffff : UInt64)
+  if (t & VT_UNSIGNED) != 0 {
+    return Some(low)
+  }
+  let sign_mask : UInt = 0x80000000
+  let low_u32 = low.to_uint()
+  if (low_u32 & sign_mask) != 0 {
+    let upper : UInt64 = (0xffffffff : UInt64) << 32
+    return Some(low | upper)
+  }
+  Some(low)
 }
 
 ///|
