@@ -3,7 +3,7 @@ struct Parser {
   tokens : Array[Token]
   mut index : Int
   diags : DiagBag
-  type_aliases : Map[String, CType]
+  type_scopes : Array[Map[String, CType]]
   mut anon_tag_id : Int
 }
 
@@ -22,7 +22,7 @@ fn collect_tokens(pp : Preprocessor) -> Array[Token] {
 
 ///|
 fn new_parser(tokens : Array[Token], diags : DiagBag) -> Parser {
-  { tokens, index: 0, diags, type_aliases: {}, anon_tag_id: 0 }
+  { tokens, index: 0, diags, type_scopes: [{}], anon_tag_id: 0 }
 }
 
 ///|
@@ -80,7 +80,7 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
                     "typedef cannot have initializer",
                   )
                 }
-                p.type_aliases.set(decl.name, decl.ty)
+                define_typedef(p, decl.name, decl.ty)
                 decls.push(
                   Decl::Typedef(name=decl.name, ty=decl.ty, loc=decl.loc),
                 )
@@ -478,20 +478,25 @@ fn parse_type_specifiers(
             }
         }
       Ident =>
-        match p.type_aliases.get(tok.lexeme) {
+        match lookup_typedef(p, tok.lexeme) {
           Some(aliased) =>
-            match base {
-              Some(_) => {
-                add_parse_error(p, tok.loc, "multiple type specifiers")
-                break
-              }
-              None => {
-                ignore(advance_token(p))
-                base = Some(aliased)
-                start_loc = tok.loc
-                saw_any = true
-                continue
-              }
+            if base is Some(_) ||
+              saw_void ||
+              saw_bool ||
+              saw_float ||
+              saw_double ||
+              saw_char ||
+              saw_int ||
+              short_seen ||
+              long_count > 0 ||
+              signedness != 0 {
+              break
+            } else {
+              ignore(advance_token(p))
+              base = Some(aliased)
+              start_loc = tok.loc
+              saw_any = true
+              continue
             }
           None => ()
         }
@@ -1095,11 +1100,13 @@ fn parse_param_declarator(
 
 ///|
 fn parse_compound_stmt(p : Parser, loc : SrcLoc) -> Stmt {
+  push_typedef_scope(p)
   let stmts : Array[Stmt] = []
   while !is_at_end(p) && peek_token(p).kind != RBrace {
     stmts.push(parse_stmt(p))
   }
   expect(p, RBrace, "expected '}'") |> ignore
+  pop_typedef_scope(p)
   Stmt::Compound(stmts~, loc~)
 }
 
@@ -1206,7 +1213,7 @@ fn parse_stmt(p : Parser) -> Stmt {
                       "typedef cannot have initializer",
                     )
                   }
-                  p.type_aliases.set(decl.name, decl.ty)
+                  define_typedef(p, decl.name, decl.ty)
                 } else {
                   let mut actual_init = init
                   if decl.ty is CType::Function(..) && actual_init is Some(_) {
@@ -1300,6 +1307,7 @@ fn parse_do_while_stmt(p : Parser, loc : SrcLoc) -> Stmt {
 ///|
 fn parse_for_stmt(p : Parser, loc : SrcLoc) -> Stmt {
   expect(p, LParen, "expected '(' after for") |> ignore
+  push_typedef_scope(p)
   let init = parse_for_init(p)
   let cond = if match_token(p, Semicolon) is Some(_) {
     None
@@ -1316,6 +1324,7 @@ fn parse_for_stmt(p : Parser, loc : SrcLoc) -> Stmt {
     Some(step_expr)
   }
   let body = parse_stmt(p)
+  pop_typedef_scope(p)
   Stmt::For(init~, cond~, step~, body~, loc~)
 }
 
@@ -1369,7 +1378,7 @@ fn parse_for_init(p : Parser) -> Stmt? {
                       "typedef cannot have initializer",
                     )
                   }
-                  p.type_aliases.set(decl.name, decl.ty)
+                  define_typedef(p, decl.name, decl.ty)
                 } else {
                   let mut actual_init = init
                   if decl.ty is CType::Function(..) && actual_init is Some(_) {
@@ -2084,7 +2093,7 @@ fn is_type_start(p : Parser, tok : Token) -> Bool {
     KwUnion => true
     KwEnum => true
     KwTypedef => true
-    Ident => p.type_aliases.contains(tok.lexeme)
+    Ident => has_typedef(p, tok.lexeme)
     _ => false
   }
 }
@@ -2107,6 +2116,45 @@ fn expr_loc(expr : Expr) -> SrcLoc {
     Expr::Index(loc~, ..) => loc
     Expr::Member(loc~, ..) => loc
   }
+}
+
+///|
+fn push_typedef_scope(p : Parser) -> Unit {
+  p.type_scopes.push({})
+}
+
+///|
+fn pop_typedef_scope(p : Parser) -> Unit {
+  ignore(p.type_scopes.pop())
+}
+
+///|
+fn define_typedef(p : Parser, name : String, ty : CType) -> Unit {
+  if p.type_scopes.length() == 0 {
+    p.type_scopes.push({})
+  }
+  let idx = p.type_scopes.length() - 1
+  let scope = p.type_scopes[idx]
+  scope.set(name, ty)
+  p.type_scopes[idx] = scope
+}
+
+///|
+fn lookup_typedef(p : Parser, name : String) -> CType? {
+  let mut i = p.type_scopes.length()
+  while i > 0 {
+    i = i - 1
+    let scope = p.type_scopes[i]
+    if scope.contains(name) {
+      return scope.get(name)
+    }
+  }
+  None
+}
+
+///|
+fn has_typedef(p : Parser, name : String) -> Bool {
+  lookup_typedef(p, name) is Some(_)
 }
 
 ///|

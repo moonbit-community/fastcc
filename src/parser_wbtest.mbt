@@ -305,3 +305,11 @@ test "sem accepts void pointer compatibility" {
   )
   assert_true(!has_errors(bag))
 }
+
+///|
+test "typedef scope does not leak" {
+  let (_, bag) = check_text(
+    "struct S { int x; }; int main(){typedef struct S T; { typedef int T; } T y; return y.x;}",
+  )
+  assert_true(!has_errors(bag))
+}
