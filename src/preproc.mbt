@@ -26,6 +26,10 @@ struct Preprocessor {
   held_stack : Array[Token?]
   path_stack : Array[String]
   mut current_path : String
+  mut logical_path : String
+  logical_path_stack : Array[String]
+  mut line_adjust : Int
+  line_adjust_stack : Array[Int]
   mut next_file_id : Int
   include_paths : Array[String]
   diags : DiagBag
@@ -34,16 +38,23 @@ struct Preprocessor {
   mut held : Token?
   cond_stack : Array[CondState]
   expanding : Array[String]
+  date_literal : String
+  time_literal : String
 }
 
 ///|
 fn new_preprocessor(file : SourceFile, diags : DiagBag) -> Preprocessor {
+  let (date_literal, time_literal) = init_datetime_literals()
   {
     lexer: new_lexer(file, diags),
     lexer_stack: [],
     held_stack: [],
     path_stack: [],
     current_path: file.path,
+    logical_path: file.path,
+    logical_path_stack: [],
+    line_adjust: 0,
+    line_adjust_stack: [],
     next_file_id: file.id + 1,
     include_paths: [],
     diags,
@@ -52,6 +63,8 @@ fn new_preprocessor(file : SourceFile, diags : DiagBag) -> Preprocessor {
     held: None,
     cond_stack: [],
     expanding: [],
+    date_literal,
+    time_literal,
   }
 }
 
@@ -90,6 +103,14 @@ fn next_input_token(pp : Preprocessor) -> Token {
           }
           match pp.path_stack.pop() {
             Some(prev_path) => pp.current_path = prev_path
+            None => ()
+          }
+          match pp.logical_path_stack.pop() {
+            Some(prev_path) => pp.logical_path = prev_path
+            None => ()
+          }
+          match pp.line_adjust_stack.pop() {
+            Some(prev_adjust) => pp.line_adjust = prev_adjust
             None => ()
           }
           continue
@@ -202,6 +223,7 @@ fn resolve_include_path(
   pp : Preprocessor,
   path : String,
   is_angle : Bool,
+  include_next~ : Bool,
 ) -> String? {
   if path.has_prefix("/") {
     return Some(path)
@@ -213,18 +235,29 @@ fn resolve_include_path(
   for p in pp.include_paths {
     dirs.push(p)
   }
-  for d in dirs {
-    let candidate = join_path(d, path)
+  let mut start = 0
+  if include_next && dirs.length() > 0 {
+    start = 1
+  }
+  let mut i = start
+  while i < dirs.length() {
+    let candidate = join_path(dirs[i], path)
     if @fs.path_exists(candidate) {
       return Some(candidate)
     }
+    i = i + 1
   }
   None
 }
 
 ///|
-fn include_file(pp : Preprocessor, spec : IncludeSpec, loc : SrcLoc) -> Unit {
-  match resolve_include_path(pp, spec.path, spec.is_angle) {
+fn include_file(
+  pp : Preprocessor,
+  spec : IncludeSpec,
+  loc : SrcLoc,
+  include_next~ : Bool,
+) -> Unit {
+  match resolve_include_path(pp, spec.path, spec.is_angle, include_next~) {
     None => add_pp_error(pp, loc, "include not found: \{spec.path}")
     Some(resolved) =>
       try @fs.read_file_to_string(resolved) catch {
@@ -238,8 +271,12 @@ fn include_file(pp : Preprocessor, spec : IncludeSpec, loc : SrcLoc) -> Unit {
           pp.held_stack.push(pp.held)
           pp.held = None
           pp.path_stack.push(pp.current_path)
+          pp.logical_path_stack.push(pp.logical_path)
+          pp.line_adjust_stack.push(pp.line_adjust)
           pp.lexer = new_lexer(file, pp.diags)
           pp.current_path = resolved
+          pp.logical_path = resolved
+          pp.line_adjust = 0
         }
       }
   }
@@ -460,6 +497,99 @@ fn escape_string(text : String) -> String {
 }
 
 ///|
+fn logical_line(pp : Preprocessor, loc : SrcLoc) -> Int {
+  loc.line + pp.line_adjust
+}
+
+///|
+fn make_int_literal_token(value : Int, loc : SrcLoc) -> Token {
+  { kind: IntLit, lexeme: value.to_string(), loc, line_start: false }
+}
+
+///|
+fn builtin_macro_tokens(pp : Preprocessor, tok : Token) -> Array[Token]? {
+  match tok.lexeme {
+    "__LINE__" =>
+      Some([make_int_literal_token(logical_line(pp, tok.loc), tok.loc)])
+    "__FILE__" => {
+      let path = if pp.logical_path == "" {
+        pp.current_path
+      } else {
+        pp.logical_path
+      }
+      Some([make_string_literal(path, tok.loc)])
+    }
+    "__DATE__" => Some([make_string_literal(pp.date_literal, tok.loc)])
+    "__TIME__" => Some([make_string_literal(pp.time_literal, tok.loc)])
+    _ => None
+  }
+}
+
+///|
+fn init_datetime_literals() -> (String, String) {
+  let now_ms = @env.now()
+  let now_sec = (now_ms / 1000UL).to_int().to_int64()
+  try @time.unix(now_sec, zone=@time.utc_zone) catch {
+    _ => ("Jan 01 1970", "00:00:00")
+  } noraise {
+    dt => (format_date(dt), format_time(dt))
+  }
+}
+
+///|
+fn format_date(dt : @time.ZonedDateTime) -> String {
+  let month = month_name(dt.month())
+  let day = pad2_space(dt.day())
+  let year = dt.year().to_string()
+  month + " " + day + " " + year
+}
+
+///|
+fn format_time(dt : @time.ZonedDateTime) -> String {
+  let hour = pad2(dt.hour())
+  let minute = pad2(dt.minute())
+  let second = pad2(dt.second())
+  hour + ":" + minute + ":" + second
+}
+
+///|
+fn month_name(month : Int) -> String {
+  match month {
+    1 => "Jan"
+    2 => "Feb"
+    3 => "Mar"
+    4 => "Apr"
+    5 => "May"
+    6 => "Jun"
+    7 => "Jul"
+    8 => "Aug"
+    9 => "Sep"
+    10 => "Oct"
+    11 => "Nov"
+    12 => "Dec"
+    _ => "Jan"
+  }
+}
+
+///|
+fn pad2(value : Int) -> String {
+  if value < 10 {
+    "0" + value.to_string()
+  } else {
+    value.to_string()
+  }
+}
+
+///|
+fn pad2_space(value : Int) -> String {
+  if value < 10 {
+    " " + value.to_string()
+  } else {
+    value.to_string()
+  }
+}
+
+///|
 fn lookup_param_index(params : Array[String], name : String) -> Int? {
   for i = 0; i < params.length(); i = i + 1 {
     if params[i] == name {
@@ -625,6 +755,18 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
   let mut i = 0
   while i < tokens.length() {
     let tok = tokens[i]
+    if tok.kind == Ident {
+      match builtin_macro_tokens(pp, tok) {
+        Some(tokens) => {
+          for t in tokens {
+            out.push(t)
+          }
+          i = i + 1
+          continue
+        }
+        None => ()
+      }
+    }
     if tok.kind == Ident &&
       pp.macros.contains(tok.lexeme) &&
       !is_expanding(pp, tok.lexeme) {
@@ -808,6 +950,32 @@ fn push_tokens(pp : Preprocessor, tokens : Array[Token]) -> Unit {
   while i > 0 {
     i = i - 1
     pp.pending.push(tokens[i])
+  }
+}
+
+///|
+fn handle_line_directive(
+  pp : Preprocessor,
+  tokens : Array[Token],
+  loc : SrcLoc,
+) -> Unit {
+  if tokens.length() == 0 {
+    add_pp_error(pp, loc, "missing line number in #line")
+    return
+  }
+  let line_tok = tokens[0]
+  if line_tok.kind != IntLit {
+    add_pp_error(pp, loc, "invalid line number in #line")
+    return
+  }
+  let line_val = parse_int_literal(pp, line_tok.lexeme, line_tok.loc)
+  if line_val <= 0 {
+    add_pp_error(pp, loc, "invalid line number in #line")
+    return
+  }
+  pp.line_adjust = line_val - (loc.line + 1)
+  if tokens.length() > 1 && tokens[1].kind == StrLit {
+    pp.logical_path = strip_quotes(tokens[1].lexeme)
   }
 }
 
@@ -1197,10 +1365,43 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     if current_active(pp) {
       let expanded = expand_tokens(pp, args)
       match parse_include_path(pp, expanded, name_tok.loc) {
-        Some(spec) => include_file(pp, spec, name_tok.loc)
+        Some(spec) => include_file(pp, spec, name_tok.loc, include_next=false)
         None => ()
       }
     }
+    return
+  }
+  if name == "include_next" {
+    if current_active(pp) {
+      let expanded = expand_tokens(pp, args)
+      match parse_include_path(pp, expanded, name_tok.loc) {
+        Some(spec) => include_file(pp, spec, name_tok.loc, include_next=true)
+        None => ()
+      }
+    }
+    return
+  }
+  if name == "line" {
+    if !current_active(pp) {
+      return
+    }
+    let expanded = expand_tokens(pp, args)
+    handle_line_directive(pp, expanded, name_tok.loc)
+    return
+  }
+  if name == "error" {
+    if current_active(pp) {
+      add_pp_error(pp, name_tok.loc, "error: " + stringize_tokens(args))
+    }
+    return
+  }
+  if name == "warning" {
+    if current_active(pp) {
+      add_pp_error(pp, name_tok.loc, "warning: " + stringize_tokens(args))
+    }
+    return
+  }
+  if name == "pragma" {
     return
   }
   if current_active(pp) {
@@ -1227,6 +1428,15 @@ fn next_pp_token(pp : Preprocessor) -> Token {
     }
     if !current_active(pp) {
       continue
+    }
+    if tok.kind == Ident {
+      match builtin_macro_tokens(pp, tok) {
+        Some(tokens) => {
+          push_tokens(pp, tokens)
+          continue
+        }
+        None => ()
+      }
     }
     if tok.kind == Ident && pp.macros.contains(tok.lexeme) {
       if is_expanding(pp, tok.lexeme) {

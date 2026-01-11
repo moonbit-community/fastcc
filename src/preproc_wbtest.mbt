@@ -163,3 +163,39 @@ test "preprocess recursion guard" {
     "KwInt:int", "Ident:z", "Assign:=", "Ident:A", "Semicolon:;",
   ])
 }
+
+///|
+test "preprocess builtin line and file" {
+  let (toks, bag) = pp_tokens("int x = __LINE__;\nconst char *f = __FILE__;")
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=[
+    "KwInt:int", "Ident:x", "Assign:=", "IntLit:1", "Semicolon:;", "KwConst:const",
+    "KwChar:char", "Star:*", "Ident:f", "Assign:=", "StrLit:\"<test>\"", "Semicolon:;",
+  ])
+}
+
+///|
+test "preprocess line directive" {
+  let (toks, bag) = pp_tokens(
+    "#line 200 \"foo.c\"\nint x = __LINE__;\nconst char *f = __FILE__;",
+  )
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=[
+    "KwInt:int", "Ident:x", "Assign:=", "IntLit:200", "Semicolon:;", "KwConst:const",
+    "KwChar:char", "Star:*", "Ident:f", "Assign:=", "StrLit:\"foo.c\"", "Semicolon:;",
+  ])
+}
+
+///|
+test "preprocess date and time" {
+  let (toks, bag) = pp_tokens(
+    "const char *d = __DATE__; const char *t = __TIME__;",
+  )
+  assert_true(!has_errors(bag))
+  assert_true(toks.length() >= 13)
+  assert_true(toks[5].kind == StrLit)
+  assert_true(toks[12].kind == StrLit)
+  assert_true(toks[12].lexeme.contains(":"))
+}
