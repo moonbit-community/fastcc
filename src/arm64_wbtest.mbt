@@ -54,3 +54,14 @@ test "arm64 movimm uses movn when beneficial" {
   assert_eq(emitter.code[2], (0xf2c24680 : UInt))
   assert_eq(emitter.code[3], (0xf2ffffe0 : UInt))
 }
+
+///|
+test "arm64 gsym_addr patches branches" {
+  let emitter = new_arm64_emitter()
+  emitter.code.push(0)
+  emitter.code.push((8 : UInt))
+  emitter.code.push(0)
+  gsym_addr(emitter, 4, 12)
+  assert_eq(emitter.code[1], (0x14000002 : UInt))
+  assert_eq(emitter.code[2], (0xd503201f : UInt))
+}

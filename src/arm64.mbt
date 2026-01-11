@@ -240,6 +240,28 @@ fn arm64_movimm(emitter : Arm64Emitter, reg : UInt, value : UInt64) -> Unit {
 }
 
 ///|
+fn gsym_addr(emitter : Arm64Emitter, t_ : Int, a_ : Int) -> Unit raise {
+  let mut t = t_
+  let a = a_
+  while t != 0 {
+    let idx = t >> 2
+    let next = emitter.code[idx].reinterpret_as_int()
+    let diff = a - t
+    if diff + 0x8000000 >= 0x10000000 {
+      fail("branch out of range")
+    }
+    let insn : UInt = if diff == 4 {
+      0xd503201f
+    } else {
+      let imm = (diff >> 2) & 0x3ffffff
+      (0x14000000 : Int).lor(imm).reinterpret_as_uint()
+    }
+    emitter.code[idx] = insn
+    t = next
+  }
+}
+
+///|
 fn arm64_spoff(emitter : Arm64Emitter, reg : UInt, off : UInt64) -> Unit {
   let sub = off >> 63
   let mut off1 = off
