@@ -760,6 +760,12 @@ fn parse_int_value(text : String) -> Int {
 }
 
 ///|
+fn parse_uint64_value(text : String) -> UInt64 {
+  let trimmed = trim_int_literal(text)
+  parse_uint64_literal(trimmed, int_literal_base(text))
+}
+
+///|
 fn trim_int_literal(text : String) -> String {
   let end = int_literal_end(text)
   slice_string_sem(text, 0, end)
@@ -768,26 +774,25 @@ fn trim_int_literal(text : String) -> String {
 ///|
 fn int_literal_type(text : String) -> CType {
   let end = int_literal_end(text)
-  if end >= text.length() {
-    return default_int_type()
-  }
-  let suffix = slice_string_sem(text, end, text.length()).to_lower()
-  let unsigned = suffix.contains("u")
-  let long_count = if suffix.contains("ll") {
-    2
-  } else if suffix.contains("l") {
-    1
+  let suffix = if end >= text.length() {
+    ""
   } else {
-    0
+    slice_string_sem(text, end, text.length())
   }
-  let kind = if long_count >= 2 {
+  let (long_count, unsigned) = parse_int_suffix(suffix)
+  let value = parse_uint64_value(text)
+  let base = int_literal_base(text)
+  let (adj_long_count, adj_unsigned) = adjust_int_literal_kind(
+    value, base, long_count, unsigned,
+  )
+  let kind = if adj_long_count >= 2 {
     CIntKind::LongLong
-  } else if long_count == 1 {
+  } else if adj_long_count == 1 {
     CIntKind::Long
   } else {
     CIntKind::Int
   }
-  CType::Int(kind~, unsigned~)
+  CType::Int(kind~, unsigned=adj_unsigned)
 }
 
 ///|
@@ -854,6 +859,117 @@ fn is_hex_digit_code(code : UInt16) -> Bool {
   is_dec_digit_code(code) ||
   (code >= 65 && code <= 70) ||
   (code >= 97 && code <= 102)
+}
+
+///|
+fn parse_uint64_literal(text : String, base : Int) -> UInt64 {
+  let mut value : UInt64 = 0
+  let mut i = 0
+  if base == 16 &&
+    text.length() >= 2 &&
+    text[0] == 48 &&
+    (text[1] == 120 || text[1] == 88) {
+    i = 2
+  } else if base == 2 &&
+    text.length() >= 2 &&
+    text[0] == 48 &&
+    (text[1] == 98 || text[1] == 66) {
+    i = 2
+  } else if base == 8 && text.length() > 1 && text[0] == 48 {
+    i = 1
+  }
+  while i < text.length() {
+    let code = text[i]
+    let digit = match digit_value(code) {
+      None => break
+      Some(v) => v
+    }
+    if digit >= base {
+      break
+    }
+    value = value * base.to_uint64() + digit.to_uint64()
+    i = i + 1
+  }
+  value
+}
+
+///|
+fn digit_value(code : UInt16) -> Int? {
+  if is_dec_digit_code(code) {
+    Some(code.to_int() - 48)
+  } else if code >= 65 && code <= 70 {
+    Some(code.to_int() - 65 + 10)
+  } else if code >= 97 && code <= 102 {
+    Some(code.to_int() - 97 + 10)
+  } else {
+    None
+  }
+}
+
+///|
+fn int_literal_base(text : String) -> Int {
+  let trimmed = trim_int_literal(text)
+  if trimmed.length() >= 2 && trimmed[0] == 48 {
+    let next = trimmed[1]
+    if next == 120 || next == 88 {
+      return 16
+    }
+    if next == 98 || next == 66 {
+      return 2
+    }
+    return 8
+  }
+  10
+}
+
+///|
+fn parse_int_suffix(suffix : String) -> (Int, Bool) {
+  let mut long_count = 0
+  let mut unsigned = false
+  for code in suffix.to_lower() {
+    if code == 'l' {
+      long_count = long_count + 1
+    } else if code == 'u' {
+      unsigned = true
+    }
+  }
+  if long_count > 2 {
+    long_count = 2
+  }
+  (long_count, unsigned)
+}
+
+///|
+fn adjust_int_literal_kind(
+  value : UInt64,
+  base : Int,
+  long_count : Int,
+  unsigned : Bool,
+) -> (Int, Bool) {
+  let mut lcount = long_count
+  let mut ucount = unsigned
+  if !ucount && base == 10 {
+    if lcount <= 0 {
+      if value >= 0x80000000 {
+        lcount = 1
+      }
+    }
+    if value >= 0x8000000000000000 {
+      ucount = true
+    }
+  } else {
+    if lcount <= 0 {
+      if value >= 0x100000000 {
+        lcount = 1
+      } else if value >= 0x80000000 {
+        ucount = true
+      }
+    }
+    if value >= 0x8000000000000000 {
+      ucount = true
+    }
+  }
+  (lcount, ucount)
 }
 
 ///|
@@ -1715,7 +1831,11 @@ fn type_eq(a : CType, b : CType) -> Bool {
     (
       CType::Array(elem=elem_a, size=size_a),
       CType::Array(elem=elem_b, size=size_b),
-    ) => size_a == size_b && type_eq(elem_a, elem_b)
+    ) =>
+      match (size_a, size_b) {
+        (Some(sa), Some(sb)) => sa == sb && type_eq(elem_a, elem_b)
+        _ => type_eq(elem_a, elem_b)
+      }
     (
       CType::Function(return_type=a_ret, params=a_params, varargs=a_varargs),
       CType::Function(return_type=b_ret, params=b_params, varargs=b_varargs),
@@ -1743,6 +1863,46 @@ fn type_eq(a : CType, b : CType) -> Bool {
     (CType::Enum(name=a_name, ..), CType::Enum(name=b_name, ..)) =>
       a_name == b_name
     _ => false
+  }
+}
+
+///|
+fn types_compatible_for_decl(a : CType, b : CType) -> Bool {
+  let lhs = strip_qualifiers(a)
+  let rhs = strip_qualifiers(b)
+  match (lhs, rhs) {
+    (
+      CType::Array(elem=elem_a, size=size_a),
+      CType::Array(elem=elem_b, size=size_b),
+    ) =>
+      match (size_a, size_b) {
+        (Some(sa), Some(sb)) =>
+          sa == sb && types_compatible_for_decl(elem_a, elem_b)
+        _ => types_compatible_for_decl(elem_a, elem_b)
+      }
+    (CType::Pointer(inner_a), CType::Pointer(inner_b)) =>
+      types_compatible_for_decl(inner_a, inner_b)
+    (
+      CType::Function(return_type=a_ret, params=a_params, varargs=a_varargs),
+      CType::Function(return_type=b_ret, params=b_params, varargs=b_varargs),
+    ) => {
+      if a_varargs != b_varargs {
+        return false
+      }
+      if !types_compatible_for_decl(a_ret, b_ret) {
+        return false
+      }
+      if a_params.length() != b_params.length() {
+        return false
+      }
+      for i = 0; i < a_params.length(); i = i + 1 {
+        if !types_compatible_for_decl(a_params[i], b_params[i]) {
+          return false
+        }
+      }
+      true
+    }
+    _ => type_eq(lhs, rhs)
   }
 }
 
@@ -2500,9 +2660,50 @@ fn declare_global(
   loc : SrcLoc,
 ) -> Unit {
   if ctx.enum_consts.contains(name) || ctx.globals.contains(name) {
-    add_sem_error(ctx, loc, "redefinition of global '\{name}'")
+    if ctx.enum_consts.contains(name) {
+      add_sem_error(ctx, loc, "redefinition of global '\{name}'")
+      return
+    }
+    match ctx.globals.get(name) {
+      None => ctx.globals.set(name, ty)
+      Some(existing) =>
+        if !types_compatible_for_decl(existing, ty) {
+          add_sem_error(ctx, loc, "redefinition of global '\{name}'")
+        } else {
+          let merged = merge_global_decl_type(existing, ty)
+          ctx.globals.set(name, merged)
+        }
+    }
   } else {
     ctx.globals.set(name, ty)
+  }
+}
+
+///|
+fn merge_global_decl_type(existing : CType, incoming : CType) -> CType {
+  match (existing, incoming) {
+    (CType::Qualified(qual~, base~), _) => {
+      let merged = merge_global_decl_type(base, incoming)
+      CType::Qualified(qual~, base=merged)
+    }
+    (_, CType::Qualified(qual~, base~)) => {
+      let merged = merge_global_decl_type(existing, base)
+      CType::Qualified(qual~, base=merged)
+    }
+    (
+      CType::Array(elem=elem_a, size=size_a),
+      CType::Array(elem=elem_b, size=size_b),
+    ) => {
+      let merged_elem = merge_global_decl_type(elem_a, elem_b)
+      let merged_size = match size_a {
+        Some(_) => size_a
+        None => size_b
+      }
+      CType::Array(elem=merged_elem, size=merged_size)
+    }
+    (CType::Pointer(inner_a), CType::Pointer(inner_b)) =>
+      CType::Pointer(merge_global_decl_type(inner_a, inner_b))
+    _ => existing
   }
 }
 

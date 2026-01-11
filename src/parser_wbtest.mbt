@@ -347,3 +347,27 @@ test "sem accepts reversed array indexing" {
   let (_, bag) = check_text("int a[2]; int main(){return 1[a];}")
   assert_true(!has_errors(bag))
 }
+
+///|
+test "int literal type selection by base" {
+  let ty_decimal = int_literal_type("2147483648")
+  assert_true(type_to_string(ty_decimal) == "long")
+  let ty_hex = int_literal_type("0x80000000")
+  assert_true(type_to_string(ty_hex) == "unsigned int")
+  let ty_hex_big = int_literal_type("0x100000000")
+  assert_true(type_to_string(ty_hex_big) == "long")
+}
+
+///|
+test "sem allows compatible global redeclarations" {
+  let (_, bag) = check_text(
+    "extern int x; int x; int a[]; int a[3]; int main(){return x + a[0];}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem rejects incompatible global redeclarations" {
+  let (_, bag) = check_text("int a[2]; int a[3];")
+  assert_true(has_errors(bag))
+}
