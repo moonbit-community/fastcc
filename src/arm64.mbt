@@ -69,14 +69,6 @@ const R_AARCH64_ADR_GOT_PAGE : Int = 311
 const R_AARCH64_LD64_GOT_LO12_NC : Int = 312
 
 ///|
-struct Reloc {
-  offset : Int
-  kind : Int
-  sym : Sym
-  addend : Int64
-}
-
-///|
 struct Arm64Emitter {
   code : Array[UInt]
   relocs : Array[Reloc]

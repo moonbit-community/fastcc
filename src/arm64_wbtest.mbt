@@ -155,3 +155,18 @@ test "arm64 sym emits relocations" {
   assert_eq(emitter.relocs[1].offset, 4)
   assert_eq(emitter.relocs[1].kind, R_AARCH64_LD64_GOT_LO12_NC)
 }
+
+///|
+test "section_from_emitter copies code and relocs" {
+  let emitter = new_arm64_emitter()
+  let sym = { id: 3 }
+  emit32(emitter, (0x14000000 : UInt))
+  greloca(emitter, sym, 0, R_AARCH64_ADR_GOT_PAGE, 0)
+  let sec = section_from_emitter(".text", emitter)
+  assert_eq(sec.name, ".text")
+  assert_eq(sec.data.length(), 1)
+  assert_eq(sec.data[0], (0x14000000 : UInt))
+  assert_eq(sec.relocs.length(), 1)
+  assert_eq(sec.relocs[0].sym.id, 3)
+  assert_eq(sec.relocs[0].kind, R_AARCH64_ADR_GOT_PAGE)
+}
