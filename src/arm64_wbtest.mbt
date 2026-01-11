@@ -99,6 +99,7 @@ fn push_sv(type_t : Int, r : Int, c_i : Int64) -> Int {
     jtrue: 0,
     jfalse: 0,
     c_i,
+    sym: None,
     cmp_op: 0,
     cmp_r: 0,
   })
@@ -128,4 +129,13 @@ test "arm64 iconst non-const returns none" {
   vstack.clear()
   let idx = push_sv(VT_INT, VT_LOCAL, 0)
   assert_eq(arm64_iconst(idx), None)
+}
+
+///|
+test "arm64 gen opic add immediate" {
+  let emitter = new_arm64_emitter()
+  let ok = arm64_gen_opic(emitter, TOK_ADD, 0, true, 5, 1, 2)
+  assert_true(ok)
+  assert_eq(emitter.code.length(), 1)
+  assert_eq(emitter.code[0], (0x11001441 : UInt))
 }
