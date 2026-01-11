@@ -1396,11 +1396,11 @@ fn parse_expr_comma(p : Parser) -> Expr {
 ///|
 fn parse_expr_eq(p : Parser) -> Expr {
   let left = parse_expr_cond(p)
-  match match_token(p, Assign) {
+  match match_assign_op(p) {
     None => left
-    Some(tok) => {
+    Some((op, tok)) => {
       let right = parse_expr_eq(p)
-      Expr::Binary(op=BinaryOp::Assign, left~, right~, loc=tok.loc)
+      Expr::Binary(op~, left~, right~, loc=tok.loc)
     }
   }
 }
@@ -1794,6 +1794,10 @@ fn parse_expr_primary(p : Parser) -> Expr {
   let tok = advance_token(p)
   match tok.kind {
     IntLit => Expr::IntLit(value=tok.lexeme, loc=tok.loc)
+    FloatLit => Expr::FloatLit(value=tok.lexeme, loc=tok.loc)
+    CharLit =>
+      Expr::CharLit(value=parse_char_literal_value(p, tok), loc=tok.loc)
+    StrLit => parse_string_literal_expr(p, tok)
     Ident => Expr::Ident(name=tok.lexeme, loc=tok.loc)
     LParen => {
       let expr = parse_expr(p)
@@ -1805,6 +1809,212 @@ fn parse_expr_primary(p : Parser) -> Expr {
       Expr::IntLit(value="0", loc=tok.loc)
     }
   }
+}
+
+///|
+fn match_assign_op(p : Parser) -> (BinaryOp, Token)? {
+  let tok = peek_token(p)
+  let op = match tok.kind {
+    Assign => Some(BinaryOp::Assign)
+    PlusAssign => Some(BinaryOp::AddAssign)
+    MinusAssign => Some(BinaryOp::SubAssign)
+    StarAssign => Some(BinaryOp::MulAssign)
+    SlashAssign => Some(BinaryOp::DivAssign)
+    PercentAssign => Some(BinaryOp::ModAssign)
+    ShiftLeftAssign => Some(BinaryOp::ShlAssign)
+    ShiftRightAssign => Some(BinaryOp::ShrAssign)
+    AmpAssign => Some(BinaryOp::BitAndAssign)
+    PipeAssign => Some(BinaryOp::BitOrAssign)
+    CaretAssign => Some(BinaryOp::BitXorAssign)
+    _ => None
+  }
+  match op {
+    None => None
+    Some(op_val) => {
+      ignore(advance_token(p))
+      Some((op_val, tok))
+    }
+  }
+}
+
+///|
+fn parse_string_literal_expr(p : Parser, first : Token) -> Expr {
+  let sb = StringBuilder::new()
+  let mut byte_len = 0
+  let (value, len) = decode_string_literal(p, first.lexeme, first.loc)
+  sb.write_string(value)
+  byte_len = byte_len + len
+  while peek_token(p).kind == StrLit {
+    let tok = advance_token(p)
+    let (part, part_len) = decode_string_literal(p, tok.lexeme, tok.loc)
+    sb.write_string(part)
+    byte_len = byte_len + part_len
+  }
+  Expr::StringLit(value=sb.to_string(), length=byte_len + 1, loc=first.loc)
+}
+
+///|
+fn decode_string_literal(
+  p : Parser,
+  lexeme : String,
+  loc : SrcLoc,
+) -> (String, Int) {
+  let sb = StringBuilder::new()
+  let mut i = 1
+  let mut count = 0
+  let len = lexeme.length()
+  while i + 1 < len {
+    let code = lexeme[i]
+    if code == 92 {
+      if i + 1 >= len {
+        add_parse_error(p, loc, "unterminated escape sequence")
+        break
+      }
+      let next = lexeme[i + 1]
+      if next == 10 {
+        i = i + 2
+        continue
+      }
+      let (value, next_index) = decode_escape_value(p, lexeme, i + 1, loc)
+      if value >= 0 {
+        sb.write_char(value.to_uint16().unsafe_to_char())
+        count = count + 1
+      }
+      i = next_index
+      continue
+    }
+    sb.write_char(code.unsafe_to_char())
+    count = count + 1
+    i = i + 1
+  }
+  (sb.to_string(), count)
+}
+
+///|
+fn parse_char_literal_value(p : Parser, tok : Token) -> Int {
+  let lexeme = tok.lexeme
+  if lexeme.length() < 3 {
+    add_parse_error(p, tok.loc, "invalid character literal")
+    return 0
+  }
+  let len = lexeme.length()
+  let mut value = 0
+  let mut i = 1
+  if i + 1 >= len {
+    add_parse_error(p, tok.loc, "invalid character literal")
+    return 0
+  }
+  let code = lexeme[i]
+  if code == 92 {
+    let (esc, next_index) = decode_escape_value(p, lexeme, i + 1, tok.loc)
+    value = esc
+    i = next_index
+  } else {
+    value = code.to_int()
+    i = i + 1
+  }
+  if i + 1 < len {
+    add_parse_error(p, tok.loc, "multi-character literal")
+  }
+  value
+}
+
+///|
+fn decode_escape_value(
+  p : Parser,
+  text : String,
+  start : Int,
+  loc : SrcLoc,
+) -> (Int, Int) {
+  if start >= text.length() {
+    add_parse_error(p, loc, "unterminated escape sequence")
+    return (0, start)
+  }
+  let code = text[start]
+  match code {
+    97 => (7, start + 1) // \a
+    98 => (8, start + 1) // \b
+    102 => (12, start + 1) // \f
+    110 => (10, start + 1) // \n
+    114 => (13, start + 1) // \r
+    116 => (9, start + 1) // \t
+    118 => (11, start + 1) // \v
+    92 => (92, start + 1) // \\
+    39 => (39, start + 1) // \'
+    34 => (34, start + 1) // \"
+    63 => (63, start + 1) // \?
+    120 | 88 => parse_hex_escape(p, text, start + 1, loc) // \x
+    _ =>
+      if is_oct_digit(code) {
+        parse_octal_escape(text, start)
+      } else {
+        (code.to_int(), start + 1)
+      }
+  }
+}
+
+///|
+fn parse_hex_escape(
+  p : Parser,
+  text : String,
+  start : Int,
+  loc : SrcLoc,
+) -> (Int, Int) {
+  let mut i = start
+  let mut value = 0
+  let mut saw = false
+  while i < text.length() {
+    let code = text[i]
+    let digit = hex_digit_value(code)
+    match digit {
+      None => break
+      Some(v) => {
+        value = value * 16 + v
+        saw = true
+        i = i + 1
+      }
+    }
+  }
+  if !saw {
+    add_parse_error(p, loc, "invalid hex escape")
+  }
+  (value, i)
+}
+
+///|
+fn parse_octal_escape(text : String, start : Int) -> (Int, Int) {
+  let mut i = start
+  let mut value = 0
+  let mut count = 0
+  while i < text.length() && count < 3 {
+    let code = text[i]
+    if !is_oct_digit(code) {
+      break
+    }
+    value = value * 8 + (code.to_int() - 48)
+    i = i + 1
+    count = count + 1
+  }
+  (value, i)
+}
+
+///|
+fn is_oct_digit(code : UInt16) -> Bool {
+  code >= 48 && code <= 55
+}
+
+///|
+fn hex_digit_value(code : UInt16) -> Int? {
+  if code >= 48 && code <= 57 {
+    return Some(code.to_int() - 48)
+  }
+  if code >= 65 && code <= 70 {
+    return Some(code.to_int() - 65 + 10)
+  }
+  if code >= 97 && code <= 102 {
+    return Some(code.to_int() - 97 + 10)
+  }
+  None
 }
 
 ///|
@@ -1841,6 +2051,9 @@ fn is_type_start(p : Parser, tok : Token) -> Bool {
 fn expr_loc(expr : Expr) -> SrcLoc {
   match expr {
     Expr::IntLit(loc~, ..) => loc
+    Expr::FloatLit(loc~, ..) => loc
+    Expr::CharLit(loc~, ..) => loc
+    Expr::StringLit(loc~, ..) => loc
     Expr::Ident(loc~, ..) => loc
     Expr::Unary(loc~, ..) => loc
     Expr::Cast(loc~, ..) => loc

@@ -50,6 +50,11 @@ fn default_int_type() -> CType {
 }
 
 ///|
+fn char_type() -> CType {
+  CType::Int(kind=CIntKind::Char, unsigned=false)
+}
+
+///|
 fn enum_int_type_from_range(min_value : Int, max_value : Int) -> CType {
   let max_int = 2147483647
   let min_int = -2147483647 - 1
@@ -528,6 +533,8 @@ fn type_for_sizeof(ctx : SemContext, expr : Expr) -> CType {
           default_int_type()
         }
       }
+    Expr::StringLit(length~, ..) =>
+      CType::Array(elem=char_type(), size=Some(length))
     _ => type_of_expr(ctx, expr)
   }
 }
@@ -729,10 +736,99 @@ fn define_enum_const(
 
 ///|
 fn parse_int_value(text : String) -> Int {
-  try @strconv.parse_int(text, base=0) catch {
+  let trimmed = trim_int_literal(text)
+  try @strconv.parse_int(trimmed, base=0) catch {
     _ => 0
   } noraise {
     v => v
+  }
+}
+
+///|
+fn trim_int_literal(text : String) -> String {
+  let end = int_literal_end(text)
+  slice_string_sem(text, 0, end)
+}
+
+///|
+fn int_literal_end(text : String) -> Int {
+  let len = text.length()
+  if len == 0 {
+    return 0
+  }
+  let first = text[0]
+  if first == 48 {
+    if len >= 2 {
+      let next = text[1]
+      if next == 120 || next == 88 {
+        return scan_digits(text, 2, is_hex_digit_code)
+      }
+      if next == 98 || next == 66 {
+        return scan_digits(text, 2, is_bin_digit_code)
+      }
+      return scan_digits(text, 1, is_oct_digit_code)
+    }
+    return 1
+  }
+  scan_digits(text, 0, is_dec_digit_code)
+}
+
+///|
+fn scan_digits(text : String, start : Int, accept : (UInt16) -> Bool) -> Int {
+  let mut i = start
+  while i < text.length() {
+    if !accept(text[i]) {
+      break
+    }
+    i = i + 1
+  }
+  i
+}
+
+///|
+fn slice_string_sem(text : String, start : Int, end : Int) -> String {
+  try text[start:end] catch {
+    _ => ""
+  } noraise {
+    view => view.to_string()
+  }
+}
+
+///|
+fn is_dec_digit_code(code : UInt16) -> Bool {
+  code >= 48 && code <= 57
+}
+
+///|
+fn is_oct_digit_code(code : UInt16) -> Bool {
+  code >= 48 && code <= 55
+}
+
+///|
+fn is_bin_digit_code(code : UInt16) -> Bool {
+  code == 48 || code == 49
+}
+
+///|
+fn is_hex_digit_code(code : UInt16) -> Bool {
+  is_dec_digit_code(code) ||
+  (code >= 65 && code <= 70) ||
+  (code >= 97 && code <= 102)
+}
+
+///|
+fn float_type_from_literal(lit : String) -> CType {
+  let len = lit.length()
+  if len == 0 {
+    return CType::Float(kind=CFloatKind::Double)
+  }
+  let last = lit[len - 1]
+  if last == 102 || last == 70 {
+    CType::Float(kind=CFloatKind::Float)
+  } else if last == 108 || last == 76 {
+    CType::Float(kind=CFloatKind::LongDouble)
+  } else {
+    CType::Float(kind=CFloatKind::Double)
   }
 }
 
@@ -744,6 +840,15 @@ fn eval_const_expr_value(
 ) -> (Int, Bool) {
   match expr {
     Expr::IntLit(value~, ..) => (parse_int_value(value), true)
+    Expr::CharLit(value~, ..) => (value, true)
+    Expr::FloatLit(..) => {
+      add_sem_error(ctx, loc, "invalid constant expression")
+      (0, false)
+    }
+    Expr::StringLit(..) => {
+      add_sem_error(ctx, loc, "invalid constant expression")
+      (0, false)
+    }
     Expr::Ident(name~, ..) =>
       match ctx.enum_consts.get(name) {
         Some(v) => (v, true)
@@ -1042,17 +1147,58 @@ fn check_initializer(
   loc : SrcLoc,
 ) -> Int? {
   match init {
-    Initializer::Expr(expr~, ..) => {
-      let init_ty = type_of_expr(ctx, expr)
-      if !can_assign(ty, init_ty) {
-        add_sem_error(
-          ctx,
-          loc,
-          "cannot assign '\{type_to_string(init_ty)}' to '\{type_to_string(ty)}'",
-        )
+    Initializer::Expr(expr~, ..) =>
+      match expr {
+        Expr::StringLit(length~, ..) =>
+          match strip_qualifiers(ty) {
+            CType::Array(elem~, size~) =>
+              if is_char_type(elem) {
+                match size {
+                  None => Some(length)
+                  Some(n) => {
+                    if length > n {
+                      add_sem_error(
+                        ctx, loc, "string initializer too long for array",
+                      )
+                    }
+                    None
+                  }
+                }
+              } else {
+                let init_ty = type_of_expr(ctx, expr)
+                if !can_assign(ty, init_ty) {
+                  add_sem_error(
+                    ctx,
+                    loc,
+                    "cannot assign '\{type_to_string(init_ty)}' to '\{type_to_string(ty)}'",
+                  )
+                }
+                None
+              }
+            _ => {
+              let init_ty = type_of_expr(ctx, expr)
+              if !can_assign(ty, init_ty) {
+                add_sem_error(
+                  ctx,
+                  loc,
+                  "cannot assign '\{type_to_string(init_ty)}' to '\{type_to_string(ty)}'",
+                )
+              }
+              None
+            }
+          }
+        _ => {
+          let init_ty = type_of_expr(ctx, expr)
+          if !can_assign(ty, init_ty) {
+            add_sem_error(
+              ctx,
+              loc,
+              "cannot assign '\{type_to_string(init_ty)}' to '\{type_to_string(ty)}'",
+            )
+          }
+          None
+        }
       }
-      None
-    }
     Initializer::List(items~, ..) => check_initializer_list(ctx, ty, items, loc)
   }
 }
@@ -1511,6 +1657,14 @@ fn is_int_like(ty : CType) -> Bool {
 }
 
 ///|
+fn is_char_type(ty : CType) -> Bool {
+  match strip_qualifiers(ty) {
+    CType::Int(kind=CIntKind::Char, ..) => true
+    _ => false
+  }
+}
+
+///|
 fn is_scalar(ty : CType) -> Bool {
   if is_int_like(ty) || is_float_type(ty) {
     return true
@@ -1700,6 +1854,9 @@ fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
 fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
   match expr {
     Expr::IntLit(..) => default_int_type()
+    Expr::FloatLit(value~, ..) => float_type_from_literal(value)
+    Expr::CharLit(..) => default_int_type()
+    Expr::StringLit(..) => CType::Pointer(char_type())
     Expr::Ident(name~, loc~) =>
       match lookup_value(ctx, name) {
         Some(ty) => decay_type(ty)
@@ -1813,6 +1970,17 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
             }
             None => default_int_type()
           }
+        BinaryOp::AddAssign
+        | BinaryOp::SubAssign
+        | BinaryOp::MulAssign
+        | BinaryOp::DivAssign
+        | BinaryOp::ModAssign
+        | BinaryOp::ShlAssign
+        | BinaryOp::ShrAssign
+        | BinaryOp::BitAndAssign
+        | BinaryOp::BitXorAssign
+        | BinaryOp::BitOrAssign =>
+          type_of_compound_assign(ctx, op, left, right, loc)
         BinaryOp::Comma => {
           type_of_expr(ctx, left) |> ignore
           type_of_expr(ctx, right)
@@ -1998,6 +2166,121 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
       }
     }
   }
+}
+
+///|
+fn type_of_compound_assign(
+  ctx : SemContext,
+  op : BinaryOp,
+  left : Expr,
+  right : Expr,
+  loc : SrcLoc,
+) -> CType {
+  let lhs_ty = match type_of_lvalue(ctx, left) {
+    None => return default_int_type()
+    Some(ty) => ty
+  }
+  match strip_qualifiers(lhs_ty) {
+    CType::Array(_) | CType::Function(..) => {
+      add_sem_error(ctx, loc, "assignment to non-modifiable lvalue")
+      return default_int_type()
+    }
+    _ => ()
+  }
+  let rhs_ty = type_of_expr(ctx, right)
+  let result_ty = match op {
+    BinaryOp::AddAssign =>
+      match strip_qualifiers(lhs_ty) {
+        CType::Pointer(pointee) =>
+          if is_int_like(rhs_ty) {
+            CType::Pointer(pointee)
+          } else {
+            add_sem_error(ctx, loc, "invalid operands to '+='")
+            default_int_type()
+          }
+        _ =>
+          if is_arithmetic(lhs_ty) && is_arithmetic(rhs_ty) {
+            arithmetic_result_type(ctx, lhs_ty, rhs_ty)
+          } else {
+            add_sem_error(ctx, loc, "invalid operands to '+='")
+            default_int_type()
+          }
+      }
+    BinaryOp::SubAssign =>
+      match strip_qualifiers(lhs_ty) {
+        CType::Pointer(pointee) =>
+          if is_int_like(rhs_ty) {
+            CType::Pointer(pointee)
+          } else {
+            add_sem_error(ctx, loc, "invalid operands to '-='")
+            default_int_type()
+          }
+        _ =>
+          if is_arithmetic(lhs_ty) && is_arithmetic(rhs_ty) {
+            arithmetic_result_type(ctx, lhs_ty, rhs_ty)
+          } else {
+            add_sem_error(ctx, loc, "invalid operands to '-='")
+            default_int_type()
+          }
+      }
+    BinaryOp::MulAssign => {
+      if !is_arithmetic(lhs_ty) || !is_arithmetic(rhs_ty) {
+        add_sem_error(ctx, loc, "invalid operands to '*='")
+      }
+      arithmetic_result_type(ctx, lhs_ty, rhs_ty)
+    }
+    BinaryOp::DivAssign => {
+      if !is_arithmetic(lhs_ty) || !is_arithmetic(rhs_ty) {
+        add_sem_error(ctx, loc, "invalid operands to '/='")
+      }
+      arithmetic_result_type(ctx, lhs_ty, rhs_ty)
+    }
+    BinaryOp::ModAssign => {
+      if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
+        add_sem_error(ctx, loc, "invalid operands to '%='")
+      }
+      common_int_type(ctx, lhs_ty, rhs_ty)
+    }
+    BinaryOp::ShlAssign => {
+      if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
+        add_sem_error(ctx, loc, "invalid operands to '<<='")
+      }
+      common_int_type(ctx, lhs_ty, rhs_ty)
+    }
+    BinaryOp::ShrAssign => {
+      if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
+        add_sem_error(ctx, loc, "invalid operands to '>>='")
+      }
+      common_int_type(ctx, lhs_ty, rhs_ty)
+    }
+    BinaryOp::BitAndAssign => {
+      if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
+        add_sem_error(ctx, loc, "invalid operands to '&='")
+      }
+      common_int_type(ctx, lhs_ty, rhs_ty)
+    }
+    BinaryOp::BitXorAssign => {
+      if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
+        add_sem_error(ctx, loc, "invalid operands to '^='")
+      }
+      common_int_type(ctx, lhs_ty, rhs_ty)
+    }
+    BinaryOp::BitOrAssign => {
+      if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
+        add_sem_error(ctx, loc, "invalid operands to '|='")
+      }
+      common_int_type(ctx, lhs_ty, rhs_ty)
+    }
+    _ => default_int_type()
+  }
+  if !can_assign(lhs_ty, result_ty) {
+    add_sem_error(
+      ctx,
+      loc,
+      "cannot assign '\{type_to_string(result_ty)}' to '\{type_to_string(lhs_ty)}'",
+    )
+  }
+  lhs_ty
 }
 
 ///|

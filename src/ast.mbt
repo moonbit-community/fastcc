@@ -128,6 +128,16 @@ enum UnaryOp {
 ///|
 enum BinaryOp {
   Assign
+  AddAssign
+  SubAssign
+  MulAssign
+  DivAssign
+  ModAssign
+  ShlAssign
+  ShrAssign
+  BitAndAssign
+  BitXorAssign
+  BitOrAssign
   Comma
   Add
   Sub
@@ -152,6 +162,9 @@ enum BinaryOp {
 ///|
 enum Expr {
   IntLit(value~ : String, loc~ : SrcLoc)
+  FloatLit(value~ : String, loc~ : SrcLoc)
+  CharLit(value~ : Int, loc~ : SrcLoc)
+  StringLit(value~ : String, length~ : Int, loc~ : SrcLoc)
   Ident(name~ : String, loc~ : SrcLoc)
   Unary(op~ : UnaryOp, expr~ : Expr, loc~ : SrcLoc)
   Cast(ty~ : CType, expr~ : Expr, loc~ : SrcLoc)

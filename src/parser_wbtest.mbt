@@ -253,3 +253,25 @@ test "sem rejects control flow outside context" {
   let (_, bag4) = check_text("int main(){goto missing;}")
   assert_true(has_errors(bag4))
 }
+
+///|
+test "sem accepts string and char literals" {
+  let (_, bag) = check_text(
+    "enum { A = 'a' }; int main(){char *p = \"hi\"; char s[] = \"hi\"; return s[0] + A;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem rejects long string initializer" {
+  let (_, bag) = check_text("int main(){char s[2] = \"hi\"; return 0;}")
+  assert_true(has_errors(bag))
+}
+
+///|
+test "sem accepts compound assignments and floats" {
+  let (_, bag) = check_text(
+    "int main(){int x=0; x+=1; x<<=2; double f=1.0; f/=2.0; return x;}",
+  )
+  assert_true(!has_errors(bag))
+}

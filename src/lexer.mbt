@@ -430,7 +430,7 @@ fn lex_number(
     }
   }
   let lit = slice_to_string(lex.text, start, lex.index)
-  let kind = if is_float { FloatLit } else { IntLit }
+  let kind = if is_float { TokenKind::FloatLit } else { TokenKind::IntLit }
   make_token(kind, lit, loc, line_start)
 }
 
