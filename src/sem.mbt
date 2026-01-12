@@ -3,6 +3,7 @@ struct FuncSig {
   return_type : CType
   params : Array[CType]
   varargs : Bool
+  is_old_style : Bool
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -107,11 +108,12 @@ fn strip_qualifiers(ty : CType) -> CType {
     CType::Pointer(inner) => CType::Pointer(strip_qualifiers(inner))
     CType::Array(elem~, size~) =>
       CType::Array(elem=strip_qualifiers(elem), size~)
-    CType::Function(return_type~, params~, varargs~) =>
+    CType::Function(return_type~, params~, varargs~, is_old_style~) =>
       CType::Function(
         return_type=strip_qualifiers(return_type),
         params=params.map(strip_qualifiers),
         varargs~,
+        is_old_style~,
       )
     _ => ty
   }
@@ -1163,6 +1165,7 @@ fn check_func_decl(ctx : SemContext, func_decl : FuncDecl) -> Unit {
     func_decl.return_type,
     func_decl.params,
     func_decl.varargs,
+    func_decl.is_old_style,
   )
   add_function_sig(ctx, func_decl.name, sig, func_decl.loc, is_def=false)
 }
@@ -1180,6 +1183,7 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
     func_def.return_type,
     func_def.params,
     func_def.varargs,
+    func_def.is_old_style,
   )
   add_function_sig(ctx, func_def.name, sig, func_def.loc, is_def=true)
   ctx.labels_defined = {}
@@ -1205,9 +1209,10 @@ fn func_sig_from_params(
   return_type : CType,
   params : Array[Param],
   varargs : Bool,
+  is_old_style : Bool,
 ) -> FuncSig {
   let param_types = params.map(p => adjust_param_type_for_sig(p.ty))
-  { return_type, params: param_types, varargs }
+  { return_type, params: param_types, varargs, is_old_style }
 }
 
 ///|
@@ -1230,6 +1235,8 @@ fn add_function_sig(
             loc,
             "conflicting function declaration for '\{name}'",
           )
+        } else if existing.is_old_style && !sig.is_old_style {
+          ctx.functions.set(name, sig)
         }
       None => ()
     }
@@ -1247,17 +1254,20 @@ fn add_function_sig(
 
 ///|
 fn func_sig_eq(a : FuncSig, b : FuncSig) -> Bool {
-  if a.varargs != b.varargs {
+  if !types_compatible_for_decl(a.return_type, b.return_type) {
     return false
   }
-  if !type_eq(a.return_type, b.return_type) {
+  if a.is_old_style || b.is_old_style {
+    return true
+  }
+  if a.varargs != b.varargs {
     return false
   }
   if a.params.length() != b.params.length() {
     return false
   }
   for i = 0; i < a.params.length(); i = i + 1 {
-    if !type_eq(a.params[i], b.params[i]) {
+    if !types_compatible_for_decl(a.params[i], b.params[i]) {
       return false
     }
   }
@@ -1306,7 +1316,7 @@ fn update_decl_type(
 fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
   register_type_defs(ctx, decl.ty, decl.loc)
   match strip_qualifiers(decl.ty) {
-    CType::Function(return_type~, params~, varargs~) => {
+    CType::Function(return_type~, params~, varargs~, is_old_style~) => {
       check_storage_class(
         ctx,
         decl.storage,
@@ -1321,7 +1331,7 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
           "function declaration cannot have initializer",
         )
       }
-      let sig = { return_type, params, varargs }
+      let sig = { return_type, params, varargs, is_old_style }
       add_function_sig(ctx, decl.name, sig, decl.loc, is_def=false)
       return
     }
@@ -1837,11 +1847,24 @@ fn type_eq(a : CType, b : CType) -> Bool {
         _ => type_eq(elem_a, elem_b)
       }
     (
-      CType::Function(return_type=a_ret, params=a_params, varargs=a_varargs),
-      CType::Function(return_type=b_ret, params=b_params, varargs=b_varargs),
+      CType::Function(
+        return_type=a_ret,
+        params=a_params,
+        varargs=a_varargs,
+        is_old_style=a_old
+      ),
+      CType::Function(
+        return_type=b_ret,
+        params=b_params,
+        varargs=b_varargs,
+        is_old_style=b_old
+      ),
     ) => {
       if !type_eq(a_ret, b_ret) {
         return false
+      }
+      if a_old || b_old {
+        return true
       }
       if a_varargs != b_varargs {
         return false
@@ -1883,13 +1906,26 @@ fn types_compatible_for_decl(a : CType, b : CType) -> Bool {
     (CType::Pointer(inner_a), CType::Pointer(inner_b)) =>
       types_compatible_for_decl(inner_a, inner_b)
     (
-      CType::Function(return_type=a_ret, params=a_params, varargs=a_varargs),
-      CType::Function(return_type=b_ret, params=b_params, varargs=b_varargs),
+      CType::Function(
+        return_type=a_ret,
+        params=a_params,
+        varargs=a_varargs,
+        is_old_style=a_old
+      ),
+      CType::Function(
+        return_type=b_ret,
+        params=b_params,
+        varargs=b_varargs,
+        is_old_style=b_old
+      ),
     ) => {
-      if a_varargs != b_varargs {
+      if !types_compatible_for_decl(a_ret, b_ret) {
         return false
       }
-      if !types_compatible_for_decl(a_ret, b_ret) {
+      if a_old || b_old {
+        return true
+      }
+      if a_varargs != b_varargs {
         return false
       }
       if a_params.length() != b_params.length() {
@@ -2485,25 +2521,25 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
         _ => None
       }
       match fn_ty {
-        Some(CType::Function(return_type~, params~, varargs~)) => {
-          if varargs {
-            if args.length() < params.length() {
+        Some(CType::Function(return_type~, params~, varargs~, is_old_style~)) => {
+          if !is_old_style {
+            if varargs {
+              if args.length() < params.length() {
+                add_sem_error(ctx, loc, "argument count mismatch in call")
+              }
+            } else if params.length() != args.length() {
               add_sem_error(ctx, loc, "argument count mismatch in call")
             }
-          } else if params.length() != args.length() {
-            add_sem_error(ctx, loc, "argument count mismatch in call")
           }
-          let limit = if args.length() < params.length() {
-            args.length()
-          } else {
-            params.length()
-          }
-          for i = 0; i < limit; i = i + 1 {
+          for i = 0; i < args.length(); i = i + 1 {
             let arg_ty = type_of_expr(ctx, args[i])
-            if !can_assign(params[i], arg_ty) &&
-              !(is_pointer_type(params[i]) && is_null_pointer_expr(ctx, args[i])) {
-              add_sem_error(ctx, loc, "argument type mismatch in call")
-              break
+            if !is_old_style && i < params.length() {
+              if !can_assign(params[i], arg_ty) &&
+                !(is_pointer_type(params[i]) &&
+                is_null_pointer_expr(ctx, args[i])) {
+                add_sem_error(ctx, loc, "argument type mismatch in call")
+                break
+              }
             }
           }
           return_type
@@ -2727,6 +2763,7 @@ fn lookup_value(ctx : SemContext, name : String) -> CType? {
               return_type=sig.return_type,
               params=sig.params,
               varargs=sig.varargs,
+              is_old_style=sig.is_old_style,
             ),
           )
         None =>
@@ -2818,9 +2855,11 @@ fn type_to_string(ty : CType) -> String {
     CType::Struct(name~, ..) => "struct " + name
     CType::Union(name~, ..) => "union " + name
     CType::Enum(name~, ..) => "enum " + name
-    CType::Function(return_type~, params~, varargs~) => {
+    CType::Function(return_type~, params~, varargs~, is_old_style~) => {
       let args = params.map(type_to_string).join(", ")
-      let rendered = if varargs {
+      let rendered = if is_old_style {
+        ""
+      } else if varargs {
         if args == "" {
           "..."
         } else {

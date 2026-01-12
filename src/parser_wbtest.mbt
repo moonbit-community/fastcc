@@ -91,6 +91,18 @@ test "sem accepts function pointer call" {
 }
 
 ///|
+test "sem accepts old-style function declaration" {
+  let (_, bag) = check_text("int f(); int f(int); int main(){return f(1);}")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts old-style call with extra args" {
+  let (_, bag) = check_text("int f(); int main(){return f(1,2,3);}")
+  assert_true(!has_errors(bag))
+}
+
+///|
 test "sem accepts struct access" {
   let (_, bag) = check_text(
     "struct S { int x; int y; }; int main(){struct S s; s.x = 1; return s.y;}",
