@@ -136,6 +136,14 @@ fn strip_top_qualifiers(ty : CType) -> CType {
 }
 
 ///|
+fn split_top_qual(ty : CType) -> (TypeQual, CType) {
+  match ty {
+    CType::Qualified(qual~, base~) => (qual, base)
+    _ => (empty_qual(), ty)
+  }
+}
+
+///|
 fn is_const_qualified(ty : CType) -> Bool {
   match ty {
     CType::Qualified(qual~, ..) => qual.is_const
@@ -2171,7 +2179,7 @@ fn member_access_type(
   loc : SrcLoc,
 ) -> CType? {
   let obj_ty = if is_arrow {
-    match strip_qualifiers(base_ty) {
+    match strip_top_qualifiers(base_ty) {
       CType::Pointer(inner) => inner
       _ => {
         add_sem_error(ctx, loc, "arrow operator requires pointer")
@@ -2181,7 +2189,8 @@ fn member_access_type(
   } else {
     base_ty
   }
-  match strip_qualifiers(obj_ty) {
+  let (obj_qual, obj_base) = split_top_qual(obj_ty)
+  match strip_top_qualifiers(obj_base) {
     CType::Struct(name=tag, fields=field_list) => {
       let fields = match field_list {
         Some(vals) => Some(vals)
@@ -2194,7 +2203,7 @@ fn member_access_type(
         }
         Some(list) =>
           match find_field(list, name) {
-            Some(field) => Some(field.ty)
+            Some(field) => Some(apply_qualifiers(field.ty, obj_qual))
             None => {
               add_sem_error(ctx, loc, "unknown field '\{name}'")
               None
@@ -2214,7 +2223,7 @@ fn member_access_type(
         }
         Some(list) =>
           match find_field(list, name) {
-            Some(field) => Some(field.ty)
+            Some(field) => Some(apply_qualifiers(field.ty, obj_qual))
             None => {
               add_sem_error(ctx, loc, "unknown field '\{name}'")
               None

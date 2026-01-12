@@ -209,6 +209,22 @@ test "sem rejects assignment to const pointer" {
 }
 
 ///|
+test "sem rejects assignment to const struct field" {
+  let (_, bag) = check_text(
+    "struct S { int x; }; int main(){const struct S s = {0}; s.x = 1;}",
+  )
+  assert_true(has_errors(bag))
+}
+
+///|
+test "sem rejects assignment through const struct pointer" {
+  let (_, bag) = check_text(
+    "struct S { int x; }; int main(){const struct S s = {0}; const struct S *p = &s; p->x = 1;}",
+  )
+  assert_true(has_errors(bag))
+}
+
+///|
 test "sem accepts struct access" {
   let (_, bag) = check_text(
     "struct S { int x; int y; }; int main(){struct S s; s.x = 1; return s.y;}",
