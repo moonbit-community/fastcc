@@ -62,6 +62,7 @@ struct Attributes {
   visibility : Visibility?
   section : String?
   alias : String?
+  asm_label : String?
   cleanup : String?
   noreturn : Bool
   constructor : Bool
@@ -83,6 +84,7 @@ fn empty_attrs() -> Attributes {
     visibility: None,
     section: None,
     alias: None,
+    asm_label: None,
     cleanup: None,
     noreturn: false,
     constructor: false,
@@ -104,6 +106,7 @@ fn attrs_with(
   visibility? : Visibility? = None,
   section? : String? = None,
   alias? : String? = None,
+  asm_label? : String? = None,
   cleanup? : String? = None,
   noreturn? : Bool = false,
   constructor? : Bool = false,
@@ -122,6 +125,7 @@ fn attrs_with(
     visibility,
     section,
     alias,
+    asm_label,
     cleanup,
     noreturn,
     constructor,
@@ -149,6 +153,10 @@ fn merge_attrs(base : Attributes, incoming : Attributes) -> Attributes {
     Some(_) => incoming.alias
     None => base.alias
   }
+  let asm_label = match incoming.asm_label {
+    Some(_) => incoming.asm_label
+    None => base.asm_label
+  }
   let cleanup = match incoming.cleanup {
     Some(_) => incoming.cleanup
     None => base.cleanup
@@ -168,6 +176,7 @@ fn merge_attrs(base : Attributes, incoming : Attributes) -> Attributes {
     visibility,
     section,
     alias,
+    asm_label,
     cleanup,
     noreturn: base.noreturn || incoming.noreturn,
     constructor: base.constructor || incoming.constructor,
@@ -190,6 +199,7 @@ fn type_attrs_from(attrs : Attributes) -> Attributes {
     visibility: None,
     section: None,
     alias: None,
+    asm_label: None,
     cleanup: None,
     noreturn: false,
     constructor: false,
@@ -385,6 +395,7 @@ enum Decl {
   Typedef(name~ : String, ty~ : CType, attrs~ : Attributes, loc~ : SrcLoc)
   TagDef(ty~ : CType, loc~ : SrcLoc)
   StaticAssert(StaticAssert)
+  Asm(AsmStmt)
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -478,6 +489,26 @@ enum Initializer {
 } derive(Show, Eq, ToJson)
 
 ///|
+struct AsmOperand {
+  name : String?
+  constraint : String
+  expr : Expr
+  loc : SrcLoc
+} derive(Show, Eq, ToJson)
+
+///|
+struct AsmStmt {
+  template : String
+  outputs : Array[AsmOperand]
+  inputs : Array[AsmOperand]
+  clobbers : Array[String]
+  labels : Array[String]
+  is_volatile : Bool
+  is_goto : Bool
+  loc : SrcLoc
+} derive(Show, Eq, ToJson)
+
+///|
 enum Stmt {
   Compound(stmts~ : Array[Stmt], loc~ : SrcLoc)
   If(cond~ : Expr, then_branch~ : Stmt, else_branch~ : Stmt?, loc~ : SrcLoc)
@@ -492,6 +523,7 @@ enum Stmt {
   Break(loc~ : SrcLoc)
   Continue(loc~ : SrcLoc)
   Return(value~ : Expr?, loc~ : SrcLoc)
+  Asm(AsmStmt)
   ExprStmt(expr~ : Expr, loc~ : SrcLoc)
   DeclStmt(decls~ : Array[VarDecl], loc~ : SrcLoc)
   TagDef(ty~ : CType, loc~ : SrcLoc)

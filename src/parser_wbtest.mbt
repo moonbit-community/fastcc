@@ -481,6 +481,42 @@ test "sem accepts _Static_assert in struct" {
 }
 
 ///|
+test "parse asm label on declaration" {
+  let (unit, bag) = parse_text("int f() __asm__(\"foo\");")
+  assert_true(!has_errors(bag))
+  guard unit.decls.length() == 1 else { fail("expected single declaration") }
+  match unit.decls[0] {
+    Decl::FuncDecl(func) => assert_eq(func.attrs.asm_label, Some("foo"))
+    _ => fail("expected function declaration")
+  }
+}
+
+///|
+test "parse global asm block" {
+  let (unit, bag) = parse_text("asm(\"nop\"); int main(){return 0;}")
+  assert_true(!has_errors(bag))
+  guard unit.decls.length() == 2 else { fail("expected two declarations") }
+  match unit.decls[0] {
+    Decl::Asm(_) => ()
+    _ => fail("expected asm declaration")
+  }
+}
+
+///|
+test "sem accepts asm statement" {
+  let (_, bag) = check_text("int main(){asm(\"nop\"); return 0;}")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts asm operands" {
+  let (_, bag) = check_text(
+    "int main(){int x=0; int y=1; asm(\"\" : \"=r\"(x) : \"r\"(y) : \"cc\"); return x;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
 test "sem accepts __attribute__ on declarations" {
   let (_, bag) = check_text(
     "int * __attribute__((unused)) p; struct __attribute__((packed)) S { char c; int x; }; int main(){return 0;}",

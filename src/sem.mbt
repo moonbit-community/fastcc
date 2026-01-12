@@ -850,6 +850,7 @@ fn check_decl(ctx : SemContext, decl : Decl) -> Unit {
     }
     Decl::TagDef(ty~, loc~) => register_type_defs(ctx, ty, loc)
     Decl::StaticAssert(static_assert) => check_static_assert(ctx, static_assert)
+    Decl::Asm(asm_stmt) => check_asm_stmt(ctx, asm_stmt)
   }
 }
 
@@ -2221,6 +2222,7 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
           }
         }
       }
+    Stmt::Asm(asm_stmt) => check_asm_stmt(ctx, asm_stmt)
     Stmt::ExprStmt(expr~, ..) => type_of_expr(ctx, expr) |> ignore
     Stmt::DeclStmt(decls~, ..) =>
       for decl in decls {
@@ -2289,6 +2291,19 @@ fn check_label_uses(ctx : SemContext) -> Unit {
     if !ctx.labels_defined.contains(name) {
       add_sem_error(ctx, loc, "undefined label '\{name}'")
     }
+  }
+}
+
+///|
+fn check_asm_stmt(ctx : SemContext, asm_stmt : AsmStmt) -> Unit {
+  for op in asm_stmt.outputs {
+    type_of_lvalue(ctx, op.expr) |> ignore
+  }
+  for op in asm_stmt.inputs {
+    type_of_expr(ctx, op.expr) |> ignore
+  }
+  for label in asm_stmt.labels {
+    ctx.labels_used.push((label, asm_stmt.loc))
   }
 }
 

@@ -45,6 +45,7 @@ enum TokenKind {
   KwTypeof
   KwAttribute
   KwStaticAssert
+  KwAsm
   LParen
   RParen
   LBrace
@@ -147,6 +148,9 @@ fn keyword_or_ident(name : String) -> TokenKind {
     "__attribute" => KwAttribute
     "__attribute__" => KwAttribute
     "_Static_assert" => KwStaticAssert
+    "asm" => KwAsm
+    "__asm" => KwAsm
+    "__asm__" => KwAsm
     "__const" => KwConst
     "__const__" => KwConst
     "__volatile" => KwVolatile

@@ -54,6 +54,11 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
     expect(p, Semicolon, "expected ';' after _Static_assert") |> ignore
     return Some([Decl::StaticAssert(static_assert)])
   }
+  if match_token(p, KwAsm) is Some(asm_tok) {
+    let asm_stmt = parse_asm_stmt(p, asm_tok.loc)
+    expect(p, Semicolon, "expected ';' after asm") |> ignore
+    return Some([Decl::Asm(asm_stmt)])
+  }
   let specs = match parse_decl_specs(p) {
     None =>
       if peek_token(p).kind == Ident && !has_typedef(p, peek_token(p).lexeme) {
@@ -856,6 +861,134 @@ fn parse_static_assert(p : Parser, loc : SrcLoc) -> StaticAssert {
 }
 
 ///|
+fn parse_asm_label(p : Parser, loc : SrcLoc) -> String? {
+  expect(p, LParen, "expected '(' after asm") |> ignore
+  let label = parse_attr_string(p, loc)
+  expect(p, RParen, "expected ')' after asm label") |> ignore
+  label
+}
+
+///|
+fn parse_asm_operands(p : Parser) -> Array[AsmOperand] {
+  let operands : Array[AsmOperand] = []
+  if peek_token(p).kind == Colon || peek_token(p).kind == RParen {
+    return operands
+  }
+  while true {
+    let start_loc = peek_token(p).loc
+    let name = if match_token(p, LBracket) is Some(_) {
+      let id = match expect_ident(p, "expected asm operand name") {
+        None => ""
+        Some(tok) => tok.lexeme
+      }
+      expect(p, RBracket, "expected ']' after asm operand name") |> ignore
+      if id == "" {
+        None
+      } else {
+        Some(id)
+      }
+    } else {
+      None
+    }
+    let constraint = match parse_attr_string(p, start_loc) {
+      None => ""
+      Some(value) => value
+    }
+    expect(p, LParen, "expected '(' after asm constraint") |> ignore
+    let expr = parse_expr(p)
+    expect(p, RParen, "expected ')' after asm operand") |> ignore
+    operands.push({ name, constraint, expr, loc: start_loc })
+    if match_token(p, Comma) is Some(_) {
+      continue
+    }
+    break
+  }
+  operands
+}
+
+///|
+fn parse_asm_clobbers(p : Parser) -> Array[String] {
+  let clobbers : Array[String] = []
+  if peek_token(p).kind == Colon || peek_token(p).kind == RParen {
+    return clobbers
+  }
+  while true {
+    let loc = peek_token(p).loc
+    match parse_attr_string(p, loc) {
+      None => ()
+      Some(value) => clobbers.push(value)
+    }
+    if match_token(p, Comma) is Some(_) {
+      continue
+    }
+    break
+  }
+  clobbers
+}
+
+///|
+fn parse_asm_labels(p : Parser) -> Array[String] {
+  let labels : Array[String] = []
+  if peek_token(p).kind == Colon || peek_token(p).kind == RParen {
+    return labels
+  }
+  while true {
+    let name = match expect_ident(p, "expected label identifier") {
+      None => ""
+      Some(tok) => tok.lexeme
+    }
+    if name != "" {
+      labels.push(name)
+    }
+    if match_token(p, Comma) is Some(_) {
+      continue
+    }
+    break
+  }
+  labels
+}
+
+///|
+fn parse_asm_stmt(p : Parser, loc : SrcLoc) -> AsmStmt {
+  let mut is_volatile = false
+  let mut is_goto = false
+  while true {
+    if match_token(p, KwVolatile) is Some(_) {
+      is_volatile = true
+      continue
+    }
+    if match_token(p, KwGoto) is Some(_) {
+      is_goto = true
+      continue
+    }
+    break
+  }
+  expect(p, LParen, "expected '(' after asm") |> ignore
+  let template = match parse_attr_string(p, loc) {
+    None => ""
+    Some(value) => value
+  }
+  let mut outputs : Array[AsmOperand] = []
+  let mut inputs : Array[AsmOperand] = []
+  let mut clobbers : Array[String] = []
+  let mut labels : Array[String] = []
+  if match_token(p, Colon) is Some(_) {
+    outputs = parse_asm_operands(p)
+    if match_token(p, Colon) is Some(_) {
+      inputs = parse_asm_operands(p)
+      if match_token(p, Colon) is Some(_) {
+        clobbers = parse_asm_clobbers(p)
+        if match_token(p, Colon) is Some(_) {
+          labels = parse_asm_labels(p)
+        }
+      }
+    }
+  }
+  expect(p, RParen, "expected ')' after asm") |> ignore
+  { template, outputs, inputs, clobbers, labels, is_volatile, is_goto, loc }
+}
+
+///|
 fn is_attr_name_token(kind : TokenKind) -> Bool {
   match kind {
     Ident | KwConst | KwVolatile | KwRestrict | KwInline | KwSigned => true
@@ -1180,6 +1313,14 @@ fn parse_declarator(p : Parser, base : CType) -> Declarator? {
         p, ty,
       )
       attrs = merge_attrs(attrs, suffix_attrs)
+      if match_token(p, KwAsm) is Some(asm_tok) {
+        match parse_asm_label(p, asm_tok.loc) {
+          None => ()
+          Some(label) =>
+            attrs = merge_attrs(attrs, attrs_with(asm_label=Some(label)))
+        }
+        attrs = merge_attrs(attrs, parse_attributes(p))
+      }
       Some({
         name: tok.lexeme,
         ty,
@@ -1367,6 +1508,14 @@ fn parse_paren_pointer_declarator(p : Parser, base : CType) -> Declarator? {
         p, base,
       )
       attrs = merge_attrs(attrs, suffix_attrs)
+      if match_token(p, KwAsm) is Some(asm_tok) {
+        match parse_asm_label(p, asm_tok.loc) {
+          None => ()
+          Some(label) =>
+            attrs = merge_attrs(attrs, attrs_with(asm_label=Some(label)))
+        }
+        attrs = merge_attrs(attrs, parse_attributes(p))
+      }
       let mut wrapped = ty
       for qual in quals {
         wrapped = CType::Pointer(wrapped)
@@ -1819,6 +1968,11 @@ fn parse_stmt(p : Parser) -> Stmt {
     let static_assert = parse_static_assert(p, assert_tok.loc)
     expect(p, Semicolon, "expected ';' after _Static_assert") |> ignore
     return Stmt::StaticAssert(static_assert)
+  }
+  if match_token(p, KwAsm) is Some(asm_tok) {
+    let asm_stmt = parse_asm_stmt(p, asm_tok.loc)
+    expect(p, Semicolon, "expected ';' after asm") |> ignore
+    return Stmt::Asm(asm_stmt)
   }
   if match_token(p, KwCase) is Some(case_tok) {
     let expr = parse_expr(p)
