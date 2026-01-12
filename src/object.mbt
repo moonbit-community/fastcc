@@ -11,19 +11,31 @@ struct Section {
   name : String
   data : Array[UInt]
   relocs : Array[Reloc]
+  align : Int
+  size_bytes : Int
 }
 
 ///|
 fn new_section(name : String) -> Section {
-  { name, data: [], relocs: [] }
+  { name, data: [], relocs: [], align: 4, size_bytes: 0 }
 }
 
 ///|
 fn section_size_bytes(sec : Section) -> Int {
-  sec.data.length() << 2
+  if sec.size_bytes > 0 {
+    sec.size_bytes
+  } else {
+    sec.data.length() << 2
+  }
 }
 
 ///|
 fn section_from_emitter(name : String, emitter : Arm64Emitter) -> Section {
-  { name, data: emitter.code.copy(), relocs: emitter.relocs.copy() }
+  {
+    name,
+    data: emitter.code.copy(),
+    relocs: emitter.relocs.copy(),
+    align: 4,
+    size_bytes: emitter.code.length() << 2,
+  }
 }

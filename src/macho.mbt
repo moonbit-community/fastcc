@@ -1,0 +1,579 @@
+///|
+const MH_MAGIC_64 : UInt = 0xfeedfacf
+
+///|
+const MH_OBJECT : UInt = 0x1
+
+///|
+const CPU_ARCH_ABI64 : Int = 0x01000000
+
+///|
+const CPU_TYPE_ARM : Int = 12
+
+///|
+const CPU_TYPE_ARM64 : Int = CPU_TYPE_ARM | CPU_ARCH_ABI64
+
+///|
+const CPU_SUBTYPE_ARM64_ALL : Int = 0
+
+///|
+const LC_SEGMENT_64 : UInt = 0x19
+
+///|
+const LC_SYMTAB : UInt = 0x2
+
+///|
+const VM_PROT_READ : Int = 1
+
+///|
+const VM_PROT_WRITE : Int = 2
+
+///|
+const VM_PROT_EXECUTE : Int = 4
+
+///|
+const S_REGULAR : UInt = 0x0
+
+///|
+const S_ZEROFILL : UInt = 0x1
+
+///|
+const S_ATTR_PURE_INSTRUCTIONS : UInt = 0x80000000
+
+///|
+const S_ATTR_SOME_INSTRUCTIONS : UInt = 0x00000400
+
+///|
+const N_EXT : Int = 0x01
+
+///|
+const N_SECT : Int = 0x0e
+
+///|
+const N_UNDF : Int = 0x0
+
+///|
+const ARM64_RELOC_UNSIGNED : Int = 0
+
+///|
+const ARM64_RELOC_BRANCH26 : Int = 2
+
+///|
+const ARM64_RELOC_PAGE21 : Int = 3
+
+///|
+const ARM64_RELOC_PAGEOFF12 : Int = 4
+
+///|
+const ARM64_RELOC_GOT_LOAD_PAGE21 : Int = 5
+
+///|
+const ARM64_RELOC_GOT_LOAD_PAGEOFF12 : Int = 6
+
+///|
+struct ObjSymbol {
+  id : Int
+  name : String
+  section : String?
+  value : Int
+  is_external : Bool
+}
+
+///|
+struct MachoSectionInfo {
+  sectname : String
+  segname : String
+  flags : UInt
+  align : Int
+  is_zerofill : Bool
+}
+
+///|
+struct MachoSectionLayout {
+  section : Section
+  info : MachoSectionInfo
+  align_log2 : Int
+  offset : Int
+  size : Int
+  reloff : Int
+  nreloc : Int
+  index : Int
+}
+
+///|
+struct MachoSegmentLayout {
+  name : String
+  section_indices : Array[Int]
+  fileoff : Int
+  filesize : Int
+  maxprot : Int
+  initprot : Int
+}
+
+///|
+fn align_up(value : Int, align : Int) -> Int {
+  if align <= 0 {
+    value
+  } else {
+    let mask = align - 1
+    (value + mask) & mask.lnot()
+  }
+}
+
+///|
+fn align_log2(value : Int) -> Int {
+  let mut v = if value <= 0 { 1 } else { value }
+  let mut log = 0
+  while v > 1 {
+    v = v >> 1
+    log = log + 1
+  }
+  log
+}
+
+///|
+fn write_padded_name(buf : @buffer.Buffer, name : String, len : Int) -> Unit {
+  let bytes = @encoding/utf8.encode(name)
+  let mut i = 0
+  while i < len {
+    if i < bytes.length() {
+      buf.write_byte(bytes[i])
+    } else {
+      buf.write_byte(0)
+    }
+    i = i + 1
+  }
+}
+
+///|
+fn macho_section_info(name : String) -> MachoSectionInfo {
+  match name {
+    ".text" =>
+      {
+        sectname: "__text",
+        segname: "__TEXT",
+        flags: S_REGULAR | S_ATTR_PURE_INSTRUCTIONS | S_ATTR_SOME_INSTRUCTIONS,
+        align: 4,
+        is_zerofill: false,
+      }
+    ".rodata" =>
+      {
+        sectname: "__const",
+        segname: "__TEXT",
+        flags: S_REGULAR,
+        align: 4,
+        is_zerofill: false,
+      }
+    ".data" =>
+      {
+        sectname: "__data",
+        segname: "__DATA",
+        flags: S_REGULAR,
+        align: 4,
+        is_zerofill: false,
+      }
+    ".bss" =>
+      {
+        sectname: "__bss",
+        segname: "__DATA",
+        flags: S_ZEROFILL,
+        align: 4,
+        is_zerofill: true,
+      }
+    _ =>
+      {
+        sectname: "__data",
+        segname: "__DATA",
+        flags: S_REGULAR,
+        align: 4,
+        is_zerofill: false,
+      }
+  }
+}
+
+///|
+fn build_strtab(symbols : Array[ObjSymbol]) -> (Bytes, Array[Int]) {
+  let buf = @buffer.new()
+  buf.write_bytes(@encoding/utf8.encode(" "))
+  buf.write_byte(0)
+  let offsets : Array[Int] = []
+  for sym in symbols {
+    let off = buf.length()
+    offsets.push(off)
+    buf.write_bytes(@encoding/utf8.encode(sym.name))
+    buf.write_byte(0)
+  }
+  let pad = -buf.length() & 7
+  let mut i = 0
+  while i < pad {
+    buf.write_byte(0)
+    i = i + 1
+  }
+  (buf.to_bytes(), offsets)
+}
+
+///|
+fn build_symtab(
+  symbols : Array[ObjSymbol],
+  offsets : Array[Int],
+  section_index : Map[String, Int],
+) -> (Bytes, Map[Int, Int], Map[Int, ObjSymbol]) {
+  let buf = @buffer.new()
+  let id_to_index : Map[Int, Int] = {}
+  let id_to_symbol : Map[Int, ObjSymbol] = {}
+  let mut idx = 0
+  while idx < symbols.length() {
+    let sym = symbols[idx]
+    let strx = offsets[idx]
+    let mut n_type = if sym.is_external { N_EXT } else { 0 }
+    let (n_sect, n_value) = match sym.section {
+      None => (0, 0)
+      Some(sec_name) =>
+        match section_index.get(sec_name) {
+          None => (0, 0)
+          Some(sec_idx) => {
+            n_type = n_type | N_SECT
+            (sec_idx, sym.value)
+          }
+        }
+    }
+    if n_sect == 0 {
+      n_type = n_type | N_UNDF
+    }
+    buf.write_uint_le(strx.to_uint())
+    buf.write_byte(n_type.to_byte())
+    buf.write_byte(n_sect.to_byte())
+    buf.write_uint16_le((0 : Int).to_uint16())
+    buf.write_uint64_le(n_value.to_uint64())
+    id_to_index.set(sym.id, idx)
+    id_to_symbol.set(sym.id, sym)
+    idx = idx + 1
+  }
+  (buf.to_bytes(), id_to_index, id_to_symbol)
+}
+
+///|
+fn macho_reloc_type(kind : Int) -> (Int, Bool) {
+  match kind {
+    R_AARCH64_ADR_GOT_PAGE => (ARM64_RELOC_GOT_LOAD_PAGE21, true)
+    R_AARCH64_LD64_GOT_LO12_NC => (ARM64_RELOC_GOT_LOAD_PAGEOFF12, false)
+    _ => (ARM64_RELOC_UNSIGNED, false)
+  }
+}
+
+///|
+fn pack_reloc_info(
+  symbolnum : Int,
+  pcrel : Bool,
+  length : Int,
+  is_extern : Bool,
+  r_type : Int,
+) -> UInt {
+  let mut info = symbolnum & 0x00ffffff
+  if pcrel {
+    info = info | (1 << 24)
+  }
+  info = info | ((length & 0x3) << 25)
+  if is_extern {
+    info = info | (1 << 27)
+  }
+  info = info | ((r_type & 0xf) << 28)
+  info.to_uint()
+}
+
+///|
+fn encode_macho_object(
+  sections : Array[Section],
+  symbols : Array[ObjSymbol],
+) -> Bytes {
+  let (strtab, str_offsets) = build_strtab(symbols)
+  let header_size = 32
+  let segment_order : Array[String] = []
+  let segment_sections : Map[String, Array[Int]] = {}
+  let layouts : Array[MachoSectionLayout] = []
+  for sec in sections {
+    let info = macho_section_info(sec.name)
+    if !segment_sections.contains(info.segname) {
+      segment_sections.set(info.segname, [])
+      segment_order.push(info.segname)
+    }
+    let align = if sec.align > 0 { sec.align } else { info.align }
+    let layout = {
+      section: sec,
+      info,
+      align_log2: align_log2(align),
+      offset: 0,
+      size: section_size_bytes(sec),
+      reloff: 0,
+      nreloc: 0,
+      index: 0,
+    }
+    layouts.push(layout)
+    let idx = layouts.length() - 1
+    match segment_sections.get(info.segname) {
+      None => ()
+      Some(list) => {
+        list.push(idx)
+        segment_sections.set(info.segname, list)
+      }
+    }
+  }
+  let mut sizeofcmds = 24
+  for seg in segment_order {
+    let count = match segment_sections.get(seg) {
+      None => 0
+      Some(list) => list.length()
+    }
+    sizeofcmds = sizeofcmds + 72 + count * 80
+  }
+  let mut offset = header_size + sizeofcmds
+  let mut section_index = 1
+  for seg in segment_order {
+    match segment_sections.get(seg) {
+      None => ()
+      Some(list) =>
+        for idx in list {
+          let layout = layouts[idx]
+          let align = if layout.section.align > 0 {
+            layout.section.align
+          } else {
+            layout.info.align
+          }
+          offset = align_up(offset, align)
+          let data_off = if layout.info.is_zerofill { 0 } else { offset }
+          let size = layout.size
+          if !layout.info.is_zerofill {
+            offset = offset + size
+          }
+          layouts[idx] = {
+            section: layout.section,
+            info: layout.info,
+            align_log2: align_log2(align),
+            offset: data_off,
+            size,
+            reloff: 0,
+            nreloc: 0,
+            index: section_index,
+          }
+          section_index = section_index + 1
+        }
+    }
+  }
+  let mut reloc_offset = align_up(offset, 4)
+  for seg in segment_order {
+    match segment_sections.get(seg) {
+      None => ()
+      Some(list) =>
+        for idx in list {
+          let layout = layouts[idx]
+          let rel_count = layout.section.relocs.length()
+          let reloff = if rel_count > 0 { reloc_offset } else { 0 }
+          if rel_count > 0 {
+            reloc_offset = reloc_offset + rel_count * 8
+          }
+          layouts[idx] = {
+            section: layout.section,
+            info: layout.info,
+            align_log2: layout.align_log2,
+            offset: layout.offset,
+            size: layout.size,
+            reloff,
+            nreloc: rel_count,
+            index: layout.index,
+          }
+        }
+    }
+  }
+  let symoff = align_up(reloc_offset, 4)
+  let section_index_map = collect_section_indices(layouts)
+  let (symtab, id_to_index, id_to_symbol) = build_symtab(
+    symbols, str_offsets, section_index_map,
+  )
+  let stroff = symoff + symtab.length()
+  let ncmds = segment_order.length() + 1
+  let out = @buffer.new()
+  out.write_uint_le(MH_MAGIC_64)
+  out.write_int_le(CPU_TYPE_ARM64)
+  out.write_int_le(CPU_SUBTYPE_ARM64_ALL)
+  out.write_uint_le(MH_OBJECT)
+  out.write_uint_le(ncmds.to_uint())
+  out.write_uint_le(sizeofcmds.to_uint())
+  out.write_uint_le(0)
+  out.write_uint_le(0)
+  for seg in segment_order {
+    let indices = match segment_sections.get(seg) {
+      None => []
+      Some(list) => list
+    }
+    let cmdsize = 72 + indices.length() * 80
+    let (fileoff, filesize) = segment_file_range(indices, layouts)
+    let (maxprot, initprot) = segment_prot(seg)
+    out.write_uint_le(LC_SEGMENT_64)
+    out.write_uint_le(cmdsize.to_uint())
+    write_padded_name(out, seg, 16)
+    out.write_uint64_le(0)
+    out.write_uint64_le(0)
+    out.write_uint64_le(fileoff.to_uint64())
+    out.write_uint64_le(filesize.to_uint64())
+    out.write_int_le(maxprot)
+    out.write_int_le(initprot)
+    out.write_uint_le(indices.length().to_uint())
+    out.write_uint_le(0)
+    for idx in indices {
+      let layout = layouts[idx]
+      write_padded_name(out, layout.info.sectname, 16)
+      write_padded_name(out, layout.info.segname, 16)
+      out.write_uint64_le(0)
+      out.write_uint64_le(layout.size.to_uint64())
+      out.write_uint_le(layout.offset.to_uint())
+      out.write_uint_le(layout.align_log2.to_uint())
+      out.write_uint_le(layout.reloff.to_uint())
+      out.write_uint_le(layout.nreloc.to_uint())
+      out.write_uint_le(layout.info.flags)
+      out.write_uint_le(0)
+      out.write_uint_le(0)
+      out.write_uint_le(0)
+    }
+  }
+  out.write_uint_le(LC_SYMTAB)
+  out.write_uint_le(24)
+  out.write_uint_le(symoff.to_uint())
+  out.write_uint_le(symbols.length().to_uint())
+  out.write_uint_le(stroff.to_uint())
+  out.write_uint_le(strtab.length().to_uint())
+  let mut fileoff = out.length()
+  for seg in segment_order {
+    match segment_sections.get(seg) {
+      None => ()
+      Some(list) =>
+        for idx in list {
+          let layout = layouts[idx]
+          if layout.info.is_zerofill {
+            continue
+          }
+          let align = 1 << layout.align_log2
+          let aligned = align_up(fileoff, align)
+          while fileoff < aligned {
+            out.write_byte(0)
+            fileoff = fileoff + 1
+          }
+          for word in layout.section.data {
+            out.write_uint_le(word)
+            fileoff = fileoff + 4
+          }
+        }
+    }
+  }
+  let reloc_aligned = align_up(fileoff, 4)
+  while fileoff < reloc_aligned {
+    out.write_byte(0)
+    fileoff = fileoff + 1
+  }
+  for seg in segment_order {
+    match segment_sections.get(seg) {
+      None => ()
+      Some(list) =>
+        for idx in list {
+          let layout = layouts[idx]
+          for rel in layout.section.relocs {
+            let (rtype, pcrel) = macho_reloc_type(rel.kind)
+            let mut is_extern = true
+            let mut symbolnum = 0
+            match id_to_symbol.get(rel.sym.id) {
+              None => ()
+              Some(sym) =>
+                if !sym.is_external {
+                  is_extern = false
+                  match sym.section {
+                    None => ()
+                    Some(sec) =>
+                      match section_index_map.get(sec) {
+                        None => ()
+                        Some(idx_val) => symbolnum = idx_val
+                      }
+                  }
+                }
+            }
+            if is_extern {
+              match id_to_index.get(rel.sym.id) {
+                None => ()
+                Some(idx_val) => symbolnum = idx_val
+              }
+            }
+            let info = pack_reloc_info(symbolnum, pcrel, 2, is_extern, rtype)
+            out.write_uint_le(rel.offset.to_uint())
+            out.write_uint_le(info)
+            fileoff = fileoff + 8
+          }
+        }
+    }
+  }
+  let sym_aligned = align_up(fileoff, 4)
+  while fileoff < sym_aligned {
+    out.write_byte(0)
+    fileoff = fileoff + 1
+  }
+  out.write_bytes(symtab)
+  fileoff = fileoff + symtab.length()
+  out.write_bytes(strtab)
+  out.to_bytes()
+}
+
+///|
+fn collect_section_indices(
+  layouts : Array[MachoSectionLayout],
+) -> Map[String, Int] {
+  let map : Map[String, Int] = {}
+  for layout in layouts {
+    map.set(layout.section.name, layout.index)
+  }
+  map
+}
+
+///|
+fn segment_file_range(
+  indices : Array[Int],
+  layouts : Array[MachoSectionLayout],
+) -> (Int, Int) {
+  let mut start = -1
+  let mut end = 0
+  for idx in indices {
+    let layout = layouts[idx]
+    if layout.info.is_zerofill {
+      continue
+    }
+    if start < 0 || layout.offset < start {
+      start = layout.offset
+    }
+    let end_here = layout.offset + layout.size
+    if end_here > end {
+      end = end_here
+    }
+  }
+  if start < 0 {
+    (0, 0)
+  } else {
+    (start, end - start)
+  }
+}
+
+///|
+fn segment_prot(name : String) -> (Int, Int) {
+  if name == "__TEXT" {
+    let prot = VM_PROT_READ | VM_PROT_EXECUTE
+    (prot, prot)
+  } else {
+    let prot = VM_PROT_READ | VM_PROT_WRITE
+    (prot, prot)
+  }
+}
+
+///|
+fn write_macho_object(
+  path : String,
+  sections : Array[Section],
+  symbols : Array[ObjSymbol],
+) -> Unit raise @fs.IOError {
+  let bytes = encode_macho_object(sections, symbols)
+  @fs.write_bytes_to_file(path, bytes)
+}
