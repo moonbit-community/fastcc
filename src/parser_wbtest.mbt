@@ -225,6 +225,36 @@ test "sem rejects assignment through const struct pointer" {
 }
 
 ///|
+test "sem rejects incomplete struct object" {
+  let (_, bag) = check_text("struct S; struct S s;")
+  assert_true(has_errors(bag))
+}
+
+///|
+test "sem accepts extern incomplete struct" {
+  let (_, bag) = check_text("struct S; extern struct S s;")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts extern incomplete array" {
+  let (_, bag) = check_text("extern int a[];")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem rejects array of incomplete element" {
+  let (_, bag) = check_text("struct S; struct S a[1];")
+  assert_true(has_errors(bag))
+}
+
+///|
+test "sem rejects local incomplete array" {
+  let (_, bag) = check_text("int main(){int a[];}")
+  assert_true(has_errors(bag))
+}
+
+///|
 test "sem accepts struct access" {
   let (_, bag) = check_text(
     "struct S { int x; int y; }; int main(){struct S s; s.x = 1; return s.y;}",

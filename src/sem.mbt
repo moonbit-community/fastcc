@@ -1355,8 +1355,51 @@ fn update_decl_type(
 }
 
 ///|
+fn require_complete_object_type(
+  ctx : SemContext,
+  ty : CType,
+  loc : SrcLoc,
+  allow_incomplete_array? : Bool = false,
+) -> Unit {
+  match strip_qualifiers(ty) {
+    CType::Array(elem~, size~) =>
+      match size {
+        None => {
+          if !allow_incomplete_array {
+            add_sem_error(ctx, loc, "incomplete array type")
+          }
+          require_complete_object_type(ctx, elem, loc)
+        }
+        Some(_) => require_complete_object_type(ctx, elem, loc)
+      }
+    CType::Struct(name=tag, fields=field_list) =>
+      ensure_struct_fields(ctx, tag, field_list, is_union=false, loc) |> ignore
+    CType::Union(name=tag, fields=field_list) =>
+      ensure_struct_fields(ctx, tag, field_list, is_union=true, loc) |> ignore
+    CType::Enum(name=tag, items~) =>
+      match items {
+        Some(list) =>
+          if list.length() == 0 {
+            add_sem_error(ctx, loc, "incomplete enum '\{tag}'")
+          } else {
+            let base = enum_type_from_items(ctx, list)
+            if tag != "" {
+              ctx.enum_types.set(tag, base)
+            }
+          }
+        None =>
+          if !ctx.enum_types.contains(tag) {
+            add_sem_error(ctx, loc, "incomplete enum '\{tag}'")
+          }
+      }
+    _ => ()
+  }
+}
+
+///|
 fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
   register_type_defs(ctx, decl.ty, decl.loc)
+  let mut final_ty = decl.ty
   match strip_qualifiers(decl.ty) {
     CType::Function(return_type~, params~, varargs~, is_old_style~) => {
       check_storage_class(
@@ -1395,9 +1438,19 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
         None => ()
         Some(size) => {
           let updated = apply_inferred_array_size(decl.ty, size)
+          final_ty = updated
           update_decl_type(ctx, decl.name, updated, is_local~)
         }
       }
+  }
+  if decl.storage != StorageClass::Extern || decl.init is Some(_) {
+    let allow_incomplete_array = !is_local && decl.init is None
+    require_complete_object_type(
+      ctx,
+      final_ty,
+      decl.loc,
+      allow_incomplete_array~,
+    )
   }
 }
 
