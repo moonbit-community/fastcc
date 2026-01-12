@@ -673,6 +673,15 @@ fn register_struct_def(
   if name == "" {
     return
   }
+  if is_union {
+    if ctx.struct_defs.contains(name) {
+      add_sem_error(ctx, loc, "redefinition of '\{name}'")
+      return
+    }
+  } else if ctx.union_defs.contains(name) {
+    add_sem_error(ctx, loc, "redefinition of '\{name}'")
+    return
+  }
   let incoming = match fields {
     None => []
     Some(val) => val

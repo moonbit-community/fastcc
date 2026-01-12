@@ -273,6 +273,14 @@ test "sem rejects flexible array member in union" {
 }
 
 ///|
+test "sem rejects struct/union tag conflict" {
+  let (_, bag) = check_text(
+    "struct S { int a; }; union S { int b; }; int main(){return 0;}",
+  )
+  assert_true(has_errors(bag))
+}
+
+///|
 test "sem accepts struct access" {
   let (_, bag) = check_text(
     "struct S { int x; int y; }; int main(){struct S s; s.x = 1; return s.y;}",
