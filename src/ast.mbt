@@ -41,6 +41,7 @@ enum CType {
   Struct(name~ : String, fields~ : Array[Field]?)
   Union(name~ : String, fields~ : Array[Field]?)
   Enum(name~ : String, items~ : Array[EnumItem]?)
+  TypeofExpr(expr~ : Expr)
   Function(
     return_type~ : CType,
     params~ : Array[CType],

@@ -42,6 +42,8 @@ enum TokenKind {
   KwTypedef
   KwEnum
   KwSizeof
+  KwTypeof
+  KwAttribute
   LParen
   RParen
   LBrace
@@ -138,6 +140,21 @@ fn keyword_or_ident(name : String) -> TokenKind {
     "typedef" => KwTypedef
     "enum" => KwEnum
     "sizeof" => KwSizeof
+    "typeof" => KwTypeof
+    "__typeof" => KwTypeof
+    "__typeof__" => KwTypeof
+    "__attribute" => KwAttribute
+    "__attribute__" => KwAttribute
+    "__const" => KwConst
+    "__const__" => KwConst
+    "__volatile" => KwVolatile
+    "__volatile__" => KwVolatile
+    "__restrict" => KwRestrict
+    "__restrict__" => KwRestrict
+    "__inline" => KwInline
+    "__inline__" => KwInline
+    "__signed" => KwSigned
+    "__signed__" => KwSigned
     _ => Ident
   }
 }

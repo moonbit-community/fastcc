@@ -359,7 +359,10 @@ fn check_storage_class(
 
 ///|
 fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
-  match strip_qualifiers(ty) {
+  let resolved = resolve_type(ctx, ty, loc)
+  match strip_qualifiers(resolved) {
+    CType::TypeofExpr(expr~) =>
+      type_size_align(ctx, type_for_typeof(ctx, expr), loc)
     CType::Void => {
       add_sem_error(ctx, loc, "invalid application of sizeof to void")
       None
@@ -605,6 +608,44 @@ fn type_for_sizeof(ctx : SemContext, expr : Expr) -> CType {
 }
 
 ///|
+fn type_for_typeof(ctx : SemContext, expr : Expr) -> CType {
+  match expr {
+    Expr::Ident(name~, loc~) =>
+      match lookup_value(ctx, name) {
+        Some(ty) => ty
+        None => {
+          add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
+          default_int_type()
+        }
+      }
+    Expr::StringLit(length~, ..) =>
+      CType::Array(elem=char_type(), size=Some(length))
+    _ => type_of_expr(ctx, expr)
+  }
+}
+
+///|
+fn resolve_type(ctx : SemContext, ty : CType, loc : SrcLoc) -> CType {
+  match ty {
+    CType::Qualified(qual~, base~) =>
+      CType::Qualified(qual~, base=resolve_type(ctx, base, loc))
+    CType::Pointer(inner) => CType::Pointer(resolve_type(ctx, inner, loc))
+    CType::Array(elem~, size~) =>
+      CType::Array(elem=resolve_type(ctx, elem, loc), size~)
+    CType::Function(return_type~, params~, varargs~, is_old_style~) =>
+      CType::Function(
+        return_type=resolve_type(ctx, return_type, loc),
+        params=params.map(param => resolve_type(ctx, param, loc)),
+        varargs~,
+        is_old_style~,
+      )
+    CType::TypeofExpr(expr~) =>
+      resolve_type(ctx, type_for_typeof(ctx, expr), expr_loc(expr))
+    _ => ty
+  }
+}
+
+///|
 fn check_translation_unit(unit : TranslationUnit, diags : DiagBag) -> Unit {
   let ctx = new_sem_context(diags)
   for decl in unit.decls {
@@ -635,7 +676,8 @@ fn check_decl(ctx : SemContext, decl : Decl) -> Unit {
     }
     Decl::Typedef(name~, ty~, loc~) => {
       register_type_defs(ctx, ty, loc)
-      ctx.type_aliases.set(name, ty)
+      let resolved = resolve_type(ctx, ty, loc)
+      ctx.type_aliases.set(name, resolved)
     }
     Decl::TagDef(ty~, loc~) => register_type_defs(ctx, ty, loc)
   }
@@ -1249,14 +1291,20 @@ fn check_func_decl(ctx : SemContext, func_decl : FuncDecl) -> Unit {
     is_local=false,
     is_function=true,
   )
-  for param in func_decl.params {
+  let resolved_return = resolve_type(ctx, func_decl.return_type, func_decl.loc)
+  let params = func_decl.params.map(param => {
+    name: param.name,
+    ty: resolve_type(ctx, param.ty, param.loc),
+    loc: param.loc,
+  })
+  for param in params {
     if is_void_type(param.ty) {
       add_sem_error(ctx, param.loc, "parameter declared as void")
     }
   }
   let sig = func_sig_from_params(
-    func_decl.return_type,
-    func_decl.params,
+    resolved_return,
+    params,
     func_decl.varargs,
     func_decl.is_old_style,
   )
@@ -1272,13 +1320,19 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
     is_local=false,
     is_function=true,
   )
+  let resolved_return = resolve_type(ctx, func_def.return_type, func_def.loc)
+  let resolved_params = func_def.params.map(param => {
+    name: param.name,
+    ty: resolve_type(ctx, param.ty, param.loc),
+    loc: param.loc,
+  })
   let params = if func_def.is_old_style {
-    promote_old_style_params(func_def.params)
+    promote_old_style_params(resolved_params)
   } else {
-    func_def.params
+    resolved_params
   }
   let sig = func_sig_from_params(
-    func_def.return_type,
+    resolved_return,
     params,
     func_def.varargs,
     func_def.is_old_style,
@@ -1299,7 +1353,7 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
       declare_local(ctx, param.name, param_ty, param.loc)
     }
   }
-  check_stmt(ctx, func_def.body, func_def.return_type)
+  check_stmt(ctx, func_def.body, resolved_return)
   check_label_uses(ctx)
   pop_scope(ctx)
 }
@@ -1457,8 +1511,9 @@ fn require_complete_object_type(
 ///|
 fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
   register_type_defs(ctx, decl.ty, decl.loc)
-  let mut final_ty = decl.ty
-  match strip_qualifiers(decl.ty) {
+  let resolved = resolve_type(ctx, decl.ty, decl.loc)
+  let mut final_ty = resolved
+  match strip_qualifiers(resolved) {
     CType::Function(return_type~, params~, varargs~, is_old_style~) => {
       check_storage_class(
         ctx,
@@ -1481,21 +1536,21 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
     _ => ()
   }
   check_storage_class(ctx, decl.storage, decl.loc, is_local~, is_function=false)
-  if is_void_type(decl.ty) {
+  if is_void_type(resolved) {
     add_sem_error(ctx, decl.loc, "variable '\{decl.name}' has void type")
   }
   if is_local {
-    declare_local(ctx, decl.name, decl.ty, decl.loc)
+    declare_local(ctx, decl.name, resolved, decl.loc)
   } else {
-    declare_global(ctx, decl.name, decl.ty, decl.loc)
+    declare_global(ctx, decl.name, resolved, decl.loc)
   }
   match decl.init {
     None => ()
     Some(init) =>
-      match check_initializer(ctx, decl.ty, init, decl.loc) {
+      match check_initializer(ctx, resolved, init, decl.loc) {
         None => ()
         Some(size) => {
-          let updated = apply_inferred_array_size(decl.ty, size)
+          let updated = apply_inferred_array_size(resolved, size)
           final_ty = updated
           update_decl_type(ctx, decl.name, updated, is_local~)
         }
@@ -2513,8 +2568,9 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
       }
     Expr::Cast(ty~, expr~, loc~) => {
       register_type_defs(ctx, ty, loc)
+      let resolved = resolve_type(ctx, ty, loc)
       type_of_expr(ctx, expr) |> ignore
-      ty
+      resolved
     }
     Expr::SizeofExpr(expr~, ..) => {
       let ty = type_for_sizeof(ctx, expr)
@@ -2523,7 +2579,8 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
     }
     Expr::SizeofType(ty~, loc~) => {
       register_type_defs(ctx, ty, loc)
-      type_size_align(ctx, ty, loc) |> ignore
+      let resolved = resolve_type(ctx, ty, loc)
+      type_size_align(ctx, resolved, loc) |> ignore
       default_int_type()
     }
     Expr::Binary(op~, left~, right~, loc~) =>
@@ -3100,6 +3157,7 @@ fn type_to_string(ty : CType) -> String {
     CType::Struct(name~, ..) => "struct " + name
     CType::Union(name~, ..) => "union " + name
     CType::Enum(name~, ..) => "enum " + name
+    CType::TypeofExpr(..) => "typeof"
     CType::Function(return_type~, params~, varargs~, is_old_style~) => {
       let args = params.map(type_to_string).join(", ")
       let rendered = if is_old_style {

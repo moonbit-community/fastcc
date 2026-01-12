@@ -423,6 +423,26 @@ test "sem rejects oversized bitfield" {
 }
 
 ///|
+test "sem accepts typeof expression" {
+  let (_, bag) = check_text("int x; typeof(x) y; int main(){y = 1; return y;}")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts typeof type" {
+  let (_, bag) = check_text("typedef int T; typeof(T) y; int main(){return y;}")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts __attribute__ on declarations" {
+  let (_, bag) = check_text(
+    "int * __attribute__((unused)) p; struct __attribute__((packed)) S { char c; int x; }; int main(){return 0;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
 test "sem accepts storage classes" {
   let (_, bag) = check_text(
     "static int x; extern int y; int main(){register int r=1; return r + x;}",

@@ -475,6 +475,10 @@ fn parse_type_specifiers(
         saw_any = true
         continue
       }
+      KwAttribute => {
+        parse_attribute_clause(p, tok.loc)
+        continue
+      }
       KwSigned => {
         if signedness == 2 {
           add_parse_error(p, tok.loc, "signed/unsigned conflict")
@@ -594,6 +598,24 @@ fn parse_type_specifiers(
               None => return None
             }
         }
+      KwTypeof =>
+        match base {
+          Some(_) => {
+            add_parse_error(p, tok.loc, "multiple type specifiers")
+            ignore(advance_token(p))
+            continue
+          }
+          None =>
+            match parse_typeof_spec(p, tok.loc) {
+              Some(ty) => {
+                base = Some(ty)
+                start_loc = tok.loc
+                saw_any = true
+                continue
+              }
+              None => return None
+            }
+        }
       Ident =>
         match lookup_typedef(p, tok.lexeme) {
           Some(aliased) =>
@@ -694,6 +716,85 @@ fn parse_type_spec(p : Parser) -> (CType, SrcLoc)? {
 }
 
 ///|
+fn is_type_spec_start(p : Parser) -> Bool {
+  match peek_token(p).kind {
+    KwVoid
+    | KwBool
+    | KwChar
+    | KwInt
+    | KwFloat
+    | KwDouble
+    | KwShort
+    | KwLong
+    | KwStruct
+    | KwUnion
+    | KwEnum
+    | KwConst
+    | KwVolatile
+    | KwRestrict
+    | KwSigned
+    | KwUnsigned
+    | KwTypeof => true
+    Ident => has_typedef(p, peek_token(p).lexeme)
+    _ => false
+  }
+}
+
+///|
+fn parse_typeof_spec(p : Parser, loc : SrcLoc) -> CType? {
+  ignore(advance_token(p))
+  if match_token(p, LParen) is None {
+    add_parse_error(p, loc, "expected '(' after typeof")
+    return None
+  }
+  if is_type_spec_start(p) {
+    match parse_type_name(p) {
+      None => {
+        add_parse_error(p, loc, "expected type name in typeof")
+        return None
+      }
+      Some(ty) => {
+        expect(p, RParen, "expected ')' after typeof type") |> ignore
+        return Some(ty)
+      }
+    }
+  }
+  let expr = parse_expr(p)
+  expect(p, RParen, "expected ')' after typeof expression") |> ignore
+  Some(CType::TypeofExpr(expr~))
+}
+
+///|
+fn parse_attribute_clause(p : Parser, loc : SrcLoc) -> Unit {
+  ignore(advance_token(p))
+  if match_token(p, LParen) is None {
+    add_parse_error(p, loc, "expected '(' after attribute")
+    return
+  }
+  if match_token(p, LParen) is None {
+    add_parse_error(p, loc, "expected '(' after attribute")
+    return
+  }
+  let mut depth = 1
+  while depth > 0 && !is_at_end(p) {
+    let tok = advance_token(p)
+    match tok.kind {
+      LParen => depth = depth + 1
+      RParen => depth = depth - 1
+      _ => ()
+    }
+  }
+  expect(p, RParen, "expected ')' after attribute") |> ignore
+}
+
+///|
+fn skip_attributes(p : Parser) -> Unit {
+  while peek_token(p).kind == KwAttribute {
+    parse_attribute_clause(p, peek_token(p).loc)
+  }
+}
+
+///|
 fn parse_pointer_chain(p : Parser, ty_in : CType) -> CType {
   let mut ty = ty_in
   while match_token(p, Star) is Some(_) {
@@ -737,6 +838,7 @@ fn parse_declarator(p : Parser, base : CType) -> Declarator? {
     return parse_paren_pointer_declarator(p, base)
   }
   let ty = parse_pointer_chain(p, base)
+  skip_attributes(p)
   let name_tok = expect_ident(p, "expected identifier")
   match name_tok {
     None => None
@@ -796,6 +898,7 @@ fn parse_field_declarator(
     return Some({ name, ty: wrapped, params, varargs, is_old_style, loc })
   }
   let ty = parse_pointer_chain(p, base)
+  skip_attributes(p)
   let (name, loc) = if peek_token(p).kind == Ident {
     let name_tok = advance_token(p)
     (name_tok.lexeme, name_tok.loc)
@@ -932,6 +1035,7 @@ fn parse_declarator_suffix(
   let mut ty = ty_in
   let mut varargs = false
   let mut old_style = false
+  skip_attributes(p)
   while match_token(p, LBracket) is Some(_) {
     let size = parse_array_size(p)
     expect(p, RBracket, "expected ']' after array size") |> ignore
@@ -952,6 +1056,7 @@ fn parse_declarator_suffix(
   } else {
     None
   }
+  skip_attributes(p)
   (ty, params, varargs, old_style)
 }
 
@@ -983,11 +1088,13 @@ fn next_anon_tag(p : Parser) -> String {
 ///|
 fn parse_struct_type(p : Parser, is_union~ : Bool) -> (CType, SrcLoc)? {
   let kw = advance_token(p)
+  skip_attributes(p)
   let mut name = if peek_token(p).kind == Ident {
     advance_token(p).lexeme
   } else {
     ""
   }
+  skip_attributes(p)
   if match_token(p, LBrace) is Some(_) {
     let fields = parse_struct_fields(p)
     expect(p, RBrace, "expected '}' after fields") |> ignore
