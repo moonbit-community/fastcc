@@ -86,8 +86,25 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
                 )
               } else {
                 match decl.params {
-                  Some(params) if decl.ty is CType::Function(return_type~, ..) =>
-                    if match_token(p, LBrace) is Some(lbrace) {
+                  Some(params) if decl.ty is CType::Function(return_type~, ..) => {
+                    let mut final_params = params
+                    let mut lbrace = match_token(p, LBrace)
+                    if lbrace is None &&
+                      decl.is_old_style &&
+                      is_type_start(p, peek_token(p)) {
+                      final_params = parse_old_style_param_decls(
+                        p, final_params,
+                      )
+                      lbrace = match_token(p, LBrace)
+                      if lbrace is None {
+                        add_parse_error(
+                          p,
+                          decl.loc,
+                          "expected '{' after parameter declarations",
+                        )
+                      }
+                    }
+                    if lbrace is Some(lbrace_tok) {
                       if init is Some(_) {
                         add_parse_error(
                           p,
@@ -102,12 +119,12 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
                           "function definition cannot be mixed with other declarators",
                         )
                       }
-                      let body = parse_compound_stmt(p, lbrace.loc)
+                      let body = parse_compound_stmt(p, lbrace_tok.loc)
                       decls.push(
                         Decl::FuncDef({
                           name: decl.name,
                           return_type,
-                          params,
+                          params: final_params,
                           varargs: decl.varargs,
                           is_old_style: decl.is_old_style,
                           storage,
@@ -129,7 +146,7 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
                         Decl::FuncDecl({
                           name: decl.name,
                           return_type,
-                          params,
+                          params: final_params,
                           varargs: decl.varargs,
                           is_old_style: decl.is_old_style,
                           storage,
@@ -138,6 +155,7 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
                         }),
                       )
                     }
+                  }
                   _ => {
                     if is_inline {
                       add_parse_error(
@@ -169,6 +187,88 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
       }
     }
   }
+}
+
+///|
+fn parse_old_style_param_decls(
+  p : Parser,
+  params : Array[Param],
+) -> Array[Param] {
+  let updated = params
+  let param_map : Map[String, Int] = {}
+  for i = 0; i < params.length(); i = i + 1 {
+    let name = params[i].name
+    if name == "" {
+      continue
+    }
+    if param_map.contains(name) {
+      add_parse_error(p, params[i].loc, "duplicate parameter name")
+    } else {
+      param_map.set(name, i)
+    }
+  }
+  let seen : Map[String, Bool] = {}
+  while is_type_start(p, peek_token(p)) {
+    match parse_decl_specs(p) {
+      None => break
+      Some(specs) => {
+        let base = specs.ty
+        if specs.is_typedef {
+          add_parse_error(p, specs.loc, "typedef not allowed in parameter list")
+        }
+        if specs.is_inline {
+          add_parse_error(p, specs.loc, "inline not allowed in parameter list")
+        }
+        if specs.storage != StorageClass::Default &&
+          specs.storage != StorageClass::Register {
+          add_parse_error(p, specs.loc, "invalid storage class for parameter")
+        }
+        let mut any_decl = false
+        while true {
+          match parse_declarator(p, base) {
+            None => {
+              add_parse_error(p, specs.loc, "expected parameter declarator")
+              break
+            }
+            Some(decl) => {
+              any_decl = true
+              if decl.name == "" {
+                add_parse_error(p, decl.loc, "parameter name missing")
+              } else {
+                match param_map.get(decl.name) {
+                  None => add_parse_error(p, decl.loc, "unknown parameter name")
+                  Some(idx) =>
+                    if seen.contains(decl.name) {
+                      add_parse_error(
+                        p,
+                        decl.loc,
+                        "duplicate parameter declaration",
+                      )
+                    } else {
+                      seen.set(decl.name, true)
+                      updated[idx] = {
+                        name: decl.name,
+                        ty: decl.ty,
+                        loc: decl.loc,
+                      }
+                    }
+                }
+              }
+            }
+          }
+          if match_token(p, Comma) is Some(_) {
+            continue
+          }
+          break
+        }
+        if !any_decl {
+          add_parse_error(p, specs.loc, "expected parameter declarator")
+        }
+        ignore(expect(p, Semicolon, "expected ';' after parameter declaration"))
+      }
+    }
+  }
+  updated
 }
 
 ///|
@@ -1033,6 +1133,27 @@ fn parse_param_list(p : Parser) -> (Array[Param], Bool, Bool) {
   if match_token(p, Ellipsis) is Some(_) {
     expect(p, RParen, "expected ')' after '...'") |> ignore
     return (params, true, false)
+  }
+  let first = peek_token(p)
+  if first.kind == Ident && !has_typedef(p, first.lexeme) {
+    old_style = true
+    while true {
+      match expect_ident(p, "expected parameter name") {
+        None => break
+        Some(tok) =>
+          params.push({
+            name: tok.lexeme,
+            ty: CType::Int(kind=CIntKind::Int, unsigned=false),
+            loc: tok.loc,
+          })
+      }
+      if match_token(p, Comma) is Some(_) {
+        continue
+      }
+      break
+    }
+    expect(p, RParen, "expected ')' after parameter list") |> ignore
+    return (params, varargs, old_style)
   }
   if peek_token(p).kind == KwVoid {
     let void_tok = advance_token(p)

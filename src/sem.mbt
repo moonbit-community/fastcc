@@ -1179,9 +1179,14 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
     is_local=false,
     is_function=true,
   )
+  let params = if func_def.is_old_style {
+    promote_old_style_params(func_def.params)
+  } else {
+    func_def.params
+  }
   let sig = func_sig_from_params(
     func_def.return_type,
-    func_def.params,
+    params,
     func_def.varargs,
     func_def.is_old_style,
   )
@@ -1191,7 +1196,7 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
   ctx.loop_depth = 0
   ctx.switch_depth = 0
   push_scope(ctx)
-  for param in func_def.params {
+  for param in params {
     if param.name == "" {
       add_sem_error(ctx, param.loc, "parameter name missing in definition")
     } else {
@@ -2013,6 +2018,28 @@ fn adjust_param_type_for_local(ty : CType) -> CType {
 fn adjust_param_type_for_sig(ty : CType) -> CType {
   let adjusted = adjust_param_type_for_local(ty)
   strip_top_qualifiers(adjusted)
+}
+
+///|
+fn promote_old_style_param_type(ty : CType) -> CType {
+  match ty {
+    CType::Qualified(qual~, base~) => {
+      let updated = promote_old_style_param_type(base)
+      CType::Qualified(qual~, base=updated)
+    }
+    CType::Float(kind=CFloatKind::Float) =>
+      CType::Float(kind=CFloatKind::Double)
+    _ => ty
+  }
+}
+
+///|
+fn promote_old_style_params(params : Array[Param]) -> Array[Param] {
+  params.map(param => {
+    name: param.name,
+    ty: promote_old_style_param_type(param.ty),
+    loc: param.loc,
+  })
 }
 
 ///|

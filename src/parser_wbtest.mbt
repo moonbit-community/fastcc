@@ -103,6 +103,22 @@ test "sem accepts old-style call with extra args" {
 }
 
 ///|
+test "sem accepts K&R function definition" {
+  let (_, bag) = check_text(
+    "int f(a,b) int a; char b; { return a + b; } int main(){return f(1,2);}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts K&R default int parameters" {
+  let (_, bag) = check_text(
+    "int f(a,b){return a + b;} int main(){return f(1,2);}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
 test "sem accepts struct access" {
   let (_, bag) = check_text(
     "struct S { int x; int y; }; int main(){struct S s; s.x = 1; return s.y;}",
