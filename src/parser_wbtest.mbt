@@ -143,6 +143,12 @@ test "sem rejects void parameter in list" {
 }
 
 ///|
+test "sem rejects static function at block scope" {
+  let (_, bag) = check_text("int main(){ static int f(); return 0; }")
+  assert_true(has_errors(bag))
+}
+
+///|
 test "sem accepts struct access" {
   let (_, bag) = check_text(
     "struct S { int x; int y; }; int main(){struct S s; s.x = 1; return s.y;}",

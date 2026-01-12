@@ -316,6 +316,12 @@ fn check_storage_class(
     match storage {
       StorageClass::Auto | StorageClass::Register =>
         add_sem_error(ctx, loc, "invalid storage class for function")
+      StorageClass::Static =>
+        if is_local {
+          add_sem_error(
+            ctx, loc, "function without file scope cannot be static",
+          )
+        }
       _ => ()
     }
   } else if !is_local {
