@@ -88,7 +88,12 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
               synchronize(p)
               return None
             }
-            Some((decl, init)) =>
+            Some((decl, init)) => {
+              let combined_attrs = merge_attrs(base_attrs, decl.attrs)
+              let adjusted_ty = apply_call_conv_to_type(
+                decl.ty,
+                normalize_call_conv(combined_attrs.call_conv),
+              )
               if is_typedef {
                 if init is Some(_) {
                   add_parse_error(
@@ -97,9 +102,8 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
                     "typedef cannot have initializer",
                   )
                 }
-                let combined_attrs = merge_attrs(base_attrs, decl.attrs)
                 let typedef_ty = apply_type_attrs(
-                  decl.ty,
+                  adjusted_ty,
                   type_attrs_from(combined_attrs),
                 )
                 define_typedef(p, decl.name, typedef_ty)
@@ -112,80 +116,101 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
                   ),
                 )
               } else {
-                let combined_attrs = merge_attrs(base_attrs, decl.attrs)
                 match decl.params {
-                  Some(params) if decl.ty is CType::Function(return_type~, ..) => {
-                    let mut final_params = params
-                    let mut lbrace = match_token(p, LBrace)
-                    if lbrace is None &&
-                      decl.is_old_style &&
-                      is_type_start(p, peek_token(p)) {
-                      final_params = parse_old_style_param_decls(
-                        p, final_params,
-                      )
-                      lbrace = match_token(p, LBrace)
-                      if lbrace is None {
-                        add_parse_error(
-                          p,
-                          decl.loc,
-                          "expected '{' after parameter declarations",
+                  Some(params) =>
+                    match adjusted_ty {
+                      CType::Function(return_type~, ..) => {
+                        let mut final_params = params
+                        let mut lbrace = match_token(p, LBrace)
+                        if lbrace is None &&
+                          decl.is_old_style &&
+                          is_type_start(p, peek_token(p)) {
+                          final_params = parse_old_style_param_decls(
+                            p, final_params,
+                          )
+                          lbrace = match_token(p, LBrace)
+                          if lbrace is None {
+                            add_parse_error(
+                              p,
+                              decl.loc,
+                              "expected '{' after parameter declarations",
+                            )
+                          }
+                        }
+                        if lbrace is Some(lbrace_tok) {
+                          if init is Some(_) {
+                            add_parse_error(
+                              p,
+                              decl.loc,
+                              "function cannot have initializer",
+                            )
+                          }
+                          if decls.length() > 0 {
+                            add_parse_error(
+                              p,
+                              decl.loc,
+                              "function definition cannot be mixed with other declarators",
+                            )
+                          }
+                          let body = parse_compound_stmt(p, lbrace_tok.loc)
+                          decls.push(
+                            Decl::FuncDef({
+                              name: decl.name,
+                              return_type,
+                              params: final_params,
+                              varargs: decl.varargs,
+                              is_old_style: decl.is_old_style,
+                              storage,
+                              is_inline,
+                              attrs: combined_attrs,
+                              body,
+                              loc: decl.loc,
+                            }),
+                          )
+                          return Some(decls)
+                        } else {
+                          if init is Some(_) {
+                            add_parse_error(
+                              p,
+                              decl.loc,
+                              "function declaration cannot have initializer",
+                            )
+                          }
+                          decls.push(
+                            Decl::FuncDecl({
+                              name: decl.name,
+                              return_type,
+                              params: final_params,
+                              varargs: decl.varargs,
+                              is_old_style: decl.is_old_style,
+                              storage,
+                              is_inline,
+                              attrs: combined_attrs,
+                              loc: decl.loc,
+                            }),
+                          )
+                        }
+                      }
+                      _ => {
+                        if is_inline {
+                          add_parse_error(
+                            p,
+                            decl.loc,
+                            "inline can only apply to functions",
+                          )
+                        }
+                        decls.push(
+                          Decl::Var({
+                            name: decl.name,
+                            ty: adjusted_ty,
+                            init,
+                            storage,
+                            attrs: combined_attrs,
+                            loc: decl.loc,
+                          }),
                         )
                       }
                     }
-                    if lbrace is Some(lbrace_tok) {
-                      if init is Some(_) {
-                        add_parse_error(
-                          p,
-                          decl.loc,
-                          "function cannot have initializer",
-                        )
-                      }
-                      if decls.length() > 0 {
-                        add_parse_error(
-                          p,
-                          decl.loc,
-                          "function definition cannot be mixed with other declarators",
-                        )
-                      }
-                      let body = parse_compound_stmt(p, lbrace_tok.loc)
-                      decls.push(
-                        Decl::FuncDef({
-                          name: decl.name,
-                          return_type,
-                          params: final_params,
-                          varargs: decl.varargs,
-                          is_old_style: decl.is_old_style,
-                          storage,
-                          is_inline,
-                          attrs: combined_attrs,
-                          body,
-                          loc: decl.loc,
-                        }),
-                      )
-                      return Some(decls)
-                    } else {
-                      if init is Some(_) {
-                        add_parse_error(
-                          p,
-                          decl.loc,
-                          "function declaration cannot have initializer",
-                        )
-                      }
-                      decls.push(
-                        Decl::FuncDecl({
-                          name: decl.name,
-                          return_type,
-                          params: final_params,
-                          varargs: decl.varargs,
-                          is_old_style: decl.is_old_style,
-                          storage,
-                          is_inline,
-                          attrs: combined_attrs,
-                          loc: decl.loc,
-                        }),
-                      )
-                    }
-                  }
                   _ => {
                     if is_inline {
                       add_parse_error(
@@ -197,7 +222,7 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
                     decls.push(
                       Decl::Var({
                         name: decl.name,
-                        ty: decl.ty,
+                        ty: adjusted_ty,
                         init,
                         storage,
                         attrs: combined_attrs,
@@ -207,6 +232,7 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
                   }
                 }
               }
+            }
           }
           if match_token(p, Comma) is Some(_) {
             continue
@@ -263,6 +289,11 @@ fn parse_old_style_param_decls(
             }
             Some(decl) => {
               any_decl = true
+              let combined_attrs = merge_attrs(specs.attrs, decl.attrs)
+              let adjusted_ty = apply_call_conv_to_type(
+                decl.ty,
+                normalize_call_conv(combined_attrs.call_conv),
+              )
               if decl.name == "" {
                 add_parse_error(p, decl.loc, "parameter name missing")
               } else {
@@ -279,7 +310,7 @@ fn parse_old_style_param_decls(
                       seen.set(decl.name, true)
                       updated[idx] = {
                         name: decl.name,
-                        ty: decl.ty,
+                        ty: adjusted_ty,
                         loc: decl.loc,
                       }
                     }
@@ -729,12 +760,6 @@ fn parse_decl_specs(p : Parser, allow_storage? : Bool = true) -> DeclSpecs? {
 }
 
 ///|
-fn parse_type_spec(p : Parser) -> (CType, SrcLoc)? {
-  match parse_type_specifiers(p, allow_storage=false, allow_typedef=false) {
-    None => None
-    Some(specs) => Some((specs.ty, specs.loc))
-  }
-}
 
 ///|
 fn is_type_spec_start(p : Parser) -> Bool {
@@ -998,7 +1023,7 @@ fn parse_attribute_clause(p : Parser, loc : SrcLoc) -> Attributes {
         if !has_args {
           add_parse_error(p, name_tok.loc, "expected '(' after regparm")
         } else {
-          let count = if peek_token(p).kind == IntLit {
+          let raw = if peek_token(p).kind == IntLit {
             let tok = advance_token(p)
             let parsed = try @strconv.parse_int(tok.lexeme, base=0) catch {
               _ => 0
@@ -1011,10 +1036,18 @@ fn parse_attribute_clause(p : Parser, loc : SrcLoc) -> Attributes {
             skip_paren_group(p)
             0
           }
-          attrs = merge_attrs(
-            attrs,
-            attrs_with(call_conv=Some(CallConv::Regparm(count~))),
-          )
+          let mut count = raw
+          if count < 0 {
+            count = 0
+          } else if count > 3 {
+            count = 3
+          }
+          if count > 0 {
+            attrs = merge_attrs(
+              attrs,
+              attrs_with(call_conv=Some(CallConv::Regparm(count~))),
+            )
+          }
         }
       "dllimport" => {
         attrs = merge_attrs(attrs, attrs_with(dll_import=true))
@@ -1063,30 +1096,44 @@ fn parse_attributes(p : Parser) -> Attributes {
 }
 
 ///|
-fn parse_pointer_chain(p : Parser, ty_in : CType) -> CType {
+fn parse_pointer_chain(p : Parser, ty_in : CType) -> (CType, Attributes) {
   let mut ty = ty_in
+  let mut attrs = empty_attrs()
   while match_token(p, Star) is Some(_) {
     let qual = parse_type_qualifiers(p)
+    let pointer_attrs = parse_attributes(p)
+    attrs = merge_attrs(attrs, pointer_attrs)
     ty = CType::Pointer(ty)
     ty = apply_qualifiers(ty, qual)
   }
-  ty
+  (ty, attrs)
 }
 
 ///|
 fn parse_type_name(p : Parser) -> CType? {
-  match parse_type_spec(p) {
+  match parse_type_specifiers(p, allow_storage=false, allow_typedef=false) {
     None => None
-    Some((base, _loc)) =>
+    Some(specs) => {
+      let base = specs.ty
+      let base_attrs = specs.attrs
       if is_paren_pointer_declarator(p) {
-        Some(parse_paren_pointer_abstract(p, base))
+        let (ty, pointer_attrs) = parse_paren_pointer_abstract(p, base)
+        let combined_attrs = merge_attrs(base_attrs, pointer_attrs)
+        let call_conv = normalize_call_conv(combined_attrs.call_conv)
+        Some(apply_call_conv_to_type(ty, call_conv))
       } else {
-        let ty = parse_pointer_chain(p, base)
-        let (full, _params, _varargs, _old_style, _attrs) = parse_declarator_suffix(
+        let (ty, pointer_attrs) = parse_pointer_chain(p, base)
+        let (full, _params, _varargs, _old_style, suffix_attrs) = parse_declarator_suffix(
           p, ty,
         )
-        Some(full)
+        let combined_attrs = merge_attrs(
+          merge_attrs(base_attrs, pointer_attrs),
+          suffix_attrs,
+        )
+        let call_conv = normalize_call_conv(combined_attrs.call_conv)
+        Some(apply_call_conv_to_type(full, call_conv))
       }
+    }
   }
 }
 
@@ -1106,8 +1153,8 @@ fn parse_declarator(p : Parser, base : CType) -> Declarator? {
   if is_paren_pointer_declarator(p) {
     return parse_paren_pointer_declarator(p, base)
   }
-  let ty = parse_pointer_chain(p, base)
-  let mut attrs = parse_attributes(p)
+  let (ty, pointer_attrs) = parse_pointer_chain(p, base)
+  let mut attrs = merge_attrs(pointer_attrs, parse_attributes(p))
   let name_tok = expect_ident(p, "expected identifier")
   match name_tok {
     None => None
@@ -1156,10 +1203,12 @@ fn parse_field_declarator(
   if is_paren_pointer_declarator(p) {
     expect(p, LParen, "expected '(' in declarator") |> ignore
     let quals : Array[TypeQual] = []
+    let mut attrs = parse_attributes(p)
     while match_token(p, Star) is Some(_) {
       quals.push(parse_type_qualifiers(p))
+      attrs = merge_attrs(attrs, parse_attributes(p))
     }
-    ignore(parse_attributes(p))
+    attrs = merge_attrs(attrs, parse_attributes(p))
     let name_tok = if peek_token(p).kind == Ident {
       Some(advance_token(p))
     } else {
@@ -1169,6 +1218,7 @@ fn parse_field_declarator(
     let (ty, params, varargs, is_old_style, suffix_attrs) = parse_declarator_suffix(
       p, base,
     )
+    attrs = merge_attrs(attrs, suffix_attrs)
     let mut wrapped = ty
     for qual in quals {
       wrapped = CType::Pointer(wrapped)
@@ -1178,18 +1228,10 @@ fn parse_field_declarator(
       Some(tok) => (tok.lexeme, tok.loc)
       None => ("", fallback_loc)
     }
-    return Some({
-      name,
-      ty: wrapped,
-      params,
-      varargs,
-      is_old_style,
-      attrs: suffix_attrs,
-      loc,
-    })
+    return Some({ name, ty: wrapped, params, varargs, is_old_style, attrs, loc })
   }
-  let ty = parse_pointer_chain(p, base)
-  let mut attrs = parse_attributes(p)
+  let (ty, pointer_attrs) = parse_pointer_chain(p, base)
+  let mut attrs = merge_attrs(pointer_attrs, parse_attributes(p))
   let (name, loc) = if peek_token(p).kind == Ident {
     let name_tok = advance_token(p)
     (name_tok.lexeme, name_tok.loc)
@@ -1271,24 +1313,43 @@ fn parse_designator_list(p : Parser) -> (Array[InitDesignator], SrcLoc) {
 
 ///|
 fn is_paren_pointer_declarator(p : Parser) -> Bool {
-  peek_kind(p, 0) == LParen && peek_kind(p, 1) == Star
+  if peek_kind(p, 0) != LParen {
+    return false
+  }
+  let mut depth = 0
+  let mut i = 1
+  while true {
+    match peek_kind(p, i) {
+      Eof => return false
+      LParen => depth = depth + 1
+      RParen => if depth == 0 { return false } else { depth = depth - 1 }
+      Star => if depth == 0 { return true }
+      _ => ()
+    }
+    i = i + 1
+  }
+  false
 }
 
 ///|
 fn parse_paren_pointer_declarator(p : Parser, base : CType) -> Declarator? {
   expect(p, LParen, "expected '(' in declarator") |> ignore
   let quals : Array[TypeQual] = []
+  let mut attrs = parse_attributes(p)
   while match_token(p, Star) is Some(_) {
     quals.push(parse_type_qualifiers(p))
+    attrs = merge_attrs(attrs, parse_attributes(p))
   }
+  attrs = merge_attrs(attrs, parse_attributes(p))
   let name_tok = expect_ident(p, "expected identifier")
   expect(p, RParen, "expected ')' in declarator") |> ignore
   match name_tok {
     None => None
     Some(tok) => {
-      let (ty, params, varargs, is_old_style, attrs) = parse_declarator_suffix(
+      let (ty, params, varargs, is_old_style, suffix_attrs) = parse_declarator_suffix(
         p, base,
       )
+      attrs = merge_attrs(attrs, suffix_attrs)
       let mut wrapped = ty
       for qual in quals {
         wrapped = CType::Pointer(wrapped)
@@ -1308,22 +1369,29 @@ fn parse_paren_pointer_declarator(p : Parser, base : CType) -> Declarator? {
 }
 
 ///|
-fn parse_paren_pointer_abstract(p : Parser, base : CType) -> CType {
+fn parse_paren_pointer_abstract(
+  p : Parser,
+  base : CType,
+) -> (CType, Attributes) {
   expect(p, LParen, "expected '(' in declarator") |> ignore
   let quals : Array[TypeQual] = []
+  let mut attrs = parse_attributes(p)
   while match_token(p, Star) is Some(_) {
     quals.push(parse_type_qualifiers(p))
+    attrs = merge_attrs(attrs, parse_attributes(p))
   }
+  attrs = merge_attrs(attrs, parse_attributes(p))
   expect(p, RParen, "expected ')' in declarator") |> ignore
-  let (ty, _params, _varargs, _old_style, _attrs) = parse_declarator_suffix(
+  let (ty, _params, _varargs, _old_style, suffix_attrs) = parse_declarator_suffix(
     p, base,
   )
+  attrs = merge_attrs(attrs, suffix_attrs)
   let mut wrapped = ty
   for qual in quals {
     wrapped = CType::Pointer(wrapped)
     wrapped = apply_qualifiers(wrapped, qual)
   }
-  wrapped
+  (wrapped, attrs)
 }
 
 ///|
@@ -1350,12 +1418,15 @@ fn parse_declarator_suffix(
       params=param_types,
       varargs~,
       is_old_style=old_style,
+      call_conv=CallConv::Default,
     )
     Some(params)
   } else {
     None
   }
   attrs = merge_attrs(attrs, parse_attributes(p))
+  let call_conv = normalize_call_conv(attrs.call_conv)
+  ty = apply_call_conv_to_type(ty, call_conv)
   (ty, params, varargs, old_style, attrs)
 }
 
@@ -1397,6 +1468,7 @@ fn parse_struct_type(p : Parser, is_union~ : Bool) -> (CType, SrcLoc)? {
   if match_token(p, LBrace) is Some(_) {
     let fields = parse_struct_fields(p)
     expect(p, RBrace, "expected '}' after fields") |> ignore
+    attrs = merge_attrs(attrs, parse_attributes(p))
     if name == "" {
       name = next_anon_tag(p)
     }
@@ -1465,9 +1537,13 @@ fn parse_struct_fields(p : Parser) -> Array[Field] {
               if field_decl.name != "" || bit_width is Some(_) || allow_anon {
                 any_field = true
                 let combined_attrs = merge_attrs(specs.attrs, field_decl.attrs)
+                let adjusted_ty = apply_call_conv_to_type(
+                  field_decl.ty,
+                  normalize_call_conv(combined_attrs.call_conv),
+                )
                 fields.push({
                   name: field_decl.name,
-                  ty: field_decl.ty,
+                  ty: adjusted_ty,
                   bit_width,
                   attrs: combined_attrs,
                   loc: field_decl.loc,
@@ -1584,14 +1660,14 @@ fn parse_param_list(p : Parser) -> (Array[Param], Bool, Bool) {
     if match_token(p, RParen) is Some(_) {
       return (params, varargs, false)
     }
-    match parse_param_after_base(p, CType::Void, void_tok.loc) {
+    match parse_param_after_base(p, CType::Void, empty_attrs(), void_tok.loc) {
       Some(param) => params.push(param)
       None => ()
     }
   } else {
-    match parse_type_spec(p) {
-      Some((base, type_loc)) =>
-        match parse_param_after_base(p, base, type_loc) {
+    match parse_type_specifiers(p, allow_storage=false, allow_typedef=false) {
+      Some(specs) =>
+        match parse_param_after_base(p, specs.ty, specs.attrs, specs.loc) {
           Some(param) => params.push(param)
           None => ()
         }
@@ -1605,9 +1681,9 @@ fn parse_param_list(p : Parser) -> (Array[Param], Bool, Bool) {
         expect(p, RParen, "expected ')' after '...'") |> ignore
         break
       }
-      match parse_type_spec(p) {
-        Some((base, type_loc)) =>
-          match parse_param_after_base(p, base, type_loc) {
+      match parse_type_specifiers(p, allow_storage=false, allow_typedef=false) {
+        Some(specs) =>
+          match parse_param_after_base(p, specs.ty, specs.attrs, specs.loc) {
             Some(param) => params.push(param)
             None => ()
           }
@@ -1622,9 +1698,18 @@ fn parse_param_list(p : Parser) -> (Array[Param], Bool, Bool) {
 }
 
 ///|
-fn parse_param_after_base(p : Parser, base : CType, loc : SrcLoc) -> Param? {
+fn parse_param_after_base(
+  p : Parser,
+  base : CType,
+  attrs : Attributes,
+  loc : SrcLoc,
+) -> Param? {
   match parse_param_declarator(p, base, loc) {
-    Some(param) => Some(param)
+    Some(param) => {
+      let call_conv = normalize_call_conv(attrs.call_conv)
+      let adjusted_ty = apply_call_conv_to_type(param.ty, call_conv)
+      Some({ name: param.name, ty: adjusted_ty, loc: param.loc })
+    }
     None => {
       add_parse_error(p, loc, "expected parameter declarator")
       None
@@ -1641,39 +1726,50 @@ fn parse_param_declarator(
   if is_paren_pointer_declarator(p) {
     expect(p, LParen, "expected '(' in declarator") |> ignore
     let quals : Array[TypeQual] = []
+    let mut attrs = parse_attributes(p)
     while match_token(p, Star) is Some(_) {
       quals.push(parse_type_qualifiers(p))
+      attrs = merge_attrs(attrs, parse_attributes(p))
     }
+    attrs = merge_attrs(attrs, parse_attributes(p))
     let name_tok = if peek_token(p).kind == Ident {
       Some(advance_token(p))
     } else {
       None
     }
     expect(p, RParen, "expected ')' in declarator") |> ignore
-    let (ty, _params, _varargs, _old_style, _attrs) = parse_declarator_suffix(
+    let (ty, _params, _varargs, _old_style, suffix_attrs) = parse_declarator_suffix(
       p, base,
     )
+    attrs = merge_attrs(attrs, suffix_attrs)
     let mut wrapped = ty
     for qual in quals {
       wrapped = CType::Pointer(wrapped)
       wrapped = apply_qualifiers(wrapped, qual)
     }
+    let call_conv = normalize_call_conv(attrs.call_conv)
+    let adjusted_ty = apply_call_conv_to_type(wrapped, call_conv)
     let (name, loc) = match name_tok {
       Some(tok) => (tok.lexeme, tok.loc)
       None => ("", fallback_loc)
     }
-    return Some({ name, ty: wrapped, loc })
+    return Some({ name, ty: adjusted_ty, loc })
   }
-  let ty = parse_pointer_chain(p, base)
-  ignore(parse_attributes(p))
+  let (ty, pointer_attrs) = parse_pointer_chain(p, base)
+  let mut attrs = merge_attrs(pointer_attrs, parse_attributes(p))
   if peek_token(p).kind == Ident {
     let name_tok = advance_token(p)
-    let (ty, _params, _varargs, _old_style, _attrs) = parse_declarator_suffix(
+    let (ty, _params, _varargs, _old_style, suffix_attrs) = parse_declarator_suffix(
       p, ty,
     )
-    return Some({ name: name_tok.lexeme, ty, loc: name_tok.loc })
+    attrs = merge_attrs(attrs, suffix_attrs)
+    let call_conv = normalize_call_conv(attrs.call_conv)
+    let adjusted_ty = apply_call_conv_to_type(ty, call_conv)
+    return Some({ name: name_tok.lexeme, ty: adjusted_ty, loc: name_tok.loc })
   }
-  Some({ name: "", ty, loc: fallback_loc })
+  let call_conv = normalize_call_conv(attrs.call_conv)
+  let adjusted_ty = apply_call_conv_to_type(ty, call_conv)
+  Some({ name: "", ty: adjusted_ty, loc: fallback_loc })
 }
 
 ///|
@@ -1744,6 +1840,7 @@ fn parse_stmt(p : Parser) -> Stmt {
   if tok.kind == Ident && peek_kind(p, 1) == Colon {
     let label_tok = advance_token(p)
     expect(p, Colon, "expected ':' after label") |> ignore
+    ignore(parse_attributes(p))
     let body = parse_stmt(p)
     return Stmt::Label(name=label_tok.lexeme, body~, loc=label_tok.loc)
   }
@@ -1784,6 +1881,11 @@ fn parse_stmt(p : Parser) -> Stmt {
                   decl_loc = decl.loc
                   saw_decl = true
                 }
+                let combined_attrs = merge_attrs(base_attrs, decl.attrs)
+                let adjusted_ty = apply_call_conv_to_type(
+                  decl.ty,
+                  normalize_call_conv(combined_attrs.call_conv),
+                )
                 if is_typedef {
                   if init is Some(_) {
                     add_parse_error(
@@ -1792,15 +1894,15 @@ fn parse_stmt(p : Parser) -> Stmt {
                       "typedef cannot have initializer",
                     )
                   }
-                  let combined_attrs = merge_attrs(base_attrs, decl.attrs)
                   let typedef_ty = apply_type_attrs(
-                    decl.ty,
+                    adjusted_ty,
                     type_attrs_from(combined_attrs),
                   )
                   define_typedef(p, decl.name, typedef_ty)
                 } else {
                   let mut actual_init = init
-                  if decl.ty is CType::Function(..) && actual_init is Some(_) {
+                  if adjusted_ty is CType::Function(..) &&
+                    actual_init is Some(_) {
                     add_parse_error(
                       p,
                       decl.loc,
@@ -1815,10 +1917,9 @@ fn parse_stmt(p : Parser) -> Stmt {
                       "inline can only apply to functions",
                     )
                   }
-                  let combined_attrs = merge_attrs(base_attrs, decl.attrs)
                   decls.push({
                     name: decl.name,
-                    ty: decl.ty,
+                    ty: adjusted_ty,
                     init: actual_init,
                     storage,
                     attrs: combined_attrs,
@@ -1957,6 +2058,11 @@ fn parse_for_init(p : Parser) -> Stmt? {
                   decl_loc = decl.loc
                   saw_decl = true
                 }
+                let combined_attrs = merge_attrs(base_attrs, decl.attrs)
+                let adjusted_ty = apply_call_conv_to_type(
+                  decl.ty,
+                  normalize_call_conv(combined_attrs.call_conv),
+                )
                 if is_typedef {
                   if init is Some(_) {
                     add_parse_error(
@@ -1965,15 +2071,15 @@ fn parse_for_init(p : Parser) -> Stmt? {
                       "typedef cannot have initializer",
                     )
                   }
-                  let combined_attrs = merge_attrs(base_attrs, decl.attrs)
                   let typedef_ty = apply_type_attrs(
-                    decl.ty,
+                    adjusted_ty,
                     type_attrs_from(combined_attrs),
                   )
                   define_typedef(p, decl.name, typedef_ty)
                 } else {
                   let mut actual_init = init
-                  if decl.ty is CType::Function(..) && actual_init is Some(_) {
+                  if adjusted_ty is CType::Function(..) &&
+                    actual_init is Some(_) {
                     add_parse_error(
                       p,
                       decl.loc,
@@ -1988,10 +2094,9 @@ fn parse_for_init(p : Parser) -> Stmt? {
                       "inline can only apply to functions",
                     )
                   }
-                  let combined_attrs = merge_attrs(base_attrs, decl.attrs)
                   decls.push({
                     name: decl.name,
-                    ty: decl.ty,
+                    ty: adjusted_ty,
                     init: actual_init,
                     storage,
                     attrs: combined_attrs,

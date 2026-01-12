@@ -30,6 +30,31 @@ enum CallConv {
 } derive(Show, Eq, ToJson)
 
 ///|
+fn normalize_call_conv(call_conv : CallConv?) -> CallConv {
+  match call_conv {
+    None => CallConv::Default
+    Some(CallConv::Default) => CallConv::Default
+    Some(CallConv::Cdecl) => CallConv::Default
+    Some(CallConv::Regparm(count~)) =>
+      if count <= 0 {
+        CallConv::Default
+      } else {
+        CallConv::Regparm(count~)
+      }
+    Some(conv) => conv
+  }
+}
+
+///|
+fn merge_call_conv(existing : CallConv, incoming : CallConv) -> CallConv {
+  if existing == CallConv::Default {
+    incoming
+  } else {
+    existing
+  }
+}
+
+///|
 struct Attributes {
   aligned : AlignSpec?
   packed : Bool
@@ -200,6 +225,38 @@ fn apply_type_attrs(ty : CType, attrs : Attributes) -> CType {
 }
 
 ///|
+fn apply_call_conv_to_type(ty : CType, call_conv : CallConv) -> CType {
+  if call_conv == CallConv::Default {
+    return ty
+  }
+  match ty {
+    CType::Qualified(qual~, base~) =>
+      CType::Qualified(qual~, base=apply_call_conv_to_type(base, call_conv))
+    CType::Attributed(attrs~, base~) =>
+      CType::Attributed(attrs~, base=apply_call_conv_to_type(base, call_conv))
+    CType::Pointer(inner) =>
+      CType::Pointer(apply_call_conv_to_type(inner, call_conv))
+    CType::Array(elem~, size~) =>
+      CType::Array(elem=apply_call_conv_to_type(elem, call_conv), size~)
+    CType::Function(
+      return_type~,
+      params~,
+      varargs~,
+      is_old_style~,
+      call_conv=existing
+    ) =>
+      CType::Function(
+        return_type~,
+        params~,
+        varargs~,
+        is_old_style~,
+        call_conv=merge_call_conv(existing, call_conv),
+      )
+    _ => ty
+  }
+}
+
+///|
 enum CIntKind {
   Char
   Short
@@ -240,7 +297,8 @@ enum CType {
     return_type~ : CType,
     params~ : Array[CType],
     varargs~ : Bool,
-    is_old_style~ : Bool
+    is_old_style~ : Bool,
+    call_conv~ : CallConv
   )
   Attributed(attrs~ : Attributes, base~ : CType)
   Qualified(qual~ : TypeQual, base~ : CType)

@@ -4,6 +4,7 @@ struct FuncSig {
   params : Array[CType]
   varargs : Bool
   is_old_style : Bool
+  call_conv : CallConv
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -124,12 +125,13 @@ fn strip_qualifiers(ty : CType) -> CType {
     CType::Pointer(inner) => CType::Pointer(strip_qualifiers(inner))
     CType::Array(elem~, size~) =>
       CType::Array(elem=strip_qualifiers(elem), size~)
-    CType::Function(return_type~, params~, varargs~, is_old_style~) =>
+    CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) =>
       CType::Function(
         return_type=strip_qualifiers(return_type),
         params=params.map(strip_qualifiers),
         varargs~,
         is_old_style~,
+        call_conv~,
       )
     _ => ty
   }
@@ -143,12 +145,13 @@ fn strip_attrs(ty : CType) -> CType {
       CType::Qualified(qual~, base=strip_attrs(base))
     CType::Pointer(inner) => CType::Pointer(strip_attrs(inner))
     CType::Array(elem~, size~) => CType::Array(elem=strip_attrs(elem), size~)
-    CType::Function(return_type~, params~, varargs~, is_old_style~) =>
+    CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) =>
       CType::Function(
         return_type=strip_attrs(return_type),
         params=params.map(strip_attrs),
         varargs~,
         is_old_style~,
+        call_conv~,
       )
     _ => ty
   }
@@ -752,12 +755,13 @@ fn resolve_type(ctx : SemContext, ty : CType, loc : SrcLoc) -> CType {
     CType::Pointer(inner) => CType::Pointer(resolve_type(ctx, inner, loc))
     CType::Array(elem~, size~) =>
       CType::Array(elem=resolve_type(ctx, elem, loc), size~)
-    CType::Function(return_type~, params~, varargs~, is_old_style~) =>
+    CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) =>
       CType::Function(
         return_type=resolve_type(ctx, return_type, loc),
         params=params.map(param => resolve_type(ctx, param, loc)),
         varargs~,
         is_old_style~,
+        call_conv~,
       )
     CType::TypeofExpr(expr~) =>
       resolve_type(ctx, type_for_typeof(ctx, expr), expr_loc(expr))
@@ -1434,6 +1438,7 @@ fn check_func_decl(ctx : SemContext, func_decl : FuncDecl) -> Unit {
     is_local=false,
     is_function=true,
   )
+  let call_conv = normalize_call_conv(func_decl.attrs.call_conv)
   let resolved_return = resolve_type(ctx, func_decl.return_type, func_decl.loc)
   let params = func_decl.params.map(param => {
     name: param.name,
@@ -1450,6 +1455,7 @@ fn check_func_decl(ctx : SemContext, func_decl : FuncDecl) -> Unit {
     params,
     func_decl.varargs,
     func_decl.is_old_style,
+    call_conv,
   )
   add_function_sig(ctx, func_decl.name, sig, func_decl.loc, is_def=false)
 }
@@ -1463,6 +1469,7 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
     is_local=false,
     is_function=true,
   )
+  let call_conv = normalize_call_conv(func_def.attrs.call_conv)
   let resolved_return = resolve_type(ctx, func_def.return_type, func_def.loc)
   let resolved_params = func_def.params.map(param => {
     name: param.name,
@@ -1479,6 +1486,7 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
     params,
     func_def.varargs,
     func_def.is_old_style,
+    call_conv,
   )
   add_function_sig(ctx, func_def.name, sig, func_def.loc, is_def=true)
   ctx.labels_defined = {}
@@ -1507,9 +1515,10 @@ fn func_sig_from_params(
   params : Array[Param],
   varargs : Bool,
   is_old_style : Bool,
+  call_conv : CallConv,
 ) -> FuncSig {
   let param_types = params.map(p => adjust_param_type_for_sig(p.ty))
-  { return_type, params: param_types, varargs, is_old_style }
+  { return_type, params: param_types, varargs, is_old_style, call_conv }
 }
 
 ///|
@@ -1552,6 +1561,9 @@ fn add_function_sig(
 ///|
 fn func_sig_eq(a : FuncSig, b : FuncSig) -> Bool {
   if !types_compatible_for_decl(a.return_type, b.return_type) {
+    return false
+  }
+  if a.call_conv != b.call_conv {
     return false
   }
   if a.is_old_style || b.is_old_style {
@@ -1657,7 +1669,7 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
   let resolved = resolve_type(ctx, decl.ty, decl.loc)
   let mut final_ty = resolved
   match strip_qual_attrs(resolved) {
-    CType::Function(return_type~, params~, varargs~, is_old_style~) => {
+    CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) => {
       check_storage_class(
         ctx,
         decl.storage,
@@ -1672,7 +1684,7 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
           "function declaration cannot have initializer",
         )
       }
-      let sig = { return_type, params, varargs, is_old_style }
+      let sig = { return_type, params, varargs, is_old_style, call_conv }
       add_function_sig(ctx, decl.name, sig, decl.loc, is_def=false)
       return
     }
@@ -2260,16 +2272,21 @@ fn type_eq(a : CType, b : CType) -> Bool {
         return_type=a_ret,
         params=a_params,
         varargs=a_varargs,
-        is_old_style=a_old
+        is_old_style=a_old,
+        call_conv=a_call
       ),
       CType::Function(
         return_type=b_ret,
         params=b_params,
         varargs=b_varargs,
-        is_old_style=b_old
+        is_old_style=b_old,
+        call_conv=b_call
       ),
     ) => {
       if !type_eq(a_ret, b_ret) {
+        return false
+      }
+      if a_call != b_call {
         return false
       }
       if a_old || b_old {
@@ -2319,16 +2336,21 @@ fn types_compatible_for_decl(a : CType, b : CType) -> Bool {
         return_type=a_ret,
         params=a_params,
         varargs=a_varargs,
-        is_old_style=a_old
+        is_old_style=a_old,
+        call_conv=a_call
       ),
       CType::Function(
         return_type=b_ret,
         params=b_params,
         varargs=b_varargs,
-        is_old_style=b_old
+        is_old_style=b_old,
+        call_conv=b_call
       ),
     ) => {
       if !types_compatible_for_decl(a_ret, b_ret) {
+        return false
+      }
+      if a_call != b_call {
         return false
       }
       if a_old || b_old {
@@ -2967,7 +2989,9 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
         _ => None
       }
       match fn_ty {
-        Some(CType::Function(return_type~, params~, varargs~, is_old_style~)) => {
+        Some(
+          CType::Function(return_type~, params~, varargs~, is_old_style~, ..)
+        ) => {
           if !is_old_style {
             if varargs {
               if args.length() < params.length() {
@@ -3228,6 +3252,7 @@ fn lookup_value(ctx : SemContext, name : String) -> CType? {
               params=sig.params,
               varargs=sig.varargs,
               is_old_style=sig.is_old_style,
+              call_conv=sig.call_conv,
             ),
           )
         None =>
@@ -3321,7 +3346,7 @@ fn type_to_string(ty : CType) -> String {
     CType::Union(name~, ..) => "union " + name
     CType::Enum(name~, ..) => "enum " + name
     CType::TypeofExpr(..) => "typeof"
-    CType::Function(return_type~, params~, varargs~, is_old_style~) => {
+    CType::Function(return_type~, params~, varargs~, is_old_style~, ..) => {
       let args = params.map(type_to_string).join(", ")
       let rendered = if is_old_style {
         ""

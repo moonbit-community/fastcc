@@ -463,6 +463,35 @@ test "sem accepts __attribute__ on declarations" {
 }
 
 ///|
+test "attribute after label is accepted" {
+  let (_, bag) = check_text(
+    "int main(){label: __attribute__((unused)); return 0;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "attribute in pointer declarator sets call conv" {
+  let (unit, bag) = parse_text(
+    "typedef int (* __attribute__((stdcall)) Fn)(void);",
+  )
+  assert_true(!has_errors(bag))
+  guard unit.decls.length() == 1 else { fail("expected single declaration") }
+  match unit.decls[0] {
+    Decl::Typedef(name="Fn", ty~, ..) =>
+      match ty {
+        CType::Pointer(inner) =>
+          match inner {
+            CType::Function(call_conv=CallConv::Stdcall, ..) => ()
+            _ => fail("expected function type")
+          }
+        _ => fail("expected pointer type")
+      }
+    _ => fail("expected typedef declaration")
+  }
+}
+
+///|
 test "attribute packed affects struct size" {
   let (size, align) = struct_size_align_from_text(
     "struct __attribute__((packed)) S { char c; int x; };", "S",
@@ -505,6 +534,33 @@ test "field packed affects struct size" {
   )
   assert_eq(size, 5)
   assert_eq(align, 1)
+}
+
+///|
+test "attribute packed after struct affects size" {
+  let (size, align) = struct_size_align_from_text(
+    "struct S { char c; int x; } __attribute__((packed));", "S",
+  )
+  assert_eq(size, 5)
+  assert_eq(align, 1)
+}
+
+///|
+test "sem rejects call conv mismatch" {
+  let (_, bag) = check_text("int __attribute__((stdcall)) f(); int f();")
+  assert_true(has_errors(bag))
+}
+
+///|
+test "sem accepts cdecl as default" {
+  let (_, bag) = check_text("int __attribute__((cdecl)) f(); int f();")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts regparm zero as default" {
+  let (_, bag) = check_text("int __attribute__((regparm(0))) f(); int f();")
+  assert_true(!has_errors(bag))
 }
 
 ///|
