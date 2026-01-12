@@ -734,6 +734,19 @@ fn register_struct_def(
               if width == 0 && field.name != "" {
                 add_sem_error(ctx, field.loc, "zero width for bit-field")
               }
+              if width > 0 {
+                match type_size_align(ctx, field.ty, field.loc) {
+                  None => ()
+                  Some((size, _align)) =>
+                    if width > size * 8 {
+                      add_sem_error(
+                        ctx,
+                        field.loc,
+                        "width of '\{field.name}' exceeds its type",
+                      )
+                    }
+                }
+              }
             }
           }
         }

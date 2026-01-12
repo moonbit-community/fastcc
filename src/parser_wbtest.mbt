@@ -409,6 +409,12 @@ test "sem rejects non-integer bitfield" {
 }
 
 ///|
+test "sem rejects oversized bitfield" {
+  let (_, bag) = check_text("struct S { int a: 33; }; int main(){return 0;}")
+  assert_true(has_errors(bag))
+}
+
+///|
 test "sem accepts storage classes" {
   let (_, bag) = check_text(
     "static int x; extern int y; int main(){register int r=1; return r + x;}",
