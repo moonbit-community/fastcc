@@ -161,6 +161,30 @@ test "sem rejects non-integer switch condition" {
 }
 
 ///|
+test "sem rejects duplicate case values" {
+  let (_, bag) = check_text(
+    "int main(){switch(1){case 1: return 0; case 1: return 1;}}",
+  )
+  assert_true(has_errors(bag))
+}
+
+///|
+test "sem rejects overlapping case ranges" {
+  let (_, bag) = check_text(
+    "int main(){switch(1){case 1 ... 3: return 0; case 2: return 1;}}",
+  )
+  assert_true(has_errors(bag))
+}
+
+///|
+test "sem rejects duplicate default" {
+  let (_, bag) = check_text(
+    "int main(){switch(1){default: return 0; default: return 1;}}",
+  )
+  assert_true(has_errors(bag))
+}
+
+///|
 test "sem accepts struct access" {
   let (_, bag) = check_text(
     "struct S { int x; int y; }; int main(){struct S s; s.x = 1; return s.y;}",

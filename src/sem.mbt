@@ -19,10 +19,17 @@ struct SemContext {
   enum_defs : Map[String, Array[EnumItem]]
   enum_consts : Map[String, Int]
   enum_types : Map[String, CType]
+  switch_stack : Array[SwitchInfo]
   mut labels_defined : Map[String, Bool]
   mut labels_used : Array[(String, SrcLoc)]
   mut loop_depth : Int
   mut switch_depth : Int
+}
+
+///|
+struct SwitchInfo {
+  cases : Array[(Int, Int, SrcLoc)]
+  mut has_default : Bool
 }
 
 ///|
@@ -39,6 +46,7 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     enum_defs: {},
     enum_consts: {},
     enum_types: {},
+    switch_stack: [],
     labels_defined: {},
     labels_used: [],
     loop_depth: 0,
@@ -1753,25 +1761,43 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
       if ctx.switch_depth == 0 {
         add_sem_error(ctx, expr_loc(expr), "case outside of switch")
       }
-      if const_int_from_expr(ctx, expr, expr_loc(expr)) is None {
+      let start = const_int_from_expr(ctx, expr, expr_loc(expr))
+      if start is None {
         add_sem_error(ctx, expr_loc(expr), "case label is not constant")
       }
-      match end_expr {
-        None => ()
-        Some(end_value) =>
-          if const_int_from_expr(ctx, end_value, expr_loc(end_value)) is None {
+      let end = match end_expr {
+        None => start
+        Some(end_value) => {
+          let end_val = const_int_from_expr(ctx, end_value, expr_loc(end_value))
+          if end_val is None {
             add_sem_error(
               ctx,
               expr_loc(end_value),
               "case label is not constant",
             )
           }
+          end_val
+        }
+      }
+      match (start, end) {
+        (Some(v1), Some(v2)) => register_case_range(ctx, v1, v2, expr_loc(expr))
+        _ => ()
       }
       check_stmt(ctx, body, return_type)
     }
     Stmt::Default(body~, loc~) => {
       if ctx.switch_depth == 0 {
         add_sem_error(ctx, loc, "default outside of switch")
+      }
+      if ctx.switch_stack.length() > 0 {
+        let idx = ctx.switch_stack.length() - 1
+        let info = ctx.switch_stack[idx]
+        if info.has_default {
+          add_sem_error(ctx, loc, "too many 'default'")
+        } else {
+          info.has_default = true
+          ctx.switch_stack[idx] = info
+        }
       }
       check_stmt(ctx, body, return_type)
     }
@@ -1831,6 +1857,32 @@ fn check_cond_expr(ctx : SemContext, expr : Expr) -> Unit {
 }
 
 ///|
+fn register_case_range(
+  ctx : SemContext,
+  start : Int,
+  end : Int,
+  loc : SrcLoc,
+) -> Unit {
+  if ctx.switch_stack.length() == 0 {
+    return
+  }
+  if start > end {
+    return
+  }
+  let idx = ctx.switch_stack.length() - 1
+  let info = ctx.switch_stack[idx]
+  for item in info.cases {
+    let (existing_start, existing_end, _) = item
+    if start <= existing_end && existing_start <= end {
+      add_sem_error(ctx, loc, "duplicate case value")
+      return
+    }
+  }
+  info.cases.push((start, end, loc))
+  ctx.switch_stack[idx] = info
+}
+
+///|
 fn with_loop(ctx : SemContext, f : () -> Unit) -> Unit {
   ctx.loop_depth = ctx.loop_depth + 1
   f()
@@ -1840,7 +1892,9 @@ fn with_loop(ctx : SemContext, f : () -> Unit) -> Unit {
 ///|
 fn with_switch(ctx : SemContext, f : () -> Unit) -> Unit {
   ctx.switch_depth = ctx.switch_depth + 1
+  ctx.switch_stack.push({ cases: [], has_default: false })
   f()
+  ignore(ctx.switch_stack.pop())
   ctx.switch_depth = ctx.switch_depth - 1
 }
 
