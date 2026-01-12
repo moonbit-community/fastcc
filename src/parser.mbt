@@ -49,6 +49,11 @@ fn parse_translation_unit_with(p : Parser) -> TranslationUnit {
 
 ///|
 fn parse_decl(p : Parser) -> Array[Decl]? {
+  if match_token(p, KwStaticAssert) is Some(assert_tok) {
+    let static_assert = parse_static_assert(p, assert_tok.loc)
+    expect(p, Semicolon, "expected ';' after _Static_assert") |> ignore
+    return Some([Decl::StaticAssert(static_assert)])
+  }
   let specs = match parse_decl_specs(p) {
     None =>
       if peek_token(p).kind == Ident && !has_typedef(p, peek_token(p).lexeme) {
@@ -839,6 +844,18 @@ fn parse_attr_string(p : Parser, loc : SrcLoc) -> String? {
 }
 
 ///|
+fn parse_static_assert(p : Parser, loc : SrcLoc) -> StaticAssert {
+  expect(p, LParen, "expected '(' after _Static_assert") |> ignore
+  let expr = parse_expr_cond(p)
+  let mut message : String? = None
+  if match_token(p, Comma) is Some(_) {
+    message = parse_attr_string(p, loc)
+  }
+  expect(p, RParen, "expected ')' after _Static_assert") |> ignore
+  { expr, message, loc }
+}
+
+///|
 fn is_attr_name_token(kind : TokenKind) -> Bool {
   match kind {
     Ident | KwConst | KwVolatile | KwRestrict | KwInline | KwSigned => true
@@ -1492,9 +1509,15 @@ fn parse_struct_type(p : Parser, is_union~ : Bool) -> (CType, SrcLoc)? {
 }
 
 ///|
-fn parse_struct_fields(p : Parser) -> Array[Field] {
-  let fields : Array[Field] = []
+fn parse_struct_fields(p : Parser) -> Array[RecordItem] {
+  let items : Array[RecordItem] = []
   while !is_at_end(p) && peek_token(p).kind != RBrace {
+    if match_token(p, KwStaticAssert) is Some(assert_tok) {
+      let static_assert = parse_static_assert(p, assert_tok.loc)
+      expect(p, Semicolon, "expected ';' after _Static_assert") |> ignore
+      items.push(RecordItem::StaticAssert(static_assert))
+      continue
+    }
     match parse_decl_specs(p, allow_storage=false) {
       None => {
         synchronize(p)
@@ -1541,13 +1564,15 @@ fn parse_struct_fields(p : Parser) -> Array[Field] {
                   field_decl.ty,
                   normalize_call_conv(combined_attrs.call_conv),
                 )
-                fields.push({
-                  name: field_decl.name,
-                  ty: adjusted_ty,
-                  bit_width,
-                  attrs: combined_attrs,
-                  loc: field_decl.loc,
-                })
+                items.push(
+                  RecordItem::Field({
+                    name: field_decl.name,
+                    ty: adjusted_ty,
+                    bit_width,
+                    attrs: combined_attrs,
+                    loc: field_decl.loc,
+                  }),
+                )
               } else {
                 add_parse_error(p, loc, "expected field declarator")
               }
@@ -1565,7 +1590,7 @@ fn parse_struct_fields(p : Parser) -> Array[Field] {
       }
     }
   }
-  fields
+  items
 }
 
 ///|
@@ -1789,6 +1814,11 @@ fn parse_stmt(p : Parser) -> Stmt {
   let tok = peek_token(p)
   if match_token(p, LBrace) is Some(lbrace) {
     return parse_compound_stmt(p, lbrace.loc)
+  }
+  if match_token(p, KwStaticAssert) is Some(assert_tok) {
+    let static_assert = parse_static_assert(p, assert_tok.loc)
+    expect(p, Semicolon, "expected ';' after _Static_assert") |> ignore
+    return Stmt::StaticAssert(static_assert)
   }
   if match_token(p, KwCase) is Some(case_tok) {
     let expr = parse_expr(p)

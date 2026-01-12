@@ -289,8 +289,8 @@ enum CType {
   Float(kind~ : CFloatKind)
   Pointer(CType)
   Array(elem~ : CType, size~ : Int?)
-  Struct(name~ : String, fields~ : Array[Field]?, attrs~ : Attributes)
-  Union(name~ : String, fields~ : Array[Field]?, attrs~ : Attributes)
+  Struct(name~ : String, fields~ : Array[RecordItem]?, attrs~ : Attributes)
+  Union(name~ : String, fields~ : Array[RecordItem]?, attrs~ : Attributes)
   Enum(name~ : String, items~ : Array[EnumItem]?)
   TypeofExpr(expr~ : Expr)
   Function(
@@ -311,6 +311,19 @@ struct Field {
   bit_width : Expr?
   attrs : Attributes
   loc : SrcLoc
+} derive(Show, Eq, ToJson)
+
+///|
+struct StaticAssert {
+  expr : Expr
+  message : String?
+  loc : SrcLoc
+} derive(Show, Eq, ToJson)
+
+///|
+enum RecordItem {
+  Field(Field)
+  StaticAssert(StaticAssert)
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -371,6 +384,7 @@ enum Decl {
   Var(VarDecl)
   Typedef(name~ : String, ty~ : CType, attrs~ : Attributes, loc~ : SrcLoc)
   TagDef(ty~ : CType, loc~ : SrcLoc)
+  StaticAssert(StaticAssert)
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -481,5 +495,6 @@ enum Stmt {
   ExprStmt(expr~ : Expr, loc~ : SrcLoc)
   DeclStmt(decls~ : Array[VarDecl], loc~ : SrcLoc)
   TagDef(ty~ : CType, loc~ : SrcLoc)
+  StaticAssert(StaticAssert)
   Empty(loc~ : SrcLoc)
 } derive(Show, Eq, ToJson)

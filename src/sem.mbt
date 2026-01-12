@@ -529,12 +529,13 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
 fn ensure_struct_fields(
   ctx : SemContext,
   tag : String,
-  fields : Array[Field]?,
+  fields : Array[RecordItem]?,
   is_union~ : Bool,
   loc : SrcLoc,
 ) -> RecordDef? {
   match fields {
-    Some(list) => Some({ fields: list, attrs: empty_attrs() })
+    Some(list) =>
+      Some({ fields: record_items_to_fields(list), attrs: empty_attrs() })
     None =>
       if is_union {
         match ctx.union_defs.get(tag) {
@@ -554,6 +555,50 @@ fn ensure_struct_fields(
         }
       }
   }
+}
+
+///|
+fn static_assert_message(message : String?) -> String {
+  match message {
+    Some(value) => value
+    None => "_Static_assert fail"
+  }
+}
+
+///|
+fn check_static_assert(ctx : SemContext, item : StaticAssert) -> Unit {
+  let (value, ok) = eval_const_expr_value(ctx, item.expr, item.loc)
+  if ok && value == 0 {
+    add_sem_error(ctx, item.loc, static_assert_message(item.message))
+  }
+}
+
+///|
+fn record_items_to_fields(items : Array[RecordItem]) -> Array[Field] {
+  let fields : Array[Field] = []
+  for item in items {
+    match item {
+      RecordItem::Field(field) => fields.push(field)
+      RecordItem::StaticAssert(_) => ()
+    }
+  }
+  fields
+}
+
+///|
+fn record_items_to_fields_checked(
+  ctx : SemContext,
+  items : Array[RecordItem],
+) -> Array[Field] {
+  let fields : Array[Field] = []
+  for item in items {
+    match item {
+      RecordItem::Field(field) => fields.push(field)
+      RecordItem::StaticAssert(static_assert) =>
+        check_static_assert(ctx, static_assert)
+    }
+  }
+  fields
 }
 
 ///|
@@ -804,6 +849,7 @@ fn check_decl(ctx : SemContext, decl : Decl) -> Unit {
       ctx.type_aliases.set(name, resolved)
     }
     Decl::TagDef(ty~, loc~) => register_type_defs(ctx, ty, loc)
+    Decl::StaticAssert(static_assert) => check_static_assert(ctx, static_assert)
   }
 }
 
@@ -833,7 +879,7 @@ fn register_type_defs(ctx : SemContext, ty : CType, loc : SrcLoc) -> Unit {
 fn register_struct_def(
   ctx : SemContext,
   name : String,
-  fields : Array[Field]?,
+  fields : Array[RecordItem]?,
   attrs : Attributes,
   is_union~ : Bool,
   loc : SrcLoc,
@@ -852,7 +898,7 @@ fn register_struct_def(
   }
   let incoming_fields = match fields {
     None => []
-    Some(val) => val
+    Some(val) => record_items_to_fields_checked(ctx, val)
   }
   let incoming = { fields: incoming_fields, attrs }
   let validate_fields = fn(def : RecordDef) -> Unit {
@@ -1854,7 +1900,7 @@ fn check_initializer_list(
     }
     CType::Struct(name=tag, fields=field_list, attrs=_) => {
       let fields = match field_list {
-        Some(list) => Some(list)
+        Some(list) => Some(record_items_to_fields(list))
         None => lookup_struct_fields(ctx, tag, is_union=false)
       }
       match fields {
@@ -1866,7 +1912,7 @@ fn check_initializer_list(
     }
     CType::Union(name=tag, fields=field_list, attrs=_) => {
       let fields = match field_list {
-        Some(list) => Some(list)
+        Some(list) => Some(record_items_to_fields(list))
         None => lookup_struct_fields(ctx, tag, is_union=true)
       }
       match fields {
@@ -1996,7 +2042,7 @@ fn resolve_designator_type(
         match strip_qual_attrs(current) {
           CType::Struct(name=tag, fields=field_list, attrs=_) => {
             let fields = match field_list {
-              Some(list) => Some(list)
+              Some(list) => Some(record_items_to_fields(list))
               None => lookup_struct_fields(ctx, tag, is_union=false)
             }
             match fields {
@@ -2016,7 +2062,7 @@ fn resolve_designator_type(
           }
           CType::Union(name=tag, fields=field_list, attrs=_) => {
             let fields = match field_list {
-              Some(list) => Some(list)
+              Some(list) => Some(record_items_to_fields(list))
               None => lookup_struct_fields(ctx, tag, is_union=true)
             }
             match fields {
@@ -2181,6 +2227,7 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
         check_var_decl(ctx, decl, is_local=true)
       }
     Stmt::TagDef(ty~, loc~) => register_type_defs(ctx, ty, loc)
+    Stmt::StaticAssert(static_assert) => check_static_assert(ctx, static_assert)
     Stmt::Empty(..) => ()
   }
 }
@@ -2528,7 +2575,7 @@ fn member_access_type(
   match strip_top_qualifiers(obj_base) {
     CType::Struct(name=tag, fields=field_list, ..) => {
       let fields = match field_list {
-        Some(vals) => Some(vals)
+        Some(vals) => Some(record_items_to_fields(vals))
         None => lookup_struct_fields(ctx, tag, is_union=false)
       }
       match fields {
@@ -2548,7 +2595,7 @@ fn member_access_type(
     }
     CType::Union(name=tag, fields=field_list, ..) => {
       let fields = match field_list {
-        Some(vals) => Some(vals)
+        Some(vals) => Some(record_items_to_fields(vals))
         None => lookup_struct_fields(ctx, tag, is_union=true)
       }
       match fields {

@@ -455,6 +455,32 @@ test "sem accepts typeof type" {
 }
 
 ///|
+test "sem accepts _Static_assert" {
+  let (_, bag) = check_text("_Static_assert(1, \"ok\"); int main(){return 0;}")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem rejects _Static_assert" {
+  let (_, bag) = check_text("_Static_assert(0, \"no\"); int main(){return 0;}")
+  assert_true(has_errors(bag))
+}
+
+///|
+test "sem accepts _Static_assert without message" {
+  let (_, bag) = check_text("_Static_assert(1); int main(){return 0;}")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts _Static_assert in struct" {
+  let (_, bag) = check_text(
+    "struct S { _Static_assert(1, \"ok\"); int x; }; int main(){return 0;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
 test "sem accepts __attribute__ on declarations" {
   let (_, bag) = check_text(
     "int * __attribute__((unused)) p; struct __attribute__((packed)) S { char c; int x; }; int main(){return 0;}",
