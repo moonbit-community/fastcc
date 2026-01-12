@@ -1161,6 +1161,11 @@ fn check_func_decl(ctx : SemContext, func_decl : FuncDecl) -> Unit {
     is_local=false,
     is_function=true,
   )
+  for param in func_decl.params {
+    if is_void_type(param.ty) {
+      add_sem_error(ctx, param.loc, "parameter declared as void")
+    }
+  }
   let sig = func_sig_from_params(
     func_decl.return_type,
     func_decl.params,
@@ -1199,6 +1204,8 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
   for param in params {
     if param.name == "" {
       add_sem_error(ctx, param.loc, "parameter name missing in definition")
+    } else if is_void_type(param.ty) {
+      add_sem_error(ctx, param.loc, "parameter declared as void")
     } else {
       let param_ty = adjust_param_type_for_local(param.ty)
       declare_local(ctx, param.name, param_ty, param.loc)

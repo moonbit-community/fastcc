@@ -131,6 +131,18 @@ test "sem accepts implicit int global variable" {
 }
 
 ///|
+test "sem rejects void parameter" {
+  let (_, bag) = check_text("int f(void x);")
+  assert_true(has_errors(bag))
+}
+
+///|
+test "sem rejects void parameter in list" {
+  let (_, bag) = check_text("int f(void, int);")
+  assert_true(has_errors(bag))
+}
+
+///|
 test "sem accepts struct access" {
   let (_, bag) = check_text(
     "struct S { int x; int y; }; int main(){struct S s; s.x = 1; return s.y;}",
