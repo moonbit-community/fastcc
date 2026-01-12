@@ -49,7 +49,22 @@ fn parse_translation_unit_with(p : Parser) -> TranslationUnit {
 
 ///|
 fn parse_decl(p : Parser) -> Array[Decl]? {
-  match parse_decl_specs(p) {
+  let specs = match parse_decl_specs(p) {
+    None =>
+      if peek_token(p).kind == Ident && !has_typedef(p, peek_token(p).lexeme) {
+        Some({
+          ty: CType::Int(kind=CIntKind::Int, unsigned=false),
+          loc: peek_token(p).loc,
+          is_typedef: false,
+          storage: StorageClass::Default,
+          is_inline: false,
+        })
+      } else {
+        None
+      }
+    Some(val) => Some(val)
+  }
+  match specs {
     None => None
     Some(specs) => {
       let base_type = specs.ty

@@ -119,6 +119,18 @@ test "sem accepts K&R default int parameters" {
 }
 
 ///|
+test "sem accepts implicit int function definition" {
+  let (_, bag) = check_text("f(){return 0;} int main(){return f();}")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts implicit int global variable" {
+  let (_, bag) = check_text("x; int main(){return x;}")
+  assert_true(!has_errors(bag))
+}
+
+///|
 test "sem accepts struct access" {
   let (_, bag) = check_text(
     "struct S { int x; int y; }; int main(){struct S s; s.x = 1; return s.y;}",
