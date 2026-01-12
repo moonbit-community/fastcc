@@ -2,6 +2,8 @@
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
+This project's goal is to rewrite refs/tinycc in MoonBit. Please keep implementation as close as possible to refs/tinycc.
+
 ## Quick Reference
 
 ```bash
