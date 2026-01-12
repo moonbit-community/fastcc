@@ -185,6 +185,30 @@ test "sem rejects duplicate default" {
 }
 
 ///|
+test "sem rejects assignment to const" {
+  let (_, bag) = check_text("const int x = 1; int main(){x = 2;}")
+  assert_true(has_errors(bag))
+}
+
+///|
+test "sem rejects increment of const" {
+  let (_, bag) = check_text("int main(){const int x = 1; x++;}")
+  assert_true(has_errors(bag))
+}
+
+///|
+test "sem rejects assignment through const pointer" {
+  let (_, bag) = check_text("int main(){const int *p; *p = 1;}")
+  assert_true(has_errors(bag))
+}
+
+///|
+test "sem rejects assignment to const pointer" {
+  let (_, bag) = check_text("int main(){int *const p = 0; p = 0;}")
+  assert_true(has_errors(bag))
+}
+
+///|
 test "sem accepts struct access" {
   let (_, bag) = check_text(
     "struct S { int x; int y; }; int main(){struct S s; s.x = 1; return s.y;}",

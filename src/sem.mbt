@@ -136,6 +136,14 @@ fn strip_top_qualifiers(ty : CType) -> CType {
 }
 
 ///|
+fn is_const_qualified(ty : CType) -> Bool {
+  match ty {
+    CType::Qualified(qual~, ..) => qual.is_const
+    _ => false
+  }
+}
+
+///|
 fn is_void_type(ty : CType) -> Bool {
   strip_qualifiers(ty) is CType::Void
 }
@@ -2229,7 +2237,7 @@ fn index_access_type(
   loc : SrcLoc,
 ) -> CType? {
   if is_int_like(index_ty) {
-    match strip_qualifiers(base_ty) {
+    match strip_top_qualifiers(base_ty) {
       CType::Pointer(elem) => Some(elem)
       CType::Array(elem~, ..) => Some(elem)
       _ => {
@@ -2238,7 +2246,7 @@ fn index_access_type(
       }
     }
   } else if is_int_like(base_ty) {
-    match strip_qualifiers(index_ty) {
+    match strip_top_qualifiers(index_ty) {
       CType::Pointer(elem) => Some(elem)
       CType::Array(elem~, ..) => Some(elem)
       _ => {
@@ -2283,7 +2291,7 @@ fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
       member_access_type(ctx, type_of_expr(ctx, base), name, is_arrow~, loc)
     Expr::Unary(op=UnaryOp::Deref, expr=inner, loc~) => {
       let inner_ty = type_of_expr(ctx, inner)
-      match strip_qualifiers(inner_ty) {
+      match strip_top_qualifiers(inner_ty) {
         CType::Pointer(pointee) => Some(pointee)
         _ => {
           add_sem_error(ctx, loc, "cannot dereference non-pointer")
@@ -2362,6 +2370,10 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
           match type_of_lvalue(ctx, expr) {
             None => default_int_type()
             Some(ty) => {
+              if is_const_qualified(ty) {
+                add_sem_error(ctx, loc, "increment of read-only location")
+                return default_int_type()
+              }
               match strip_qualifiers(ty) {
                 CType::Array(_) | CType::Function(..) => {
                   add_sem_error(ctx, loc, "invalid operand to increment")
@@ -2399,6 +2411,10 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
         BinaryOp::Assign =>
           match type_of_lvalue(ctx, left) {
             Some(lhs_ty) => {
+              if is_const_qualified(lhs_ty) {
+                add_sem_error(ctx, loc, "assignment to read-only location")
+                return default_int_type()
+              }
               match strip_qualifiers(lhs_ty) {
                 CType::Array(_) | CType::Function(..) => {
                   add_sem_error(ctx, loc, "assignment to non-modifiable lvalue")
@@ -2763,6 +2779,9 @@ fn type_of_compound_assign(
       common_int_type(ctx, lhs_ty, rhs_ty)
     }
     _ => default_int_type()
+  }
+  if is_const_qualified(lhs_ty) {
+    add_sem_error(ctx, loc, "assignment to read-only location")
   }
   if !can_assign(lhs_ty, result_ty) {
     add_sem_error(
