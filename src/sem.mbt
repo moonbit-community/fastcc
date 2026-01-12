@@ -7,6 +7,12 @@ struct FuncSig {
 } derive(Show, Eq, ToJson)
 
 ///|
+struct RecordDef {
+  fields : Array[Field]
+  attrs : Attributes
+}
+
+///|
 struct SemContext {
   diags : DiagBag
   globals : Map[String, CType]
@@ -14,8 +20,8 @@ struct SemContext {
   function_defs : Map[String, Bool]
   locals : Array[Map[String, CType]]
   type_aliases : Map[String, CType]
-  struct_defs : Map[String, Array[Field]]
-  union_defs : Map[String, Array[Field]]
+  struct_defs : Map[String, RecordDef]
+  union_defs : Map[String, RecordDef]
   enum_defs : Map[String, Array[EnumItem]]
   enum_consts : Map[String, Int]
   enum_types : Map[String, CType]
@@ -113,6 +119,8 @@ fn enum_type_from_items(ctx : SemContext, items : Array[EnumItem]) -> CType {
 fn strip_qualifiers(ty : CType) -> CType {
   match ty {
     CType::Qualified(base~, ..) => strip_qualifiers(base)
+    CType::Attributed(attrs~, base~) =>
+      CType::Attributed(attrs~, base=strip_qualifiers(base))
     CType::Pointer(inner) => CType::Pointer(strip_qualifiers(inner))
     CType::Array(elem~, size~) =>
       CType::Array(elem=strip_qualifiers(elem), size~)
@@ -128,9 +136,34 @@ fn strip_qualifiers(ty : CType) -> CType {
 }
 
 ///|
+fn strip_attrs(ty : CType) -> CType {
+  match ty {
+    CType::Attributed(base~, ..) => strip_attrs(base)
+    CType::Qualified(qual~, base~) =>
+      CType::Qualified(qual~, base=strip_attrs(base))
+    CType::Pointer(inner) => CType::Pointer(strip_attrs(inner))
+    CType::Array(elem~, size~) => CType::Array(elem=strip_attrs(elem), size~)
+    CType::Function(return_type~, params~, varargs~, is_old_style~) =>
+      CType::Function(
+        return_type=strip_attrs(return_type),
+        params=params.map(strip_attrs),
+        varargs~,
+        is_old_style~,
+      )
+    _ => ty
+  }
+}
+
+///|
+fn strip_qual_attrs(ty : CType) -> CType {
+  strip_attrs(strip_qualifiers(ty))
+}
+
+///|
 fn strip_top_qualifiers(ty : CType) -> CType {
   match ty {
-    CType::Qualified(base~, ..) => base
+    CType::Qualified(base~, ..) => strip_top_qualifiers(base)
+    CType::Attributed(base~, ..) => strip_top_qualifiers(base)
     _ => ty
   }
 }
@@ -139,6 +172,7 @@ fn strip_top_qualifiers(ty : CType) -> CType {
 fn split_top_qual(ty : CType) -> (TypeQual, CType) {
   match ty {
     CType::Qualified(qual~, base~) => (qual, base)
+    CType::Attributed(base~, ..) => split_top_qual(base)
     _ => (empty_qual(), ty)
   }
 }
@@ -147,13 +181,14 @@ fn split_top_qual(ty : CType) -> (TypeQual, CType) {
 fn is_const_qualified(ty : CType) -> Bool {
   match ty {
     CType::Qualified(qual~, ..) => qual.is_const
+    CType::Attributed(base~, ..) => is_const_qualified(base)
     _ => false
   }
 }
 
 ///|
 fn is_void_type(ty : CType) -> Bool {
-  strip_qualifiers(ty) is CType::Void
+  strip_qual_attrs(ty) is CType::Void
 }
 
 ///|
@@ -216,8 +251,42 @@ fn align_to(value : Int, align : Int) -> Int {
 }
 
 ///|
+let max_align = 16
+
+///|
+fn is_power_of_two(value : Int) -> Bool {
+  value > 0 && (value & (value - 1)) == 0
+}
+
+///|
+fn resolve_align_spec(ctx : SemContext, spec : AlignSpec, loc : SrcLoc) -> Int? {
+  match spec {
+    AlignSpec::Default => Some(max_align)
+    AlignSpec::Expr(expr~) =>
+      match const_int_from_expr(ctx, expr, loc) {
+        None => None
+        Some(value) =>
+          if !is_power_of_two(value) {
+            add_sem_error(ctx, loc, "alignment must be a positive power of two")
+            None
+          } else {
+            Some(value)
+          }
+      }
+  }
+}
+
+///|
+fn attr_align_value(ctx : SemContext, attrs : Attributes, loc : SrcLoc) -> Int? {
+  match attrs.aligned {
+    None => None
+    Some(spec) => resolve_align_spec(ctx, spec, loc)
+  }
+}
+
+///|
 fn is_float_type(ty : CType) -> Bool {
-  match strip_qualifiers(ty) {
+  match strip_qual_attrs(ty) {
     CType::Float(..) => true
     _ => false
   }
@@ -225,7 +294,7 @@ fn is_float_type(ty : CType) -> Bool {
 
 ///|
 fn enum_type_for_arith(ctx : SemContext, ty : CType) -> CType {
-  match strip_qualifiers(ty) {
+  match strip_qual_attrs(ty) {
     CType::Enum(name~, ..) =>
       match ctx.enum_types.get(name) {
         Some(base) => base
@@ -237,7 +306,7 @@ fn enum_type_for_arith(ctx : SemContext, ty : CType) -> CType {
 
 ///|
 fn promote_int_type(ctx : SemContext, ty : CType) -> CType {
-  match strip_qualifiers(ty) {
+  match strip_qual_attrs(ty) {
     CType::Int(kind~, unsigned~) =>
       if int_rank(kind) < int_rank(CIntKind::Int) {
         default_int_type()
@@ -289,8 +358,8 @@ fn common_int_type(ctx : SemContext, lhs : CType, rhs : CType) -> CType {
 
 ///|
 fn arithmetic_result_type(ctx : SemContext, lhs : CType, rhs : CType) -> CType {
-  let left = strip_qualifiers(lhs)
-  let right = strip_qualifiers(rhs)
+  let left = strip_qual_attrs(lhs)
+  let right = strip_qual_attrs(rhs)
   match (left, right) {
     (CType::Float(kind=l_kind), CType::Float(kind=r_kind)) =>
       if float_rank(l_kind) >= float_rank(r_kind) {
@@ -311,8 +380,8 @@ fn is_arithmetic(ty : CType) -> Bool {
 
 ///|
 fn can_assign(dst : CType, src : CType) -> Bool {
-  let dst_ty = strip_qualifiers(dst)
-  let src_ty = strip_qualifiers(src)
+  let dst_ty = strip_qual_attrs(dst)
+  let src_ty = strip_qual_attrs(src)
   if is_arithmetic(dst_ty) && is_arithmetic(src_ty) {
     return true
   }
@@ -363,6 +432,18 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
   match strip_qualifiers(resolved) {
     CType::TypeofExpr(expr~) =>
       type_size_align(ctx, type_for_typeof(ctx, expr), loc)
+    CType::Attributed(attrs~, base~) =>
+      match type_size_align(ctx, base, loc) {
+        None => None
+        Some((size, align)) => {
+          let mut final_align = if attrs.packed { 1 } else { align }
+          match attr_align_value(ctx, attrs, loc) {
+            None => ()
+            Some(value) => if value > final_align { final_align = value }
+          }
+          Some((size, final_align))
+        }
+      }
     CType::Void => {
       add_sem_error(ctx, loc, "invalid application of sizeof to void")
       None
@@ -421,15 +502,21 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
         Some(n) => Some((elem_size * n, elem_align))
       }
     }
-    CType::Struct(name=tag, fields=field_list) =>
+    CType::Struct(name=tag, fields=field_list, attrs=struct_attrs) =>
       match ensure_struct_fields(ctx, tag, field_list, is_union=false, loc) {
         None => None
-        Some(fields) => Some(struct_size_align(ctx, fields, loc))
+        Some(def) => {
+          let merged = merge_attrs(def.attrs, struct_attrs)
+          Some(struct_size_align(ctx, def.fields, merged, loc))
+        }
       }
-    CType::Union(name=tag, fields=field_list) =>
+    CType::Union(name=tag, fields=field_list, attrs=struct_attrs) =>
       match ensure_struct_fields(ctx, tag, field_list, is_union=true, loc) {
         None => None
-        Some(fields) => Some(union_size_align(ctx, fields, loc))
+        Some(def) => {
+          let merged = merge_attrs(def.attrs, struct_attrs)
+          Some(union_size_align(ctx, def.fields, merged, loc))
+        }
       }
     CType::Qualified(base~, ..) => type_size_align(ctx, base, loc)
   }
@@ -442,13 +529,13 @@ fn ensure_struct_fields(
   fields : Array[Field]?,
   is_union~ : Bool,
   loc : SrcLoc,
-) -> Array[Field]? {
+) -> RecordDef? {
   match fields {
-    Some(list) => Some(list)
+    Some(list) => Some({ fields: list, attrs: empty_attrs() })
     None =>
       if is_union {
         match ctx.union_defs.get(tag) {
-          Some(list) if list.length() > 0 => Some(list)
+          Some(def) if def.fields.length() > 0 => Some(def)
           _ => {
             add_sem_error(ctx, loc, "incomplete union '\{tag}'")
             None
@@ -456,7 +543,7 @@ fn ensure_struct_fields(
         }
       } else {
         match ctx.struct_defs.get(tag) {
-          Some(list) if list.length() > 0 => Some(list)
+          Some(def) if def.fields.length() > 0 => Some(def)
           _ => {
             add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
             None
@@ -470,6 +557,7 @@ fn ensure_struct_fields(
 fn struct_size_align(
   ctx : SemContext,
   fields : Array[Field],
+  attrs : Attributes,
   loc : SrcLoc,
 ) -> (Int, Int) {
   let mut size = 0
@@ -479,6 +567,8 @@ fn struct_size_align(
   let mut bit_unit_size = 0
   for i = 0; i < fields.length(); i = i + 1 {
     let field = fields[i]
+    let packed = attrs.packed || field.attrs.packed
+    let field_align_override = attr_align_value(ctx, field.attrs, field.loc)
     match field.bit_width {
       Some(expr) => {
         let width = match const_int_from_expr(ctx, expr, field.loc) {
@@ -491,9 +581,14 @@ fn struct_size_align(
           Some(v) => v
         }
         let unit_bits = base_size * 8
-        align = if base_align > align { base_align } else { align }
+        let mut field_align = if packed { 1 } else { base_align }
+        match field_align_override {
+          None => ()
+          Some(value) => field_align = value
+        }
+        align = if field_align > align { field_align } else { align }
         if width == 0 {
-          size = align_to(size, base_align)
+          size = align_to(size, field_align)
           bit_unit_bits = 0
           bit_offset = 0
           bit_unit_size = 0
@@ -502,7 +597,7 @@ fn struct_size_align(
         if bit_unit_bits == 0 ||
           bit_unit_bits != unit_bits ||
           width > unit_bits - bit_offset {
-          size = align_to(size, base_align)
+          size = align_to(size, field_align)
           bit_unit_bits = unit_bits
           bit_unit_size = base_size
           bit_offset = 0
@@ -544,28 +639,41 @@ fn struct_size_align(
               Some(v) => v
             }
         }
-        size = align_to(size, field_align)
+        let mut adjusted_align = if packed { 1 } else { field_align }
+        match field_align_override {
+          None => ()
+          Some(value) => adjusted_align = value
+        }
+        size = align_to(size, adjusted_align)
         size = size + field_size
-        align = if field_align > align { field_align } else { align }
+        align = if adjusted_align > align { adjusted_align } else { align }
       }
     }
   }
   if bit_unit_bits != 0 {
     size = size + bit_unit_size
   }
-  size = align_to(size, align)
-  (size, align)
+  let mut final_align = align
+  match attr_align_value(ctx, attrs, loc) {
+    None => ()
+    Some(value) => if value > final_align { final_align = value }
+  }
+  size = align_to(size, final_align)
+  (size, final_align)
 }
 
 ///|
 fn union_size_align(
   ctx : SemContext,
   fields : Array[Field],
+  attrs : Attributes,
   loc : SrcLoc,
 ) -> (Int, Int) {
   let mut size = 0
   let mut align = 1
   for field in fields {
+    let packed = attrs.packed || field.attrs.packed
+    let field_align_override = attr_align_value(ctx, field.attrs, field.loc)
     let base = strip_qualifiers(field.ty)
     let (field_size, field_align) = match field.bit_width {
       Some(_) =>
@@ -579,15 +687,25 @@ fn union_size_align(
           Some(v) => v
         }
     }
+    let mut adjusted_align = if packed { 1 } else { field_align }
+    match field_align_override {
+      None => ()
+      Some(value) => adjusted_align = value
+    }
     if field_size > size {
       size = field_size
     }
-    if field_align > align {
-      align = field_align
+    if adjusted_align > align {
+      align = adjusted_align
     }
   }
-  size = align_to(size, align)
-  (size, align)
+  let mut final_align = align
+  match attr_align_value(ctx, attrs, loc) {
+    None => ()
+    Some(value) => if value > final_align { final_align = value }
+  }
+  size = align_to(size, final_align)
+  (size, final_align)
 }
 
 ///|
@@ -629,6 +747,8 @@ fn resolve_type(ctx : SemContext, ty : CType, loc : SrcLoc) -> CType {
   match ty {
     CType::Qualified(qual~, base~) =>
       CType::Qualified(qual~, base=resolve_type(ctx, base, loc))
+    CType::Attributed(attrs~, base~) =>
+      CType::Attributed(attrs~, base=resolve_type(ctx, base, loc))
     CType::Pointer(inner) => CType::Pointer(resolve_type(ctx, inner, loc))
     CType::Array(elem~, size~) =>
       CType::Array(elem=resolve_type(ctx, elem, loc), size~)
@@ -674,7 +794,7 @@ fn check_decl(ctx : SemContext, decl : Decl) -> Unit {
       }
       check_func_def(ctx, func_def)
     }
-    Decl::Typedef(name~, ty~, loc~) => {
+    Decl::Typedef(name~, ty~, attrs=_, loc~) => {
       register_type_defs(ctx, ty, loc)
       let resolved = resolve_type(ctx, ty, loc)
       ctx.type_aliases.set(name, resolved)
@@ -687,10 +807,11 @@ fn check_decl(ctx : SemContext, decl : Decl) -> Unit {
 fn register_type_defs(ctx : SemContext, ty : CType, loc : SrcLoc) -> Unit {
   match ty {
     CType::Qualified(base~, ..) => register_type_defs(ctx, base, loc)
-    CType::Struct(name~, fields~) =>
-      register_struct_def(ctx, name, fields, is_union=false, loc)
-    CType::Union(name~, fields~) =>
-      register_struct_def(ctx, name, fields, is_union=true, loc)
+    CType::Attributed(base~, ..) => register_type_defs(ctx, base, loc)
+    CType::Struct(name~, fields~, attrs~) =>
+      register_struct_def(ctx, name, fields, attrs, is_union=false, loc)
+    CType::Union(name~, fields~, attrs~) =>
+      register_struct_def(ctx, name, fields, attrs, is_union=true, loc)
     CType::Enum(name~, items~) => register_enum_def(ctx, name, items, loc)
     CType::Pointer(inner) => register_type_defs(ctx, inner, loc)
     CType::Array(elem~, ..) => register_type_defs(ctx, elem, loc)
@@ -709,6 +830,7 @@ fn register_struct_def(
   ctx : SemContext,
   name : String,
   fields : Array[Field]?,
+  attrs : Attributes,
   is_union~ : Bool,
   loc : SrcLoc,
 ) -> Unit {
@@ -724,51 +846,72 @@ fn register_struct_def(
     add_sem_error(ctx, loc, "redefinition of '\{name}'")
     return
   }
-  let incoming = match fields {
+  let incoming_fields = match fields {
     None => []
     Some(val) => val
   }
-  let validate_fields = fn() -> Unit {
-    if incoming.length() == 0 {
+  let incoming = { fields: incoming_fields, attrs }
+  let validate_fields = fn(def : RecordDef) -> Unit {
+    if def.fields.length() == 0 {
       return
     }
     if is_union {
-      union_size_align(ctx, incoming, loc) |> ignore
+      union_size_align(ctx, def.fields, def.attrs, loc) |> ignore
     } else {
-      struct_size_align(ctx, incoming, loc) |> ignore
+      struct_size_align(ctx, def.fields, def.attrs, loc) |> ignore
     }
   }
   if is_union {
     match ctx.union_defs.get(name) {
       None => {
         ctx.union_defs.set(name, incoming)
-        validate_fields()
+        validate_fields(incoming)
       }
       Some(existing) =>
-        if existing.length() > 0 && incoming.length() > 0 {
+        if existing.fields.length() > 0 && incoming.fields.length() > 0 {
           add_sem_error(ctx, loc, "redefinition of '\{name}'")
-        } else if existing.length() == 0 && incoming.length() > 0 {
-          ctx.union_defs.set(name, incoming)
-          validate_fields()
+        } else if existing.fields.length() == 0 && incoming.fields.length() > 0 {
+          let merged = {
+            fields: incoming.fields,
+            attrs: merge_attrs(existing.attrs, incoming.attrs),
+          }
+          ctx.union_defs.set(name, merged)
+          validate_fields(merged)
+        } else {
+          let merged = {
+            fields: existing.fields,
+            attrs: merge_attrs(existing.attrs, incoming.attrs),
+          }
+          ctx.union_defs.set(name, merged)
         }
     }
   } else {
     match ctx.struct_defs.get(name) {
       None => {
         ctx.struct_defs.set(name, incoming)
-        validate_fields()
+        validate_fields(incoming)
       }
       Some(existing) =>
-        if existing.length() > 0 && incoming.length() > 0 {
+        if existing.fields.length() > 0 && incoming.fields.length() > 0 {
           add_sem_error(ctx, loc, "redefinition of '\{name}'")
-        } else if existing.length() == 0 && incoming.length() > 0 {
-          ctx.struct_defs.set(name, incoming)
-          validate_fields()
+        } else if existing.fields.length() == 0 && incoming.fields.length() > 0 {
+          let merged = {
+            fields: incoming.fields,
+            attrs: merge_attrs(existing.attrs, incoming.attrs),
+          }
+          ctx.struct_defs.set(name, merged)
+          validate_fields(merged)
+        } else {
+          let merged = {
+            fields: existing.fields,
+            attrs: merge_attrs(existing.attrs, incoming.attrs),
+          }
+          ctx.struct_defs.set(name, merged)
         }
     }
   }
-  if incoming.length() > 0 {
-    for field in incoming {
+  if incoming.fields.length() > 0 {
+    for field in incoming.fields {
       register_type_defs(ctx, field.ty, field.loc)
       match field.bit_width {
         None => ()
@@ -1473,7 +1616,7 @@ fn require_complete_object_type(
   loc : SrcLoc,
   allow_incomplete_array? : Bool = false,
 ) -> Unit {
-  match strip_qualifiers(ty) {
+  match strip_qual_attrs(ty) {
     CType::Array(elem~, size~) =>
       match size {
         None => {
@@ -1484,9 +1627,9 @@ fn require_complete_object_type(
         }
         Some(_) => require_complete_object_type(ctx, elem, loc)
       }
-    CType::Struct(name=tag, fields=field_list) =>
+    CType::Struct(name=tag, fields=field_list, attrs=_) =>
       ensure_struct_fields(ctx, tag, field_list, is_union=false, loc) |> ignore
-    CType::Union(name=tag, fields=field_list) =>
+    CType::Union(name=tag, fields=field_list, attrs=_) =>
       ensure_struct_fields(ctx, tag, field_list, is_union=true, loc) |> ignore
     CType::Enum(name=tag, items~) =>
       match items {
@@ -1513,7 +1656,7 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
   register_type_defs(ctx, decl.ty, decl.loc)
   let resolved = resolve_type(ctx, decl.ty, decl.loc)
   let mut final_ty = resolved
-  match strip_qualifiers(resolved) {
+  match strip_qual_attrs(resolved) {
     CType::Function(return_type~, params~, varargs~, is_old_style~) => {
       check_storage_class(
         ctx,
@@ -1578,7 +1721,7 @@ fn check_initializer(
     Initializer::Expr(expr~, ..) =>
       match expr {
         Expr::StringLit(length~, ..) =>
-          match strip_qualifiers(ty) {
+          match strip_qual_attrs(ty) {
             CType::Array(elem~, size~) =>
               if is_char_type(elem) {
                 match size {
@@ -1640,7 +1783,7 @@ fn check_initializer_list(
   items : Array[InitItem],
   loc : SrcLoc,
 ) -> Int? {
-  match strip_qualifiers(ty) {
+  match strip_qual_attrs(ty) {
     CType::Array(elem~, size~) => {
       let mut next_index = 0
       let mut max_index = -1
@@ -1697,7 +1840,7 @@ fn check_initializer_list(
         Some(_) => None
       }
     }
-    CType::Struct(name=tag, fields=field_list) => {
+    CType::Struct(name=tag, fields=field_list, attrs=_) => {
       let fields = match field_list {
         Some(list) => Some(list)
         None => lookup_struct_fields(ctx, tag, is_union=false)
@@ -1709,7 +1852,7 @@ fn check_initializer_list(
       }
       None
     }
-    CType::Union(name=tag, fields=field_list) => {
+    CType::Union(name=tag, fields=field_list, attrs=_) => {
       let fields = match field_list {
         Some(list) => Some(list)
         None => lookup_struct_fields(ctx, tag, is_union=true)
@@ -1813,11 +1956,11 @@ fn resolve_designator_type(
   designators : Array[InitDesignator],
   loc : SrcLoc,
 ) -> CType? {
-  let mut current = strip_qualifiers(ty)
+  let mut current = strip_qual_attrs(ty)
   for des in designators {
     match des {
       InitDesignator::Index(expr~, loc=des_loc) =>
-        match strip_qualifiers(current) {
+        match strip_qual_attrs(current) {
           CType::Array(elem~, size~) => {
             match size {
               None => ()
@@ -1838,8 +1981,8 @@ fn resolve_designator_type(
           }
         }
       InitDesignator::Field(name~, ..) =>
-        match strip_qualifiers(current) {
-          CType::Struct(name=tag, fields=field_list) => {
+        match strip_qual_attrs(current) {
+          CType::Struct(name=tag, fields=field_list, attrs=_) => {
             let fields = match field_list {
               Some(list) => Some(list)
               None => lookup_struct_fields(ctx, tag, is_union=false)
@@ -1859,7 +2002,7 @@ fn resolve_designator_type(
                 }
             }
           }
-          CType::Union(name=tag, fields=field_list) => {
+          CType::Union(name=tag, fields=field_list, attrs=_) => {
             let fields = match field_list {
               Some(list) => Some(list)
               None => lookup_struct_fields(ctx, tag, is_union=true)
@@ -2092,8 +2235,8 @@ fn check_label_uses(ctx : SemContext) -> Unit {
 
 ///|
 fn type_eq(a : CType, b : CType) -> Bool {
-  let lhs = strip_qualifiers(a)
-  let rhs = strip_qualifiers(b)
+  let lhs = strip_qual_attrs(a)
+  let rhs = strip_qual_attrs(b)
   match (lhs, rhs) {
     (CType::Void, CType::Void) => true
     (CType::Bool, CType::Bool) => true
@@ -2157,8 +2300,8 @@ fn type_eq(a : CType, b : CType) -> Bool {
 
 ///|
 fn types_compatible_for_decl(a : CType, b : CType) -> Bool {
-  let lhs = strip_qualifiers(a)
-  let rhs = strip_qualifiers(b)
+  let lhs = strip_qual_attrs(a)
+  let rhs = strip_qual_attrs(b)
   match (lhs, rhs) {
     (
       CType::Array(elem=elem_a, size=size_a),
@@ -2210,7 +2353,7 @@ fn types_compatible_for_decl(a : CType, b : CType) -> Bool {
 
 ///|
 fn is_int_like(ty : CType) -> Bool {
-  match strip_qualifiers(ty) {
+  match strip_qual_attrs(ty) {
     CType::Int(..) => true
     CType::Bool => true
     CType::Enum(..) => true
@@ -2220,7 +2363,7 @@ fn is_int_like(ty : CType) -> Bool {
 
 ///|
 fn is_char_type(ty : CType) -> Bool {
-  match strip_qualifiers(ty) {
+  match strip_qual_attrs(ty) {
     CType::Int(kind=CIntKind::Char, ..) => true
     _ => false
   }
@@ -2231,7 +2374,7 @@ fn is_scalar(ty : CType) -> Bool {
   if is_int_like(ty) || is_float_type(ty) {
     return true
   }
-  match strip_qualifiers(ty) {
+  match strip_qual_attrs(ty) {
     CType::Pointer(_) => true
     _ => false
   }
@@ -2239,7 +2382,7 @@ fn is_scalar(ty : CType) -> Bool {
 
 ///|
 fn is_pointer_type(ty : CType) -> Bool {
-  match strip_qualifiers(ty) {
+  match strip_qual_attrs(ty) {
     CType::Pointer(_) => true
     _ => false
   }
@@ -2247,7 +2390,7 @@ fn is_pointer_type(ty : CType) -> Bool {
 
 ///|
 fn is_void_pointer_type(ty : CType) -> Bool {
-  match strip_qualifiers(ty) {
+  match strip_qual_attrs(ty) {
     CType::Pointer(inner) => is_void_type(inner)
     _ => false
   }
@@ -2255,7 +2398,7 @@ fn is_void_pointer_type(ty : CType) -> Bool {
 
 ///|
 fn decay_type(ty : CType) -> CType {
-  match strip_qualifiers(ty) {
+  match strip_qual_attrs(ty) {
     CType::Array(elem~, ..) => CType::Pointer(elem)
     CType::Function(..) => CType::Pointer(ty)
     _ => ty
@@ -2269,6 +2412,8 @@ fn adjust_param_type_for_local(ty : CType) -> CType {
       let adjusted = adjust_param_type_for_local(base)
       CType::Qualified(qual~, base=adjusted)
     }
+    CType::Attributed(attrs~, base~) =>
+      CType::Attributed(attrs~, base=adjust_param_type_for_local(base))
     CType::Array(elem~, ..) => CType::Pointer(elem)
     CType::Function(..) => CType::Pointer(ty)
     _ => ty
@@ -2288,6 +2433,8 @@ fn promote_old_style_param_type(ty : CType) -> CType {
       let updated = promote_old_style_param_type(base)
       CType::Qualified(qual~, base=updated)
     }
+    CType::Attributed(attrs~, base~) =>
+      CType::Attributed(attrs~, base=promote_old_style_param_type(base))
     CType::Float(kind=CFloatKind::Float) =>
       CType::Float(kind=CFloatKind::Double)
     _ => ty
@@ -2312,7 +2459,7 @@ fn lookup_struct_fields(
   let defs = if is_union { ctx.union_defs } else { ctx.struct_defs }
   match defs.get(name) {
     None => None
-    Some(fields) => if fields.length() == 0 { None } else { Some(fields) }
+    Some(def) => if def.fields.length() == 0 { None } else { Some(def.fields) }
   }
 }
 
@@ -2357,7 +2504,7 @@ fn member_access_type(
   }
   let (obj_qual, obj_base) = split_top_qual(obj_ty)
   match strip_top_qualifiers(obj_base) {
-    CType::Struct(name=tag, fields=field_list) => {
+    CType::Struct(name=tag, fields=field_list, ..) => {
       let fields = match field_list {
         Some(vals) => Some(vals)
         None => lookup_struct_fields(ctx, tag, is_union=false)
@@ -2377,7 +2524,7 @@ fn member_access_type(
           }
       }
     }
-    CType::Union(name=tag, fields=field_list) => {
+    CType::Union(name=tag, fields=field_list, ..) => {
       let fields = match field_list {
         Some(vals) => Some(vals)
         None => lookup_struct_fields(ctx, tag, is_union=true)
@@ -2505,7 +2652,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
           }
         UnaryOp::Deref => {
           let inner = type_of_expr(ctx, expr)
-          match strip_qualifiers(inner) {
+          match strip_qual_attrs(inner) {
             CType::Pointer(pointee) => pointee
             _ => {
               add_sem_error(ctx, loc, "cannot dereference non-pointer")
@@ -2526,7 +2673,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
             add_sem_error(ctx, loc, "unary operator expects arithmetic")
           }
           if is_float_type(inner) {
-            strip_qualifiers(inner)
+            strip_qual_attrs(inner)
           } else {
             common_int_type(ctx, inner, inner)
           }
@@ -2549,7 +2696,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
                 add_sem_error(ctx, loc, "increment of read-only location")
                 return default_int_type()
               }
-              match strip_qualifiers(ty) {
+              match strip_qual_attrs(ty) {
                 CType::Array(_) | CType::Function(..) => {
                   add_sem_error(ctx, loc, "invalid operand to increment")
                   return default_int_type()
@@ -2557,7 +2704,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
                 _ => ()
               }
               if !is_arithmetic(ty) {
-                match strip_qualifiers(ty) {
+                match strip_qual_attrs(ty) {
                   CType::Pointer(_) => ()
                   _ => add_sem_error(ctx, loc, "invalid operand to increment")
                 }
@@ -2592,7 +2739,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
                 add_sem_error(ctx, loc, "assignment to read-only location")
                 return default_int_type()
               }
-              match strip_qualifiers(lhs_ty) {
+              match strip_qual_attrs(lhs_ty) {
                 CType::Array(_) | CType::Function(..) => {
                   add_sem_error(ctx, loc, "assignment to non-modifiable lvalue")
                   return default_int_type()
@@ -2630,7 +2777,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
         BinaryOp::Add => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
-          match strip_qualifiers(lhs_ty) {
+          match strip_qual_attrs(lhs_ty) {
             CType::Pointer(pointee) =>
               if is_int_like(rhs_ty) {
                 return CType::Pointer(pointee)
@@ -2640,7 +2787,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
               }
             _ => ()
           }
-          match strip_qualifiers(rhs_ty) {
+          match strip_qual_attrs(rhs_ty) {
             CType::Pointer(pointee) =>
               if is_int_like(lhs_ty) {
                 return CType::Pointer(pointee)
@@ -2660,9 +2807,9 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
         BinaryOp::Sub => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
-          match strip_qualifiers(lhs_ty) {
+          match strip_qual_attrs(lhs_ty) {
             CType::Pointer(pointee) =>
-              match strip_qualifiers(rhs_ty) {
+              match strip_qual_attrs(rhs_ty) {
                 CType::Pointer(other) => {
                   if !pointer_compatible(pointee, other) {
                     add_sem_error(ctx, loc, "pointer subtraction type mismatch")
@@ -2694,9 +2841,9 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
         | BinaryOp::Ge => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
-          match strip_qualifiers(lhs_ty) {
+          match strip_qual_attrs(lhs_ty) {
             CType::Pointer(pointee) =>
-              match strip_qualifiers(rhs_ty) {
+              match strip_qual_attrs(rhs_ty) {
                 CType::Pointer(other) => {
                   if !pointer_compatible(pointee, other) {
                     add_sem_error(ctx, loc, "pointer comparison type mismatch")
@@ -2710,7 +2857,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
               }
             _ => ()
           }
-          match strip_qualifiers(rhs_ty) {
+          match strip_qual_attrs(rhs_ty) {
             CType::Pointer(_) =>
               if is_int_like(lhs_ty) && is_null_pointer_expr(ctx, left) {
                 return default_int_type()
@@ -2760,7 +2907,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
       check_cond_expr(ctx, cond)
       let then_ty = type_of_expr(ctx, then_expr)
       let else_ty = type_of_expr(ctx, else_expr)
-      match (strip_qualifiers(then_ty), strip_qualifiers(else_ty)) {
+      match (strip_qual_attrs(then_ty), strip_qual_attrs(else_ty)) {
         (CType::Pointer(a), CType::Pointer(b)) => {
           if !pointer_compatible(a, b) {
             add_sem_error(ctx, loc, "conditional operator type mismatch")
@@ -2810,11 +2957,11 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
       }
     Expr::Call(callee~, args~, loc~) => {
       let callee_ty = type_of_expr(ctx, callee)
-      let fn_ty = match strip_qualifiers(callee_ty) {
-        CType::Function(..) => Some(strip_qualifiers(callee_ty))
+      let fn_ty = match strip_qual_attrs(callee_ty) {
+        CType::Function(..) => Some(strip_qual_attrs(callee_ty))
         CType::Pointer(inner) =>
-          match strip_qualifiers(inner) {
-            CType::Function(..) => Some(strip_qualifiers(inner))
+          match strip_qual_attrs(inner) {
+            CType::Function(..) => Some(strip_qual_attrs(inner))
             _ => None
           }
         _ => None
@@ -2864,7 +3011,7 @@ fn type_of_compound_assign(
     None => return default_int_type()
     Some(ty) => ty
   }
-  match strip_qualifiers(lhs_ty) {
+  match strip_qual_attrs(lhs_ty) {
     CType::Array(_) | CType::Function(..) => {
       add_sem_error(ctx, loc, "assignment to non-modifiable lvalue")
       return default_int_type()
@@ -2874,7 +3021,7 @@ fn type_of_compound_assign(
   let rhs_ty = type_of_expr(ctx, right)
   let result_ty = match op {
     BinaryOp::AddAssign =>
-      match strip_qualifiers(lhs_ty) {
+      match strip_qual_attrs(lhs_ty) {
         CType::Pointer(pointee) =>
           if is_int_like(rhs_ty) {
             CType::Pointer(pointee)
@@ -2891,7 +3038,7 @@ fn type_of_compound_assign(
           }
       }
     BinaryOp::SubAssign =>
-      match strip_qualifiers(lhs_ty) {
+      match strip_qual_attrs(lhs_ty) {
         CType::Pointer(pointee) =>
           if is_int_like(rhs_ty) {
             CType::Pointer(pointee)
@@ -3029,6 +3176,21 @@ fn merge_global_decl_type(existing : CType, incoming : CType) -> CType {
       CType::Qualified(qual~, base=merged)
     }
     (
+      CType::Attributed(attrs=attrs_a, base=base_a),
+      CType::Attributed(attrs=attrs_b, base=base_b),
+    ) => {
+      let merged_base = merge_global_decl_type(base_a, base_b)
+      CType::Attributed(attrs=merge_attrs(attrs_a, attrs_b), base=merged_base)
+    }
+    (CType::Attributed(attrs=attrs_a, base=base_a), _) => {
+      let merged = merge_global_decl_type(base_a, incoming)
+      CType::Attributed(attrs=attrs_a, base=merged)
+    }
+    (_, CType::Attributed(attrs=attrs_b, base=base_b)) => {
+      let merged = merge_global_decl_type(existing, base_b)
+      CType::Attributed(attrs=attrs_b, base=merged)
+    }
+    (
       CType::Array(elem=elem_a, size=size_a),
       CType::Array(elem=elem_b, size=size_b),
     ) => {
@@ -3137,6 +3299,7 @@ fn type_to_string(ty : CType) -> String {
   match ty {
     CType::Qualified(qual~, base~) =>
       qual_to_string(qual) + type_to_string(base)
+    CType::Attributed(base~, ..) => type_to_string(base)
     CType::Void => "void"
     CType::Bool => "_Bool"
     CType::Int(kind~, unsigned~) => {

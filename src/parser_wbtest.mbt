@@ -16,6 +16,26 @@ fn check_text(text : String) -> (TranslationUnit, DiagBag) {
 }
 
 ///|
+fn struct_size_align_from_text(
+  text : String,
+  name : String,
+) -> (Int, Int) raise {
+  let (unit, bag) = parse_text(text)
+  assert_true(!has_errors(bag))
+  let sem_bag = new_diag_bag()
+  let ctx = new_sem_context(sem_bag)
+  for decl in unit.decls {
+    check_decl(ctx, decl)
+  }
+  assert_true(!has_errors(sem_bag))
+  let ty = CType::Struct(name~, fields=None, attrs=empty_attrs())
+  match type_size_align(ctx, ty, dummy_loc(0)) {
+    Some((size, align)) => (size, align)
+    None => fail("expected struct size")
+  }
+}
+
+///|
 test "parse function with return" {
   let (unit, bag) = parse_text("int main(){return 1;}")
   assert_true(!has_errors(bag))
@@ -440,6 +460,51 @@ test "sem accepts __attribute__ on declarations" {
     "int * __attribute__((unused)) p; struct __attribute__((packed)) S { char c; int x; }; int main(){return 0;}",
   )
   assert_true(!has_errors(bag))
+}
+
+///|
+test "attribute packed affects struct size" {
+  let (size, align) = struct_size_align_from_text(
+    "struct __attribute__((packed)) S { char c; int x; };", "S",
+  )
+  assert_eq(size, 5)
+  assert_eq(align, 1)
+}
+
+///|
+test "attribute aligned affects struct size" {
+  let (size, align) = struct_size_align_from_text(
+    "struct __attribute__((aligned(8))) S { char c; };", "S",
+  )
+  assert_eq(size, 8)
+  assert_eq(align, 8)
+}
+
+///|
+test "typedef aligned affects field size" {
+  let (size, align) = struct_size_align_from_text(
+    "typedef int __attribute__((aligned(8))) T; struct S { T x; };", "S",
+  )
+  assert_eq(size, 8)
+  assert_eq(align, 8)
+}
+
+///|
+test "field aligned affects struct size" {
+  let (size, align) = struct_size_align_from_text(
+    "struct S { char c; int x __attribute__((aligned(8))); };", "S",
+  )
+  assert_eq(size, 16)
+  assert_eq(align, 8)
+}
+
+///|
+test "field packed affects struct size" {
+  let (size, align) = struct_size_align_from_text(
+    "struct S { char c; int x __attribute__((packed)); };", "S",
+  )
+  assert_eq(size, 5)
+  assert_eq(align, 1)
 }
 
 ///|
