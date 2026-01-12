@@ -149,6 +149,18 @@ test "sem rejects static function at block scope" {
 }
 
 ///|
+test "sem rejects non-constant case label" {
+  let (_, bag) = check_text("int main(){int x=1; switch(x){case x: return 0;}}")
+  assert_true(has_errors(bag))
+}
+
+///|
+test "sem rejects non-integer switch condition" {
+  let (_, bag) = check_text("int main(){switch(1.0){case 1: return 0;}}")
+  assert_true(has_errors(bag))
+}
+
+///|
 test "sem accepts struct access" {
   let (_, bag) = check_text(
     "struct S { int x; int y; }; int main(){struct S s; s.x = 1; return s.y;}",

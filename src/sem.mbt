@@ -1742,18 +1742,30 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
       with_loop(ctx, () => check_stmt(ctx, body, return_type))
       pop_scope(ctx)
     }
-    Stmt::Switch(cond~, body~, ..) => {
-      check_cond_expr(ctx, cond)
+    Stmt::Switch(cond~, body~, loc~) => {
+      let cond_ty = type_of_expr(ctx, cond)
+      if !is_int_like(cond_ty) {
+        add_sem_error(ctx, loc, "switch expression must have integer type")
+      }
       with_switch(ctx, () => check_stmt(ctx, body, return_type))
     }
     Stmt::Case(expr~, end_expr~, body~, ..) => {
       if ctx.switch_depth == 0 {
         add_sem_error(ctx, expr_loc(expr), "case outside of switch")
       }
-      check_cond_expr(ctx, expr)
+      if const_int_from_expr(ctx, expr, expr_loc(expr)) is None {
+        add_sem_error(ctx, expr_loc(expr), "case label is not constant")
+      }
       match end_expr {
         None => ()
-        Some(end_value) => check_cond_expr(ctx, end_value)
+        Some(end_value) =>
+          if const_int_from_expr(ctx, end_value, expr_loc(end_value)) is None {
+            add_sem_error(
+              ctx,
+              expr_loc(end_value),
+              "case label is not constant",
+            )
+          }
       }
       check_stmt(ctx, body, return_type)
     }
