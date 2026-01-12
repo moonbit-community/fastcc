@@ -474,7 +474,8 @@ fn struct_size_align(
   let mut bit_unit_bits = 0
   let mut bit_offset = 0
   let mut bit_unit_size = 0
-  for field in fields {
+  for i = 0; i < fields.length(); i = i + 1 {
+    let field = fields[i]
     match field.bit_width {
       Some(expr) => {
         let width = match const_int_from_expr(ctx, expr, field.loc) {
@@ -518,10 +519,27 @@ fn struct_size_align(
           bit_unit_size = 0
           bit_offset = 0
         }
-        let (field_size, field_align) = match
-          type_size_align(ctx, field.ty, loc) {
-          None => (0, 1)
-          Some(v) => v
+        let (field_size, field_align) = match strip_qualifiers(field.ty) {
+          CType::Array(elem~, size=None) => {
+            if i != fields.length() - 1 {
+              add_sem_error(
+                ctx,
+                field.loc,
+                "flexible array member '\{field.name}' not at the end of struct",
+              )
+            }
+            let (_elem_size, elem_align) = match
+              type_size_align(ctx, elem, field.loc) {
+              None => (0, 1)
+              Some(v) => v
+            }
+            (0, elem_align)
+          }
+          _ =>
+            match type_size_align(ctx, field.ty, loc) {
+              None => (0, 1)
+              Some(v) => v
+            }
         }
         size = align_to(size, field_align)
         size = size + field_size
@@ -659,24 +677,42 @@ fn register_struct_def(
     None => []
     Some(val) => val
   }
+  let validate_fields = fn() -> Unit {
+    if incoming.length() == 0 {
+      return
+    }
+    if is_union {
+      union_size_align(ctx, incoming, loc) |> ignore
+    } else {
+      struct_size_align(ctx, incoming, loc) |> ignore
+    }
+  }
   if is_union {
     match ctx.union_defs.get(name) {
-      None => ctx.union_defs.set(name, incoming)
+      None => {
+        ctx.union_defs.set(name, incoming)
+        validate_fields()
+      }
       Some(existing) =>
         if existing.length() > 0 && incoming.length() > 0 {
           add_sem_error(ctx, loc, "redefinition of '\{name}'")
         } else if existing.length() == 0 && incoming.length() > 0 {
           ctx.union_defs.set(name, incoming)
+          validate_fields()
         }
     }
   } else {
     match ctx.struct_defs.get(name) {
-      None => ctx.struct_defs.set(name, incoming)
+      None => {
+        ctx.struct_defs.set(name, incoming)
+        validate_fields()
+      }
       Some(existing) =>
         if existing.length() > 0 && incoming.length() > 0 {
           add_sem_error(ctx, loc, "redefinition of '\{name}'")
         } else if existing.length() == 0 && incoming.length() > 0 {
           ctx.struct_defs.set(name, incoming)
+          validate_fields()
         }
     }
   }

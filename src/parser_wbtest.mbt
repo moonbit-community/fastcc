@@ -255,6 +255,24 @@ test "sem rejects local incomplete array" {
 }
 
 ///|
+test "sem accepts flexible array member last" {
+  let (_, bag) = check_text("struct S { int n; int a[]; };")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem rejects flexible array member not last" {
+  let (_, bag) = check_text("struct S { int a[]; int n; };")
+  assert_true(has_errors(bag))
+}
+
+///|
+test "sem rejects flexible array member in union" {
+  let (_, bag) = check_text("union U { int a[]; };")
+  assert_true(has_errors(bag))
+}
+
+///|
 test "sem accepts struct access" {
   let (_, bag) = check_text(
     "struct S { int x; int y; }; int main(){struct S s; s.x = 1; return s.y;}",
