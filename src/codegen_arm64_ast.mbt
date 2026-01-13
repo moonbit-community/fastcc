@@ -564,6 +564,73 @@ fn gen_call_direct(
   loc : SrcLoc,
   bag : DiagBag,
 ) -> Unit {
+  let sig = alloc.sem.functions.get(name)
+  let (fixed_count, is_varargs) = match sig {
+    None => (0, false)
+    Some(s) => (s.params.length(), s.varargs)
+  }
+  let is_varargs_call = is_varargs && args.length() > fixed_count
+
+  if is_varargs_call {
+    if fixed_count > 8 {
+      add_error(bag, loc, "codegen: too many fixed args for varargs call")
+      return
+    }
+
+    let vararg_count = args.length() - fixed_count
+    let raw_bytes = vararg_count * 8
+    let stack_bytes = align_up(raw_bytes, 16)
+    if stack_bytes > 0 {
+      let off = (0 : UInt64) - stack_bytes.to_uint64()
+      arm64_spoff(emitter, (31 : UInt), off)
+    }
+
+    let mut j = 0
+    while j < vararg_count {
+      let arg = args[fixed_count + j]
+      let aty = type_of_expr(alloc.sem, arg)
+      if type_is_pointer_like(aty) {
+        gen_expr_ptr(emitter, alloc, syms, pool, cstrings, arg, 8, bag)
+      } else {
+        gen_expr_int32(emitter, alloc, syms, pool, cstrings, arg, 8, bag)
+        let signed = match strip_qualifiers(aty) {
+          CType::Int(unsigned~, ..) => !unsigned
+          _ => false
+        }
+        if signed {
+          emit_sxtw(emitter, 8, 8)
+        }
+      }
+      arm64_strx(
+        emitter,
+        3,
+        (8 : UInt),
+        (31 : UInt),
+        (j * 8).to_uint64(),
+      )
+      j = j + 1
+    }
+
+    let mut i = 0
+    while i < fixed_count {
+      let aty = type_of_expr(alloc.sem, args[i])
+      if type_is_pointer_like(aty) {
+        gen_expr_ptr(emitter, alloc, syms, pool, cstrings, args[i], i, bag)
+      } else {
+        gen_expr_int32(emitter, alloc, syms, pool, cstrings, args[i], i, bag)
+      }
+      i = i + 1
+    }
+
+    let sym = sym_for_name(syms, link_name(name))
+    emit_call(emitter, sym)
+
+    if stack_bytes > 0 {
+      arm64_spoff(emitter, (31 : UInt), stack_bytes.to_uint64())
+    }
+    return
+  }
+
   let mut i = 0
   while i < args.length() {
     if i >= 8 {
@@ -1697,7 +1764,9 @@ fn compute_frame_size(sem : SemContext, func : FuncDef) -> Int {
     alloc_local(alloc, p.name, p.ty, p.loc) |> ignore
   }
   layout_stmt(alloc, func.body)
-  align_up(alloc.used_bytes, 16)
+  let size = align_up(alloc.used_bytes, 16)
+  cg_pop_scope(alloc)
+  size
 }
 
 ///|
