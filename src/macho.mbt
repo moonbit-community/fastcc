@@ -257,6 +257,7 @@ fn macho_reloc_type(kind : Int) -> (Int, Bool) {
   match kind {
     R_AARCH64_ADR_GOT_PAGE => (ARM64_RELOC_GOT_LOAD_PAGE21, true)
     R_AARCH64_LD64_GOT_LO12_NC => (ARM64_RELOC_GOT_LOAD_PAGEOFF12, false)
+    R_AARCH64_CALL26 => (ARM64_RELOC_BRANCH26, true)
     _ => (ARM64_RELOC_UNSIGNED, false)
   }
 }

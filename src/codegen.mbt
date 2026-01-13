@@ -39,6 +39,31 @@ fn simple_return_const(func : FuncDef) -> Int64? {
 }
 
 ///|
+fn simple_return_call(func : FuncDef) -> String? {
+  match func.body {
+    Stmt::Compound(stmts~, ..) =>
+      if stmts.length() == 1 {
+        match stmts[0] {
+          Stmt::Return(value=Some(expr), ..) =>
+            match expr {
+              Expr::Call(callee=Expr::Ident(name~, ..), args~, ..) =>
+                if args.length() == 0 {
+                  Some(name)
+                } else {
+                  None
+                }
+              _ => None
+            }
+          _ => None
+        }
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
 fn gen_arm64_prologue(emitter : Arm64Emitter) -> Unit {
   emit32(emitter, (0xa9bf7bfd : UInt))
   emit32(emitter, (0x910003fd : UInt))
@@ -51,11 +76,24 @@ fn gen_arm64_epilogue(emitter : Arm64Emitter) -> Unit {
 }
 
 ///|
+fn gen_arm64_call(emitter : Arm64Emitter, sym : Sym) -> Unit {
+  let ind = emitter_pc(emitter)
+  greloca(emitter, sym, ind, R_AARCH64_CALL26, 0)
+  emit32(emitter, (0x94000000 : UInt))
+}
+
+///|
 fn codegen_arm64_object_bytes(unit : TranslationUnit, bag : DiagBag) -> Bytes? {
   let mut main_def : FuncDef? = None
+  let func_defs : Map[String, FuncDef] = {}
   for decl in unit.decls {
     match decl {
-      Decl::FuncDef(func) => if func.name == "main" { main_def = Some(func) }
+      Decl::FuncDef(func) =>
+        if func.name == "main" {
+          main_def = Some(func)
+        } else {
+          func_defs.set(func.name, func)
+        }
       _ => ()
     }
   }
@@ -69,16 +107,8 @@ fn codegen_arm64_object_bytes(unit : TranslationUnit, bag : DiagBag) -> Bytes? {
       None
     }
     Some(func) =>
-      match simple_return_const(func) {
-        None => {
-          add_error(
-            bag,
-            func.loc,
-            "codegen: only supports 'int main(){return <const>;}' for now",
-          )
-          None
-        }
-        Some(value) => {
+      match (simple_return_const(func), simple_return_call(func)) {
+        (Some(value), _) => {
           let emitter = new_arm64_emitter()
           gen_arm64_prologue(emitter)
           arm64_movimm(emitter, 0, value.to_uint64())
@@ -94,6 +124,58 @@ fn codegen_arm64_object_bytes(unit : TranslationUnit, bag : DiagBag) -> Bytes? {
             },
           ]
           Some(encode_macho_object([text], symbols))
+        }
+        (None, Some(name)) => {
+          let emitter = new_arm64_emitter()
+          gen_arm64_prologue(emitter)
+          gen_arm64_call(emitter, { id: 2 })
+          gen_arm64_epilogue(emitter)
+          let mut callee_offset : Int? = None
+          match func_defs.get(name) {
+            None => ()
+            Some(def) =>
+              match simple_return_const(def) {
+                None => ()
+                Some(value) => {
+                  callee_offset = Some(emitter_pc(emitter))
+                  gen_arm64_prologue(emitter)
+                  arm64_movimm(emitter, 0, value.to_uint64())
+                  gen_arm64_epilogue(emitter)
+                }
+              }
+          }
+          let text = section_from_emitter(".text", emitter)
+          let symbols = [
+            {
+              id: 1,
+              name: "_main",
+              section: Some(".text"),
+              value: 0,
+              is_external: true,
+            },
+            {
+              id: 2,
+              name: "_\{name}",
+              section: match callee_offset {
+                None => None
+                Some(_) => Some(".text")
+              },
+              value: match callee_offset {
+                None => 0
+                Some(v) => v
+              },
+              is_external: true,
+            },
+          ]
+          Some(encode_macho_object([text], symbols))
+        }
+        _ => {
+          add_error(
+            bag,
+            func.loc,
+            "codegen: only supports 'int main(){return <const>;}' or 'int main(){return f();}' for now",
+          )
+          None
         }
       }
   }

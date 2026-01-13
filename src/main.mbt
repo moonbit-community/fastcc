@@ -76,27 +76,29 @@ fn main {
       for p in include_paths {
         add_include_path(pp, p)
       }
-      let unit = parse_translation_unit(pp)
-      if !has_errors(bag) {
-        check_translation_unit(unit, bag)
-      }
-      if compile_only && !has_errors(bag) {
-        match codegen_arm64_object_bytes(unit, bag) {
-          None => ()
-          Some(bytes) => {
-            let out_path = match output {
-              None => "a.o"
-              Some(v) => v
-            }
-            @fs.write_bytes_to_file(out_path, bytes) catch {
-              err => add_error(bag, dummy_loc(0), err.to_string())
-            }
-          }
-        }
-      } else if !compile_only && !has_errors(bag) {
+      if !compile_only {
         let toks = dump_tokens(pp, 32)
         for t in toks {
           println(t.lexeme)
+        }
+      } else {
+        let unit = parse_translation_unit(pp)
+        if !has_errors(bag) {
+          check_translation_unit(unit, bag)
+        }
+        if !has_errors(bag) {
+          match codegen_arm64_object_bytes(unit, bag) {
+            None => ()
+            Some(bytes) => {
+              let out_path = match output {
+                None => "a.o"
+                Some(v) => v
+              }
+              @fs.write_bytes_to_file(out_path, bytes) catch {
+                err => add_error(bag, dummy_loc(0), err.to_string())
+              }
+            }
+          }
         }
       }
       if has_errors(bag) {
