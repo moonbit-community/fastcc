@@ -420,6 +420,7 @@ fn gen_expr_int32(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
+  cstrings : Map[String, Sym],
   expr : Expr,
   dst : Int,
   bag : DiagBag,
@@ -451,9 +452,10 @@ fn gen_expr_int32(
       }
     Expr::Unary(op~, expr=inner, loc~) => {
       match op {
-        UnaryOp::Plus => gen_expr_int32(emitter, alloc, syms, pool, inner, dst, bag)
+        UnaryOp::Plus =>
+          gen_expr_int32(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
         UnaryOp::Minus => {
-          gen_expr_int32(emitter, alloc, syms, pool, inner, dst, bag)
+          gen_expr_int32(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
           emit32(
             emitter,
             (0x4b0003e0 : Int)
@@ -463,7 +465,7 @@ fn gen_expr_int32(
           )
         }
         UnaryOp::BitNot => {
-          gen_expr_int32(emitter, alloc, syms, pool, inner, dst, bag)
+          gen_expr_int32(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
           emit32(
             emitter,
             (0x2a2003e0 : Int)
@@ -473,7 +475,7 @@ fn gen_expr_int32(
           )
         }
         UnaryOp::Not => {
-          gen_expr_int32(emitter, alloc, syms, pool, inner, dst, bag)
+          gen_expr_int32(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
           emit_cmp(emitter, false, dst, 31)
           emit32(
             emitter,
@@ -486,13 +488,13 @@ fn gen_expr_int32(
     Expr::Binary(op~, left~, right~, loc~) =>
       match op {
         BinaryOp::Comma => {
-          gen_expr_int32(emitter, alloc, syms, pool, left, dst, bag)
-          gen_expr_int32(emitter, alloc, syms, pool, right, dst, bag)
+          gen_expr_int32(emitter, alloc, syms, pool, cstrings, left, dst, bag)
+          gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, dst, bag)
         }
         BinaryOp::Assign =>
           match left {
             Expr::Ident(name~, ..) => {
-              gen_expr_int32(emitter, alloc, syms, pool, right, dst, bag)
+              gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, dst, bag)
               match lookup_local(alloc, name) {
                 Some(slot) =>
                   if type_is_supported_int32(slot.ty) {
@@ -517,7 +519,16 @@ fn gen_expr_int32(
         BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt |
         BinaryOp::Ge | BinaryOp::Shl | BinaryOp::Shr => {
           let left_reg = dst
-          gen_expr_int32(emitter, alloc, syms, pool, left, left_reg, bag)
+          gen_expr_int32(
+            emitter,
+            alloc,
+            syms,
+            pool,
+            cstrings,
+            left,
+            left_reg,
+            bag,
+          )
           let tmp = take_reg(pool) catch {
             err => {
               add_error(bag, loc, err.to_string())
@@ -525,7 +536,7 @@ fn gen_expr_int32(
             }
           }
           emit_mov(emitter, false, tmp, left_reg)
-          gen_expr_int32(emitter, alloc, syms, pool, right, dst, bag)
+          gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, dst, bag)
           match op {
             BinaryOp::Add =>
               emit32(
@@ -688,7 +699,7 @@ fn gen_expr_int32(
           add_error(bag, loc, "codegen: only supports up to 8 int args for now")
           return
         }
-        gen_expr_int32(emitter, alloc, syms, pool, args[i], i, bag)
+        gen_expr_int32(emitter, alloc, syms, pool, cstrings, args[i], i, bag)
         i = i + 1
       }
       let sym = sym_for_name(syms, link_name(name))
@@ -709,9 +720,31 @@ fn gen_expr_int32(
         Some((size, _)) => arm64_movimm(emitter, dst.to_uint(), size.to_uint64())
       }
     Expr::Cast(expr=inner, ..) =>
-      gen_expr_int32(emitter, alloc, syms, pool, inner, dst, bag)
+      gen_expr_int32(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
     Expr::Conditional(loc=cond_loc, ..) =>
       add_error(bag, cond_loc, "codegen: conditional operator not supported yet")
+    Expr::StringLit(value=value, loc=loc, ..) =>
+      match cstrings.get(value) {
+        None =>
+          add_error(bag, loc, "codegen: missing string literal in cstring pool")
+        Some(sym) => {
+          let adrp_off = emitter_pc(emitter)
+          greloca(emitter, sym, adrp_off, R_AARCH64_ADR_PREL_PG_HI21, 0)
+          emit32(
+            emitter,
+            (0x90000000 : UInt64).lor(dst.to_uint64()).to_uint(),
+          )
+          let add_off = emitter_pc(emitter)
+          greloca(emitter, sym, add_off, R_AARCH64_ADD_ABS_LO12_NC, 0)
+          emit32(
+            emitter,
+            (0x91000000 : UInt64)
+            .lor(dst.to_uint64())
+            .lor(dst.to_uint64() << 5)
+            .to_uint(),
+          )
+        }
+      }
     _ =>
       add_error(bag, expr_loc(expr), "codegen: unsupported expression")
   }
@@ -789,6 +822,7 @@ fn gen_stmt(
   syms : SymTable,
   pool : RegPool,
   loops : Array[LoopChains],
+  cstrings : Map[String, Sym],
   stmt : Stmt,
   bag : DiagBag,
   return_chain : Int,
@@ -798,7 +832,7 @@ fn gen_stmt(
       cg_push_scope(alloc)
       let mut chain = return_chain
       for s in stmts {
-        chain = gen_stmt(emitter, alloc, syms, pool, loops, s, bag, chain)
+        chain = gen_stmt(emitter, alloc, syms, pool, loops, cstrings, s, bag, chain)
       }
       cg_pop_scope(alloc)
       chain
@@ -814,7 +848,7 @@ fn gen_stmt(
                 match init {
                   Initializer::Expr(expr~, ..) => {
                     if type_is_supported_int32(slot.ty) {
-                      gen_expr_int32(emitter, alloc, syms, pool, expr, 0, bag)
+                      gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
                       emit_store_local_int32(emitter, 0, slot.offset)
                     } else {
                       add_error(
@@ -837,7 +871,7 @@ fn gen_stmt(
       return_chain
     }
     Stmt::If(cond~, then_branch~, else_branch~, loc~) => {
-      gen_expr_int32(emitter, alloc, syms, pool, cond, 0, bag)
+      gen_expr_int32(emitter, alloc, syms, pool, cstrings, cond, 0, bag)
       emit_cmp(emitter, false, 0, 31)
       let br_false = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
       let chain1 = gen_stmt(
@@ -846,6 +880,7 @@ fn gen_stmt(
         syms,
         pool,
         loops,
+        cstrings,
         then_branch,
         bag,
         return_chain,
@@ -870,6 +905,7 @@ fn gen_stmt(
             syms,
             pool,
             loops,
+            cstrings,
             else_stmt,
             bag,
             chain1,
@@ -884,7 +920,7 @@ fn gen_stmt(
     }
     Stmt::While(cond~, body~, loc~) => {
       let start_pc = emitter_pc(emitter)
-      gen_expr_int32(emitter, alloc, syms, pool, cond, 0, bag)
+      gen_expr_int32(emitter, alloc, syms, pool, cstrings, cond, 0, bag)
       emit_cmp(emitter, false, 0, 31)
       let br_end = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
 
@@ -895,6 +931,7 @@ fn gen_stmt(
         syms,
         pool,
         loops,
+        cstrings,
         body,
         bag,
         return_chain,
@@ -925,6 +962,7 @@ fn gen_stmt(
         syms,
         pool,
         loops,
+        cstrings,
         body,
         bag,
         return_chain,
@@ -935,7 +973,7 @@ fn gen_stmt(
         err => add_error(bag, loc, err.to_string())
       }
 
-      gen_expr_int32(emitter, alloc, syms, pool, cond, 0, bag)
+      gen_expr_int32(emitter, alloc, syms, pool, cstrings, cond, 0, bag)
       emit_cmp(emitter, false, 0, 31)
       let br_back = emit_b_cond_placeholder(emitter, ARM64_COND_NE)
       patch_b_cond(emitter, br_back, start_pc, ARM64_COND_NE) catch {
@@ -952,13 +990,24 @@ fn gen_stmt(
       let mut chain0 = return_chain
       match init {
         None => ()
-        Some(s) => chain0 = gen_stmt(emitter, alloc, syms, pool, loops, s, bag, chain0)
+        Some(s) =>
+          chain0 = gen_stmt(
+            emitter,
+            alloc,
+            syms,
+            pool,
+            loops,
+            cstrings,
+            s,
+            bag,
+            chain0,
+          )
       }
       let cond_pc = emitter_pc(emitter)
       let br_end = match cond {
         None => None
         Some(e) => {
-          gen_expr_int32(emitter, alloc, syms, pool, e, 0, bag)
+          gen_expr_int32(emitter, alloc, syms, pool, cstrings, e, 0, bag)
           emit_cmp(emitter, false, 0, 31)
           Some(emit_b_cond_placeholder(emitter, ARM64_COND_EQ))
         }
@@ -971,6 +1020,7 @@ fn gen_stmt(
         syms,
         pool,
         loops,
+        cstrings,
         body,
         bag,
         chain0,
@@ -983,7 +1033,7 @@ fn gen_stmt(
       }
       match step {
         None => ()
-        Some(e) => gen_expr_int32(emitter, alloc, syms, pool, e, 0, bag)
+        Some(e) => gen_expr_int32(emitter, alloc, syms, pool, cstrings, e, 0, bag)
       }
       gjmp_addr(emitter, cond_pc) catch {
         err => add_error(bag, loc, err.to_string())
@@ -1011,13 +1061,13 @@ fn gen_stmt(
       return_chain
     }
     Stmt::ExprStmt(expr~, ..) => {
-      gen_expr_int32(emitter, alloc, syms, pool, expr, 0, bag)
+      gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
       return_chain
     }
     Stmt::Return(value~, loc~) => {
       match value {
         None => arm64_movimm(emitter, (0 : UInt), 0)
-        Some(expr) => gen_expr_int32(emitter, alloc, syms, pool, expr, 0, bag)
+        Some(expr) => gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
       }
       gjmp(emitter, return_chain)
     }
@@ -1065,6 +1115,7 @@ fn gen_func_def(
   sem : SemContext,
   syms : SymTable,
   func_offsets : Map[String, Int],
+  cstrings : Map[String, Sym],
   func : FuncDef,
   bag : DiagBag,
 ) -> Unit {
@@ -1104,6 +1155,7 @@ fn gen_func_def(
     syms,
     pool,
     loops,
+    cstrings,
     func.body,
     bag,
     0,
@@ -1114,6 +1166,189 @@ fn gen_func_def(
     err => add_error(bag, func.loc, err.to_string())
   }
   emit_epilogue(emitter, frame_size)
+}
+
+///|
+fn cstring_record(
+  order : Array[String],
+  seen : Map[String, Bool],
+  value : String,
+) -> Unit {
+  if !seen.contains(value) {
+    seen.set(value, true)
+    order.push(value)
+  }
+}
+
+///|
+fn collect_cstring_expr(order : Array[String], seen : Map[String, Bool], expr : Expr) -> Unit {
+  match expr {
+    Expr::StringLit(value~, ..) => cstring_record(order, seen, value)
+    Expr::Unary(expr=inner, ..) => collect_cstring_expr(order, seen, inner)
+    Expr::Cast(expr=inner, ..) => collect_cstring_expr(order, seen, inner)
+    Expr::SizeofExpr(expr=inner, ..) => collect_cstring_expr(order, seen, inner)
+    Expr::AlignofExpr(expr=inner, ..) => collect_cstring_expr(order, seen, inner)
+    Expr::Binary(left~, right~, ..) => {
+      collect_cstring_expr(order, seen, left)
+      collect_cstring_expr(order, seen, right)
+    }
+    Expr::Conditional(cond~, then_expr~, else_expr~, ..) => {
+      collect_cstring_expr(order, seen, cond)
+      collect_cstring_expr(order, seen, then_expr)
+      collect_cstring_expr(order, seen, else_expr)
+    }
+    Expr::Call(callee~, args~, ..) => {
+      collect_cstring_expr(order, seen, callee)
+      for a in args {
+        collect_cstring_expr(order, seen, a)
+      }
+    }
+    Expr::Index(base~, index~, ..) => {
+      collect_cstring_expr(order, seen, base)
+      collect_cstring_expr(order, seen, index)
+    }
+    Expr::Member(base~, ..) => collect_cstring_expr(order, seen, base)
+    Expr::BuiltinVaArg(list~, ..) => collect_cstring_expr(order, seen, list)
+    _ => ()
+  }
+}
+
+///|
+fn collect_cstring_initializer(
+  order : Array[String],
+  seen : Map[String, Bool],
+  init : Initializer,
+) -> Unit {
+  match init {
+    Initializer::Expr(expr~, ..) => collect_cstring_expr(order, seen, expr)
+    Initializer::List(items~, ..) =>
+      for item in items {
+        collect_cstring_initializer(order, seen, item.value)
+      }
+  }
+}
+
+///|
+fn collect_cstring_stmt(order : Array[String], seen : Map[String, Bool], stmt : Stmt) -> Unit {
+  match stmt {
+    Stmt::Compound(stmts~, ..) =>
+      for s in stmts {
+        collect_cstring_stmt(order, seen, s)
+      }
+    Stmt::If(cond~, then_branch~, else_branch~, ..) => {
+      collect_cstring_expr(order, seen, cond)
+      collect_cstring_stmt(order, seen, then_branch)
+      match else_branch {
+        None => ()
+        Some(s) => collect_cstring_stmt(order, seen, s)
+      }
+    }
+    Stmt::While(cond~, body~, ..) => {
+      collect_cstring_expr(order, seen, cond)
+      collect_cstring_stmt(order, seen, body)
+    }
+    Stmt::DoWhile(cond~, body~, ..) => {
+      collect_cstring_stmt(order, seen, body)
+      collect_cstring_expr(order, seen, cond)
+    }
+    Stmt::For(init~, cond~, step~, body~, ..) => {
+      match init {
+        None => ()
+        Some(s) => collect_cstring_stmt(order, seen, s)
+      }
+      match cond {
+        None => ()
+        Some(e) => collect_cstring_expr(order, seen, e)
+      }
+      match step {
+        None => ()
+        Some(e) => collect_cstring_expr(order, seen, e)
+      }
+      collect_cstring_stmt(order, seen, body)
+    }
+    Stmt::Return(value~, ..) =>
+      match value {
+        None => ()
+        Some(e) => collect_cstring_expr(order, seen, e)
+      }
+    Stmt::ExprStmt(expr~, ..) => collect_cstring_expr(order, seen, expr)
+    Stmt::DeclStmt(decls~, ..) =>
+      for d in decls {
+        match d.init {
+          None => ()
+          Some(init) => collect_cstring_initializer(order, seen, init)
+        }
+      }
+    Stmt::Switch(cond~, body~, ..) => {
+      collect_cstring_expr(order, seen, cond)
+      collect_cstring_stmt(order, seen, body)
+    }
+    Stmt::Case(expr~, end_expr~, body~, ..) => {
+      collect_cstring_expr(order, seen, expr)
+      match end_expr {
+        None => ()
+        Some(e) => collect_cstring_expr(order, seen, e)
+      }
+      collect_cstring_stmt(order, seen, body)
+    }
+    Stmt::Default(body~, ..) => collect_cstring_stmt(order, seen, body)
+    Stmt::Label(body=body, ..) => collect_cstring_stmt(order, seen, body)
+    Stmt::Asm(_) |
+    Stmt::Goto(name=_, loc=_) |
+    Stmt::Break(_) |
+    Stmt::Continue(_) |
+    Stmt::TagDef(ty=_, loc=_) |
+    Stmt::StaticAssert(_) |
+    Stmt::Empty(_) => ()
+  }
+}
+
+///|
+fn build_cstring_pool(
+  syms : SymTable,
+  order : Array[String],
+) -> (Map[String, Sym], Map[String, Int], Section?) {
+  if order.length() == 0 {
+    return ({}, {}, None)
+  }
+  let cstring_syms : Map[String, Sym] = {}
+  let cstring_offsets : Map[String, Int] = {}
+  let buf = @buffer.new()
+  let mut i = 0
+  while i < order.length() {
+    let value = order[i]
+    let sym_name = "_L_.str.\{i}"
+    let sym = sym_for_name(syms, sym_name)
+    cstring_syms.set(value, sym)
+    let off = buf.length()
+    cstring_offsets.set(value, off)
+    buf.write_bytes(@encoding/utf8.encode(value))
+    buf.write_byte(0)
+    while (buf.length() & 3) != 0 {
+      buf.write_byte(0)
+    }
+    i = i + 1
+  }
+  let bytes = buf.to_bytes()
+  let size_bytes = bytes.length()
+  let words : Array[UInt] = []
+  let mut pos = 0
+  while pos + 3 < size_bytes {
+    let b0 = bytes[pos].to_uint()
+    let b1 = bytes[pos + 1].to_uint() << 8
+    let b2 = bytes[pos + 2].to_uint() << 16
+    let b3 = bytes[pos + 3].to_uint() << 24
+    words.push(b0 | b1 | b2 | b3)
+    pos = pos + 4
+  }
+  let sec : Section = {
+    name: ".cstring",
+    data: words,
+    relocs: [],
+    align: 1,
+    size_bytes,
+  }
+  (cstring_syms, cstring_offsets, Some(sec))
 }
 
 ///|
@@ -1147,6 +1382,24 @@ fn codegen_arm64_object_bytes_from_ast(
   let syms = new_symtab()
   let func_offsets : Map[String, Int] = {}
 
+  let cstring_order : Array[String] = []
+  let cstring_seen : Map[String, Bool] = {}
+  for decl in unit.decls {
+    match decl {
+      Decl::FuncDef(func) => collect_cstring_stmt(cstring_order, cstring_seen, func.body)
+      Decl::Var(var_decl) =>
+        match var_decl.init {
+          None => ()
+          Some(init) => collect_cstring_initializer(cstring_order, cstring_seen, init)
+        }
+      _ => ()
+    }
+  }
+  let (cstring_syms, cstring_offsets, cstring_section) = build_cstring_pool(
+    syms,
+    cstring_order,
+  )
+
   let mut main_found = false
   for decl in unit.decls {
     match decl {
@@ -1163,13 +1416,35 @@ fn codegen_arm64_object_bytes_from_ast(
 
   for decl in unit.decls {
     match decl {
-      Decl::FuncDef(func) => if func.name == "main" { gen_func_def(emitter, sem, syms, func_offsets, func, bag) }
+      Decl::FuncDef(func) =>
+        if func.name == "main" {
+          gen_func_def(
+            emitter,
+            sem,
+            syms,
+            func_offsets,
+            cstring_syms,
+            func,
+            bag,
+          )
+        }
       _ => ()
     }
   }
   for decl in unit.decls {
     match decl {
-      Decl::FuncDef(func) => if func.name != "main" { gen_func_def(emitter, sem, syms, func_offsets, func, bag) }
+      Decl::FuncDef(func) =>
+        if func.name != "main" {
+          gen_func_def(
+            emitter,
+            sem,
+            syms,
+            func_offsets,
+            cstring_syms,
+            func,
+            bag,
+          )
+        }
       _ => ()
     }
   }
@@ -1185,6 +1460,23 @@ fn codegen_arm64_object_bytes_from_ast(
   let data_words : Array[UInt] = []
   let mut bss_size = 0
   let def_symbols : Map[String, ObjSymbol] = {}
+
+  if cstring_order.length() > 0 {
+    let mut i = 0
+    while i < cstring_order.length() {
+      let value = cstring_order[i]
+      let name = "_L_.str.\{i}"
+      let off = cstring_offsets.get(value).unwrap_or(0)
+      def_symbols.set(name, {
+        id: syms.name_to_id.get(name).unwrap_or(0),
+        name,
+        section: Some(".cstring"),
+        value: off,
+        is_external: true,
+      })
+      i = i + 1
+    }
+  }
 
   for decl in unit.decls {
     match decl {
@@ -1285,6 +1577,10 @@ fn codegen_arm64_object_bytes_from_ast(
 
   let text = section_from_emitter(".text", emitter)
   let sections : Array[Section] = [text]
+  match cstring_section {
+    None => ()
+    Some(sec) => sections.push(sec)
+  }
   if data_words.length() > 0 {
     sections.push({
       name: ".data",

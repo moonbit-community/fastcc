@@ -167,6 +167,28 @@ test "codegen emits branches for while + break/continue" {
 }
 
 ///|
+test "codegen emits .cstring and relocs for extern call with string literal" {
+  let (unit, bag) = parse_text(
+    "int puts(const char*); int main(){return puts(\"hi\");}",
+  )
+  assert_true(!has_errors(bag))
+  check_translation_unit(unit, bag)
+  assert_true(!has_errors(bag))
+  let bytes = match codegen_arm64_object_bytes(unit, bag) {
+    None => fail("expected object bytes")
+    Some(b) => b
+  }
+  assert_true(!has_errors(bag))
+  let (_, _, nreloc) = macho_text_section_offsets(bytes)
+  assert_eq(nreloc, 3)
+  let cstring_off = match macho_section_file_offset(bytes, "__TEXT", "__cstring") {
+    None => fail("expected __TEXT,__cstring section")
+    Some(v) => v
+  }
+  assert_eq(read_u32_le_at(bytes, cstring_off), (0x00006968 : UInt))
+}
+
+///|
 test "codegen emits global load relocs for return x" {
   let (unit, bag) = parse_text("int x; int main(){return x;}")
   assert_true(!has_errors(bag))

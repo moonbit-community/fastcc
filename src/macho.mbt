@@ -47,6 +47,9 @@ const S_REGULAR : UInt = 0x0
 const S_ZEROFILL : UInt = 0x1
 
 ///|
+const S_CSTRING_LITERALS : UInt = 0x2
+
+///|
 const S_ATTR_PURE_INSTRUCTIONS : UInt = 0x80000000
 
 ///|
@@ -171,6 +174,14 @@ fn macho_section_info(name : String) -> MachoSectionInfo {
         segname: "__TEXT",
         flags: S_REGULAR,
         align: 4,
+        is_zerofill: false,
+      }
+    ".cstring" =>
+      {
+        sectname: "__cstring",
+        segname: "__TEXT",
+        flags: S_CSTRING_LITERALS,
+        align: 1,
         is_zerofill: false,
       }
     ".data" =>
