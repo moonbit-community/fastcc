@@ -42,6 +42,7 @@ enum TokenKind {
   KwTypedef
   KwEnum
   KwSizeof
+  KwAlignof
   KwTypeof
   KwAttribute
   KwStaticAssert
@@ -142,6 +143,9 @@ fn keyword_or_ident(name : String) -> TokenKind {
     "typedef" => KwTypedef
     "enum" => KwEnum
     "sizeof" => KwSizeof
+    "__alignof" => KwAlignof
+    "__alignof__" => KwAlignof
+    "_Alignof" => KwAlignof
     "typeof" => KwTypeof
     "__typeof" => KwTypeof
     "__typeof__" => KwTypeof

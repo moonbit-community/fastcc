@@ -455,6 +455,22 @@ test "sem accepts typeof type" {
 }
 
 ///|
+test "sem accepts alignof in _Static_assert" {
+  let (_, bag) = check_text(
+    "_Static_assert(__alignof__(int) == 4, \"ok\"); _Static_assert(_Alignof(int) == 4, \"ok\"); int main(){return 0;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem applies aligned attribute to typedef and var" {
+  let (_, bag) = check_text(
+    "typedef int T __attribute__((aligned(8))); int x __attribute__((aligned(8))); _Static_assert(__alignof__(T) == 8, \"ok\"); _Static_assert(__alignof__(x) == 8, \"ok\"); int main(){return 0;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
 test "sem accepts _Static_assert" {
   let (_, bag) = check_text("_Static_assert(1, \"ok\"); int main(){return 0;}")
   assert_true(!has_errors(bag))

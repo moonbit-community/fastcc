@@ -843,10 +843,11 @@ fn check_decl(ctx : SemContext, decl : Decl) -> Unit {
       }
       check_func_def(ctx, func_def)
     }
-    Decl::Typedef(name~, ty~, attrs=_, loc~) => {
+    Decl::Typedef(name~, ty~, attrs~, loc~) => {
       register_type_defs(ctx, ty, loc)
       let resolved = resolve_type(ctx, ty, loc)
-      ctx.type_aliases.set(name, resolved)
+      let final_ty = apply_type_attrs(resolved, type_attrs_from(attrs))
+      ctx.type_aliases.set(name, final_ty)
     }
     Decl::TagDef(ty~, loc~) => register_type_defs(ctx, ty, loc)
     Decl::StaticAssert(static_assert) => check_static_assert(ctx, static_assert)
@@ -1425,6 +1426,20 @@ fn eval_const_expr_value(
         Some((size, _)) => (size, true)
       }
     }
+    Expr::AlignofExpr(expr~, loc~) => {
+      let ty = type_for_sizeof(ctx, expr)
+      match type_size_align(ctx, ty, loc) {
+        None => (0, false)
+        Some((_, align)) => (align, true)
+      }
+    }
+    Expr::AlignofType(ty~, loc~) => {
+      register_type_defs(ctx, ty, loc)
+      match type_size_align(ctx, ty, loc) {
+        None => (0, false)
+        Some((_, align)) => (align, true)
+      }
+    }
     _ => {
       add_sem_error(ctx, loc, "invalid constant expression")
       (0, false)
@@ -1714,7 +1729,11 @@ fn require_complete_object_type(
 fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
   register_type_defs(ctx, decl.ty, decl.loc)
   let resolved = resolve_type(ctx, decl.ty, decl.loc)
-  let mut final_ty = resolved
+  let resolved_with_attrs = apply_type_attrs(
+    resolved,
+    type_attrs_from(decl.attrs),
+  )
+  let mut final_ty = resolved_with_attrs
   match strip_qual_attrs(resolved) {
     CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) => {
       check_storage_class(
@@ -1738,21 +1757,21 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
     _ => ()
   }
   check_storage_class(ctx, decl.storage, decl.loc, is_local~, is_function=false)
-  if is_void_type(resolved) {
+  if is_void_type(resolved_with_attrs) {
     add_sem_error(ctx, decl.loc, "variable '\{decl.name}' has void type")
   }
   if is_local {
-    declare_local(ctx, decl.name, resolved, decl.loc)
+    declare_local(ctx, decl.name, resolved_with_attrs, decl.loc)
   } else {
-    declare_global(ctx, decl.name, resolved, decl.loc)
+    declare_global(ctx, decl.name, resolved_with_attrs, decl.loc)
   }
   match decl.init {
     None => ()
     Some(init) =>
-      match check_initializer(ctx, resolved, init, decl.loc) {
+      match check_initializer(ctx, resolved_with_attrs, init, decl.loc) {
         None => ()
         Some(size) => {
-          let updated = apply_inferred_array_size(resolved, size)
+          let updated = apply_inferred_array_size(resolved_with_attrs, size)
           final_ty = updated
           update_decl_type(ctx, decl.name, updated, is_local~)
         }
@@ -2809,6 +2828,17 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
       default_int_type()
     }
     Expr::SizeofType(ty~, loc~) => {
+      register_type_defs(ctx, ty, loc)
+      let resolved = resolve_type(ctx, ty, loc)
+      type_size_align(ctx, resolved, loc) |> ignore
+      default_int_type()
+    }
+    Expr::AlignofExpr(expr~, loc~) => {
+      let ty = type_for_sizeof(ctx, expr)
+      type_size_align(ctx, ty, loc) |> ignore
+      default_int_type()
+    }
+    Expr::AlignofType(ty~, loc~) => {
       register_type_defs(ctx, ty, loc)
       let resolved = resolve_type(ctx, ty, loc)
       type_size_align(ctx, resolved, loc) |> ignore

@@ -462,6 +462,8 @@ enum Expr {
   Cast(ty~ : CType, expr~ : Expr, loc~ : SrcLoc)
   SizeofExpr(expr~ : Expr, loc~ : SrcLoc)
   SizeofType(ty~ : CType, loc~ : SrcLoc)
+  AlignofExpr(expr~ : Expr, loc~ : SrcLoc)
+  AlignofType(ty~ : CType, loc~ : SrcLoc)
   Binary(op~ : BinaryOp, left~ : Expr, right~ : Expr, loc~ : SrcLoc)
   Conditional(cond~ : Expr, then_expr~ : Expr, else_expr~ : Expr, loc~ : SrcLoc)
   Call(callee~ : Expr, args~ : Array[Expr], loc~ : SrcLoc)

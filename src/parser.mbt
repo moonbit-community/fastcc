@@ -2571,6 +2571,23 @@ fn parse_expr_unary(p : Parser) -> Expr {
     let expr = parse_expr_unary(p)
     return Expr::SizeofExpr(expr~, loc=tok.loc)
   }
+  if match_token(p, KwAlignof) is Some(tok) {
+    if peek_kind(p, 0) == LParen && is_type_start(p, peek_token_at(p, 1)) {
+      expect(p, LParen, "expected '(' after alignof") |> ignore
+      match parse_type_name(p) {
+        None => {
+          add_parse_error(p, tok.loc, "expected type name after alignof")
+          return Expr::IntLit(value="0", loc=tok.loc)
+        }
+        Some(ty) => {
+          expect(p, RParen, "expected ')' after alignof type") |> ignore
+          return Expr::AlignofType(ty~, loc=tok.loc)
+        }
+      }
+    }
+    let expr = parse_expr_unary(p)
+    return Expr::AlignofExpr(expr~, loc=tok.loc)
+  }
   if peek_kind(p, 0) == LParen && is_type_start(p, peek_token_at(p, 1)) {
     let lparen = advance_token(p)
     match parse_type_name(p) {
@@ -2993,6 +3010,8 @@ fn expr_loc(expr : Expr) -> SrcLoc {
     Expr::Cast(loc~, ..) => loc
     Expr::SizeofExpr(loc~, ..) => loc
     Expr::SizeofType(loc~, ..) => loc
+    Expr::AlignofExpr(loc~, ..) => loc
+    Expr::AlignofType(loc~, ..) => loc
     Expr::Binary(loc~, ..) => loc
     Expr::Conditional(loc~, ..) => loc
     Expr::Call(loc~, ..) => loc
