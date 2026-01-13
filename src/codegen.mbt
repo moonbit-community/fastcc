@@ -108,7 +108,7 @@ fn gen_arm64_load_global_int(emitter : Arm64Emitter, sym : Sym) -> Unit {
   greloca(emitter, sym, adrp_off, R_AARCH64_ADR_PREL_PG_HI21, 0)
   emit32(emitter, (0x90000000 : UInt))
   let add_off = emitter_pc(emitter)
-  greloca(emitter, sym, add_off, R_AARCH64_ADD_ABS_LO12_NC, 0)
+  greloca(emitter, sym, add_off, R_AARCH64_LDST8_ABS_LO12_NC, 0)
   emit32(emitter, (0x91000000 : UInt))
   emit32(emitter, (0xb9400000 : UInt))
 }
