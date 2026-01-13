@@ -1122,6 +1122,53 @@ fn gen_expr_int32(
           give_reg(pool, tmp_old)
           give_reg(pool, addr)
         }
+        BinaryOp::LogAnd | BinaryOp::LogOr => {
+          let left_ty = type_of_expr(alloc.sem, left)
+          if type_is_pointer_like(left_ty) {
+            gen_expr_ptr(emitter, alloc, syms, pool, cstrings, left, dst, bag)
+            emit_cmp(emitter, true, dst, 31)
+          } else {
+            gen_expr_int32(emitter, alloc, syms, pool, cstrings, left, dst, bag)
+            emit_cmp(emitter, false, dst, 31)
+          }
+          let br_short = emit_b_cond_placeholder(
+            emitter,
+            if op == BinaryOp::LogAnd { ARM64_COND_EQ } else { ARM64_COND_NE },
+          )
+
+          let right_ty = type_of_expr(alloc.sem, right)
+          if type_is_pointer_like(right_ty) {
+            gen_expr_ptr(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+            emit_cmp(emitter, true, dst, 31)
+          } else {
+            gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+            emit_cmp(emitter, false, dst, 31)
+          }
+          emit_cset_from_tok(emitter, TOK_NE, dst) catch {
+            err => add_error(bag, loc, err.to_string())
+          }
+
+          let br_end = gjmp(emitter, 0)
+          let short_pc = emitter_pc(emitter)
+          patch_b_cond(
+            emitter,
+            br_short,
+            short_pc,
+            if op == BinaryOp::LogAnd { ARM64_COND_EQ } else { ARM64_COND_NE },
+          )
+          catch { err => add_error(bag, loc, err.to_string()) }
+
+          arm64_movimm(
+            emitter,
+            dst.to_uint(),
+            if op == BinaryOp::LogAnd { 0 } else { 1 },
+          )
+
+          let end_pc = emitter_pc(emitter)
+          gsym_addr(emitter, br_end, end_pc) catch {
+            err => add_error(bag, loc, err.to_string())
+          }
+        }
         BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div |
         BinaryOp::Mod | BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor |
         BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt |
