@@ -151,8 +151,8 @@ fn strip_qualifiers(ty : CType) -> CType {
     CType::Attributed(attrs~, base~) =>
       CType::Attributed(attrs~, base=strip_qualifiers(base))
     CType::Pointer(inner) => CType::Pointer(strip_qualifiers(inner))
-    CType::Array(elem~, size~) =>
-      CType::Array(elem=strip_qualifiers(elem), size~)
+    CType::Array(elem~, size~, size_expr~) =>
+      CType::Array(elem=strip_qualifiers(elem), size~, size_expr~)
     CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) =>
       CType::Function(
         return_type=strip_qualifiers(return_type),
@@ -172,7 +172,8 @@ fn strip_attrs(ty : CType) -> CType {
     CType::Qualified(qual~, base~) =>
       CType::Qualified(qual~, base=strip_attrs(base))
     CType::Pointer(inner) => CType::Pointer(strip_attrs(inner))
-    CType::Array(elem~, size~) => CType::Array(elem=strip_attrs(elem), size~)
+    CType::Array(elem~, size~, size_expr~) =>
+      CType::Array(elem=strip_attrs(elem), size~, size_expr~)
     CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) =>
       CType::Function(
         return_type=strip_attrs(return_type),
@@ -520,17 +521,34 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
       add_sem_error(ctx, loc, "invalid application of sizeof to function")
       None
     }
-    CType::Array(elem~, size~) => {
+    CType::Array(elem~, size~, size_expr~) => {
       let (elem_size, elem_align) = match type_size_align(ctx, elem, loc) {
         None => return None
         Some(v) => v
       }
       match size {
-        None => {
-          add_sem_error(ctx, loc, "sizeof incomplete array")
-          None
-        }
         Some(n) => Some((elem_size * n, elem_align))
+        None =>
+          match size_expr {
+            None => {
+              add_sem_error(ctx, loc, "sizeof incomplete array")
+              None
+            }
+            Some(expr) =>
+              match const_int_from_expr(ctx, expr, loc) {
+                None => {
+                  add_sem_error(ctx, loc, "sizeof variable length array not supported yet")
+                  None
+                }
+                Some(n) =>
+                  if n < 0 {
+                    add_sem_error(ctx, loc, "invalid array size")
+                    None
+                  } else {
+                    Some((elem_size * n, elem_align))
+                  }
+              }
+          }
       }
     }
     CType::Struct(name=tag, fields=field_list, attrs=struct_attrs) =>
@@ -694,7 +712,7 @@ fn struct_size_align(
           bit_offset = 0
         }
         let (field_size, field_align) = match strip_qualifiers(field.ty) {
-          CType::Array(elem~, size=None) => {
+          CType::Array(elem~, size=None, ..) => {
             if i != fields.length() - 1 {
               add_sem_error(
                 ctx,
@@ -796,7 +814,7 @@ fn type_for_sizeof(ctx : SemContext, expr : Expr) -> CType {
         }
       }
     Expr::StringLit(length~, ..) =>
-      CType::Array(elem=char_type(), size=Some(length))
+      CType::Array(elem=char_type(), size=Some(length), size_expr=None)
     _ => type_of_expr(ctx, expr)
   }
 }
@@ -813,7 +831,7 @@ fn type_for_typeof(ctx : SemContext, expr : Expr) -> CType {
         }
       }
     Expr::StringLit(length~, ..) =>
-      CType::Array(elem=char_type(), size=Some(length))
+      CType::Array(elem=char_type(), size=Some(length), size_expr=None)
     _ => type_of_expr(ctx, expr)
   }
 }
@@ -826,8 +844,8 @@ fn resolve_type(ctx : SemContext, ty : CType, loc : SrcLoc) -> CType {
     CType::Attributed(attrs~, base~) =>
       CType::Attributed(attrs~, base=resolve_type(ctx, base, loc))
     CType::Pointer(inner) => CType::Pointer(resolve_type(ctx, inner, loc))
-    CType::Array(elem~, size~) =>
-      CType::Array(elem=resolve_type(ctx, elem, loc), size~)
+    CType::Array(elem~, size~, size_expr~) =>
+      CType::Array(elem=resolve_type(ctx, elem, loc), size~, size_expr~)
     CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) =>
       CType::Function(
         return_type=resolve_type(ctx, return_type, loc),
@@ -843,11 +861,129 @@ fn resolve_type(ctx : SemContext, ty : CType, loc : SrcLoc) -> CType {
 }
 
 ///|
-fn check_translation_unit(unit : TranslationUnit, diags : DiagBag) -> Unit {
+fn decl_allows_vla(is_local : Bool, storage : StorageClass) -> Bool {
+  if !is_local {
+    return false
+  }
+  match storage {
+    StorageClass::Default |
+    StorageClass::Auto |
+    StorageClass::Register => true
+    _ => false
+  }
+}
+
+///|
+fn resolve_array_sizes_for_decl(
+  ctx : SemContext,
+  ty : CType,
+  is_local : Bool,
+  storage : StorageClass,
+  loc : SrcLoc,
+) -> CType {
+  match ty {
+    CType::Qualified(qual~, base~) =>
+      CType::Qualified(
+        qual~,
+        base=resolve_array_sizes_for_decl(ctx, base, is_local, storage, loc),
+      )
+    CType::Attributed(attrs~, base~) =>
+      CType::Attributed(
+        attrs~,
+        base=resolve_array_sizes_for_decl(ctx, base, is_local, storage, loc),
+      )
+    CType::Pointer(inner) =>
+      CType::Pointer(resolve_array_sizes_for_decl(ctx, inner, is_local, storage, loc))
+    CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) =>
+      CType::Function(
+        return_type=resolve_array_sizes_for_decl(
+          ctx,
+          return_type,
+          is_local,
+          storage,
+          loc,
+        ),
+        params=params.map(p => resolve_array_sizes_for_decl(ctx, p, is_local, storage, loc)),
+        varargs~,
+        is_old_style~,
+        call_conv~,
+      )
+    CType::Array(elem~, size~, size_expr~) => {
+      let resolved_elem = resolve_array_sizes_for_decl(ctx, elem, is_local, storage, loc)
+      match size {
+        Some(n) =>
+          if n < 0 {
+            add_sem_error(ctx, loc, "invalid array size")
+            CType::Array(elem=resolved_elem, size=None, size_expr~)
+          } else {
+            CType::Array(elem=resolved_elem, size=Some(n), size_expr~)
+          }
+        None =>
+          match size_expr {
+            None => CType::Array(elem=resolved_elem, size=None, size_expr=None)
+            Some(expr) =>
+              if decl_allows_vla(is_local, storage) {
+                if is_constant_expr_for_builtin(ctx, expr) {
+                  let (value, ok) = eval_const_expr_value(ctx, expr, expr_loc(expr))
+                  if !ok {
+                    CType::Array(elem=resolved_elem, size=None, size_expr~)
+                  } else if value < 0 {
+                    add_sem_error(ctx, expr_loc(expr), "invalid array size")
+                    CType::Array(elem=resolved_elem, size=None, size_expr~)
+                  } else {
+                    CType::Array(elem=resolved_elem, size=Some(value), size_expr~)
+                  }
+                } else {
+                  let expr_ty = type_of_expr(ctx, expr)
+                  if !is_int_like(expr_ty) {
+                    add_sem_error(
+                      ctx,
+                      expr_loc(expr),
+                      "size of variable length array should be an integer",
+                    )
+                  }
+                  CType::Array(elem=resolved_elem, size=None, size_expr~)
+                }
+              } else {
+                match const_int_from_expr(ctx, expr, expr_loc(expr)) {
+                  None => CType::Array(elem=resolved_elem, size=None, size_expr~)
+                  Some(value) =>
+                    if value < 0 {
+                      add_sem_error(ctx, expr_loc(expr), "invalid array size")
+                      CType::Array(elem=resolved_elem, size=None, size_expr~)
+                    } else {
+                      CType::Array(elem=resolved_elem, size=Some(value), size_expr~)
+                    }
+                }
+              }
+          }
+      }
+    }
+    _ => ty
+  }
+}
+
+///|
+fn type_contains_vla(ty : CType) -> Bool {
+  match strip_qual_attrs(ty) {
+    CType::Array(size=None, size_expr=Some(_), ..) => true
+    CType::Array(elem~, ..) => type_contains_vla(elem)
+    CType::Pointer(inner) => type_contains_vla(inner)
+    CType::Function(return_type~, params~, ..) =>
+      type_contains_vla(return_type) || params.any(type_contains_vla)
+    CType::Qualified(base~, ..) => type_contains_vla(base)
+    CType::Attributed(base~, ..) => type_contains_vla(base)
+    _ => false
+  }
+}
+
+///|
+fn check_translation_unit(unit : TranslationUnit, diags : DiagBag) -> SemContext {
   let ctx = new_sem_context(diags)
   for decl in unit.decls {
     check_decl(ctx, decl)
   }
+  ctx
 }
 
 ///|
@@ -1649,7 +1785,7 @@ fn struct_field_offset_and_type(
           bit_offset = 0
         }
         let (field_size, field_align) = match strip_qualifiers(field.ty) {
-          CType::Array(elem~, size=None) => {
+          CType::Array(elem~, size=None, ..) => {
             let (_elem_size, elem_align) = match
               type_size_align(ctx, elem, field.loc) {
               None => (0, 1)
@@ -1990,10 +2126,10 @@ fn apply_inferred_array_size(ty : CType, size : Int) -> CType {
       let updated = apply_inferred_array_size(base, size)
       CType::Qualified(qual~, base=updated)
     }
-    CType::Array(elem~, size=arr_size) =>
-      match arr_size {
-        None => CType::Array(elem~, size=Some(size))
-        Some(_) => ty
+    CType::Array(elem~, size=arr_size, size_expr~) =>
+      match (arr_size, size_expr) {
+        (None, None) => CType::Array(elem~, size=Some(size), size_expr=None)
+        _ => ty
       }
     _ => ty
   }
@@ -2029,16 +2165,12 @@ fn require_complete_object_type(
   allow_incomplete_array? : Bool = false,
 ) -> Unit {
   match strip_qual_attrs(ty) {
-    CType::Array(elem~, size~) =>
-      match size {
-        None => {
-          if !allow_incomplete_array {
-            add_sem_error(ctx, loc, "incomplete array type")
-          }
-          require_complete_object_type(ctx, elem, loc)
-        }
-        Some(_) => require_complete_object_type(ctx, elem, loc)
+    CType::Array(elem~, size~, size_expr~) => {
+      if size is None && size_expr is None && !allow_incomplete_array {
+        add_sem_error(ctx, loc, "incomplete array type")
       }
+      require_complete_object_type(ctx, elem, loc)
+    }
     CType::Struct(name=tag, fields=field_list, attrs=_) =>
       ensure_struct_fields(ctx, tag, field_list, is_union=false, loc) |> ignore
     CType::Union(name=tag, fields=field_list, attrs=_) =>
@@ -2071,7 +2203,14 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
     resolved,
     type_attrs_from(decl.attrs),
   )
-  let mut final_ty = resolved_with_attrs
+  let resolved_with_sizes = resolve_array_sizes_for_decl(
+    ctx,
+    resolved_with_attrs,
+    is_local,
+    decl.storage,
+    decl.loc,
+  )
+  let mut final_ty = resolved_with_sizes
   match strip_qual_attrs(resolved) {
     CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) => {
       check_storage_class(
@@ -2095,25 +2234,29 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
     _ => ()
   }
   check_storage_class(ctx, decl.storage, decl.loc, is_local~, is_function=false)
-  if is_void_type(resolved_with_attrs) {
+  if is_void_type(final_ty) {
     add_sem_error(ctx, decl.loc, "variable '\{decl.name}' has void type")
   }
   if is_local {
-    declare_local(ctx, decl.name, resolved_with_attrs, decl.loc)
+    declare_local(ctx, decl.name, final_ty, decl.loc)
   } else {
-    declare_global(ctx, decl.name, resolved_with_attrs, decl.loc)
+    declare_global(ctx, decl.name, final_ty, decl.loc)
   }
-  match decl.init {
-    None => ()
-    Some(init) =>
-      match check_initializer(ctx, resolved_with_attrs, init, decl.loc) {
-        None => ()
-        Some(size) => {
-          let updated = apply_inferred_array_size(resolved_with_attrs, size)
-          final_ty = updated
-          update_decl_type(ctx, decl.name, updated, is_local~)
+  if type_contains_vla(final_ty) && decl.init is Some(_) {
+    add_sem_error(ctx, decl.loc, "variable length array cannot be initialized")
+  } else {
+    match decl.init {
+      None => ()
+      Some(init) =>
+        match check_initializer(ctx, final_ty, init, decl.loc) {
+          None => ()
+          Some(size) => {
+            let updated = apply_inferred_array_size(final_ty, size)
+            final_ty = updated
+            update_decl_type(ctx, decl.name, updated, is_local~)
+          }
         }
-      }
+    }
   }
   if decl.storage != StorageClass::Extern || decl.init is Some(_) {
     let allow_incomplete_array = !is_local && decl.init is None
@@ -2138,7 +2281,7 @@ fn check_initializer(
       match expr {
         Expr::StringLit(length~, ..) =>
           match strip_qual_attrs(ty) {
-            CType::Array(elem~, size~) =>
+            CType::Array(elem~, size~, ..) =>
               if is_char_type(elem) {
                 match size {
                   None => Some(length)
@@ -2178,7 +2321,8 @@ fn check_initializer(
           }
         _ => {
           let init_ty = type_of_expr(ctx, expr)
-          if !can_assign(ty, init_ty) {
+          if !can_assign(ty, init_ty) &&
+            !(is_pointer_type(ty) && is_null_pointer_expr(ctx, expr)) {
             add_sem_error(
               ctx,
               loc,
@@ -2200,7 +2344,7 @@ fn check_initializer_list(
   loc : SrcLoc,
 ) -> Int? {
   match strip_qual_attrs(ty) {
-    CType::Array(elem~, size~) => {
+    CType::Array(elem~, size~, ..) => {
       let mut next_index = 0
       let mut max_index = -1
       for item in items {
@@ -2377,7 +2521,7 @@ fn resolve_designator_type(
     match des {
       InitDesignator::Index(expr~, loc=des_loc) =>
         match strip_qual_attrs(current) {
-          CType::Array(elem~, size~) => {
+          CType::Array(elem~, size~, ..) => {
             match size {
               None => ()
               Some(n) =>
@@ -2679,8 +2823,8 @@ fn type_eq(a : CType, b : CType) -> Bool {
     (CType::Pointer(inner_a), CType::Pointer(inner_b)) =>
       type_eq(inner_a, inner_b)
     (
-      CType::Array(elem=elem_a, size=size_a),
-      CType::Array(elem=elem_b, size=size_b),
+      CType::Array(elem=elem_a, size=size_a, ..),
+      CType::Array(elem=elem_b, size=size_b, ..),
     ) =>
       match (size_a, size_b) {
         (Some(sa), Some(sb)) => sa == sb && type_eq(elem_a, elem_b)
@@ -2740,8 +2884,8 @@ fn types_compatible_for_decl(a : CType, b : CType) -> Bool {
   let rhs = strip_qual_attrs(b)
   match (lhs, rhs) {
     (
-      CType::Array(elem=elem_a, size=size_a),
-      CType::Array(elem=elem_b, size=size_b),
+      CType::Array(elem=elem_a, size=size_a, ..),
+      CType::Array(elem=elem_b, size=size_b, ..),
     ) =>
       match (size_a, size_b) {
         (Some(sa), Some(sb)) =>
@@ -3153,7 +3297,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
                 return default_int_type()
               }
               match strip_qual_attrs(ty) {
-                CType::Array(_) | CType::Function(..) => {
+                CType::Array(..) | CType::Function(..) => {
                   add_sem_error(ctx, loc, "invalid operand to increment")
                   return default_int_type()
                 }
@@ -3207,7 +3351,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
                 return default_int_type()
               }
               match strip_qual_attrs(lhs_ty) {
-                CType::Array(_) | CType::Function(..) => {
+                CType::Array(..) | CType::Function(..) => {
                   add_sem_error(ctx, loc, "assignment to non-modifiable lvalue")
                   return default_int_type()
                 }
@@ -3564,7 +3708,7 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
             }
           }
           for i = 0; i < args.length(); i = i + 1 {
-            let arg_ty = type_of_expr(ctx, args[i])
+            let arg_ty = decay_type(type_of_expr(ctx, args[i]))
             if !is_old_style && i < params.length() {
               if !can_assign(params[i], arg_ty) &&
                 !(is_pointer_type(params[i]) &&
@@ -3910,7 +4054,7 @@ fn type_of_compound_assign(
     Some(ty) => ty
   }
   match strip_qual_attrs(lhs_ty) {
-    CType::Array(_) | CType::Function(..) => {
+    CType::Array(..) | CType::Function(..) => {
       add_sem_error(ctx, loc, "assignment to non-modifiable lvalue")
       return default_int_type()
     }
@@ -4089,15 +4233,23 @@ fn merge_global_decl_type(existing : CType, incoming : CType) -> CType {
       CType::Attributed(attrs=attrs_b, base=merged)
     }
     (
-      CType::Array(elem=elem_a, size=size_a),
-      CType::Array(elem=elem_b, size=size_b),
+      CType::Array(elem=elem_a, size=size_a, size_expr=size_expr_a),
+      CType::Array(elem=elem_b, size=size_b, size_expr=size_expr_b),
     ) => {
       let merged_elem = merge_global_decl_type(elem_a, elem_b)
       let merged_size = match size_a {
         Some(_) => size_a
         None => size_b
       }
-      CType::Array(elem=merged_elem, size=merged_size)
+      let merged_size_expr = match size_expr_a {
+        Some(_) => size_expr_a
+        None => size_expr_b
+      }
+      CType::Array(
+        elem=merged_elem,
+        size=merged_size,
+        size_expr=merged_size_expr,
+      )
     }
     (CType::Pointer(inner_a), CType::Pointer(inner_b)) =>
       CType::Pointer(merge_global_decl_type(inner_a, inner_b))
@@ -4211,7 +4363,7 @@ fn type_to_string(ty : CType) -> String {
     }
     CType::Float(kind~) => float_kind_to_string(kind)
     CType::Pointer(inner) => type_to_string(inner) + "*"
-    CType::Array(elem~, size~) =>
+    CType::Array(elem~, size~, ..) =>
       match size {
         None => type_to_string(elem) + "[]"
         Some(n) => type_to_string(elem) + "[\{n}]"

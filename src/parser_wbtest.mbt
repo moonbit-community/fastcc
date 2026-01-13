@@ -11,7 +11,7 @@ fn parse_text(text : String) -> (TranslationUnit, DiagBag) {
 ///|
 fn check_text(text : String) -> (TranslationUnit, DiagBag) {
   let (unit, bag) = parse_text(text)
-  check_translation_unit(unit, bag)
+  check_translation_unit(unit, bag) |> ignore
   (unit, bag)
 }
 

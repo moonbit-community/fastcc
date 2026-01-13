@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 CTEST_DIR="${ROOT_DIR}/refs/mbtcc/ctest"
 TMP_DIR="${ROOT_DIR}/target/mbtcc-ctest"
+SUPPORT_C="${ROOT_DIR}/tests/mbtcc/ctest_support.c"
 
 FILTER="${FILTER:-}"
 MODE="${MODE:-strict}" # strict | allow-fail
@@ -35,6 +36,18 @@ command -v clang >/dev/null || { echo "error: clang not found"; exit 1; }
 rm -rf "${TMP_DIR}"
 mkdir -p "${TMP_DIR}"
 
+support_o="${TMP_DIR}/ctest_support.o"
+if [[ -f "${SUPPORT_C}" ]]; then
+  if ! clang -w -c "${SUPPORT_C}" -o "${support_o}" 2>"${TMP_DIR}/ctest_support.clang.log"; then
+    echo "error: failed to build ctest support object"
+    sed -n '1,120p' "${TMP_DIR}/ctest_support.clang.log" || true
+    exit 1
+  fi
+else
+  echo "error: missing support file ${SUPPORT_C}"
+  exit 1
+fi
+
 tests_file="${TMP_DIR}/tests.txt"
 find "${CTEST_DIR}" -maxdepth 1 -type f -name '*.c' -print | sort >"${tests_file}"
 if [[ -n "${FILTER}" ]]; then
@@ -58,7 +71,7 @@ while IFS= read -r c_file; do
   echo "-------------------------------------------"
   echo "Testing ${base}.c"
 
-  gcc "${c_file}" -lm -o "${TMP_DIR}/${base}.gcc.out" 2>/dev/null || {
+  gcc "${c_file}" "${SUPPORT_C}" -lm -o "${TMP_DIR}/${base}.gcc.out" 2>/dev/null || {
     echo "FAILED: gcc compilation failed"
     fail=$((fail + 1))
     continue
@@ -77,7 +90,7 @@ while IFS= read -r c_file; do
     fail=$((fail + 1))
     continue
   fi
-  if ! clang -w "${TMP_DIR}/${base}.o" -lm -o "${TMP_DIR}/${base}.tinycc.out" 2>/dev/null; then
+  if ! clang -w "${TMP_DIR}/${base}.o" "${support_o}" -lm -o "${TMP_DIR}/${base}.tinycc.out" 2>/dev/null; then
     echo "FAILED: clang link failed"
     fail=$((fail + 1))
     continue

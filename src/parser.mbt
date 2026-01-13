@@ -1266,21 +1266,24 @@ fn parse_type_name(p : Parser) -> CType? {
     Some(specs) => {
       let base = specs.ty
       let base_attrs = specs.attrs
+      // Parse any leading pointer chain first so we can handle cases like:
+      //   void *(*fp)(void)
+      // where the return type itself is a pointer and the direct-declarator is
+      // a parenthesized pointer declarator.
+      let (ty0, pointer_attrs) = parse_pointer_chain(p, base)
+      let mut attrs = merge_attrs(base_attrs, pointer_attrs)
+      attrs = merge_attrs(attrs, parse_attributes(p))
       if is_paren_pointer_declarator(p) {
-        let (ty, pointer_attrs) = parse_paren_pointer_abstract(p, base)
-        let combined_attrs = merge_attrs(base_attrs, pointer_attrs)
-        let call_conv = normalize_call_conv(combined_attrs.call_conv)
+        let (ty, paren_attrs) = parse_paren_pointer_abstract(p, ty0)
+        attrs = merge_attrs(attrs, paren_attrs)
+        let call_conv = normalize_call_conv(attrs.call_conv)
         Some(apply_call_conv_to_type(ty, call_conv))
       } else {
-        let (ty, pointer_attrs) = parse_pointer_chain(p, base)
         let (full, _params, _varargs, _old_style, suffix_attrs) = parse_declarator_suffix(
-          p, ty,
+          p, ty0,
         )
-        let combined_attrs = merge_attrs(
-          merge_attrs(base_attrs, pointer_attrs),
-          suffix_attrs,
-        )
-        let call_conv = normalize_call_conv(combined_attrs.call_conv)
+        attrs = merge_attrs(attrs, suffix_attrs)
+        let call_conv = normalize_call_conv(attrs.call_conv)
         Some(apply_call_conv_to_type(full, call_conv))
       }
     }
@@ -1300,36 +1303,52 @@ struct Declarator {
 
 ///|
 fn parse_declarator(p : Parser, base : CType) -> Declarator? {
-  if is_paren_pointer_declarator(p) {
-    return parse_paren_pointer_declarator(p, base)
-  }
-  let (ty, pointer_attrs) = parse_pointer_chain(p, base)
+  // Parse pointer chain first so we can handle return-type pointers on
+  // function-pointer declarators like:
+  //   void *(*fp)(void)
+  let (ty0, pointer_attrs) = parse_pointer_chain(p, base)
   let mut attrs = merge_attrs(pointer_attrs, parse_attributes(p))
-  let name_tok = expect_ident(p, "expected identifier")
-  match name_tok {
-    None => None
-    Some(tok) => {
-      let (ty, params, varargs, is_old_style, suffix_attrs) = parse_declarator_suffix(
-        p, ty,
-      )
-      attrs = merge_attrs(attrs, suffix_attrs)
-      if match_token(p, KwAsm) is Some(asm_tok) {
-        match parse_asm_label(p, asm_tok.loc) {
-          None => ()
-          Some(label) =>
-            attrs = merge_attrs(attrs, attrs_with(asm_label=Some(label)))
+  if is_paren_pointer_declarator(p) {
+    match parse_paren_pointer_declarator(p, ty0) {
+      None => None
+      Some(decl) =>
+        Some({
+          name: decl.name,
+          ty: decl.ty,
+          params: decl.params,
+          varargs: decl.varargs,
+          is_old_style: decl.is_old_style,
+          attrs: merge_attrs(attrs, decl.attrs),
+          loc: decl.loc,
+        })
+    }
+  } else {
+    let name_tok = expect_ident(p, "expected identifier")
+    match name_tok {
+      None => None
+      Some(tok) => {
+        let (ty, params, varargs, is_old_style, suffix_attrs) = parse_declarator_suffix(
+          p, ty0,
+        )
+        attrs = merge_attrs(attrs, suffix_attrs)
+        if match_token(p, KwAsm) is Some(asm_tok) {
+          match parse_asm_label(p, asm_tok.loc) {
+            None => ()
+            Some(label) =>
+              attrs = merge_attrs(attrs, attrs_with(asm_label=Some(label)))
+          }
+          attrs = merge_attrs(attrs, parse_attributes(p))
         }
-        attrs = merge_attrs(attrs, parse_attributes(p))
+        Some({
+          name: tok.lexeme,
+          ty,
+          params,
+          varargs,
+          is_old_style,
+          attrs,
+          loc: tok.loc,
+        })
       }
-      Some({
-        name: tok.lexeme,
-        ty,
-        params,
-        varargs,
-        is_old_style,
-        attrs,
-        loc: tok.loc,
-      })
     }
   }
 }
@@ -1358,49 +1377,63 @@ fn parse_field_declarator(
   base : CType,
   fallback_loc : SrcLoc,
 ) -> Declarator? {
+  // Like parse_declarator, but the name may be omitted (anonymous fields).
+  let (ty0, pointer_attrs) = parse_pointer_chain(p, base)
+  let mut attrs = merge_attrs(pointer_attrs, parse_attributes(p))
   if is_paren_pointer_declarator(p) {
     expect(p, LParen, "expected '(' in declarator") |> ignore
     let quals : Array[TypeQual] = []
-    let mut attrs = parse_attributes(p)
+    let mut inner_attrs = parse_attributes(p)
     while match_token(p, Star) is Some(_) {
       quals.push(parse_type_qualifiers(p))
-      attrs = merge_attrs(attrs, parse_attributes(p))
+      inner_attrs = merge_attrs(inner_attrs, parse_attributes(p))
     }
-    attrs = merge_attrs(attrs, parse_attributes(p))
+    inner_attrs = merge_attrs(inner_attrs, parse_attributes(p))
     let name_tok = if peek_token(p).kind == Ident {
       Some(advance_token(p))
     } else {
       None
     }
+    let inner_array_sizes : Array[(Int?, Expr?)] = []
+    while match_token(p, LBracket) is Some(_) {
+      let size = parse_array_size(p)
+      expect(p, RBracket, "expected ']' after array size") |> ignore
+      inner_array_sizes.push(size)
+    }
     expect(p, RParen, "expected ')' in declarator") |> ignore
     let (ty, params, varargs, is_old_style, suffix_attrs) = parse_declarator_suffix(
-      p, base,
+      p, ty0,
     )
-    attrs = merge_attrs(attrs, suffix_attrs)
+    attrs = merge_attrs(merge_attrs(attrs, inner_attrs), suffix_attrs)
     let mut wrapped = ty
     for qual in quals {
       wrapped = CType::Pointer(wrapped)
       wrapped = apply_qualifiers(wrapped, qual)
     }
+    let mut i = inner_array_sizes.length()
+    while i > 0 {
+      i = i - 1
+      let (size, size_expr) = inner_array_sizes[i]
+      wrapped = CType::Array(elem=wrapped, size~, size_expr~)
+    }
     let (name, loc) = match name_tok {
       Some(tok) => (tok.lexeme, tok.loc)
       None => ("", fallback_loc)
     }
-    return Some({ name, ty: wrapped, params, varargs, is_old_style, attrs, loc })
-  }
-  let (ty, pointer_attrs) = parse_pointer_chain(p, base)
-  let mut attrs = merge_attrs(pointer_attrs, parse_attributes(p))
-  let (name, loc) = if peek_token(p).kind == Ident {
-    let name_tok = advance_token(p)
-    (name_tok.lexeme, name_tok.loc)
+    Some({ name, ty: wrapped, params, varargs, is_old_style, attrs, loc })
   } else {
-    ("", fallback_loc)
+    let (name, loc) = if peek_token(p).kind == Ident {
+      let name_tok = advance_token(p)
+      (name_tok.lexeme, name_tok.loc)
+    } else {
+      ("", fallback_loc)
+    }
+    let (ty, params, varargs, is_old_style, suffix_attrs) = parse_declarator_suffix(
+      p, ty0,
+    )
+    attrs = merge_attrs(attrs, suffix_attrs)
+    Some({ name, ty, params, varargs, is_old_style, attrs, loc })
   }
-  let (ty, params, varargs, is_old_style, suffix_attrs) = parse_declarator_suffix(
-    p, ty,
-  )
-  attrs = merge_attrs(attrs, suffix_attrs)
-  Some({ name, ty, params, varargs, is_old_style, attrs, loc })
 }
 
 ///|
@@ -1500,6 +1533,12 @@ fn parse_paren_pointer_declarator(p : Parser, base : CType) -> Declarator? {
   }
   attrs = merge_attrs(attrs, parse_attributes(p))
   let name_tok = expect_ident(p, "expected identifier")
+  let inner_array_sizes : Array[(Int?, Expr?)] = []
+  while match_token(p, LBracket) is Some(_) {
+    let size = parse_array_size(p)
+    expect(p, RBracket, "expected ']' after array size") |> ignore
+    inner_array_sizes.push(size)
+  }
   expect(p, RParen, "expected ')' in declarator") |> ignore
   match name_tok {
     None => None
@@ -1520,6 +1559,12 @@ fn parse_paren_pointer_declarator(p : Parser, base : CType) -> Declarator? {
       for qual in quals {
         wrapped = CType::Pointer(wrapped)
         wrapped = apply_qualifiers(wrapped, qual)
+      }
+      let mut i = inner_array_sizes.length()
+      while i > 0 {
+        i = i - 1
+        let (size, size_expr) = inner_array_sizes[i]
+        wrapped = CType::Array(elem=wrapped, size~, size_expr~)
       }
       Some({
         name: tok.lexeme,
@@ -1547,6 +1592,12 @@ fn parse_paren_pointer_abstract(
     attrs = merge_attrs(attrs, parse_attributes(p))
   }
   attrs = merge_attrs(attrs, parse_attributes(p))
+  let inner_array_sizes : Array[(Int?, Expr?)] = []
+  while match_token(p, LBracket) is Some(_) {
+    let size = parse_array_size(p)
+    expect(p, RBracket, "expected ']' after array size") |> ignore
+    inner_array_sizes.push(size)
+  }
   expect(p, RParen, "expected ')' in declarator") |> ignore
   let (ty, _params, _varargs, _old_style, suffix_attrs) = parse_declarator_suffix(
     p, base,
@@ -1556,6 +1607,12 @@ fn parse_paren_pointer_abstract(
   for qual in quals {
     wrapped = CType::Pointer(wrapped)
     wrapped = apply_qualifiers(wrapped, qual)
+  }
+  let mut i = inner_array_sizes.length()
+  while i > 0 {
+    i = i - 1
+    let (size, size_expr) = inner_array_sizes[i]
+    wrapped = CType::Array(elem=wrapped, size~, size_expr~)
   }
   (wrapped, attrs)
 }
@@ -1569,10 +1626,17 @@ fn parse_declarator_suffix(
   let mut varargs = false
   let mut old_style = false
   let mut attrs = parse_attributes(p)
+  let array_sizes : Array[(Int?, Expr?)] = []
   while match_token(p, LBracket) is Some(_) {
     let size = parse_array_size(p)
     expect(p, RBracket, "expected ']' after array size") |> ignore
-    ty = CType::Array(elem=ty, size~)
+    array_sizes.push(size)
+  }
+  let mut i = array_sizes.length()
+  while i > 0 {
+    i = i - 1
+    let (size, size_expr) = array_sizes[i]
+    ty = CType::Array(elem=ty, size~, size_expr~)
   }
   let params = if match_token(p, LParen) is Some(_) {
     let (params, has_varargs, is_old_style) = parse_param_list(p)
@@ -1597,22 +1661,23 @@ fn parse_declarator_suffix(
 }
 
 ///|
-fn parse_array_size(p : Parser) -> Int? {
+fn parse_array_size(p : Parser) -> (Int?, Expr?) {
   if peek_token(p).kind == RBracket {
-    return None
+    return (None, None)
   }
-  let tok = peek_token(p)
-  if tok.kind == IntLit {
-    ignore(advance_token(p))
-    let value = try @strconv.parse_int(tok.lexeme, base=0) catch {
-      _ => 0
-    } noraise {
-      v => v
-    }
-    return Some(value)
+  let loc = peek_token(p).loc
+  let expr = parse_expr_cond(p)
+  let size = match const_i64_from_expr(expr) {
+    None => None
+    Some(v) =>
+      if v < 0 {
+        add_parse_error(p, loc, "invalid array size")
+        None
+      } else {
+        Some(v.to_int())
+      }
   }
-  add_parse_error(p, tok.loc, "expected array size")
-  None
+  (size, Some(expr))
 }
 
 ///|
@@ -1897,29 +1962,47 @@ fn parse_param_declarator(
   base : CType,
   fallback_loc : SrcLoc,
 ) -> Param? {
+  // Parse pointer chain first so we can handle return-type pointers on
+  // function-pointer parameter declarators like:
+  //   void *(*transform)(void*)
+  let (ty0, pointer_attrs) = parse_pointer_chain(p, base)
+  let mut attrs = merge_attrs(pointer_attrs, parse_attributes(p))
+
   if is_paren_pointer_declarator(p) {
     expect(p, LParen, "expected '(' in declarator") |> ignore
     let quals : Array[TypeQual] = []
-    let mut attrs = parse_attributes(p)
+    let mut inner_attrs = parse_attributes(p)
     while match_token(p, Star) is Some(_) {
       quals.push(parse_type_qualifiers(p))
-      attrs = merge_attrs(attrs, parse_attributes(p))
+      inner_attrs = merge_attrs(inner_attrs, parse_attributes(p))
     }
-    attrs = merge_attrs(attrs, parse_attributes(p))
+    inner_attrs = merge_attrs(inner_attrs, parse_attributes(p))
     let name_tok = if peek_token(p).kind == Ident {
       Some(advance_token(p))
     } else {
       None
     }
+    let inner_array_sizes : Array[(Int?, Expr?)] = []
+    while match_token(p, LBracket) is Some(_) {
+      let size = parse_array_size(p)
+      expect(p, RBracket, "expected ']' after array size") |> ignore
+      inner_array_sizes.push(size)
+    }
     expect(p, RParen, "expected ')' in declarator") |> ignore
     let (ty, _params, _varargs, _old_style, suffix_attrs) = parse_declarator_suffix(
-      p, base,
+      p, ty0,
     )
-    attrs = merge_attrs(attrs, suffix_attrs)
+    attrs = merge_attrs(merge_attrs(attrs, inner_attrs), suffix_attrs)
     let mut wrapped = ty
     for qual in quals {
       wrapped = CType::Pointer(wrapped)
       wrapped = apply_qualifiers(wrapped, qual)
+    }
+    let mut i = inner_array_sizes.length()
+    while i > 0 {
+      i = i - 1
+      let (size, size_expr) = inner_array_sizes[i]
+      wrapped = CType::Array(elem=wrapped, size~, size_expr~)
     }
     let call_conv = normalize_call_conv(attrs.call_conv)
     let adjusted_ty = apply_call_conv_to_type(wrapped, call_conv)
@@ -1929,18 +2012,21 @@ fn parse_param_declarator(
     }
     return Some({ name, ty: adjusted_ty, loc })
   }
-  let (ty, pointer_attrs) = parse_pointer_chain(p, base)
-  let mut attrs = merge_attrs(pointer_attrs, parse_attributes(p))
+
   if peek_token(p).kind == Ident {
     let name_tok = advance_token(p)
     let (ty, _params, _varargs, _old_style, suffix_attrs) = parse_declarator_suffix(
-      p, ty,
+      p, ty0,
     )
     attrs = merge_attrs(attrs, suffix_attrs)
     let call_conv = normalize_call_conv(attrs.call_conv)
     let adjusted_ty = apply_call_conv_to_type(ty, call_conv)
     return Some({ name: name_tok.lexeme, ty: adjusted_ty, loc: name_tok.loc })
   }
+
+  // Unnamed parameter: still allow declarator suffixes like `int[10]`.
+  let (ty, _params, _varargs, _old_style, suffix_attrs) = parse_declarator_suffix(p, ty0)
+  attrs = merge_attrs(attrs, suffix_attrs)
   let call_conv = normalize_call_conv(attrs.call_conv)
   let adjusted_ty = apply_call_conv_to_type(ty, call_conv)
   Some({ name: "", ty: adjusted_ty, loc: fallback_loc })
@@ -3106,7 +3192,8 @@ fn typedef_ref_type(ty : CType) -> CType {
     CType::Attributed(attrs~, base~) =>
       CType::Attributed(attrs~, base=typedef_ref_type(base))
     CType::Pointer(inner) => CType::Pointer(typedef_ref_type(inner))
-    CType::Array(elem~, size~) => CType::Array(elem=typedef_ref_type(elem), size~)
+    CType::Array(elem~, size~, size_expr~) =>
+      CType::Array(elem=typedef_ref_type(elem), size~, size_expr~)
     CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) =>
       CType::Function(
         return_type=typedef_ref_type(return_type),

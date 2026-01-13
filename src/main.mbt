@@ -172,7 +172,7 @@ fn main {
             } else {
               let unit = parse_translation_unit(pp)
               if !has_errors(bag) {
-                check_translation_unit(unit, bag)
+                check_translation_unit(unit, bag) |> ignore
               }
               if !has_errors(bag) {
                 match codegen_arm64_object_bytes(unit, bag) {

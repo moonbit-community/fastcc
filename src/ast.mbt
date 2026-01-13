@@ -246,8 +246,12 @@ fn apply_call_conv_to_type(ty : CType, call_conv : CallConv) -> CType {
       CType::Attributed(attrs~, base=apply_call_conv_to_type(base, call_conv))
     CType::Pointer(inner) =>
       CType::Pointer(apply_call_conv_to_type(inner, call_conv))
-    CType::Array(elem~, size~) =>
-      CType::Array(elem=apply_call_conv_to_type(elem, call_conv), size~)
+    CType::Array(elem~, size~, size_expr~) =>
+      CType::Array(
+        elem=apply_call_conv_to_type(elem, call_conv),
+        size~,
+        size_expr~,
+      )
     CType::Function(
       return_type~,
       params~,
@@ -298,7 +302,7 @@ enum CType {
   Int(kind~ : CIntKind, unsigned~ : Bool)
   Float(kind~ : CFloatKind)
   Pointer(CType)
-  Array(elem~ : CType, size~ : Int?)
+  Array(elem~ : CType, size~ : Int?, size_expr~ : Expr?)
   Struct(name~ : String, fields~ : Array[RecordItem]?, attrs~ : Attributes)
   Union(name~ : String, fields~ : Array[RecordItem]?, attrs~ : Attributes)
   Enum(name~ : String, items~ : Array[EnumItem]?)

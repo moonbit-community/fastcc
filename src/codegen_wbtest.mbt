@@ -97,7 +97,7 @@ fn has_b_uncond(bytes : Bytes, text_offset : Int, max_words : Int) -> Bool {
 test "codegen emits arm64 main return 0 object" {
   let (unit, bag) = parse_text("int main(){return 0;}")
   assert_true(!has_errors(bag))
-  check_translation_unit(unit, bag)
+  check_translation_unit(unit, bag) |> ignore
   assert_true(!has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
@@ -117,7 +117,7 @@ test "codegen emits arm64 main return 0 object" {
 test "codegen emits call relocation for return f()" {
   let (unit, bag) = parse_text("int f(){return 0;} int main(){return f();}")
   assert_true(!has_errors(bag))
-  check_translation_unit(unit, bag)
+  check_translation_unit(unit, bag) |> ignore
   assert_true(!has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
@@ -137,7 +137,7 @@ test "codegen emits conditional branch for if/else" {
     "int main(){int a=1; if(a) return 3; else return 4;}",
   )
   assert_true(!has_errors(bag))
-  check_translation_unit(unit, bag)
+  check_translation_unit(unit, bag) |> ignore
   assert_true(!has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
@@ -154,7 +154,7 @@ test "codegen emits branches for while + break/continue" {
     "int main(){int i=0; while(i<3){i=i+1; if(i==2) continue; if(i==3) break;} return i;}",
   )
   assert_true(!has_errors(bag))
-  check_translation_unit(unit, bag)
+  check_translation_unit(unit, bag) |> ignore
   assert_true(!has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
@@ -172,7 +172,7 @@ test "codegen emits .cstring and relocs for extern call with string literal" {
     "int puts(const char*); int main(){return puts(\"hi\");}",
   )
   assert_true(!has_errors(bag))
-  check_translation_unit(unit, bag)
+  check_translation_unit(unit, bag) |> ignore
   assert_true(!has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
@@ -194,7 +194,7 @@ test "codegen supports local pointers: addr, deref, compare" {
     "int main(){int x=1; int *p=&x; if(p!=0){*p=3;} return x;}",
   )
   assert_true(!has_errors(bag))
-  check_translation_unit(unit, bag)
+  check_translation_unit(unit, bag) |> ignore
   assert_true(!has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
@@ -208,7 +208,7 @@ test "codegen supports local pointers: addr, deref, compare" {
 test "codegen emits global load relocs for return x" {
   let (unit, bag) = parse_text("int x; int main(){return x;}")
   assert_true(!has_errors(bag))
-  check_translation_unit(unit, bag)
+  check_translation_unit(unit, bag) |> ignore
   assert_true(!has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
@@ -230,7 +230,7 @@ test "codegen emits global load relocs for return x" {
 test "codegen emits .data for initialized global int" {
   let (unit, bag) = parse_text("int x=3; int main(){return x;}")
   assert_true(!has_errors(bag))
-  check_translation_unit(unit, bag)
+  check_translation_unit(unit, bag) |> ignore
   assert_true(!has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")

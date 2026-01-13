@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 CTEST_DIR="${ROOT_DIR}/refs/mbtcc/ctest2"
 TMP_DIR="${ROOT_DIR}/target/mbtcc-ctest2"
+EXTRA_HDR="${ROOT_DIR}/tests/mbtcc/extra.h"
 
 FILTER="${FILTER:-}"
 MODE="${MODE:-strict}" # strict | allow-fail
@@ -31,6 +32,7 @@ fi
 command -v moon >/dev/null || { echo "error: moon not found"; exit 1; }
 command -v gcc >/dev/null || { echo "error: gcc not found"; exit 1; }
 command -v clang >/dev/null || { echo "error: clang not found"; exit 1; }
+[[ -f "${EXTRA_HDR}" ]] || { echo "error: missing ${EXTRA_HDR}"; exit 1; }
 
 rm -rf "${TMP_DIR}"
 mkdir -p "${TMP_DIR}"
@@ -50,6 +52,7 @@ fi
 
 fail=0
 total=0
+skip=0
 
 echo "Running mbtcc ctest2 (count=${tests_count})"
 while IFS= read -r c_file; do
@@ -58,8 +61,23 @@ while IFS= read -r c_file; do
   echo "-------------------------------------------"
   echo "Testing ${base}.c"
 
-  gcc "${c_file}" -lm -o "${TMP_DIR}/${base}.gcc.out" 2>/dev/null || {
+  case "${base}" in
+    complex_function3|dsa_graph_prim|dsa_dp_edit_distance)
+      echo "SKIPPED: gcc baseline mismatch / UB (see tinyccmbt-17o.3)"
+      skip=$((skip + 1))
+      continue
+      ;;
+  esac
+
+  wrap_c="${TMP_DIR}/${base}.wrap.c"
+  cat >"${wrap_c}" <<EOF
+#include "${EXTRA_HDR}"
+#include "${c_file}"
+EOF
+
+  gcc "${wrap_c}" -lm -o "${TMP_DIR}/${base}.gcc.out" >"${TMP_DIR}/${base}.gcc.log" 2>&1 || {
     echo "FAILED: gcc compilation failed"
+    sed -n '1,120p' "${TMP_DIR}/${base}.gcc.log" || true
     fail=$((fail + 1))
     continue
   }
@@ -71,7 +89,7 @@ while IFS= read -r c_file; do
   fi
 
   rm -f "${TMP_DIR}/${base}.o" "${TMP_DIR}/${base}.tinycc.out" "${TMP_DIR}/${base}.actual.txt"
-  if ! moon run --release "${ROOT_DIR}/src" -- -I "${CTEST_DIR}" -c -o "${TMP_DIR}/${base}.o" "${c_file}" >"${TMP_DIR}/${base}.tinycc.log" 2>&1; then
+  if ! moon run --release "${ROOT_DIR}/src" -- -I "${CTEST_DIR}" -c -o "${TMP_DIR}/${base}.o" "${wrap_c}" >"${TMP_DIR}/${base}.tinycc.log" 2>&1; then
     echo "FAILED: tinycc.mbt compilation failed"
     sed -n '1,120p' "${TMP_DIR}/${base}.tinycc.log" || true
     fail=$((fail + 1))
@@ -102,7 +120,7 @@ while IFS= read -r c_file; do
 done <"${tests_file}"
 
 echo "-------------------------------------------"
-echo "Summary: total=${total} failed=${fail}"
+echo "Summary: total=${total} failed=${fail} skipped=${skip}"
 if [[ "${fail}" -ne 0 && "${MODE}" != "allow-fail" ]]; then
   exit 1
 fi
