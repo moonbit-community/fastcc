@@ -1,3 +1,6 @@
 [submodule "refs/tinycc"]
 	path = refs/tinycc
 	url = https://github.com/TinyCC/tinycc.git
+[submodule "refs/mbtcc"]
+	path = refs/mbtcc
+	url = git@github.com:moonbitlang/mbtcc.git
