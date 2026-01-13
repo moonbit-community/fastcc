@@ -114,6 +114,18 @@ fn gen_arm64_load_global_int(emitter : Arm64Emitter, sym : Sym) -> Unit {
 }
 
 ///|
+fn const_u32_from_initializer(init : Initializer) -> UInt? {
+  match init {
+    Initializer::Expr(expr~, ..) =>
+      match const_i64_from_expr(expr) {
+        None => None
+        Some(value) => Some((value.to_uint64() & 0xffff_ffff).to_uint())
+      }
+    _ => None
+  }
+}
+
+///|
 fn codegen_arm64_object_bytes(unit : TranslationUnit, bag : DiagBag) -> Bytes? {
   let mut main_def : FuncDef? = None
   let func_defs : Map[String, FuncDef] = {}
@@ -218,12 +230,11 @@ fn codegen_arm64_object_bytes(unit : TranslationUnit, bag : DiagBag) -> Bytes? {
               None
             }
             Some(var_decl) =>
-              if var_decl.init is Some(_) ||
-                var_decl.storage == StorageClass::Extern {
+              if var_decl.storage == StorageClass::Extern {
                 add_error(
                   bag,
                   func.loc,
-                  "codegen: only supports uninitialized non-extern global for now",
+                  "codegen: only supports non-extern global for now",
                 )
                 None
               } else {
@@ -232,30 +243,71 @@ fn codegen_arm64_object_bytes(unit : TranslationUnit, bag : DiagBag) -> Bytes? {
                 gen_arm64_load_global_int(emitter, { id: 2 })
                 gen_arm64_epilogue(emitter)
                 let text = section_from_emitter(".text", emitter)
-                let bss : Section = {
-                  name: ".bss",
-                  data: [],
-                  relocs: [],
-                  align: 4,
-                  size_bytes: 4,
+                match var_decl.init {
+                  None => {
+                    let bss : Section = {
+                      name: ".bss",
+                      data: [],
+                      relocs: [],
+                      align: 4,
+                      size_bytes: 4,
+                    }
+                    let symbols = [
+                      {
+                        id: 1,
+                        name: "_main",
+                        section: Some(".text"),
+                        value: 0,
+                        is_external: true,
+                      },
+                      {
+                        id: 2,
+                        name: "_\{name}",
+                        section: Some(".bss"),
+                        value: 0,
+                        is_external: true,
+                      },
+                    ]
+                    Some(encode_macho_object([text, bss], symbols))
+                  }
+                  Some(init) =>
+                    match const_u32_from_initializer(init) {
+                      None => {
+                        add_error(
+                          bag,
+                          func.loc,
+                          "codegen: only supports constant int initializer for global for now",
+                        )
+                        None
+                      }
+                      Some(word) => {
+                        let data : Section = {
+                          name: ".data",
+                          data: [word],
+                          relocs: [],
+                          align: 4,
+                          size_bytes: 4,
+                        }
+                        let symbols = [
+                          {
+                            id: 1,
+                            name: "_main",
+                            section: Some(".text"),
+                            value: 0,
+                            is_external: true,
+                          },
+                          {
+                            id: 2,
+                            name: "_\{name}",
+                            section: Some(".data"),
+                            value: 0,
+                            is_external: true,
+                          },
+                        ]
+                        Some(encode_macho_object([text, data], symbols))
+                      }
+                    }
                 }
-                let symbols = [
-                  {
-                    id: 1,
-                    name: "_main",
-                    section: Some(".text"),
-                    value: 0,
-                    is_external: true,
-                  },
-                  {
-                    id: 2,
-                    name: "_\{name}",
-                    section: Some(".bss"),
-                    value: 0,
-                    is_external: true,
-                  },
-                ]
-                Some(encode_macho_object([text, bss], symbols))
               }
           }
         _ => {

@@ -8,6 +8,57 @@ fn read_u32_le_at(bytes : Bytes, offset : Int) -> UInt {
 }
 
 ///|
+fn read_padded_name(bytes : Bytes, offset : Int) -> String {
+  let mut end = 0
+  while end < 16 && bytes[offset + end] != 0 {
+    end = end + 1
+  }
+  let buf = @buffer.new()
+  let mut i = 0
+  while i < end {
+    buf.write_byte(bytes[offset + i])
+    i = i + 1
+  }
+  try @encoding/utf8.decode(buf.to_bytes()) catch {
+    _ => ""
+  } noraise {
+    s => s
+  }
+}
+
+///|
+fn macho_section_file_offset(
+  bytes : Bytes,
+  seg : String,
+  sect : String,
+) -> Int? {
+  let ncmds = read_u32_le_at(bytes, 16).to_int()
+  let mut off = 32
+  let mut i = 0
+  while i < ncmds {
+    let cmd = read_u32_le_at(bytes, off)
+    let cmdsize = read_u32_le_at(bytes, off + 4).to_int()
+    if cmd == LC_SEGMENT_64 {
+      let nsects = read_u32_le_at(bytes, off + 64).to_int()
+      let mut j = 0
+      let mut sect_off = off + 72
+      while j < nsects {
+        let sectname = read_padded_name(bytes, sect_off)
+        let segname = read_padded_name(bytes, sect_off + 16)
+        if segname == seg && sectname == sect {
+          return Some(read_u32_le_at(bytes, sect_off + 48).to_int())
+        }
+        sect_off = sect_off + 80
+        j = j + 1
+      }
+    }
+    off = off + cmdsize
+    i = i + 1
+  }
+  None
+}
+
+///|
 fn macho_text_section_offsets(bytes : Bytes) -> (Int, Int, Int) {
   let section_hdr = 32 + 72
   let text_off = read_u32_le_at(bytes, section_hdr + 48).to_int()
@@ -73,4 +124,21 @@ test "codegen emits global load relocs for return x" {
   assert_eq(read_u32_le_at(bytes, reloff + 4), (0x3d000001 : UInt))
   assert_eq(read_u32_le_at(bytes, reloff + 8), (12 : UInt))
   assert_eq(read_u32_le_at(bytes, reloff + 12), (0x4c000001 : UInt))
+}
+
+///|
+test "codegen emits .data for initialized global int" {
+  let (unit, bag) = parse_text("int x=3; int main(){return x;}")
+  assert_true(!has_errors(bag))
+  check_translation_unit(unit, bag)
+  assert_true(!has_errors(bag))
+  let bytes = match codegen_arm64_object_bytes(unit, bag) {
+    None => fail("expected object bytes")
+    Some(b) => b
+  }
+  let data_off = match macho_section_file_offset(bytes, "__DATA", "__data") {
+    None => fail("expected __DATA,__data section")
+    Some(v) => v
+  }
+  assert_eq(read_u32_le_at(bytes, data_off), (3 : UInt))
 }
