@@ -904,6 +904,88 @@ fn gen_expr_int32(
           arm64_ldrx(emitter, signed, sz, dst.to_uint(), addr.to_uint(), 0)
           give_reg(pool, addr)
         }
+        UnaryOp::PreInc | UnaryOp::PreDec | UnaryOp::PostInc | UnaryOp::PostDec => {
+          let ty = type_of_expr(alloc.sem, inner)
+          if type_is_pointer_like(ty) {
+            add_error(bag, loc, "codegen: pointer inc/dec not supported yet")
+            return
+          }
+          if !type_is_supported_int32(ty) {
+            add_error(bag, loc, "codegen: inc/dec only supported for int for now")
+            return
+          }
+          let addr = take_reg(pool) catch {
+            err => {
+              add_error(bag, loc, err.to_string())
+              return
+            }
+          }
+          gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, inner, addr, bag)
+          arm64_ldrx(emitter, false, 2, dst.to_uint(), addr.to_uint(), 0)
+          let one = take_reg(pool) catch {
+            err => {
+              add_error(bag, loc, err.to_string())
+              give_reg(pool, addr)
+              return
+            }
+          }
+          arm64_movimm(emitter, one.to_uint(), 1)
+          if op == UnaryOp::PostInc || op == UnaryOp::PostDec {
+            let updated = take_reg(pool) catch {
+              err => {
+                add_error(bag, loc, err.to_string())
+                give_reg(pool, one)
+                give_reg(pool, addr)
+                return
+              }
+            }
+            emit_mov(emitter, false, updated, dst)
+            if op == UnaryOp::PostInc {
+              emit32(
+                emitter,
+                (0x0b000000 : Int)
+                .lor(updated)
+                .lor(updated << 5)
+                .lor(one << 16)
+                .reinterpret_as_uint(),
+              )
+            } else {
+              emit32(
+                emitter,
+                (0x4b000000 : Int)
+                .lor(updated)
+                .lor(updated << 5)
+                .lor(one << 16)
+                .reinterpret_as_uint(),
+              )
+            }
+            arm64_strx(emitter, 2, updated.to_uint(), addr.to_uint(), 0)
+            give_reg(pool, updated)
+          } else {
+            if op == UnaryOp::PreInc {
+              emit32(
+                emitter,
+                (0x0b000000 : Int)
+                .lor(dst)
+                .lor(dst << 5)
+                .lor(one << 16)
+                .reinterpret_as_uint(),
+              )
+            } else {
+              emit32(
+                emitter,
+                (0x4b000000 : Int)
+                .lor(dst)
+                .lor(dst << 5)
+                .lor(one << 16)
+                .reinterpret_as_uint(),
+              )
+            }
+            arm64_strx(emitter, 2, dst.to_uint(), addr.to_uint(), 0)
+          }
+          give_reg(pool, one)
+          give_reg(pool, addr)
+        }
         _ => add_error(bag, loc, "codegen: unsupported unary operator")
       }
     }
@@ -950,6 +1032,96 @@ fn gen_expr_int32(
             }
             _ => add_error(bag, loc, "codegen: unsupported assignment lhs for now")
           }
+        BinaryOp::AddAssign | BinaryOp::SubAssign | BinaryOp::MulAssign |
+        BinaryOp::DivAssign | BinaryOp::ModAssign => {
+          let left_ty = type_of_expr(alloc.sem, left)
+          if type_is_pointer_like(left_ty) {
+            add_error(bag, loc, "codegen: compound assign pointer lhs not supported yet")
+            return
+          }
+          if !type_is_supported_int32(left_ty) {
+            add_error(bag, loc, "codegen: compound assign only supported for int for now")
+            return
+          }
+          let addr = take_reg(pool) catch {
+            err => {
+              add_error(bag, loc, err.to_string())
+              return
+            }
+          }
+          gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, left, addr, bag)
+          arm64_ldrx(emitter, false, 2, dst.to_uint(), addr.to_uint(), 0)
+          let tmp_old = take_reg(pool) catch {
+            err => {
+              add_error(bag, loc, err.to_string())
+              give_reg(pool, addr)
+              return
+            }
+          }
+          emit_mov(emitter, false, tmp_old, dst)
+          gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+          match op {
+            BinaryOp::AddAssign =>
+              emit32(
+                emitter,
+                (0x0b000000 : Int)
+                .lor(dst)
+                .lor(tmp_old << 5)
+                .lor(dst << 16)
+                .reinterpret_as_uint(),
+              )
+            BinaryOp::SubAssign =>
+              emit32(
+                emitter,
+                (0x4b000000 : Int)
+                .lor(dst)
+                .lor(tmp_old << 5)
+                .lor(dst << 16)
+                .reinterpret_as_uint(),
+              )
+            BinaryOp::MulAssign =>
+              emit32(
+                emitter,
+                (0x1b007c00 : Int)
+                .lor(dst)
+                .lor(tmp_old << 5)
+                .lor(dst << 16)
+                .reinterpret_as_uint(),
+              )
+            BinaryOp::DivAssign =>
+              emit32(
+                emitter,
+                (0x1ac00c00 : Int)
+                .lor(dst)
+                .lor(tmp_old << 5)
+                .lor(dst << 16)
+                .reinterpret_as_uint(),
+              )
+            BinaryOp::ModAssign => {
+              emit32(
+                emitter,
+                (0x1ac00c00 : Int)
+                .lor(30)
+                .lor(tmp_old << 5)
+                .lor(dst << 16)
+                .reinterpret_as_uint(),
+              )
+              emit32(
+                emitter,
+                (0x1b008000 : Int)
+                .lor(dst)
+                .lor(30 << 5)
+                .lor(dst << 16)
+                .lor(tmp_old << 10)
+                .reinterpret_as_uint(),
+              )
+            }
+            _ => ()
+          }
+          arm64_strx(emitter, 2, dst.to_uint(), addr.to_uint(), 0)
+          give_reg(pool, tmp_old)
+          give_reg(pool, addr)
+        }
         BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div |
         BinaryOp::Mod | BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor |
         BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt |
