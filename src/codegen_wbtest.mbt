@@ -68,6 +68,32 @@ fn macho_text_section_offsets(bytes : Bytes) -> (Int, Int, Int) {
 }
 
 ///|
+fn has_b_cond(bytes : Bytes, text_offset : Int, max_words : Int) -> Bool {
+  let mut i = 0
+  while i < max_words {
+    let w = read_u32_le_at(bytes, text_offset + (i << 2))
+    if (w & (0xff000010 : UInt)) == (0x54000000 : UInt) {
+      return true
+    }
+    i = i + 1
+  }
+  false
+}
+
+///|
+fn has_b_uncond(bytes : Bytes, text_offset : Int, max_words : Int) -> Bool {
+  let mut i = 0
+  while i < max_words {
+    let w = read_u32_le_at(bytes, text_offset + (i << 2))
+    if (w & (0x7c000000 : UInt)) == (0x14000000 : UInt) {
+      return true
+    }
+    i = i + 1
+  }
+  false
+}
+
+///|
 test "codegen emits arm64 main return 0 object" {
   let (unit, bag) = parse_text("int main(){return 0;}")
   assert_true(!has_errors(bag))
@@ -103,6 +129,41 @@ test "codegen emits call relocation for return f()" {
   assert_eq(read_u32_le_at(bytes, text_offset + 8), (0x94000000 : UInt))
   assert_eq(read_u32_le_at(bytes, reloff), (8 : UInt))
   assert_eq(read_u32_le_at(bytes, reloff + 4), (0x2d000001 : UInt))
+}
+
+///|
+test "codegen emits conditional branch for if/else" {
+  let (unit, bag) = parse_text(
+    "int main(){int a=1; if(a) return 3; else return 4;}",
+  )
+  assert_true(!has_errors(bag))
+  check_translation_unit(unit, bag)
+  assert_true(!has_errors(bag))
+  let bytes = match codegen_arm64_object_bytes(unit, bag) {
+    None => fail("expected object bytes")
+    Some(b) => b
+  }
+  assert_true(!has_errors(bag))
+  let (text_offset, _, _) = macho_text_section_offsets(bytes)
+  assert_true(has_b_cond(bytes, text_offset, 64))
+}
+
+///|
+test "codegen emits branches for while + break/continue" {
+  let (unit, bag) = parse_text(
+    "int main(){int i=0; while(i<3){i=i+1; if(i==2) continue; if(i==3) break;} return i;}",
+  )
+  assert_true(!has_errors(bag))
+  check_translation_unit(unit, bag)
+  assert_true(!has_errors(bag))
+  let bytes = match codegen_arm64_object_bytes(unit, bag) {
+    None => fail("expected object bytes")
+    Some(b) => b
+  }
+  assert_true(!has_errors(bag))
+  let (text_offset, _, _) = macho_text_section_offsets(bytes)
+  assert_true(has_b_cond(bytes, text_offset, 128))
+  assert_true(has_b_uncond(bytes, text_offset, 128))
 }
 
 ///|

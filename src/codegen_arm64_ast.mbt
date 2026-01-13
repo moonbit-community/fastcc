@@ -141,6 +141,7 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
       layout_expr(alloc, cond)
     }
     Stmt::For(init~, cond~, step~, body~, ..) => {
+      cg_push_scope(alloc)
       match init {
         None => ()
         Some(s) => layout_stmt(alloc, s)
@@ -154,6 +155,7 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
         Some(e) => layout_expr(alloc, e)
       }
       layout_stmt(alloc, body)
+      cg_pop_scope(alloc)
     }
     Stmt::Switch(cond~, body~, ..) => {
       layout_expr(alloc, cond)
@@ -238,6 +240,47 @@ fn emit_mov(emitter : Arm64Emitter, is64 : Bool, dst : Int, src : Int) -> Unit {
 fn emit_cmp(emitter : Arm64Emitter, is64 : Bool, a : Int, b : Int) -> Unit {
   let base : Int = if is64 { 0xeb00001f } else { 0x6b00001f }
   emit32(emitter, base.lor(a << 5).lor(b << 16).reinterpret_as_uint())
+}
+
+///|
+const ARM64_COND_EQ : Int = 0
+
+///|
+const ARM64_COND_NE : Int = 1
+
+///|
+fn emit_b_cond_placeholder(emitter : Arm64Emitter, cond : Int) -> Int {
+  let at = emitter_pc(emitter)
+  emit32(
+    emitter,
+    (0x54000000 : Int).lor(cond & 0xf).reinterpret_as_uint(),
+  )
+  at
+}
+
+///|
+fn patch_b_cond(
+  emitter : Arm64Emitter,
+  at_ : Int,
+  target_ : Int,
+  cond : Int,
+) -> Unit raise {
+  let at = at_
+  let target = target_
+  let diff = target - at
+  if (diff & 3) != 0 {
+    fail("codegen: unaligned b.cond target")
+  }
+  let imm = diff >> 2
+  let limit = 1 << 18
+  if imm < -limit || imm >= limit {
+    fail("codegen: conditional branch out of range")
+  }
+  let imm19 = imm & ((1 << 19) - 1)
+  emitter.code[at >> 2] = (0x54000000 : Int)
+    .lor((imm19 & 0x7ffff) << 5)
+    .lor(cond & 0xf)
+    .reinterpret_as_uint()
 }
 
 ///|
@@ -700,11 +743,52 @@ fn stmt_loc(stmt : Stmt) -> SrcLoc {
 }
 
 ///|
+struct LoopChains {
+  break_chain : Int
+  cont_chain : Int
+}
+
+///|
+fn loop_append_break(
+  loops : Array[LoopChains],
+  emitter : Arm64Emitter,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  let idx = loops.length() - 1
+  match loops.get(idx) {
+    None => add_error(bag, loc, "codegen: break outside of loop")
+    Some(info) => {
+      let chain = gjmp(emitter, info.break_chain)
+      loops[idx] = { break_chain: chain, cont_chain: info.cont_chain }
+    }
+  }
+}
+
+///|
+fn loop_append_continue(
+  loops : Array[LoopChains],
+  emitter : Arm64Emitter,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  let idx = loops.length() - 1
+  match loops.get(idx) {
+    None => add_error(bag, loc, "codegen: continue outside of loop")
+    Some(info) => {
+      let chain = gjmp(emitter, info.cont_chain)
+      loops[idx] = { break_chain: info.break_chain, cont_chain: chain }
+    }
+  }
+}
+
+///|
 fn gen_stmt(
   emitter : Arm64Emitter,
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
+  loops : Array[LoopChains],
   stmt : Stmt,
   bag : DiagBag,
   return_chain : Int,
@@ -714,7 +798,7 @@ fn gen_stmt(
       cg_push_scope(alloc)
       let mut chain = return_chain
       for s in stmts {
-        chain = gen_stmt(emitter, alloc, syms, pool, s, bag, chain)
+        chain = gen_stmt(emitter, alloc, syms, pool, loops, s, bag, chain)
       }
       cg_pop_scope(alloc)
       chain
@@ -750,6 +834,180 @@ fn gen_stmt(
             }
         }
       }
+      return_chain
+    }
+    Stmt::If(cond~, then_branch~, else_branch~, loc~) => {
+      gen_expr_int32(emitter, alloc, syms, pool, cond, 0, bag)
+      emit_cmp(emitter, false, 0, 31)
+      let br_false = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
+      let chain1 = gen_stmt(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        loops,
+        then_branch,
+        bag,
+        return_chain,
+      )
+      match else_branch {
+        None => {
+          let end_pc = emitter_pc(emitter)
+          patch_b_cond(emitter, br_false, end_pc, ARM64_COND_EQ) catch {
+            err => add_error(bag, loc, err.to_string())
+          }
+          chain1
+        }
+        Some(else_stmt) => {
+          let after_then = gjmp(emitter, 0)
+          let else_pc = emitter_pc(emitter)
+          patch_b_cond(emitter, br_false, else_pc, ARM64_COND_EQ) catch {
+            err => add_error(bag, loc, err.to_string())
+          }
+          let chain2 = gen_stmt(
+            emitter,
+            alloc,
+            syms,
+            pool,
+            loops,
+            else_stmt,
+            bag,
+            chain1,
+          )
+          let end_pc = emitter_pc(emitter)
+          gsym_addr(emitter, after_then, end_pc) catch {
+            err => add_error(bag, loc, err.to_string())
+          }
+          chain2
+        }
+      }
+    }
+    Stmt::While(cond~, body~, loc~) => {
+      let start_pc = emitter_pc(emitter)
+      gen_expr_int32(emitter, alloc, syms, pool, cond, 0, bag)
+      emit_cmp(emitter, false, 0, 31)
+      let br_end = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
+
+      loops.push({ break_chain: 0, cont_chain: 0 })
+      let chain1 = gen_stmt(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        loops,
+        body,
+        bag,
+        return_chain,
+      )
+      let loop_info = loops.pop().unwrap_or({ break_chain: 0, cont_chain: 0 })
+
+      gsym_addr(emitter, loop_info.cont_chain, start_pc) catch {
+        err => add_error(bag, loc, err.to_string())
+      }
+      gjmp_addr(emitter, start_pc) catch {
+        err => add_error(bag, loc, err.to_string())
+      }
+      let end_pc = emitter_pc(emitter)
+      patch_b_cond(emitter, br_end, end_pc, ARM64_COND_EQ) catch {
+        err => add_error(bag, loc, err.to_string())
+      }
+      gsym_addr(emitter, loop_info.break_chain, end_pc) catch {
+        err => add_error(bag, loc, err.to_string())
+      }
+      chain1
+    }
+    Stmt::DoWhile(cond~, body~, loc~) => {
+      let start_pc = emitter_pc(emitter)
+      loops.push({ break_chain: 0, cont_chain: 0 })
+      let chain1 = gen_stmt(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        loops,
+        body,
+        bag,
+        return_chain,
+      )
+      let cond_pc = emitter_pc(emitter)
+      let loop_info = loops.pop().unwrap_or({ break_chain: 0, cont_chain: 0 })
+      gsym_addr(emitter, loop_info.cont_chain, cond_pc) catch {
+        err => add_error(bag, loc, err.to_string())
+      }
+
+      gen_expr_int32(emitter, alloc, syms, pool, cond, 0, bag)
+      emit_cmp(emitter, false, 0, 31)
+      let br_back = emit_b_cond_placeholder(emitter, ARM64_COND_NE)
+      patch_b_cond(emitter, br_back, start_pc, ARM64_COND_NE) catch {
+        err => add_error(bag, loc, err.to_string())
+      }
+      let end_pc = emitter_pc(emitter)
+      gsym_addr(emitter, loop_info.break_chain, end_pc) catch {
+        err => add_error(bag, loc, err.to_string())
+      }
+      chain1
+    }
+    Stmt::For(init~, cond~, step~, body~, loc~) => {
+      cg_push_scope(alloc)
+      let mut chain0 = return_chain
+      match init {
+        None => ()
+        Some(s) => chain0 = gen_stmt(emitter, alloc, syms, pool, loops, s, bag, chain0)
+      }
+      let cond_pc = emitter_pc(emitter)
+      let br_end = match cond {
+        None => None
+        Some(e) => {
+          gen_expr_int32(emitter, alloc, syms, pool, e, 0, bag)
+          emit_cmp(emitter, false, 0, 31)
+          Some(emit_b_cond_placeholder(emitter, ARM64_COND_EQ))
+        }
+      }
+
+      loops.push({ break_chain: 0, cont_chain: 0 })
+      let chain1 = gen_stmt(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        loops,
+        body,
+        bag,
+        chain0,
+      )
+      let step_pc = emitter_pc(emitter)
+      let loop_info = loops.pop().unwrap_or({ break_chain: 0, cont_chain: 0 })
+      let continue_target = if step is Some(_) { step_pc } else { cond_pc }
+      gsym_addr(emitter, loop_info.cont_chain, continue_target) catch {
+        err => add_error(bag, loc, err.to_string())
+      }
+      match step {
+        None => ()
+        Some(e) => gen_expr_int32(emitter, alloc, syms, pool, e, 0, bag)
+      }
+      gjmp_addr(emitter, cond_pc) catch {
+        err => add_error(bag, loc, err.to_string())
+      }
+      let end_pc = emitter_pc(emitter)
+      match br_end {
+        None => ()
+        Some(at) =>
+          patch_b_cond(emitter, at, end_pc, ARM64_COND_EQ) catch {
+            err => add_error(bag, loc, err.to_string())
+          }
+      }
+      gsym_addr(emitter, loop_info.break_chain, end_pc) catch {
+        err => add_error(bag, loc, err.to_string())
+      }
+      cg_pop_scope(alloc)
+      chain1
+    }
+    Stmt::Break(loc~) => {
+      loop_append_break(loops, emitter, loc, bag)
+      return_chain
+    }
+    Stmt::Continue(loc~) => {
+      loop_append_continue(loops, emitter, loc, bag)
       return_chain
     }
     Stmt::ExprStmt(expr~, ..) => {
@@ -839,11 +1097,13 @@ fn gen_func_def(
     arg_i = arg_i + 1
   }
 
+  let loops : Array[LoopChains] = []
   let return_chain = gen_stmt(
     emitter,
     alloc,
     syms,
     pool,
+    loops,
     func.body,
     bag,
     0,
