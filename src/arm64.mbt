@@ -72,6 +72,21 @@ const R_AARCH64_LD64_GOT_LO12_NC : Int = 312
 const R_AARCH64_CALL26 : Int = 283
 
 ///|
+const R_AARCH64_ADR_PREL_PG_HI21 : Int = 275
+
+///|
+const R_AARCH64_ADR_PREL_PG_HI21_NC : Int = 276
+
+///|
+const R_AARCH64_ADD_ABS_LO12_NC : Int = 277
+
+///|
+const R_AARCH64_LDST8_ABS_LO12_NC : Int = 278
+
+///|
+const R_AARCH64_JUMP26 : Int = 282
+
+///|
 struct Arm64Emitter {
   code : Array[UInt]
   relocs : Array[Reloc]

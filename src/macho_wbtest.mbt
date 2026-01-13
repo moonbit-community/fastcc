@@ -45,3 +45,21 @@ test "macho section records reloc count" {
   let bytes = encode_macho_object([sec], symbols)
   assert_eq(read_u32_le(bytes, 164), (1 : UInt))
 }
+
+///|
+test "macho maps arm64 relocation kinds" {
+  assert_eq(macho_reloc_type(R_AARCH64_CALL26), (ARM64_RELOC_BRANCH26, true))
+  assert_eq(macho_reloc_type(R_AARCH64_JUMP26), (ARM64_RELOC_BRANCH26, true))
+  assert_eq(
+    macho_reloc_type(R_AARCH64_ADR_PREL_PG_HI21),
+    (ARM64_RELOC_PAGE21, true),
+  )
+  assert_eq(
+    macho_reloc_type(R_AARCH64_ADD_ABS_LO12_NC),
+    (ARM64_RELOC_PAGEOFF12, false),
+  )
+  assert_eq(
+    macho_reloc_type(R_AARCH64_LDST8_ABS_LO12_NC),
+    (ARM64_RELOC_PAGEOFF12, false),
+  )
+}
