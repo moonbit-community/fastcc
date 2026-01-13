@@ -82,8 +82,9 @@ test "codegen emits arm64 main return 0 object" {
   assert_eq(read_u32_le_at(bytes, text_offset), (0xa9bf7bfd : UInt))
   assert_eq(read_u32_le_at(bytes, text_offset + 4), (0x910003fd : UInt))
   assert_eq(read_u32_le_at(bytes, text_offset + 8), (0x52800000 : UInt))
-  assert_eq(read_u32_le_at(bytes, text_offset + 12), (0xa8c17bfd : UInt))
-  assert_eq(read_u32_le_at(bytes, text_offset + 16), (0xd65f03c0 : UInt))
+  assert_eq(read_u32_le_at(bytes, text_offset + 12), (0xd503201f : UInt))
+  assert_eq(read_u32_le_at(bytes, text_offset + 16), (0xa8c17bfd : UInt))
+  assert_eq(read_u32_le_at(bytes, text_offset + 20), (0xd65f03c0 : UInt))
 }
 
 ///|
