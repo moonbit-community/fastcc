@@ -1340,6 +1340,17 @@ fn eval_const_expr_value(
           (0, false)
         }
       }
+    Expr::BuiltinTypesCompatibleP(a~, b~, loc=type_loc) => {
+      register_type_defs(ctx, a, type_loc)
+      register_type_defs(ctx, b, type_loc)
+      let lhs = strip_qual_attrs(resolve_type(ctx, a, type_loc))
+      let rhs = strip_qual_attrs(resolve_type(ctx, b, type_loc))
+      (if types_compatible_for_decl(lhs, rhs) { 1 } else { 0 }, true)
+    }
+    Expr::BuiltinVaArg(..) => {
+      add_sem_error(ctx, loc, "invalid constant expression")
+      (0, false)
+    }
     Expr::Unary(op~, expr~, ..) => {
       let (v, ok) = eval_const_expr_value(ctx, expr, loc)
       if !ok {
@@ -1440,6 +1451,25 @@ fn eval_const_expr_value(
         Some((_, align)) => (align, true)
       }
     }
+    Expr::Call(callee=Expr::Ident(name~, ..), args~, loc=call_loc) =>
+      if name == "__builtin_choose_expr" && args.length() == 3 {
+        let (cond_val, ok) = eval_const_expr_value(ctx, args[0], call_loc)
+        if !ok {
+          return (0, false)
+        }
+        if cond_val != 0 {
+          eval_const_expr_value(ctx, args[1], call_loc)
+        } else {
+          eval_const_expr_value(ctx, args[2], call_loc)
+        }
+      } else if name == "__builtin_expect" && args.length() == 2 {
+        eval_const_expr_value(ctx, args[0], call_loc)
+      } else if name == "__builtin_constant_p" && args.length() == 1 {
+        (if is_constant_expr_for_builtin(ctx, args[0]) { 1 } else { 0 }, true)
+      } else {
+        add_sem_error(ctx, loc, "invalid constant expression")
+        (0, false)
+      }
     _ => {
       add_sem_error(ctx, loc, "invalid constant expression")
       (0, false)
@@ -1451,6 +1481,71 @@ fn eval_const_expr_value(
 fn eval_const_expr(ctx : SemContext, expr : Expr, loc : SrcLoc) -> Int {
   let (value, _) = eval_const_expr_value(ctx, expr, loc)
   value
+}
+
+///|
+fn is_constant_expr_for_builtin(ctx : SemContext, expr : Expr) -> Bool {
+  match expr {
+    Expr::IntLit(..) | Expr::CharLit(..) => true
+    Expr::Ident(name~, ..) => ctx.enum_consts.contains(name)
+    Expr::Unary(op~, expr=inner, ..) =>
+      match op {
+        UnaryOp::Plus | UnaryOp::Minus | UnaryOp::BitNot | UnaryOp::Not =>
+          is_constant_expr_for_builtin(ctx, inner)
+        _ => false
+      }
+    Expr::Binary(op~, left~, right~, ..) => {
+      if !is_constant_expr_for_builtin(ctx, left) ||
+        !is_constant_expr_for_builtin(ctx, right) {
+        return false
+      }
+      match op {
+        BinaryOp::Div | BinaryOp::Mod =>
+          match try_eval_int_const(ctx, right) {
+            Some(v) => v != 0
+            None => false
+          }
+        _ => true
+      }
+    }
+    Expr::Conditional(cond~, then_expr~, else_expr~, ..) =>
+      match try_eval_int_const(ctx, cond) {
+        Some(v) =>
+          if v != 0 {
+            is_constant_expr_for_builtin(ctx, then_expr)
+          } else {
+            is_constant_expr_for_builtin(ctx, else_expr)
+          }
+        None => false
+      }
+    Expr::Cast(expr=inner, ..) => is_constant_expr_for_builtin(ctx, inner)
+    Expr::SizeofExpr(expr=inner, loc~) =>
+      type_size_align(ctx, type_for_sizeof(ctx, inner), loc) is Some(_)
+    Expr::SizeofType(ty~, loc~) => type_size_align(ctx, ty, loc) is Some(_)
+    Expr::AlignofExpr(expr=inner, loc~) =>
+      type_size_align(ctx, type_for_sizeof(ctx, inner), loc) is Some(_)
+    Expr::AlignofType(ty~, loc~) => type_size_align(ctx, ty, loc) is Some(_)
+    Expr::BuiltinTypesCompatibleP(..) => true
+    Expr::Call(callee=Expr::Ident(name~, ..), args~, ..) =>
+      if name == "__builtin_choose_expr" && args.length() == 3 {
+        match try_eval_int_const(ctx, args[0]) {
+          Some(v) =>
+            if v != 0 {
+              is_constant_expr_for_builtin(ctx, args[1])
+            } else {
+              is_constant_expr_for_builtin(ctx, args[2])
+            }
+          None => false
+        }
+      } else if name == "__builtin_expect" && args.length() == 2 {
+        is_constant_expr_for_builtin(ctx, args[0])
+      } else if name == "__builtin_constant_p" && args.length() == 1 {
+        true
+      } else {
+        false
+      }
+    _ => false
+  }
 }
 
 ///|
@@ -2746,6 +2841,16 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
           default_int_type()
         }
       }
+    Expr::BuiltinTypesCompatibleP(a~, b~, loc~) => {
+      register_type_defs(ctx, a, loc)
+      register_type_defs(ctx, b, loc)
+      default_int_type()
+    }
+    Expr::BuiltinVaArg(list~, ty~, loc~) => {
+      ignore(type_of_expr(ctx, list))
+      register_type_defs(ctx, ty, loc)
+      resolve_type(ctx, ty, loc)
+    }
     Expr::Unary(op~, expr~, loc~) =>
       match op {
         UnaryOp::Addr =>
@@ -3070,7 +3175,75 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
         None => default_int_type()
       }
     Expr::Call(callee~, args~, loc~) => {
-      let callee_ty = type_of_expr(ctx, callee)
+      if callee is Expr::Ident(name~, ..) {
+        if name == "__builtin_choose_expr" {
+          if args.length() != 3 {
+            add_sem_error(ctx, loc, "__builtin_choose_expr expects 3 arguments")
+            return default_int_type()
+          }
+          let cond = eval_const_expr(ctx, args[0], loc)
+          if cond != 0 {
+            return type_of_expr(ctx, args[1])
+          } else {
+            return type_of_expr(ctx, args[2])
+          }
+        }
+        if name == "__builtin_expect" {
+          if args.length() != 2 {
+            add_sem_error(ctx, loc, "__builtin_expect expects 2 arguments")
+            return default_int_type()
+          }
+          ignore(type_of_expr(ctx, args[1]))
+          return type_of_expr(ctx, args[0])
+        }
+        if name == "__builtin_constant_p" {
+          if args.length() != 1 {
+            add_sem_error(ctx, loc, "__builtin_constant_p expects 1 argument")
+            return default_int_type()
+          }
+          ignore(type_of_expr(ctx, args[0]))
+          return default_int_type()
+        }
+        if name == "__builtin_unreachable" {
+          if args.length() != 0 {
+            add_sem_error(ctx, loc, "__builtin_unreachable expects no args")
+          }
+          return CType::Void
+        }
+        if name == "__builtin_va_start" {
+          if args.length() != 2 {
+            add_sem_error(ctx, loc, "__builtin_va_start expects 2 arguments")
+          }
+          for arg in args {
+            ignore(type_of_expr(ctx, arg))
+          }
+          return CType::Void
+        }
+      }
+      let callee_ty = match callee {
+        Expr::Ident(name~, loc=ident_loc) =>
+          match lookup_value(ctx, name) {
+            Some(ty) => ty
+            None => {
+              let sig : FuncSig = {
+                return_type: default_int_type(),
+                params: [],
+                varargs: false,
+                is_old_style: true,
+                call_conv: CallConv::Default,
+              }
+              add_function_sig(ctx, name, sig, ident_loc, is_def=false)
+              CType::Function(
+                return_type=sig.return_type,
+                params=sig.params,
+                varargs=sig.varargs,
+                is_old_style=sig.is_old_style,
+                call_conv=sig.call_conv,
+              )
+            }
+          }
+        _ => type_of_expr(ctx, callee)
+      }
       let fn_ty = match strip_qual_attrs(callee_ty) {
         CType::Function(..) => Some(strip_qual_attrs(callee_ty))
         CType::Pointer(inner) =>

@@ -65,6 +65,12 @@ test "sem rejects undeclared identifier" {
 }
 
 ///|
+test "sem accepts implicit function call" {
+  let (_, bag) = check_text("int main(){return foo(1);}")
+  assert_true(!has_errors(bag))
+}
+
+///|
 test "parse control flow and logical ops" {
   let (_, bag) = check_text(
     "int main(){int x=0;if(1){x=1;}else{x=2;}while(1){break;}do{x=x+1;}while(x<1);for(int i=0;i<3;i=i+1){continue;}switch(x){case 1 ... 3: x=2; break; default: x=3;}label: goto label;return (1?2:3,4);}",
@@ -111,6 +117,14 @@ test "sem accepts function pointer call" {
 }
 
 ///|
+test "sem accepts prototype call with multiple args" {
+  let (_, bag) = check_text(
+    "int f(int a, int b){return a+b;} int main(){return f(1,2);}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
 test "sem accepts old-style function declaration" {
   let (_, bag) = check_text("int f(); int f(int); int main(){return f(1);}")
   assert_true(!has_errors(bag))
@@ -135,6 +149,28 @@ test "sem accepts K&R default int parameters" {
   let (_, bag) = check_text(
     "int f(a,b){return a + b;} int main(){return f(1,2);}",
   )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts builtin choose_expr without typechecking dead branch" {
+  let (_, bag) = check_text(
+    "int main(){return __builtin_choose_expr(1, 2, undeclared);}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts builtin types_compatible_p in _Static_assert" {
+  let (_, bag) = check_text(
+    "_Static_assert(__builtin_types_compatible_p(int, int) == 1, \"ok\"); _Static_assert(__builtin_types_compatible_p(int, char) == 0, \"ok\"); int main(){return 0;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts builtin va_arg with type argument" {
+  let (_, bag) = check_text("int *p; int main(){return __builtin_va_arg(p, int);}")
   assert_true(!has_errors(bag))
 }
 

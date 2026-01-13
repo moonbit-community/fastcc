@@ -23,6 +23,15 @@ const LC_SEGMENT_64 : UInt = 0x19
 const LC_SYMTAB : UInt = 0x2
 
 ///|
+const LC_SOURCE_VERSION : UInt = 0x2a
+
+///|
+const LC_BUILD_VERSION : UInt = 0x32
+
+///|
+const PLATFORM_MACOS : UInt = 1
+
+///|
 const VM_PROT_READ : Int = 1
 
 ///|
@@ -332,6 +341,7 @@ fn encode_macho_object(
     }
     sizeofcmds = sizeofcmds + 72 + count * 80
   }
+  sizeofcmds = sizeofcmds + 24 + 16
   let mut offset = header_size + sizeofcmds
   let mut section_index = 1
   for seg in segment_order {
@@ -396,7 +406,7 @@ fn encode_macho_object(
     symbols, str_offsets, section_index_map,
   )
   let stroff = symoff + symtab.length()
-  let ncmds = segment_order.length() + 1
+  let ncmds = segment_order.length() + 3
   let out = @buffer.new()
   out.write_uint_le(MH_MAGIC_64)
   out.write_int_le(CPU_TYPE_ARM64)
@@ -447,6 +457,15 @@ fn encode_macho_object(
   out.write_uint_le(symbols.length().to_uint())
   out.write_uint_le(stroff.to_uint())
   out.write_uint_le(strtab.length().to_uint())
+  out.write_uint_le(LC_BUILD_VERSION)
+  out.write_uint_le(24)
+  out.write_uint_le(PLATFORM_MACOS)
+  out.write_uint_le(0x000a0600)
+  out.write_uint_le(0x000a0600)
+  out.write_uint_le(0)
+  out.write_uint_le(LC_SOURCE_VERSION)
+  out.write_uint_le(16)
+  out.write_uint64_le(0)
   let mut fileoff = out.length()
   for seg in segment_order {
     match segment_sections.get(seg) {

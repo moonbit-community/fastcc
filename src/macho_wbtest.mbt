@@ -23,7 +23,7 @@ test "macho header has segment and symtab" {
   let bytes = encode_macho_object([sec], symbols)
   assert_eq(read_u32_le(bytes, 0), MH_MAGIC_64)
   assert_eq(read_u32_le(bytes, 12), MH_OBJECT)
-  assert_eq(read_u32_le(bytes, 16), (2 : UInt))
+  assert_eq(read_u32_le(bytes, 16), (4 : UInt))
   assert_eq(read_u32_le(bytes, 32), LC_SEGMENT_64)
   assert_eq(read_u32_le(bytes, 96), (1 : UInt))
 }

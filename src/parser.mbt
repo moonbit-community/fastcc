@@ -2730,7 +2730,7 @@ fn parse_call_args(p : Parser) -> Array[Expr] {
     return args
   }
   while true {
-    args.push(parse_expr(p))
+    args.push(parse_expr_eq(p))
     if match_token(p, Comma) is Some(_) {
       continue
     }
@@ -2749,7 +2749,48 @@ fn parse_expr_primary(p : Parser) -> Expr {
     CharLit =>
       Expr::CharLit(value=parse_char_literal_value(p, tok), loc=tok.loc)
     StrLit => parse_string_literal_expr(p, tok)
-    Ident => Expr::Ident(name=tok.lexeme, loc=tok.loc)
+    Ident =>
+      if tok.lexeme == "__builtin_types_compatible_p" && peek_token(p).kind ==
+        LParen {
+        expect(
+          p,
+          LParen,
+          "expected '(' after __builtin_types_compatible_p",
+        ) |> ignore
+        let a = match parse_type_name(p) {
+          None => {
+            add_parse_error(p, tok.loc, "expected type name in builtin")
+            default_int_type()
+          }
+          Some(ty) => ty
+        }
+        expect(p, Comma, "expected ',' in __builtin_types_compatible_p") |> ignore
+        let b = match parse_type_name(p) {
+          None => {
+            add_parse_error(p, tok.loc, "expected type name in builtin")
+            default_int_type()
+          }
+          Some(ty) => ty
+        }
+        expect(p, RParen, "expected ')' after __builtin_types_compatible_p") |> ignore
+        Expr::BuiltinTypesCompatibleP(a~, b~, loc=tok.loc)
+      } else if tok.lexeme == "__builtin_va_arg" && peek_token(p).kind ==
+        LParen {
+        expect(p, LParen, "expected '(' after __builtin_va_arg") |> ignore
+        let list = parse_expr_eq(p)
+        expect(p, Comma, "expected ',' in __builtin_va_arg") |> ignore
+        let ty = match parse_type_name(p) {
+          None => {
+            add_parse_error(p, tok.loc, "expected type name in builtin")
+            default_int_type()
+          }
+          Some(v) => v
+        }
+        expect(p, RParen, "expected ')' after __builtin_va_arg") |> ignore
+        Expr::BuiltinVaArg(list~, ty~, loc=tok.loc)
+      } else {
+        Expr::Ident(name=tok.lexeme, loc=tok.loc)
+      }
     LParen => {
       let expr = parse_expr(p)
       expect(p, RParen, "expected ')'") |> ignore
@@ -3006,6 +3047,8 @@ fn expr_loc(expr : Expr) -> SrcLoc {
     Expr::CharLit(loc~, ..) => loc
     Expr::StringLit(loc~, ..) => loc
     Expr::Ident(loc~, ..) => loc
+    Expr::BuiltinTypesCompatibleP(loc~, ..) => loc
+    Expr::BuiltinVaArg(loc~, ..) => loc
     Expr::Unary(loc~, ..) => loc
     Expr::Cast(loc~, ..) => loc
     Expr::SizeofExpr(loc~, ..) => loc

@@ -458,6 +458,8 @@ enum Expr {
   CharLit(value~ : Int, loc~ : SrcLoc)
   StringLit(value~ : String, length~ : Int, loc~ : SrcLoc)
   Ident(name~ : String, loc~ : SrcLoc)
+  BuiltinTypesCompatibleP(a~ : CType, b~ : CType, loc~ : SrcLoc)
+  BuiltinVaArg(list~ : Expr, ty~ : CType, loc~ : SrcLoc)
   Unary(op~ : UnaryOp, expr~ : Expr, loc~ : SrcLoc)
   Cast(ty~ : CType, expr~ : Expr, loc~ : SrcLoc)
   SizeofExpr(expr~ : Expr, loc~ : SrcLoc)
