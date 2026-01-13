@@ -3099,13 +3099,39 @@ fn pop_typedef_scope(p : Parser) -> Unit {
 }
 
 ///|
+fn typedef_ref_type(ty : CType) -> CType {
+  match ty {
+    CType::Qualified(qual~, base~) =>
+      CType::Qualified(qual~, base=typedef_ref_type(base))
+    CType::Attributed(attrs~, base~) =>
+      CType::Attributed(attrs~, base=typedef_ref_type(base))
+    CType::Pointer(inner) => CType::Pointer(typedef_ref_type(inner))
+    CType::Array(elem~, size~) => CType::Array(elem=typedef_ref_type(elem), size~)
+    CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) =>
+      CType::Function(
+        return_type=typedef_ref_type(return_type),
+        params=params.map(t => typedef_ref_type(t)),
+        varargs~,
+        is_old_style~,
+        call_conv~,
+      )
+    CType::Struct(name~, fields=Some(_), attrs~) =>
+      CType::Struct(name~, fields=None, attrs~)
+    CType::Union(name~, fields=Some(_), attrs~) =>
+      CType::Union(name~, fields=None, attrs~)
+    CType::Enum(name~, items=Some(_)) => CType::Enum(name~, items=None)
+    _ => ty
+  }
+}
+
+///|
 fn define_typedef(p : Parser, name : String, ty : CType) -> Unit {
   if p.type_scopes.length() == 0 {
     p.type_scopes.push({})
   }
   let idx = p.type_scopes.length() - 1
   let scope = p.type_scopes[idx]
-  scope.set(name, ty)
+  scope.set(name, typedef_ref_type(ty))
   p.type_scopes[idx] = scope
 }
 
