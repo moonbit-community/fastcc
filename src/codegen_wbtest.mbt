@@ -52,3 +52,25 @@ test "codegen emits call relocation for return f()" {
   assert_eq(read_u32_le_at(bytes, reloff), (8 : UInt))
   assert_eq(read_u32_le_at(bytes, reloff + 4), (0x2d000001 : UInt))
 }
+
+///|
+test "codegen emits global load relocs for return x" {
+  let (unit, bag) = parse_text("int x; int main(){return x;}")
+  assert_true(!has_errors(bag))
+  check_translation_unit(unit, bag)
+  assert_true(!has_errors(bag))
+  let bytes = match codegen_arm64_object_bytes(unit, bag) {
+    None => fail("expected object bytes")
+    Some(b) => b
+  }
+  assert_true(!has_errors(bag))
+  let (text_offset, reloff, nreloc) = macho_text_section_offsets(bytes)
+  assert_eq(nreloc, 2)
+  assert_eq(read_u32_le_at(bytes, text_offset + 8), (0x90000000 : UInt))
+  assert_eq(read_u32_le_at(bytes, text_offset + 12), (0x91000000 : UInt))
+  assert_eq(read_u32_le_at(bytes, text_offset + 16), (0xb9400000 : UInt))
+  assert_eq(read_u32_le_at(bytes, reloff), (8 : UInt))
+  assert_eq(read_u32_le_at(bytes, reloff + 4), (0x3d000001 : UInt))
+  assert_eq(read_u32_le_at(bytes, reloff + 8), (12 : UInt))
+  assert_eq(read_u32_le_at(bytes, reloff + 12), (0x4c000001 : UInt))
+}
