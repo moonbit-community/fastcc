@@ -229,6 +229,20 @@ test "sem rejects negative frame address level" {
 }
 
 ///|
+test "sem accepts __atomic builtins" {
+  let (_, bag) = check_text(
+    "int x; int main(){ int v=1; int out=0; int expected=0; int desired=2; __atomic_store(&x, &v, 0); int r = __atomic_load(&x, &out, 0); int old = __atomic_exchange(&x, &desired, &out, 0); _Bool ok = __atomic_compare_exchange(&x, &expected, &desired, 0, 0, 0); int f = __atomic_fetch_add(&x, 1, 0); int g = __atomic_add_fetch(&x, 1, 0); return r + old + f + g + ok; }",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem rejects __atomic_fetch_add on pointer target" {
+  let (_, bag) = check_text("int *p; int main(){ return __atomic_fetch_add(&p, p, 0); }")
+  assert_true(has_errors(bag))
+}
+
+///|
 test "sem accepts implicit int function definition" {
   let (_, bag) = check_text("f(){return 0;} int main(){return f();}")
   assert_true(!has_errors(bag))

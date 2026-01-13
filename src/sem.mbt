@@ -87,6 +87,19 @@ fn char_pointer_type() -> CType {
 }
 
 ///|
+fn lookup_local_only(ctx : SemContext, name : String) -> CType? {
+  let mut i = ctx.locals.length()
+  while i > 0 {
+    i = i - 1
+    let scope = ctx.locals[i]
+    if scope.contains(name) {
+      return scope.get(name)
+    }
+  }
+  None
+}
+
+///|
 fn enum_int_type_from_range(min_value : Int, max_value : Int) -> CType {
   let max_int = 2147483647
   let min_int = -2147483647 - 1
@@ -3449,6 +3462,26 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
           if args.length() != 2 {
             add_sem_error(ctx, loc, "__builtin_va_start expects 2 arguments")
           }
+          if args.length() >= 1 {
+            match args[0] {
+              Expr::Ident(name=ap_name, loc=ap_loc) =>
+                match lookup_local_only(ctx, ap_name) {
+                  None =>
+                    add_sem_error(
+                      ctx,
+                      ap_loc,
+                      "__builtin_va_start expects a local variable",
+                    )
+                  Some(_) => ()
+                }
+              _ =>
+                add_sem_error(
+                  ctx,
+                  expr_loc(args[0]),
+                  "__builtin_va_start expects a local variable",
+                )
+            }
+          }
           for arg in args {
             ignore(type_of_expr(ctx, arg))
           }
@@ -3464,6 +3497,10 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
             }
           }
           return void_pointer_type()
+        }
+        match atomic_builtin_return_type(ctx, name, args, loc) {
+          None => ()
+          Some(ret) => return ret
         }
       }
       let callee_ty = match callee {
@@ -3682,6 +3719,182 @@ fn builtin_func_sig(name : String) -> FuncSig? {
     _ => None
   }
   sig
+}
+
+///|
+fn atomic_builtin_template(name : String) -> String? {
+  match name {
+    "__atomic_store" => Some("alm.?")
+    "__atomic_load" => Some("Asm.v")
+    "__atomic_exchange" => Some("alsm.v")
+    "__atomic_compare_exchange" => Some("aplbmm.b")
+    "__atomic_fetch_add" => Some("avm.v")
+    "__atomic_fetch_sub" => Some("avm.v")
+    "__atomic_fetch_or" => Some("avm.v")
+    "__atomic_fetch_xor" => Some("avm.v")
+    "__atomic_fetch_and" => Some("avm.v")
+    "__atomic_fetch_nand" => Some("avm.v")
+    "__atomic_add_fetch" => Some("avm.v")
+    "__atomic_sub_fetch" => Some("avm.v")
+    "__atomic_or_fetch" => Some("avm.v")
+    "__atomic_xor_fetch" => Some("avm.v")
+    "__atomic_and_fetch" => Some("avm.v")
+    "__atomic_nand_fetch" => Some("avm.v")
+    _ => None
+  }
+}
+
+///|
+fn is_pow2_int(x : Int) -> Bool {
+  x > 0 && (x & (x - 1)) == 0
+}
+
+///|
+fn atomic_builtin_return_type(
+  ctx : SemContext,
+  name : String,
+  args : Array[Expr],
+  loc : SrcLoc,
+) -> CType? {
+  let template = match atomic_builtin_template(name) {
+    None => return None
+    Some(v) => v
+  }
+  let mut dot_index = 0
+  while dot_index < template.length() && template[dot_index] != '.' {
+    dot_index = dot_index + 1
+  }
+  if dot_index >= template.length() - 1 {
+    return None
+  }
+  let arg_spec_len = dot_index
+  if args.length() != arg_spec_len {
+    add_sem_error(ctx, loc, "\{name} expects \{arg_spec_len} arguments")
+  }
+  let mut atom_type : CType? = None
+  let mut atom_size = 0
+  let allow_pointer_target = name == "__atomic_store" ||
+    name == "__atomic_load" ||
+    name == "__atomic_exchange" ||
+    name == "__atomic_compare_exchange"
+  for i = 0; i < arg_spec_len && i < args.length(); i = i + 1 {
+    let spec = template[i]
+    match spec {
+      'a' | 'A' => {
+        let ptr_ty = type_of_expr(ctx, args[i])
+        match strip_qual_attrs(ptr_ty) {
+          CType::Pointer(pointee) => {
+            atom_type = Some(pointee)
+            match type_size_align(ctx, pointee, loc) {
+              None => atom_size = 0
+              Some((size, _)) => {
+                atom_size = size
+                if size > 8 || !is_pow2_int(size) {
+                  add_sem_error(
+                    ctx,
+                    loc,
+                    "\{name} expects 1/2/4/8-byte atomic type",
+                  )
+                }
+              }
+            }
+            if !allow_pointer_target {
+              match strip_qual_attrs(pointee) {
+                CType::Pointer(_) =>
+                  add_sem_error(
+                    ctx,
+                    loc,
+                    "\{name} expects integral atomic target type",
+                  )
+                _ =>
+                  if !is_int_like(pointee) {
+                    add_sem_error(
+                      ctx,
+                      loc,
+                      "\{name} expects integral atomic target type",
+                    )
+                  }
+              }
+            }
+          }
+          _ => add_sem_error(ctx, loc, "\{name} expects pointer argument")
+        }
+      }
+      'p' | 'l' | 's' => {
+        let ptr_ty = type_of_expr(ctx, args[i])
+        match strip_qual_attrs(ptr_ty) {
+          CType::Pointer(pointee) => {
+            if atom_size > 0 {
+              match type_size_align(ctx, pointee, loc) {
+                None => ()
+                Some((size, _)) =>
+                  if size != atom_size {
+                    add_sem_error(
+                      ctx,
+                      loc,
+                      "\{name} pointer target type mismatch in argument \{i + 1}",
+                    )
+                  }
+              }
+            }
+            if spec == 'l' {
+              match atom_type {
+                None => ()
+                Some(at) =>
+                  if !can_assign(at, pointee) {
+                    add_sem_error(
+                      ctx,
+                      loc,
+                      "\{name} type mismatch in argument \{i + 1}",
+                    )
+                  }
+              }
+            }
+          }
+          _ => add_sem_error(ctx, loc, "\{name} expects pointer argument")
+        }
+      }
+      'v' => {
+        let v_ty = type_of_expr(ctx, args[i])
+        match atom_type {
+          None => ()
+          Some(at) =>
+            if !can_assign(at, v_ty) &&
+              !(is_pointer_type(at) && is_null_pointer_expr(ctx, args[i])) {
+              add_sem_error(
+                ctx,
+                loc,
+                "\{name} type mismatch in argument \{i + 1}",
+              )
+            }
+        }
+      }
+      'm' => {
+        let m_ty = type_of_expr(ctx, args[i])
+        if !is_int_like(m_ty) {
+          add_sem_error(ctx, loc, "\{name} expects int memory model")
+        }
+      }
+      'b' => {
+        let b_ty = type_of_expr(ctx, args[i])
+        if !is_scalar(b_ty) {
+          add_sem_error(ctx, loc, "\{name} expects scalar boolean argument")
+        }
+      }
+      _ => ()
+    }
+  }
+  let ret = template[dot_index + 1]
+  match ret {
+    '?' => Some(CType::Void)
+    'b' => Some(CType::Bool)
+    'v' =>
+      match atom_type {
+        None => Some(default_int_type())
+        Some(at) => Some(at)
+      }
+    _ => None
+  }
 }
 
 ///|
