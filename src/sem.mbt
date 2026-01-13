@@ -67,8 +67,23 @@ fn default_int_type() -> CType {
 }
 
 ///|
+fn size_t_type() -> CType {
+  CType::Int(kind=CIntKind::Long, unsigned=true)
+}
+
+///|
 fn char_type() -> CType {
   CType::Int(kind=CIntKind::Char, unsigned=false)
+}
+
+///|
+fn void_pointer_type() -> CType {
+  CType::Pointer(CType::Void)
+}
+
+///|
+fn char_pointer_type() -> CType {
+  CType::Pointer(char_type())
 }
 
 ///|
@@ -1347,6 +1362,13 @@ fn eval_const_expr_value(
       let rhs = strip_qual_attrs(resolve_type(ctx, b, type_loc))
       (if types_compatible_for_decl(lhs, rhs) { 1 } else { 0 }, true)
     }
+    Expr::BuiltinOffsetof(ty~, path~, loc=type_loc) => {
+      register_type_defs(ctx, ty, type_loc)
+      match eval_builtin_offsetof(ctx, ty, path, type_loc) {
+        None => (0, false)
+        Some(v) => (v, true)
+      }
+    }
     Expr::BuiltinVaArg(..) => {
       add_sem_error(ctx, loc, "invalid constant expression")
       (0, false)
@@ -1484,6 +1506,213 @@ fn eval_const_expr(ctx : SemContext, expr : Expr, loc : SrcLoc) -> Int {
 }
 
 ///|
+fn eval_builtin_offsetof(
+  ctx : SemContext,
+  ty : CType,
+  path : Array[String],
+  loc : SrcLoc,
+) -> Int? {
+  match eval_builtin_offsetof_and_type(ctx, ty, path, loc) {
+    None => None
+    Some((off, _)) => Some(off)
+  }
+}
+
+///|
+fn eval_builtin_offsetof_and_type(
+  ctx : SemContext,
+  ty : CType,
+  path : Array[String],
+  loc : SrcLoc,
+) -> (Int, CType)? {
+  if path.length() == 0 {
+    add_sem_error(ctx, loc, "__builtin_offsetof expects member designator")
+    return None
+  }
+  let mut current = resolve_type(ctx, ty, loc) |> strip_qual_attrs
+  let mut offset = 0
+  for name in path {
+    match strip_qual_attrs(current) {
+      CType::Struct(name=tag, fields=field_list, attrs=attrs) =>
+        match ensure_struct_fields(ctx, tag, field_list, is_union=false, loc) {
+          None => return None
+          Some(def) =>
+            match struct_field_offset_and_type(ctx, def, attrs, name, loc) {
+              None => return None
+              Some((field_off, field_ty)) => {
+                offset = offset + field_off
+                current = resolve_type(ctx, field_ty, loc) |> strip_qual_attrs
+              }
+            }
+        }
+      CType::Union(name=tag, fields=field_list, attrs=attrs) =>
+        match ensure_struct_fields(ctx, tag, field_list, is_union=true, loc) {
+          None => return None
+          Some(def) =>
+            match union_field_offset_and_type(ctx, def, attrs, name, loc) {
+              None => return None
+              Some((field_off, field_ty)) => {
+                offset = offset + field_off
+                current = resolve_type(ctx, field_ty, loc) |> strip_qual_attrs
+              }
+            }
+        }
+      _ => {
+        add_sem_error(ctx, loc, "__builtin_offsetof expects struct/union type")
+        return None
+      }
+    }
+  }
+  Some((offset, current))
+}
+
+///|
+fn struct_field_offset_and_type(
+  ctx : SemContext,
+  def : RecordDef,
+  struct_attrs : Attributes,
+  name : String,
+  loc : SrcLoc,
+) -> (Int, CType)? {
+  let fields = def.fields
+  let attrs = merge_attrs(def.attrs, struct_attrs)
+  let mut size = 0
+  let mut bit_unit_bits = 0
+  let mut bit_offset = 0
+  let mut bit_unit_size = 0
+  for i = 0; i < fields.length(); i = i + 1 {
+    let field = fields[i]
+    let packed = attrs.packed || field.attrs.packed
+    let field_align_override = attr_align_value(ctx, field.attrs, field.loc)
+    match field.bit_width {
+      Some(expr) => {
+        let width = match const_int_from_expr(ctx, expr, field.loc) {
+          Some(v) => v
+          None => 0
+        }
+        let base = strip_qualifiers(field.ty)
+        let (base_size, base_align) = match type_size_align(ctx, base, loc) {
+          None => (0, 1)
+          Some(v) => v
+        }
+        let unit_bits = base_size * 8
+        let mut field_align = if packed { 1 } else { base_align }
+        match field_align_override {
+          None => ()
+          Some(value) => field_align = value
+        }
+        if width == 0 {
+          size = align_to(size, field_align)
+          bit_unit_bits = 0
+          bit_offset = 0
+          bit_unit_size = 0
+          continue
+        }
+        if bit_unit_bits == 0 ||
+          bit_unit_bits != unit_bits ||
+          width > unit_bits - bit_offset {
+          size = align_to(size, field_align)
+          bit_unit_bits = unit_bits
+          bit_unit_size = base_size
+          bit_offset = 0
+        }
+        if field.name == name {
+          add_sem_error(ctx, loc, "cannot apply __builtin_offsetof to bit-field '\{name}'")
+          return None
+        }
+        bit_offset = bit_offset + width
+        if bit_offset == bit_unit_bits {
+          size = size + bit_unit_size
+          bit_unit_bits = 0
+          bit_unit_size = 0
+          bit_offset = 0
+        }
+      }
+      None => {
+        if bit_unit_bits != 0 {
+          size = size + bit_unit_size
+          bit_unit_bits = 0
+          bit_unit_size = 0
+          bit_offset = 0
+        }
+        let (field_size, field_align) = match strip_qualifiers(field.ty) {
+          CType::Array(elem~, size=None) => {
+            let (_elem_size, elem_align) = match
+              type_size_align(ctx, elem, field.loc) {
+              None => (0, 1)
+              Some(v) => v
+            }
+            (0, elem_align)
+          }
+          _ =>
+            match type_size_align(ctx, field.ty, loc) {
+              None => (0, 1)
+              Some(v) => v
+            }
+        }
+        let mut adjusted_align = if packed { 1 } else { field_align }
+        match field_align_override {
+          None => ()
+          Some(value) => adjusted_align = value
+        }
+        size = align_to(size, adjusted_align)
+        if field.name == name {
+          return Some((size, field.ty))
+        }
+        if field.name == "" {
+          match strip_qual_attrs(field.ty) {
+            CType::Struct(..) | CType::Union(..) =>
+              match eval_builtin_offsetof_and_type(ctx, field.ty, [name], loc) {
+                Some((inner_off, inner_ty)) =>
+                  return Some((size + inner_off, inner_ty))
+                None => ()
+              }
+            _ => ()
+          }
+        }
+        size = size + field_size
+      }
+    }
+  }
+  add_sem_error(ctx, loc, "unknown field '\{name}' in __builtin_offsetof")
+  None
+}
+
+///|
+fn union_field_offset_and_type(
+  ctx : SemContext,
+  def : RecordDef,
+  union_attrs : Attributes,
+  name : String,
+  loc : SrcLoc,
+) -> (Int, CType)? {
+  let fields = def.fields
+  let _attrs = merge_attrs(def.attrs, union_attrs)
+  for field in fields {
+    if field.name == name {
+      if field.bit_width is Some(_) {
+        add_sem_error(ctx, loc, "cannot apply __builtin_offsetof to bit-field '\{name}'")
+        return None
+      }
+      return Some((0, field.ty))
+    }
+    if field.name == "" {
+      match strip_qual_attrs(field.ty) {
+        CType::Struct(..) | CType::Union(..) =>
+          match eval_builtin_offsetof_and_type(ctx, field.ty, [name], loc) {
+            Some((inner_off, inner_ty)) =>
+              return Some((inner_off, inner_ty))
+            None => ()
+          }
+        _ => ()
+      }
+    }
+  }
+  add_sem_error(ctx, loc, "unknown field '\{name}' in __builtin_offsetof")
+  None
+}
+
+///|
 fn is_constant_expr_for_builtin(ctx : SemContext, expr : Expr) -> Bool {
   match expr {
     Expr::IntLit(..) | Expr::CharLit(..) => true
@@ -1526,6 +1755,7 @@ fn is_constant_expr_for_builtin(ctx : SemContext, expr : Expr) -> Bool {
       type_size_align(ctx, type_for_sizeof(ctx, inner), loc) is Some(_)
     Expr::AlignofType(ty~, loc~) => type_size_align(ctx, ty, loc) is Some(_)
     Expr::BuiltinTypesCompatibleP(..) => true
+    Expr::BuiltinOffsetof(..) => true
     Expr::Call(callee=Expr::Ident(name~, ..), args~, ..) =>
       if name == "__builtin_choose_expr" && args.length() == 3 {
         match try_eval_int_const(ctx, args[0]) {
@@ -2846,6 +3076,11 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
       register_type_defs(ctx, b, loc)
       default_int_type()
     }
+    Expr::BuiltinOffsetof(ty~, path~, loc~) => {
+      register_type_defs(ctx, ty, loc)
+      ignore(eval_builtin_offsetof(ctx, ty, path, loc))
+      size_t_type()
+    }
     Expr::BuiltinVaArg(list~, ty~, loc~) => {
       ignore(type_of_expr(ctx, list))
       register_type_defs(ctx, ty, loc)
@@ -3219,27 +3454,52 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
           }
           return CType::Void
         }
+        if name == "__builtin_frame_address" || name == "__builtin_return_address" {
+          if args.length() != 1 {
+            add_sem_error(ctx, loc, "\{name} expects 1 argument")
+          } else {
+            let level = eval_const_expr(ctx, args[0], loc)
+            if level < 0 {
+              add_sem_error(ctx, loc, "\{name} only takes non-negative integers")
+            }
+          }
+          return void_pointer_type()
+        }
       }
       let callee_ty = match callee {
         Expr::Ident(name~, loc=ident_loc) =>
           match lookup_value(ctx, name) {
             Some(ty) => ty
             None => {
-              let sig : FuncSig = {
-                return_type: default_int_type(),
-                params: [],
-                varargs: false,
-                is_old_style: true,
-                call_conv: CallConv::Default,
+              match builtin_func_sig(name) {
+                Some(sig) => {
+                  add_function_sig(ctx, name, sig, ident_loc, is_def=false)
+                  CType::Function(
+                    return_type=sig.return_type,
+                    params=sig.params,
+                    varargs=sig.varargs,
+                    is_old_style=sig.is_old_style,
+                    call_conv=sig.call_conv,
+                  )
+                }
+                None => {
+                  let sig : FuncSig = {
+                    return_type: default_int_type(),
+                    params: [],
+                    varargs: false,
+                    is_old_style: true,
+                    call_conv: CallConv::Default,
+                  }
+                  add_function_sig(ctx, name, sig, ident_loc, is_def=false)
+                  CType::Function(
+                    return_type=sig.return_type,
+                    params=sig.params,
+                    varargs=sig.varargs,
+                    is_old_style=sig.is_old_style,
+                    call_conv=sig.call_conv,
+                  )
+                }
               }
-              add_function_sig(ctx, name, sig, ident_loc, is_def=false)
-              CType::Function(
-                return_type=sig.return_type,
-                params=sig.params,
-                varargs=sig.varargs,
-                is_old_style=sig.is_old_style,
-                call_conv=sig.call_conv,
-              )
             }
           }
         _ => type_of_expr(ctx, callee)
@@ -3286,6 +3546,142 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
       }
     }
   }
+}
+
+///|
+fn builtin_func_sig(name : String) -> FuncSig? {
+  let voidp = void_pointer_type()
+  let charp = char_pointer_type()
+  let size_t = size_t_type()
+  let int_ty = default_int_type()
+  let sig = match name {
+    "__builtin_abort" =>
+      Some({
+        return_type: CType::Void,
+        params: [],
+        varargs: false,
+        is_old_style: false,
+        call_conv: CallConv::Default,
+      })
+    "__builtin_free" =>
+      Some({
+        return_type: CType::Void,
+        params: [voidp],
+        varargs: false,
+        is_old_style: false,
+        call_conv: CallConv::Default,
+      })
+    "__builtin_malloc" =>
+      Some({
+        return_type: voidp,
+        params: [size_t],
+        varargs: false,
+        is_old_style: false,
+        call_conv: CallConv::Default,
+      })
+    "__builtin_calloc" =>
+      Some({
+        return_type: voidp,
+        params: [size_t, size_t],
+        varargs: false,
+        is_old_style: false,
+        call_conv: CallConv::Default,
+      })
+    "__builtin_realloc" =>
+      Some({
+        return_type: voidp,
+        params: [voidp, size_t],
+        varargs: false,
+        is_old_style: false,
+        call_conv: CallConv::Default,
+      })
+    "__builtin_alloca" =>
+      Some({
+        return_type: voidp,
+        params: [size_t],
+        varargs: false,
+        is_old_style: false,
+        call_conv: CallConv::Default,
+      })
+    "__builtin_memcpy" | "__builtin_memmove" =>
+      Some({
+        return_type: voidp,
+        params: [voidp, voidp, size_t],
+        varargs: false,
+        is_old_style: false,
+        call_conv: CallConv::Default,
+      })
+    "__builtin_memset" =>
+      Some({
+        return_type: voidp,
+        params: [voidp, int_ty, size_t],
+        varargs: false,
+        is_old_style: false,
+        call_conv: CallConv::Default,
+      })
+    "__builtin_memcmp" =>
+      Some({
+        return_type: int_ty,
+        params: [voidp, voidp, size_t],
+        varargs: false,
+        is_old_style: false,
+        call_conv: CallConv::Default,
+      })
+    "__builtin_strlen" =>
+      Some({
+        return_type: size_t,
+        params: [charp],
+        varargs: false,
+        is_old_style: false,
+        call_conv: CallConv::Default,
+      })
+    "__builtin_strcpy" | "__builtin_strncpy" | "__builtin_strcat" | "__builtin_strncat" =>
+      Some({
+        return_type: charp,
+        params: if name == "__builtin_strncpy" || name == "__builtin_strncat" {
+          [charp, charp, size_t]
+        } else {
+          [charp, charp]
+        },
+        varargs: false,
+        is_old_style: false,
+        call_conv: CallConv::Default,
+      })
+    "__builtin_strcmp" =>
+      Some({
+        return_type: int_ty,
+        params: [charp, charp],
+        varargs: false,
+        is_old_style: false,
+        call_conv: CallConv::Default,
+      })
+    "__builtin_strncmp" =>
+      Some({
+        return_type: int_ty,
+        params: [charp, charp, size_t],
+        varargs: false,
+        is_old_style: false,
+        call_conv: CallConv::Default,
+      })
+    "__builtin_strchr" | "__builtin_strrchr" =>
+      Some({
+        return_type: charp,
+        params: [charp, int_ty],
+        varargs: false,
+        is_old_style: false,
+        call_conv: CallConv::Default,
+      })
+    "__builtin_strdup" =>
+      Some({
+        return_type: charp,
+        params: [charp],
+        varargs: false,
+        is_old_style: false,
+        call_conv: CallConv::Default,
+      })
+    _ => None
+  }
+  sig
 }
 
 ///|

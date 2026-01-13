@@ -2774,6 +2774,30 @@ fn parse_expr_primary(p : Parser) -> Expr {
         }
         expect(p, RParen, "expected ')' after __builtin_types_compatible_p") |> ignore
         Expr::BuiltinTypesCompatibleP(a~, b~, loc=tok.loc)
+      } else if tok.lexeme == "__builtin_offsetof" && peek_token(p).kind ==
+        LParen {
+        expect(p, LParen, "expected '(' after __builtin_offsetof") |> ignore
+        let ty = match parse_type_name(p) {
+          None => {
+            add_parse_error(p, tok.loc, "expected type name in __builtin_offsetof")
+            default_int_type()
+          }
+          Some(v) => v
+        }
+        expect(p, Comma, "expected ',' in __builtin_offsetof") |> ignore
+        let path : Array[String] = []
+        match expect_ident(p, "expected member name in __builtin_offsetof") {
+          None => ()
+          Some(id) => path.push(id.lexeme)
+        }
+        while match_token(p, Dot) is Some(_) {
+          match expect_ident(p, "expected member name in __builtin_offsetof") {
+            None => break
+            Some(id) => path.push(id.lexeme)
+          }
+        }
+        expect(p, RParen, "expected ')' after __builtin_offsetof") |> ignore
+        Expr::BuiltinOffsetof(ty~, path~, loc=tok.loc)
       } else if tok.lexeme == "__builtin_va_arg" && peek_token(p).kind ==
         LParen {
         expect(p, LParen, "expected '(' after __builtin_va_arg") |> ignore
@@ -3048,6 +3072,7 @@ fn expr_loc(expr : Expr) -> SrcLoc {
     Expr::StringLit(loc~, ..) => loc
     Expr::Ident(loc~, ..) => loc
     Expr::BuiltinTypesCompatibleP(loc~, ..) => loc
+    Expr::BuiltinOffsetof(loc~, ..) => loc
     Expr::BuiltinVaArg(loc~, ..) => loc
     Expr::Unary(loc~, ..) => loc
     Expr::Cast(loc~, ..) => loc

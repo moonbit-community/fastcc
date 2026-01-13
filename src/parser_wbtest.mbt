@@ -175,6 +175,60 @@ test "sem accepts builtin va_arg with type argument" {
 }
 
 ///|
+test "sem accepts builtin libc function signatures" {
+  let (_, bag) = check_text(
+    "char buf[8]; const char *s = \"abc\"; int main(){ char *p = __builtin_strcpy(buf, s); unsigned long n = __builtin_strlen(s); return __builtin_memcmp(p, s, n + 1); }",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem evaluates __builtin_offsetof for struct fields" {
+  let (_, bag) = check_text(
+    "struct S { char c; int x; }; _Static_assert(__builtin_offsetof(struct S, x) == 4, \"ok\"); int main(){return 0;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem evaluates __builtin_offsetof for nested fields" {
+  let (_, bag) = check_text(
+    "struct A { int x; }; struct B { struct A a; int y; }; _Static_assert(__builtin_offsetof(struct B, a.x) == 0, \"ok\"); _Static_assert(__builtin_offsetof(struct B, y) == 4, \"ok\"); int main(){return 0;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem evaluates __builtin_offsetof for union fields" {
+  let (_, bag) = check_text(
+    "union U { int x; char c; }; _Static_assert(__builtin_offsetof(union U, c) == 0, \"ok\"); int main(){return 0;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem rejects __builtin_offsetof on bitfields" {
+  let (_, bag) = check_text(
+    "struct S { int x:1; }; _Static_assert(__builtin_offsetof(struct S, x) == 0, \"ok\"); int main(){return 0;}",
+  )
+  assert_true(has_errors(bag))
+}
+
+///|
+test "sem accepts __builtin_frame_address and __builtin_return_address" {
+  let (_, bag) = check_text(
+    "int main(){ return __builtin_frame_address(0) != 0 && __builtin_return_address(0) != 0; }",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem rejects negative frame address level" {
+  let (_, bag) = check_text("int main(){ return __builtin_frame_address(-1) != 0; }")
+  assert_true(has_errors(bag))
+}
+
+///|
 test "sem accepts implicit int function definition" {
   let (_, bag) = check_text("f(){return 0;} int main(){return f();}")
   assert_true(!has_errors(bag))

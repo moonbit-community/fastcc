@@ -459,6 +459,7 @@ enum Expr {
   StringLit(value~ : String, length~ : Int, loc~ : SrcLoc)
   Ident(name~ : String, loc~ : SrcLoc)
   BuiltinTypesCompatibleP(a~ : CType, b~ : CType, loc~ : SrcLoc)
+  BuiltinOffsetof(ty~ : CType, path~ : Array[String], loc~ : SrcLoc)
   BuiltinVaArg(list~ : Expr, ty~ : CType, loc~ : SrcLoc)
   Unary(op~ : UnaryOp, expr~ : Expr, loc~ : SrcLoc)
   Cast(ty~ : CType, expr~ : Expr, loc~ : SrcLoc)
