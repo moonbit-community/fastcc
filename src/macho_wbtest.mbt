@@ -8,6 +8,16 @@ fn read_u32_le(bytes : Bytes, offset : Int) -> UInt {
 }
 
 ///|
+fn decode_reloc_info(info : UInt) -> (Int, Bool, Int, Bool, Int) {
+  let symbolnum = (info & 0x00ff_ffff).to_int()
+  let pcrel = ((info >> 24) & 1) == 1
+  let length = ((info >> 25) & 3).to_int()
+  let is_extern = ((info >> 27) & 1) == 1
+  let r_type = ((info >> 28) & 0xf).to_int()
+  (symbolnum, pcrel, length, is_extern, r_type)
+}
+
+///|
 test "macho header has segment and symtab" {
   let sec = new_section(".text")
   sec.data.push((0x14000000 : UInt))
@@ -62,4 +72,50 @@ test "macho maps arm64 relocation kinds" {
     macho_reloc_type(R_AARCH64_LDST8_ABS_LO12_NC),
     (ARM64_RELOC_PAGEOFF12, false),
   )
+}
+
+///|
+test "macho encodes GOT relocations as extern symbol relocs" {
+  let sec = new_section(".text")
+  let reloc_sym = { id: 2 }
+  sec.data.push((0x90000000 : UInt))
+  sec.data.push((0xf9400000 : UInt))
+  sec.relocs.push({
+    offset: 0,
+    kind: R_AARCH64_ADR_GOT_PAGE,
+    sym: reloc_sym,
+    addend: 0,
+  })
+  sec.relocs.push({
+    offset: 4,
+    kind: R_AARCH64_LD64_GOT_LO12_NC,
+    sym: reloc_sym,
+    addend: 0,
+  })
+  let symbols = [
+    { id: 2, name: "_ext", section: None, value: 0, is_external: true },
+  ]
+  let bytes = encode_macho_object([sec], symbols)
+  let section_base = 32 + 72
+  let reloff = read_u32_le(bytes, section_base + 56).to_int()
+  let nreloc = read_u32_le(bytes, section_base + 60).to_int()
+  assert_eq(nreloc, 2)
+  let addr0 = read_u32_le(bytes, reloff).to_int()
+  let info0 = read_u32_le(bytes, reloff + 4)
+  assert_eq(addr0, 0)
+  let (symnum0, pcrel0, len0, ext0, rtype0) = decode_reloc_info(info0)
+  assert_eq(symnum0, 0)
+  assert_true(pcrel0)
+  assert_eq(len0, 2)
+  assert_true(ext0)
+  assert_eq(rtype0, ARM64_RELOC_GOT_LOAD_PAGE21)
+  let addr1 = read_u32_le(bytes, reloff + 8).to_int()
+  let info1 = read_u32_le(bytes, reloff + 12)
+  assert_eq(addr1, 4)
+  let (symnum1, pcrel1, len1, ext1, rtype1) = decode_reloc_info(info1)
+  assert_eq(symnum1, 0)
+  assert_true(!pcrel1)
+  assert_eq(len1, 2)
+  assert_true(ext1)
+  assert_eq(rtype1, ARM64_RELOC_GOT_LOAD_PAGEOFF12)
 }
