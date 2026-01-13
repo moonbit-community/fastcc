@@ -1,8 +1,7 @@
 {
   "name": "hackwaly/tinycc",
   "deps": {
-    "moonbitlang/x": "0.4.38",
-    "TheWaWaR/clap": "0.2.6"
+    "moonbitlang/x": "0.4.38"
   },
   "source": "src"
 }

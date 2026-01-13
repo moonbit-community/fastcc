@@ -2054,21 +2054,35 @@ fn codegen_arm64_object_bytes_from_ast(
   let mut main_found = false
   for decl in unit.decls {
     match decl {
-      Decl::FuncDef(func) =>
-        if func.name == "main" {
-          main_found = true
-        }
+      Decl::FuncDef(func) => if func.name == "main" { main_found = true }
       _ => ()
     }
   }
+
+  // Generate `main` first when present for stable layout, but allow objects without `main`.
   if main_found {
-    sym_for_name(syms, link_name("main")) |> ignore
+    for decl in unit.decls {
+      match decl {
+        Decl::FuncDef(func) =>
+          if func.name == "main" {
+            gen_func_def(
+              emitter,
+              sem,
+              syms,
+              func_offsets,
+              cstring_syms,
+              func,
+              bag,
+            )
+          }
+        _ => ()
+      }
+    }
   }
-
   for decl in unit.decls {
     match decl {
       Decl::FuncDef(func) =>
-        if func.name == "main" {
+        if !main_found || func.name != "main" {
           gen_func_def(
             emitter,
             sem,
@@ -2081,28 +2095,6 @@ fn codegen_arm64_object_bytes_from_ast(
         }
       _ => ()
     }
-  }
-  for decl in unit.decls {
-    match decl {
-      Decl::FuncDef(func) =>
-        if func.name != "main" {
-          gen_func_def(
-            emitter,
-            sem,
-            syms,
-            func_offsets,
-            cstring_syms,
-            func,
-            bag,
-          )
-        }
-      _ => ()
-    }
-  }
-
-  if !main_found {
-    add_error(bag, dummy_loc(0), "codegen: missing function definition 'main'")
-    return None
   }
   if has_errors(bag) {
     return None

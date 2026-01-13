@@ -2,7 +2,7 @@
   "is-main": true,
   "import": [
     "moonbitlang/x/fs",
-    "moonbitlang/x/time",
-    "TheWaWaR/clap"
+    "moonbitlang/x/sys",
+    "moonbitlang/x/time"
   ]
 }
