@@ -189,6 +189,22 @@ test "codegen emits .cstring and relocs for extern call with string literal" {
 }
 
 ///|
+test "codegen supports local pointers: addr, deref, compare" {
+  let (unit, bag) = parse_text(
+    "int main(){int x=1; int *p=&x; if(p!=0){*p=3;} return x;}",
+  )
+  assert_true(!has_errors(bag))
+  check_translation_unit(unit, bag)
+  assert_true(!has_errors(bag))
+  let bytes = match codegen_arm64_object_bytes(unit, bag) {
+    None => fail("expected object bytes")
+    Some(b) => b
+  }
+  assert_true(!has_errors(bag))
+  let (_, _, _) = macho_text_section_offsets(bytes)
+}
+
+///|
 test "codegen emits global load relocs for return x" {
   let (unit, bag) = parse_text("int x; int main(){return x;}")
   assert_true(!has_errors(bag))

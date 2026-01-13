@@ -42,11 +42,13 @@ fn new_local_alloc(sem : SemContext) -> LocalAlloc {
 ///|
 fn cg_push_scope(alloc : LocalAlloc) -> Unit {
   alloc.scopes.push({})
+  push_scope(alloc.sem)
 }
 
 ///|
 fn cg_pop_scope(alloc : LocalAlloc) -> Unit {
   alloc.scopes.pop() |> ignore
+  pop_scope(alloc.sem)
 }
 
 ///|
@@ -102,6 +104,8 @@ fn alloc_local(
   let slot = { offset, ty }
   let idx = alloc.scopes.length() - 1
   alloc.scopes[idx].set(name, slot)
+  let sem_idx = alloc.sem.locals.length() - 1
+  alloc.sem.locals[sem_idx].set(name, ty)
   Some(slot)
 }
 
@@ -243,6 +247,14 @@ fn emit_cmp(emitter : Arm64Emitter, is64 : Bool, a : Int, b : Int) -> Unit {
 }
 
 ///|
+fn emit_sxtw(emitter : Arm64Emitter, dst : Int, src : Int) -> Unit {
+  emit32(
+    emitter,
+    (0x93407c00 : Int).lor(dst).lor(src << 5).reinterpret_as_uint(),
+  )
+}
+
+///|
 const ARM64_COND_EQ : Int = 0
 
 ///|
@@ -306,6 +318,32 @@ fn type_is_supported_int32(ty : CType) -> Bool {
 }
 
 ///|
+fn type_is_pointer_like(ty : CType) -> Bool {
+  match strip_qualifiers(ty) {
+    CType::Pointer(_) => true
+    CType::Array(..) => true
+    _ => false
+  }
+}
+
+///|
+fn scalar_size_signed_or_error(
+  sem : SemContext,
+  ty : CType,
+  loc : SrcLoc,
+) -> (Int, Bool)? {
+  let (size, _) = match type_size_align_or_error(sem, ty, loc) {
+    None => return None
+    Some(v) => v
+  }
+  let signed = match strip_qualifiers(ty) {
+    CType::Int(unsigned~, ..) => !unsigned
+    _ => false
+  }
+  Some((size, signed))
+}
+
+///|
 struct SymTable {
   names : Array[String]
   name_to_id : Map[String, Int]
@@ -352,6 +390,106 @@ fn emit_store_local_int32(
 ) -> Unit {
   let off_u64 = off.to_int64().reinterpret_as_uint64()
   arm64_strx(emitter, 2, src.to_uint(), (29 : UInt), off_u64)
+}
+
+///|
+fn emit_load_local_scalar(
+  emitter : Arm64Emitter,
+  sem : SemContext,
+  ty : CType,
+  dst : Int,
+  off : Int,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  let (size, signed) = match scalar_size_signed_or_error(sem, ty, loc) {
+    None => return
+    Some(v) => v
+  }
+  let sz = match arm64_sz_from_size(size) {
+    None => {
+      add_error(bag, loc, "codegen: unsupported scalar size")
+      return
+    }
+    Some(v) => v
+  }
+  let off_u64 = off.to_int64().reinterpret_as_uint64()
+  arm64_ldrx(emitter, signed, sz, dst.to_uint(), (29 : UInt), off_u64)
+}
+
+///|
+fn emit_store_local_scalar(
+  emitter : Arm64Emitter,
+  sem : SemContext,
+  ty : CType,
+  src : Int,
+  off : Int,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  let (size, _) = match scalar_size_signed_or_error(sem, ty, loc) {
+    None => return
+    Some(v) => v
+  }
+  let sz = match arm64_sz_from_size(size) {
+    None => {
+      add_error(bag, loc, "codegen: unsupported scalar size")
+      return
+    }
+    Some(v) => v
+  }
+  let off_u64 = off.to_int64().reinterpret_as_uint64()
+  arm64_strx(emitter, sz, src.to_uint(), (29 : UInt), off_u64)
+}
+
+///|
+fn emit_addr_local(
+  emitter : Arm64Emitter,
+  dst : Int,
+  off : Int,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  let imm = if off < 0 { -off } else { off }
+  if imm > 0xfff {
+    add_error(bag, loc, "codegen: large stack offsets not supported yet")
+    return
+  }
+  if off < 0 {
+    emit32(
+      emitter,
+      (0xd1000000 : Int)
+      .lor(dst)
+      .lor(29 << 5)
+      .lor(imm << 10)
+      .reinterpret_as_uint(),
+    )
+  } else {
+    emit32(
+      emitter,
+      (0x91000000 : Int)
+      .lor(dst)
+      .lor(29 << 5)
+      .lor(imm << 10)
+      .reinterpret_as_uint(),
+    )
+  }
+}
+
+///|
+fn emit_addr_global(emitter : Arm64Emitter, sym : Sym, dst : Int) -> Unit {
+  let adrp_off = emitter_pc(emitter)
+  greloca(emitter, sym, adrp_off, R_AARCH64_ADR_PREL_PG_HI21, 0)
+  emit32(emitter, (0x90000000 : UInt64).lor(dst.to_uint64()).to_uint())
+  let add_off = emitter_pc(emitter)
+  greloca(emitter, sym, add_off, R_AARCH64_ADD_ABS_LO12_NC, 0)
+  emit32(
+    emitter,
+    (0x91000000 : UInt64)
+    .lor(dst.to_uint64())
+    .lor(dst.to_uint64() << 5)
+    .to_uint(),
+  )
 }
 
 ///|
@@ -415,6 +553,199 @@ fn emit_call(emitter : Arm64Emitter, sym : Sym) -> Unit {
 }
 
 ///|
+fn gen_call_direct(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : Map[String, Sym],
+  name : String,
+  args : Array[Expr],
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  let mut i = 0
+  while i < args.length() {
+    if i >= 8 {
+      add_error(bag, loc, "codegen: only supports up to 8 args for now")
+      return
+    }
+    let aty = type_of_expr(alloc.sem, args[i])
+    if type_is_pointer_like(aty) {
+      gen_expr_ptr(emitter, alloc, syms, pool, cstrings, args[i], i, bag)
+    } else {
+      gen_expr_int32(emitter, alloc, syms, pool, cstrings, args[i], i, bag)
+    }
+    i = i + 1
+  }
+  let sym = sym_for_name(syms, link_name(name))
+  emit_call(emitter, sym)
+}
+
+///|
+fn element_type_for_pointer_arith(ty : CType) -> CType? {
+  match strip_qualifiers(ty) {
+    CType::Pointer(inner) => Some(inner)
+    CType::Array(elem~, ..) => Some(elem)
+    _ => None
+  }
+}
+
+///|
+fn gen_lvalue_addr(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : Map[String, Sym],
+  expr : Expr,
+  dst : Int,
+  bag : DiagBag,
+) -> Unit {
+  match expr {
+    Expr::Ident(name~, loc~) =>
+      match lookup_local(alloc, name) {
+        Some(slot) => emit_addr_local(emitter, dst, slot.offset, loc, bag)
+        None => {
+          let sym = sym_for_name(syms, link_name(name))
+          emit_addr_global(emitter, sym, dst)
+        }
+      }
+    Expr::Unary(op=UnaryOp::Deref, expr=inner, ..) =>
+      gen_expr_ptr(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
+    Expr::Index(base~, index~, loc~) => {
+      gen_expr_ptr(emitter, alloc, syms, pool, cstrings, base, dst, bag)
+      let idx = take_reg(pool) catch {
+        err => {
+          add_error(bag, loc, err.to_string())
+          return
+        }
+      }
+      gen_expr_int32(emitter, alloc, syms, pool, cstrings, index, idx, bag)
+      emit_sxtw(emitter, idx, idx)
+      let base_ty = type_of_expr(alloc.sem, base)
+      let elem_ty = match element_type_for_pointer_arith(base_ty) {
+        None => {
+          add_error(bag, loc, "codegen: index base is not pointer/array")
+          give_reg(pool, idx)
+          return
+        }
+        Some(t) => t
+      }
+      let (elem_size, _) = match type_size_align_or_error(alloc.sem, elem_ty, loc) {
+        None => {
+          give_reg(pool, idx)
+          return
+        }
+        Some(v) => v
+      }
+      if elem_size != 1 {
+        let scale = take_reg(pool) catch {
+          err => {
+            add_error(bag, loc, err.to_string())
+            give_reg(pool, idx)
+            return
+          }
+        }
+        arm64_movimm(emitter, scale.to_uint(), elem_size.to_uint64())
+        emit32(
+          emitter,
+          (0x9b007c00 : Int)
+          .lor(idx)
+          .lor(idx << 5)
+          .lor(scale << 16)
+          .reinterpret_as_uint(),
+        )
+        give_reg(pool, scale)
+      }
+      emit32(
+        emitter,
+        (0x8b000000 : Int)
+        .lor(dst)
+        .lor(dst << 5)
+        .lor(idx << 16)
+        .reinterpret_as_uint(),
+      )
+      give_reg(pool, idx)
+    }
+    _ => add_error(bag, expr_loc(expr), "codegen: unsupported lvalue for now")
+  }
+}
+
+///|
+fn store_lvalue_scalar(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : Map[String, Sym],
+  lvalue : Expr,
+  value_reg : Int,
+  value_ty : CType,
+  bag : DiagBag,
+) -> Unit {
+  let loc = expr_loc(lvalue)
+  match lvalue {
+    Expr::Ident(name~, ..) =>
+      match lookup_local(alloc, name) {
+        Some(slot) =>
+          emit_store_local_scalar(
+            emitter,
+            alloc.sem,
+            slot.ty,
+            value_reg,
+            slot.offset,
+            loc,
+            bag,
+          )
+        None => {
+          let sym = sym_for_name(syms, link_name(name))
+          let addr_reg : Int = 16
+          emit_addr_global(emitter, sym, addr_reg)
+          let (size, _) = match scalar_size_signed_or_error(alloc.sem, value_ty, loc) {
+            None => return
+            Some(v) => v
+          }
+          let sz = match arm64_sz_from_size(size) {
+            None => {
+              add_error(bag, loc, "codegen: unsupported scalar size")
+              return
+            }
+            Some(v) => v
+          }
+          arm64_strx(emitter, sz, value_reg.to_uint(), addr_reg.to_uint(), 0)
+        }
+      }
+    _ => {
+      let addr = take_reg(pool) catch {
+        err => {
+          add_error(bag, loc, err.to_string())
+          return
+        }
+      }
+      gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, lvalue, addr, bag)
+      let (size, _) = match scalar_size_signed_or_error(alloc.sem, value_ty, loc) {
+        None => {
+          give_reg(pool, addr)
+          return
+        }
+        Some(v) => v
+      }
+      let sz = match arm64_sz_from_size(size) {
+        None => {
+          add_error(bag, loc, "codegen: unsupported scalar size")
+          give_reg(pool, addr)
+          return
+        }
+        Some(v) => v
+      }
+      arm64_strx(emitter, sz, value_reg.to_uint(), addr.to_uint(), 0)
+      give_reg(pool, addr)
+    }
+  }
+}
+
+///|
 fn gen_expr_int32(
   emitter : Arm64Emitter,
   alloc : LocalAlloc,
@@ -436,15 +767,7 @@ fn gen_expr_int32(
     Expr::Ident(name~, loc~) =>
       match lookup_local(alloc, name) {
         Some(slot) =>
-          if type_is_supported_int32(slot.ty) {
-            emit_load_local_int32(emitter, dst, slot.offset)
-          } else {
-            add_error(
-              bag,
-              loc,
-              "codegen: only int locals supported for now",
-            )
-          }
+          emit_load_local_scalar(emitter, alloc.sem, slot.ty, dst, slot.offset, loc, bag)
         None => {
           let sym = sym_for_name(syms, link_name(name))
           emit_load_global_int32(emitter, sym, dst)
@@ -482,6 +805,38 @@ fn gen_expr_int32(
             (0x1a9f17e0 : Int).lor(dst).reinterpret_as_uint(),
           )
         }
+        UnaryOp::Deref => {
+          let addr = take_reg(pool) catch {
+            err => {
+              add_error(bag, loc, err.to_string())
+              return
+            }
+          }
+          gen_expr_ptr(emitter, alloc, syms, pool, cstrings, inner, addr, bag)
+          let ty = type_of_expr(alloc.sem, expr)
+          let (size, signed) = match scalar_size_signed_or_error(alloc.sem, ty, loc) {
+            None => {
+              give_reg(pool, addr)
+              return
+            }
+            Some(v) => v
+          }
+          if size == 8 {
+            add_error(bag, loc, "codegen: deref int32 path does not support 8-byte loads yet")
+            give_reg(pool, addr)
+            return
+          }
+          let sz = match arm64_sz_from_size(size) {
+            None => {
+              add_error(bag, loc, "codegen: unsupported scalar size")
+              give_reg(pool, addr)
+              return
+            }
+            Some(v) => v
+          }
+          arm64_ldrx(emitter, signed, sz, dst.to_uint(), addr.to_uint(), 0)
+          give_reg(pool, addr)
+        }
         _ => add_error(bag, loc, "codegen: unsupported unary operator")
       }
     }
@@ -512,12 +867,69 @@ fn gen_expr_int32(
                 }
               }
             }
-            _ => add_error(bag, loc, "codegen: assignment lhs must be an identifier for now")
+            Expr::Unary(op=UnaryOp::Deref, ..) | Expr::Index(..) => {
+              gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+              store_lvalue_scalar(
+                emitter,
+                alloc,
+                syms,
+                pool,
+                cstrings,
+                left,
+                dst,
+                type_of_expr(alloc.sem, left),
+                bag,
+              )
+            }
+            _ => add_error(bag, loc, "codegen: unsupported assignment lhs for now")
           }
         BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div |
         BinaryOp::Mod | BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor |
         BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt |
         BinaryOp::Ge | BinaryOp::Shl | BinaryOp::Shr => {
+          let left_ty = type_of_expr(alloc.sem, left)
+          let right_ty = type_of_expr(alloc.sem, right)
+          let has_ptr = type_is_pointer_like(left_ty) || type_is_pointer_like(right_ty)
+          if has_ptr {
+            match op {
+              BinaryOp::Eq | BinaryOp::Ne => ()
+              _ => {
+                add_error(
+                  bag,
+                  loc,
+                  "codegen: only ==/!= supported for pointer comparisons for now",
+                )
+                return
+              }
+            }
+            let tmp = take_reg(pool) catch {
+              err => {
+                add_error(bag, loc, err.to_string())
+                return
+              }
+            }
+            if type_is_pointer_like(left_ty) {
+              gen_expr_ptr(emitter, alloc, syms, pool, cstrings, left, tmp, bag)
+            } else {
+              gen_expr_int32(emitter, alloc, syms, pool, cstrings, left, tmp, bag)
+              emit_sxtw(emitter, tmp, tmp)
+            }
+            if type_is_pointer_like(right_ty) {
+              gen_expr_ptr(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+            } else {
+              gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+              emit_sxtw(emitter, dst, dst)
+            }
+            emit_cmp(emitter, true, tmp, dst)
+            emit_cset_from_tok(
+              emitter,
+              if op == BinaryOp::Eq { TOK_EQ } else { TOK_NE },
+              dst,
+            )
+            catch { err => add_error(bag, loc, err.to_string()) }
+            give_reg(pool, tmp)
+            return
+          }
           let left_reg = dst
           gen_expr_int32(
             emitter,
@@ -693,17 +1105,7 @@ fn gen_expr_int32(
           )
       }
     Expr::Call(callee=Expr::Ident(name~, ..), args~, loc~) => {
-      let mut i = 0
-      while i < args.length() {
-        if i >= 8 {
-          add_error(bag, loc, "codegen: only supports up to 8 int args for now")
-          return
-        }
-        gen_expr_int32(emitter, alloc, syms, pool, cstrings, args[i], i, bag)
-        i = i + 1
-      }
-      let sym = sym_for_name(syms, link_name(name))
-      emit_call(emitter, sym)
+      gen_call_direct(emitter, alloc, syms, pool, cstrings, name, args, loc, bag)
       if dst != 0 {
         emit_mov(emitter, true, dst, 0)
       }
@@ -747,6 +1149,190 @@ fn gen_expr_int32(
       }
     _ =>
       add_error(bag, expr_loc(expr), "codegen: unsupported expression")
+  }
+}
+
+///|
+fn gen_expr_ptr(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : Map[String, Sym],
+  expr : Expr,
+  dst : Int,
+  bag : DiagBag,
+) -> Unit {
+  match expr {
+    Expr::IntLit(value~, loc~) =>
+      match parse_int64_literal(value) {
+        None => add_error(bag, loc, "codegen: invalid integer literal")
+        Some(v) => arm64_movimm(emitter, dst.to_uint(), v.to_uint64())
+      }
+    Expr::CharLit(value~, ..) =>
+      arm64_movimm(emitter, dst.to_uint(), value.to_uint64())
+    Expr::StringLit(value=value, loc=loc, ..) =>
+      match cstrings.get(value) {
+        None => add_error(bag, loc, "codegen: missing string literal in cstring pool")
+        Some(sym) => emit_addr_global(emitter, sym, dst)
+      }
+    Expr::Ident(name~, loc~) =>
+      match lookup_local(alloc, name) {
+        Some(slot) =>
+          match strip_qualifiers(slot.ty) {
+            CType::Array(..) => emit_addr_local(emitter, dst, slot.offset, loc, bag)
+            _ =>
+              emit_load_local_scalar(emitter, alloc.sem, slot.ty, dst, slot.offset, loc, bag)
+          }
+        None => {
+          let sym = sym_for_name(syms, link_name(name))
+          emit_addr_global(emitter, sym, dst)
+          arm64_ldrx(emitter, false, 3, dst.to_uint(), dst.to_uint(), 0)
+        }
+      }
+    Expr::Unary(op=UnaryOp::Addr, expr=inner, ..) =>
+      gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
+    Expr::Unary(op=UnaryOp::Deref, expr=inner, loc~) => {
+      gen_expr_ptr(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
+      let ty = type_of_expr(alloc.sem, expr)
+      let (size, signed) = match scalar_size_signed_or_error(alloc.sem, ty, loc) {
+        None => return
+        Some(v) => v
+      }
+      let sz = match arm64_sz_from_size(size) {
+        None => {
+          add_error(bag, loc, "codegen: unsupported scalar size")
+          return
+        }
+        Some(v) => v
+      }
+      arm64_ldrx(emitter, signed, sz, dst.to_uint(), dst.to_uint(), 0)
+    }
+    Expr::Binary(op=BinaryOp::Assign, left~, right~, ..) => {
+      gen_expr_ptr(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+      store_lvalue_scalar(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        left,
+        dst,
+        type_of_expr(alloc.sem, left),
+        bag,
+      )
+    }
+    Expr::Binary(op~, left~, right~, loc~) =>
+      match op {
+        BinaryOp::Add | BinaryOp::Sub => {
+          let left_ty = type_of_expr(alloc.sem, left)
+          let right_ty = type_of_expr(alloc.sem, right)
+          if type_is_pointer_like(left_ty) && type_is_pointer_like(right_ty) {
+            add_error(bag, loc, "codegen: pointer +/- pointer not supported yet")
+            return
+          }
+          if op == BinaryOp::Sub && type_is_pointer_like(right_ty) && !type_is_pointer_like(left_ty) {
+            add_error(bag, loc, "codegen: int - pointer not supported")
+            return
+          }
+          let (ptr_expr, int_expr, ptr_ty) =
+            if type_is_pointer_like(left_ty) { (left, right, left_ty) }
+            else if type_is_pointer_like(right_ty) { (right, left, right_ty) }
+            else {
+              add_error(bag, loc, "codegen: pointer add/sub needs a pointer operand")
+              return
+            }
+          gen_expr_ptr(emitter, alloc, syms, pool, cstrings, ptr_expr, dst, bag)
+          let idx = take_reg(pool) catch {
+            err => {
+              add_error(bag, loc, err.to_string())
+              return
+            }
+          }
+          gen_expr_int32(emitter, alloc, syms, pool, cstrings, int_expr, idx, bag)
+          emit_sxtw(emitter, idx, idx)
+          let elem_ty = match element_type_for_pointer_arith(ptr_ty) {
+            None => {
+              add_error(bag, loc, "codegen: pointer arithmetic missing element type")
+              give_reg(pool, idx)
+              return
+            }
+            Some(t) => t
+          }
+          let (elem_size, _) = match type_size_align_or_error(alloc.sem, elem_ty, loc) {
+            None => {
+              give_reg(pool, idx)
+              return
+            }
+            Some(v) => v
+          }
+          if elem_size != 1 {
+            let scale = take_reg(pool) catch {
+              err => {
+                add_error(bag, loc, err.to_string())
+                give_reg(pool, idx)
+                return
+              }
+            }
+            arm64_movimm(emitter, scale.to_uint(), elem_size.to_uint64())
+            emit32(
+              emitter,
+              (0x9b007c00 : Int)
+              .lor(idx)
+              .lor(idx << 5)
+              .lor(scale << 16)
+              .reinterpret_as_uint(),
+            )
+            give_reg(pool, scale)
+          }
+          let base = if op == BinaryOp::Add { 0x8b000000 } else { 0xcb000000 }
+          emit32(
+            emitter,
+            (base : Int)
+            .lor(dst)
+            .lor(dst << 5)
+            .lor(idx << 16)
+            .reinterpret_as_uint(),
+          )
+          give_reg(pool, idx)
+        }
+        _ => add_error(bag, loc, "codegen: unsupported pointer expression")
+      }
+    Expr::Cast(expr=inner, ..) => {
+      let inner_ty = type_of_expr(alloc.sem, inner)
+      if type_is_pointer_like(inner_ty) {
+        gen_expr_ptr(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
+      } else {
+        gen_expr_int32(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
+        emit_sxtw(emitter, dst, dst)
+      }
+    }
+    Expr::Call(callee=Expr::Ident(name~, ..), args~, loc~) => {
+      gen_call_direct(emitter, alloc, syms, pool, cstrings, name, args, loc, bag)
+      if dst != 0 {
+        emit_mov(emitter, true, dst, 0)
+      }
+    }
+    _ => add_error(bag, expr_loc(expr), "codegen: unsupported pointer expression")
+  }
+}
+
+///|
+fn gen_expr_any(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : Map[String, Sym],
+  expr : Expr,
+  dst : Int,
+  bag : DiagBag,
+) -> Unit {
+  let ty = type_of_expr(alloc.sem, expr)
+  if type_is_pointer_like(ty) {
+    gen_expr_ptr(emitter, alloc, syms, pool, cstrings, expr, dst, bag)
+  } else {
+    gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, dst, bag)
   }
 }
 
@@ -847,16 +1433,16 @@ fn gen_stmt(
               Some(init) =>
                 match init {
                   Initializer::Expr(expr~, ..) => {
-                    if type_is_supported_int32(slot.ty) {
-                      gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
-                      emit_store_local_int32(emitter, 0, slot.offset)
-                    } else {
-                      add_error(
-                        bag,
-                        d.loc,
-                        "codegen: only int locals supported for now",
-                      )
-                    }
+                    gen_expr_any(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
+                    emit_store_local_scalar(
+                      emitter,
+                      alloc.sem,
+                      slot.ty,
+                      0,
+                      slot.offset,
+                      d.loc,
+                      bag,
+                    )
                   }
                   _ =>
                     add_error(
@@ -871,8 +1457,14 @@ fn gen_stmt(
       return_chain
     }
     Stmt::If(cond~, then_branch~, else_branch~, loc~) => {
-      gen_expr_int32(emitter, alloc, syms, pool, cstrings, cond, 0, bag)
-      emit_cmp(emitter, false, 0, 31)
+      let cond_ty = type_of_expr(alloc.sem, cond)
+      if type_is_pointer_like(cond_ty) {
+        gen_expr_ptr(emitter, alloc, syms, pool, cstrings, cond, 0, bag)
+        emit_cmp(emitter, true, 0, 31)
+      } else {
+        gen_expr_int32(emitter, alloc, syms, pool, cstrings, cond, 0, bag)
+        emit_cmp(emitter, false, 0, 31)
+      }
       let br_false = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
       let chain1 = gen_stmt(
         emitter,
@@ -920,8 +1512,14 @@ fn gen_stmt(
     }
     Stmt::While(cond~, body~, loc~) => {
       let start_pc = emitter_pc(emitter)
-      gen_expr_int32(emitter, alloc, syms, pool, cstrings, cond, 0, bag)
-      emit_cmp(emitter, false, 0, 31)
+      let cond_ty = type_of_expr(alloc.sem, cond)
+      if type_is_pointer_like(cond_ty) {
+        gen_expr_ptr(emitter, alloc, syms, pool, cstrings, cond, 0, bag)
+        emit_cmp(emitter, true, 0, 31)
+      } else {
+        gen_expr_int32(emitter, alloc, syms, pool, cstrings, cond, 0, bag)
+        emit_cmp(emitter, false, 0, 31)
+      }
       let br_end = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
 
       loops.push({ break_chain: 0, cont_chain: 0 })
@@ -973,8 +1571,14 @@ fn gen_stmt(
         err => add_error(bag, loc, err.to_string())
       }
 
-      gen_expr_int32(emitter, alloc, syms, pool, cstrings, cond, 0, bag)
-      emit_cmp(emitter, false, 0, 31)
+      let cond_ty = type_of_expr(alloc.sem, cond)
+      if type_is_pointer_like(cond_ty) {
+        gen_expr_ptr(emitter, alloc, syms, pool, cstrings, cond, 0, bag)
+        emit_cmp(emitter, true, 0, 31)
+      } else {
+        gen_expr_int32(emitter, alloc, syms, pool, cstrings, cond, 0, bag)
+        emit_cmp(emitter, false, 0, 31)
+      }
       let br_back = emit_b_cond_placeholder(emitter, ARM64_COND_NE)
       patch_b_cond(emitter, br_back, start_pc, ARM64_COND_NE) catch {
         err => add_error(bag, loc, err.to_string())
@@ -1007,8 +1611,14 @@ fn gen_stmt(
       let br_end = match cond {
         None => None
         Some(e) => {
-          gen_expr_int32(emitter, alloc, syms, pool, cstrings, e, 0, bag)
-          emit_cmp(emitter, false, 0, 31)
+          let cond_ty = type_of_expr(alloc.sem, e)
+          if type_is_pointer_like(cond_ty) {
+            gen_expr_ptr(emitter, alloc, syms, pool, cstrings, e, 0, bag)
+            emit_cmp(emitter, true, 0, 31)
+          } else {
+            gen_expr_int32(emitter, alloc, syms, pool, cstrings, e, 0, bag)
+            emit_cmp(emitter, false, 0, 31)
+          }
           Some(emit_b_cond_placeholder(emitter, ARM64_COND_EQ))
         }
       }
@@ -1033,7 +1643,7 @@ fn gen_stmt(
       }
       match step {
         None => ()
-        Some(e) => gen_expr_int32(emitter, alloc, syms, pool, cstrings, e, 0, bag)
+        Some(e) => gen_expr_any(emitter, alloc, syms, pool, cstrings, e, 0, bag)
       }
       gjmp_addr(emitter, cond_pc) catch {
         err => add_error(bag, loc, err.to_string())
@@ -1061,13 +1671,13 @@ fn gen_stmt(
       return_chain
     }
     Stmt::ExprStmt(expr~, ..) => {
-      gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
+      gen_expr_any(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
       return_chain
     }
     Stmt::Return(value~, loc~) => {
       match value {
         None => arm64_movimm(emitter, (0 : UInt), 0)
-        Some(expr) => gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
+        Some(expr) => gen_expr_any(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
       }
       gjmp(emitter, return_chain)
     }
@@ -1135,14 +1745,18 @@ fn gen_func_def(
     match alloc_local(alloc, p.name, p.ty, p.loc) {
       None => ()
       Some(slot) =>
-        if type_is_supported_int32(slot.ty) {
-          if arg_i < 8 {
-            emit_store_local_int32(emitter, arg_i, slot.offset)
-          } else {
-            add_error(bag, p.loc, "codegen: only supports up to 8 int params for now")
-          }
+        if arg_i < 8 {
+          emit_store_local_scalar(
+            emitter,
+            alloc.sem,
+            slot.ty,
+            arg_i,
+            slot.offset,
+            p.loc,
+            bag,
+          )
         } else {
-          add_error(bag, p.loc, "codegen: only int params supported for now")
+          add_error(bag, p.loc, "codegen: only supports up to 8 params for now")
         }
     }
     arg_i = arg_i + 1
@@ -1375,6 +1989,43 @@ fn codegen_arm64_object_bytes_from_ast(
       Decl::Typedef(ty=ty, loc=loc, ..) => register_type_defs(sem, ty, loc)
       Decl::TagDef(ty~, loc~) => register_type_defs(sem, ty, loc)
       Decl::StaticAssert(_) | Decl::Asm(_) => ()
+    }
+  }
+
+  // Populate sem symbol tables so type_of_expr can resolve identifiers during codegen.
+  for decl in unit.decls {
+    match decl {
+      Decl::Var(var_decl) => {
+        sem.globals.set(var_decl.name, var_decl.ty)
+      }
+      Decl::FuncDecl(func_decl) => {
+        let params : Array[CType] = []
+        for p in func_decl.params {
+          params.push(p.ty)
+        }
+        sem.functions.set(func_decl.name, {
+          return_type: func_decl.return_type,
+          params,
+          varargs: func_decl.varargs,
+          is_old_style: func_decl.is_old_style,
+          call_conv: normalize_call_conv(func_decl.attrs.call_conv),
+        })
+      }
+      Decl::FuncDef(func_def) => {
+        let params : Array[CType] = []
+        for p in func_def.params {
+          params.push(p.ty)
+        }
+        sem.functions.set(func_def.name, {
+          return_type: func_def.return_type,
+          params,
+          varargs: func_def.varargs,
+          is_old_style: func_def.is_old_style,
+          call_conv: normalize_call_conv(func_def.attrs.call_conv),
+        })
+        sem.function_defs.set(func_def.name, true)
+      }
+      _ => ()
     }
   }
 
