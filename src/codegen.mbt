@@ -76,7 +76,7 @@ fn parse_int64_literal(text : String) -> Int64? {
   if !any_digit {
     None
   } else {
-    Some(acc.to_int64())
+    Some(acc.reinterpret_as_int64())
   }
 }
 
@@ -101,7 +101,7 @@ fn const_u32_from_initializer(init : Initializer) -> UInt? {
       match const_i64_from_expr(expr) {
         None => None
         Some(value) =>
-          Some((value.to_uint64() & (0xffff_ffff : UInt64)).to_uint())
+          Some((value.reinterpret_as_uint64() & (0xffff_ffff : UInt64)).to_uint())
       }
     _ => None
   }

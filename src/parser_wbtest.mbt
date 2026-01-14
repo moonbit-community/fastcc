@@ -3,7 +3,7 @@ fn parse_text(text : String) -> (TranslationUnit, DiagBag) {
   let bag = new_diag_bag()
   let map = new_source_map()
   let file = add_file(map, "<test>", text)
-  let pp = new_preprocessor(file, bag)
+  let pp = new_preprocessor(map, file, bag)
   let unit = parse_translation_unit(pp)
   (unit, bag)
 }

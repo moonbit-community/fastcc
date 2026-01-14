@@ -145,6 +145,7 @@ fn format_diag_for_cli(map : SourceMap, d : Diag) -> String {
 
 ///|
 fn main {
+  touch_unused_symbols()
   match parse_cli_args(@env.args()) {
     CliParse::Help => ()
     CliParse::Error => @sys.exit(1)
@@ -160,7 +161,7 @@ fn main {
             let bag = new_diag_bag()
             let map = new_source_map()
             let file = add_file(map, path, text)
-            let pp = new_preprocessor(file, bag)
+            let pp = new_preprocessor(map, file, bag)
             for p in cfg.include_paths {
               add_include_path(pp, p)
             }
@@ -192,7 +193,7 @@ fn main {
             if has_errors(bag) {
               any_errors = true
               for d in bag.diags {
-                println(format_diag_for_cli(map, d))
+                println(format_diag_for_cli(pp.map, d))
               }
             }
           }
