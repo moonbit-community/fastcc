@@ -239,6 +239,16 @@ fn emit_vla_leave(emitter : Arm64Emitter, alloc : LocalAlloc, target_depth : Int
 }
 
 ///|
+fn current_scope_vla_loc(alloc : LocalAlloc) -> Int? {
+  if alloc.vla_scopes.length() == 0 {
+    return None
+  }
+  let idx = alloc.vla_scopes.length() - 1
+  let scope = alloc.vla_scopes[idx]
+  if scope.num > 0 { Some(scope.loc) } else { None }
+}
+
+///|
 fn cg_pop_scope_codegen(emitter : Arm64Emitter, alloc : LocalAlloc) -> Unit {
   let target_depth = alloc.scopes.length() - 1
   emit_vla_leave(emitter, alloc, target_depth)
@@ -4323,6 +4333,17 @@ struct SwitchChains {
 }
 
 ///|
+struct LabelCtx {
+  addrs : Map[String, Int]
+  chains : Map[String, Int]
+}
+
+///|
+fn new_label_ctx() -> LabelCtx {
+  { addrs: {}, chains: {} }
+}
+
+///|
 const BREAKABLE_LOOP : Int = 0
 
 ///|
@@ -4462,6 +4483,7 @@ fn gen_switch_body(
   loops : Array[LoopChains],
   switches : Array[SwitchChains],
   breakables : Array[Int],
+  labels : LabelCtx,
   cstrings : Map[String, Sym],
   stmt : Stmt,
   bag : DiagBag,
@@ -4486,6 +4508,7 @@ fn gen_switch_body(
         loops,
         switches,
         breakables,
+        labels,
         cstrings,
         case_body,
         bag,
@@ -4503,6 +4526,7 @@ fn gen_switch_body(
         loops,
         switches,
         breakables,
+        labels,
         cstrings,
         def_body,
         bag,
@@ -4516,17 +4540,18 @@ fn gen_switch_body(
       for s in stmts {
         let (new_chain, new_default, new_next) = gen_switch_body(
           emitter,
-          alloc,
-          syms,
-          pool,
-          loops,
-          switches,
-          breakables,
-          cstrings,
-          s,
-          bag,
-          chain,
-          case_addrs,
+        alloc,
+        syms,
+        pool,
+        loops,
+        switches,
+        breakables,
+        labels,
+        cstrings,
+        s,
+        bag,
+        chain,
+        case_addrs,
           default_addr0,
           next_case0,
         )
@@ -4546,6 +4571,7 @@ fn gen_switch_body(
         loops,
         switches,
         breakables,
+        labels,
         cstrings,
         stmt,
         bag,
@@ -4562,6 +4588,7 @@ fn gen_switch_body(
         loops,
         switches,
         breakables,
+        labels,
         cstrings,
         stmt,
         bag,
@@ -4581,6 +4608,7 @@ fn gen_stmt(
   loops : Array[LoopChains],
   switches : Array[SwitchChains],
   breakables : Array[Int],
+  labels : LabelCtx,
   cstrings : Map[String, Sym],
   stmt : Stmt,
   bag : DiagBag,
@@ -4599,6 +4627,7 @@ fn gen_stmt(
           loops,
           switches,
           breakables,
+          labels,
           cstrings,
           s,
           bag,
@@ -4705,6 +4734,7 @@ fn gen_stmt(
         loops,
         switches,
         breakables,
+        labels,
         cstrings,
         then_branch,
         bag,
@@ -4732,6 +4762,7 @@ fn gen_stmt(
             loops,
             switches,
             breakables,
+            labels,
             cstrings,
             else_stmt,
             bag,
@@ -4766,6 +4797,7 @@ fn gen_stmt(
         loops,
         switches,
         breakables,
+        labels,
         cstrings,
         body,
         bag,
@@ -4812,6 +4844,7 @@ fn gen_stmt(
         loops,
         switches,
         breakables,
+        labels,
         cstrings,
         body,
         bag,
@@ -4856,6 +4889,7 @@ fn gen_stmt(
             loops,
             switches,
             breakables,
+            labels,
             cstrings,
             s,
             bag,
@@ -4886,6 +4920,7 @@ fn gen_stmt(
         loops,
         switches,
         breakables,
+        labels,
         cstrings,
         body,
         bag,
@@ -4990,6 +5025,7 @@ fn gen_stmt(
         loops,
         switches,
         breakables,
+        labels,
         cstrings,
         body,
         bag,
@@ -5029,6 +5065,56 @@ fn gen_stmt(
         }
       }
       chain1
+    }
+    Stmt::Goto(name~, loc~) => {
+      emit_vla_leave(emitter, alloc, 0)
+      match labels.addrs.get(name) {
+        Some(addr) =>
+          gjmp_addr(emitter, addr) catch {
+            err => add_error(bag, loc, err.to_string())
+          }
+        None => {
+          let chain = labels.chains.get(name).unwrap_or(0)
+          let new_chain = gjmp(emitter, chain)
+          labels.chains.set(name, new_chain)
+        }
+      }
+      return_chain
+    }
+    Stmt::Label(name~, body~, loc~) => {
+      let addr = emitter_pc(emitter)
+      if labels.addrs.contains(name) {
+        add_error(bag, loc, "codegen: duplicate label")
+      }
+      match labels.chains.get(name) {
+        None => ()
+        Some(chain) =>
+          if chain != 0 {
+            gsym_addr(emitter, chain, addr) catch {
+              err => add_error(bag, loc, err.to_string())
+            }
+          }
+      }
+      labels.addrs.set(name, addr)
+      labels.chains.set(name, 0)
+      match current_scope_vla_loc(alloc) {
+        None => ()
+        Some(off) => emit_vla_sp_restore(emitter, off)
+      }
+      gen_stmt(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        loops,
+        switches,
+        breakables,
+        labels,
+        cstrings,
+        body,
+        bag,
+        return_chain,
+      )
     }
 	    Stmt::Break(loc~) => {
 	      let idx = breakables.length() - 1
@@ -5361,6 +5447,7 @@ fn gen_func_def(
   let loops : Array[LoopChains] = []
   let switches : Array[SwitchChains] = []
   let breakables : Array[Int] = []
+  let labels = new_label_ctx()
   let return_chain = gen_stmt(
     emitter,
     alloc,
@@ -5369,6 +5456,7 @@ fn gen_func_def(
     loops,
     switches,
     breakables,
+    labels,
     cstrings,
     func.body,
     bag,

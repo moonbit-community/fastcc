@@ -40,6 +40,15 @@ mkdir -p "${TMP_DIR}"
 
 tests_file="${TMP_DIR}/tests.txt"
 find "${CTEST_DIR}" -maxdepth 1 -type f -name '*.c' -print | sort >"${tests_file}"
+if [[ -d "${PATCH_DIR}" ]]; then
+  while IFS= read -r patch; do
+    base="$(basename "${patch}")"
+    if ! grep -q "/${base}$" "${tests_file}"; then
+      echo "${patch}" >>"${tests_file}"
+    fi
+  done < <(find "${PATCH_DIR}" -maxdepth 1 -type f -name '*.c' -print)
+fi
+sort -o "${tests_file}" "${tests_file}"
 if [[ -n "${FILTER}" ]]; then
   grep -E "${FILTER}" "${tests_file}" >"${tests_file}.filtered" || true
   mv "${tests_file}.filtered" "${tests_file}"
