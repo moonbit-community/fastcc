@@ -9,11 +9,11 @@ fn read_u32_le(bytes : Bytes, offset : Int) -> UInt {
 
 ///|
 fn decode_reloc_info(info : UInt) -> (Int, Bool, Int, Bool, Int) {
-  let symbolnum = (info & 0x00ff_ffff).to_int()
+  let symbolnum = (info & 0x00ff_ffff).reinterpret_as_int()
   let pcrel = ((info >> 24) & 1) == 1
-  let length = ((info >> 25) & 3).to_int()
+  let length = ((info >> 25) & 3).reinterpret_as_int()
   let is_extern = ((info >> 27) & 1) == 1
-  let r_type = ((info >> 28) & 0xf).to_int()
+  let r_type = ((info >> 28) & 0xf).reinterpret_as_int()
   (symbolnum, pcrel, length, is_extern, r_type)
 }
 
@@ -97,10 +97,10 @@ test "macho encodes GOT relocations as extern symbol relocs" {
   ]
   let bytes = encode_macho_object([sec], symbols)
   let section_base = 32 + 72
-  let reloff = read_u32_le(bytes, section_base + 56).to_int()
-  let nreloc = read_u32_le(bytes, section_base + 60).to_int()
+  let reloff = read_u32_le(bytes, section_base + 56).reinterpret_as_int()
+  let nreloc = read_u32_le(bytes, section_base + 60).reinterpret_as_int()
   assert_eq(nreloc, 2)
-  let addr0 = read_u32_le(bytes, reloff).to_int()
+  let addr0 = read_u32_le(bytes, reloff).reinterpret_as_int()
   let info0 = read_u32_le(bytes, reloff + 4)
   assert_eq(addr0, 0)
   let (symnum0, pcrel0, len0, ext0, rtype0) = decode_reloc_info(info0)
@@ -109,7 +109,7 @@ test "macho encodes GOT relocations as extern symbol relocs" {
   assert_eq(len0, 2)
   assert_true(ext0)
   assert_eq(rtype0, ARM64_RELOC_GOT_LOAD_PAGE21)
-  let addr1 = read_u32_le(bytes, reloff + 8).to_int()
+  let addr1 = read_u32_le(bytes, reloff + 8).reinterpret_as_int()
   let info1 = read_u32_le(bytes, reloff + 12)
   assert_eq(addr1, 4)
   let (symnum1, pcrel1, len1, ext1, rtype1) = decode_reloc_info(info1)
