@@ -61,6 +61,7 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
   }
 }
 
+
 ///|
 fn default_int_type() -> CType {
   CType::Int(kind=CIntKind::Int, unsigned=false)

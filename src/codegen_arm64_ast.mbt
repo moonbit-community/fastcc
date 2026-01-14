@@ -1176,7 +1176,7 @@ fn resolve_init_designator_offset_type(
   sem : SemContext,
   ty : CType,
   designators : Array[InitDesignator],
-  loc : SrcLoc,
+  _loc : SrcLoc,
   bag : DiagBag,
 ) -> (CType, Int)? {
   let mut current = strip_qual_attrs(ty)
@@ -1753,8 +1753,8 @@ fn emit_addr_local(
   emitter : Arm64Emitter,
   dst : Int,
   off : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  _loc : SrcLoc,
+  _bag : DiagBag,
 ) -> Unit {
   let imm = if off < 0 { -off } else { off }
   if imm <= 0xfff {
@@ -2656,7 +2656,7 @@ fn gen_expr_floatbits(
         dst,
         bag,
       )
-    Expr::Unary(op=UnaryOp::Minus, expr=inner, loc~) => {
+    Expr::Unary(op=UnaryOp::Minus, expr=inner, loc=_) => {
       gen_expr_to_float_kind_bits(
         emitter,
         alloc,
@@ -2863,7 +2863,7 @@ fn gen_expr_floatbits(
             "codegen: unsupported float binary operator",
           )
       }
-    Expr::Cast(ty=to_ty, expr=inner, loc~) => {
+    Expr::Cast(ty=to_ty, expr=inner, loc=_) => {
       let target_kind = match float_kind_of_type(to_ty) {
         None => kind
         Some(k) => k
@@ -2940,7 +2940,7 @@ fn gen_expr_int32(
     Expr::IntLit(value~, loc~) =>
       match parse_int64_literal(value) {
         None => add_error(bag, loc, "codegen: invalid integer literal")
-        Some(v) => arm64_movimm(emitter, dst.reinterpret_as_uint(), v.to_uint64())
+        Some(v) => arm64_movimm(emitter, dst.reinterpret_as_uint(), v.reinterpret_as_uint64())
       }
     Expr::CharLit(value~, ..) =>
       arm64_movimm(emitter, dst.reinterpret_as_uint(), value.to_uint64())
@@ -3076,7 +3076,14 @@ fn gen_expr_int32(
             }
             Some(v) => v
           }
-          arm64_ldrx(emitter, signed, sz, dst.to_uint(), addr.to_uint(), 0)
+          arm64_ldrx(
+            emitter,
+            signed,
+            sz,
+            dst.reinterpret_as_uint(),
+            addr.reinterpret_as_uint(),
+            0,
+          )
           give_reg(pool, addr)
         }
         UnaryOp::PreInc | UnaryOp::PreDec | UnaryOp::PostInc | UnaryOp::PostDec => {
@@ -3096,7 +3103,14 @@ fn gen_expr_int32(
             }
           }
           gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, inner, addr, bag)
-          arm64_ldrx(emitter, false, 2, dst.to_uint(), addr.to_uint(), 0)
+          arm64_ldrx(
+            emitter,
+            false,
+            2,
+            dst.reinterpret_as_uint(),
+            addr.reinterpret_as_uint(),
+            0,
+          )
           let one = take_reg(pool) catch {
             err => {
               add_error(bag, loc, err.to_string())
@@ -3104,7 +3118,7 @@ fn gen_expr_int32(
               return
             }
           }
-          arm64_movimm(emitter, one.to_uint(), 1)
+          arm64_movimm(emitter, one.reinterpret_as_uint(), 1)
           if op == UnaryOp::PostInc || op == UnaryOp::PostDec {
             let updated = take_reg(pool) catch {
               err => {
@@ -3134,7 +3148,13 @@ fn gen_expr_int32(
                 .reinterpret_as_uint(),
               )
             }
-            arm64_strx(emitter, 2, updated.to_uint(), addr.to_uint(), 0)
+            arm64_strx(
+              emitter,
+              2,
+              updated.reinterpret_as_uint(),
+              addr.reinterpret_as_uint(),
+              0,
+            )
             give_reg(pool, updated)
           } else {
             if op == UnaryOp::PreInc {
@@ -3156,7 +3176,13 @@ fn gen_expr_int32(
                 .reinterpret_as_uint(),
               )
             }
-            arm64_strx(emitter, 2, dst.to_uint(), addr.to_uint(), 0)
+            arm64_strx(
+              emitter,
+              2,
+              dst.reinterpret_as_uint(),
+              addr.reinterpret_as_uint(),
+              0,
+            )
           }
           give_reg(pool, one)
           give_reg(pool, addr)
@@ -3228,7 +3254,7 @@ fn gen_expr_int32(
             }
             _ =>
               match left {
-                Expr::Ident(name~, ..) => {
+                Expr::Ident(name=_, ..) => {
                   gen_expr_any(emitter, alloc, syms, pool, cstrings, right, dst, bag)
                   store_lvalue_scalar(
                     emitter,
@@ -3275,7 +3301,14 @@ fn gen_expr_int32(
                   }
                 }
                 gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, left, addr, bag)
-                arm64_ldrx(emitter, false, 3, dst.to_uint(), addr.to_uint(), 0)
+                arm64_ldrx(
+                  emitter,
+                  false,
+                  3,
+                  dst.reinterpret_as_uint(),
+                  addr.reinterpret_as_uint(),
+                  0,
+                )
                 let idx = take_reg(pool) catch {
                   err => {
                     add_error(bag, loc, err.to_string())
@@ -3311,7 +3344,11 @@ fn gen_expr_int32(
                       return
                     }
                   }
-                  arm64_movimm(emitter, scale.to_uint(), elem_size.to_uint64())
+                  arm64_movimm(
+                    emitter,
+                    scale.reinterpret_as_uint(),
+                    elem_size.to_uint64(),
+                  )
                   emit32(
                     emitter,
                     (0x9b007c00 : Int)
@@ -3331,7 +3368,13 @@ fn gen_expr_int32(
                   .lor(idx << 16)
                   .reinterpret_as_uint(),
                 )
-                arm64_strx(emitter, 3, dst.to_uint(), addr.to_uint(), 0)
+                arm64_strx(
+                  emitter,
+                  3,
+                  dst.reinterpret_as_uint(),
+                  addr.reinterpret_as_uint(),
+                  0,
+                )
                 give_reg(pool, idx)
                 give_reg(pool, addr)
               }
@@ -3354,7 +3397,14 @@ fn gen_expr_int32(
             }
           }
           gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, left, addr, bag)
-          arm64_ldrx(emitter, false, 2, dst.to_uint(), addr.to_uint(), 0)
+          arm64_ldrx(
+            emitter,
+            false,
+            2,
+            dst.reinterpret_as_uint(),
+            addr.reinterpret_as_uint(),
+            0,
+          )
           let tmp_old = take_reg(pool) catch {
             err => {
               add_error(bag, loc, err.to_string())
@@ -3469,7 +3519,13 @@ fn gen_expr_int32(
               )
             _ => ()
           }
-          arm64_strx(emitter, 2, dst.to_uint(), addr.to_uint(), 0)
+          arm64_strx(
+            emitter,
+            2,
+            dst.reinterpret_as_uint(),
+            addr.reinterpret_as_uint(),
+            0,
+          )
           give_reg(pool, tmp_old)
           give_reg(pool, addr)
         }
@@ -3511,7 +3567,7 @@ fn gen_expr_int32(
 
           arm64_movimm(
             emitter,
-            dst.to_uint(),
+            dst.reinterpret_as_uint(),
             if op == BinaryOp::LogAnd { 0 } else { 1 },
           )
 
@@ -3744,18 +3800,15 @@ fn gen_expr_int32(
                     } else {
                       TOK_SAR
                     }
-                  let ok = arm64_gen_opic(
+                  let _ = arm64_gen_opic(
                     emitter,
                     shift_tok,
                     0,
                     false,
-                    v.to_uint64(),
+                    v.reinterpret_as_uint64(),
                     dst,
                     tmp,
                   )
-                  if !ok {
-                    add_error(bag, loc, "codegen: unsupported shift immediate")
-                  }
                 }
                 }
               }
@@ -3791,7 +3844,7 @@ fn gen_expr_int32(
 	                        emitter,
 	                        false,
 	                        3,
-	                        dst.to_uint(),
+	                        dst.reinterpret_as_uint(),
 	                        (29 : UInt),
 	                        off.to_int64().reinterpret_as_uint64(),
 	                      )
@@ -3821,7 +3874,12 @@ fn gen_expr_int32(
 	        _ =>
 	          match type_size_align_or_error(alloc.sem, ty, loc) {
 	            None => ()
-	            Some((size, _)) => arm64_movimm(emitter, dst.to_uint(), size.to_uint64())
+	            Some((size, _)) =>
+	              arm64_movimm(
+	                emitter,
+	                dst.reinterpret_as_uint(),
+	                size.to_uint64(),
+	              )
 	          }
 	      }
 	    }
@@ -3843,7 +3901,12 @@ fn gen_expr_int32(
 	        _ =>
 	          match type_size_align_or_error(alloc.sem, ty, loc) {
 	            None => ()
-	            Some((size, _)) => arm64_movimm(emitter, dst.to_uint(), size.to_uint64())
+	            Some((size, _)) =>
+	              arm64_movimm(
+	                emitter,
+	                dst.reinterpret_as_uint(),
+	                size.to_uint64(),
+	              )
 	          }
 	      }
 	    Expr::Cast(ty=to_ty, expr=inner, loc=cast_loc) => {
@@ -3949,10 +4012,11 @@ fn gen_expr_ptr(
     Expr::IntLit(value~, loc~) =>
       match parse_int64_literal(value) {
         None => add_error(bag, loc, "codegen: invalid integer literal")
-        Some(v) => arm64_movimm(emitter, dst.to_uint(), v.to_uint64())
+        Some(v) =>
+          arm64_movimm(emitter, dst.reinterpret_as_uint(), v.reinterpret_as_uint64())
       }
     Expr::CharLit(value~, ..) =>
-      arm64_movimm(emitter, dst.to_uint(), value.to_uint64())
+      arm64_movimm(emitter, dst.reinterpret_as_uint(), value.to_uint64())
     Expr::StringLit(value=value, loc=loc, ..) =>
       match cstrings.get(value) {
         None => add_error(bag, loc, "codegen: missing string literal in cstring pool")
@@ -3967,7 +4031,7 @@ fn gen_expr_ptr(
                 emitter,
                 false,
                 3,
-                dst.to_uint(),
+                dst.reinterpret_as_uint(),
                 (29 : UInt),
                 slot.offset.to_int64().reinterpret_as_uint64(),
               )
@@ -3997,7 +4061,14 @@ fn gen_expr_ptr(
               }
             None => ()
           }
-          arm64_ldrx(emitter, false, 3, dst.to_uint(), dst.to_uint(), 0)
+          arm64_ldrx(
+            emitter,
+            false,
+            3,
+            dst.reinterpret_as_uint(),
+            dst.reinterpret_as_uint(),
+            0,
+          )
         }
       }
     Expr::Member(base=_, name=_, is_arrow=_, loc~) => {
@@ -4016,7 +4087,15 @@ fn gen_expr_ptr(
               if dst != addr {
                 emit_mov(emitter, true, dst, addr)
               }
-            _ => arm64_ldrx(emitter, false, 3, dst.to_uint(), addr.to_uint(), 0)
+            _ =>
+              arm64_ldrx(
+                emitter,
+                false,
+                3,
+                dst.reinterpret_as_uint(),
+                addr.reinterpret_as_uint(),
+                0,
+              )
           }
       }
       give_reg(pool, addr)
@@ -4037,7 +4116,15 @@ fn gen_expr_ptr(
               if dst != addr {
                 emit_mov(emitter, true, dst, addr)
               }
-            _ => arm64_ldrx(emitter, false, 3, dst.to_uint(), addr.to_uint(), 0)
+            _ =>
+              arm64_ldrx(
+                emitter,
+                false,
+                3,
+                dst.reinterpret_as_uint(),
+                addr.reinterpret_as_uint(),
+                0,
+              )
           }
       }
       give_reg(pool, addr)
@@ -4058,7 +4145,14 @@ fn gen_expr_ptr(
         }
         Some(v) => v
       }
-      arm64_ldrx(emitter, signed, sz, dst.to_uint(), dst.to_uint(), 0)
+          arm64_ldrx(
+            emitter,
+            signed,
+            sz,
+            dst.reinterpret_as_uint(),
+            dst.reinterpret_as_uint(),
+            0,
+          )
     }
     Expr::Unary(op~, expr=inner, loc~) =>
       match op {
@@ -4100,7 +4194,14 @@ fn gen_expr_ptr(
           } else {
             dst
           }
-          arm64_ldrx(emitter, false, 3, value_reg.to_uint(), addr.to_uint(), 0)
+          arm64_ldrx(
+            emitter,
+            false,
+            3,
+            value_reg.reinterpret_as_uint(),
+            addr.reinterpret_as_uint(),
+            0,
+          )
 
           let is_add = op == UnaryOp::PreInc || op == UnaryOp::PostInc
           let is_post = op == UnaryOp::PostInc || op == UnaryOp::PostDec
@@ -4141,7 +4242,11 @@ fn gen_expr_ptr(
                     return
                   }
                 }
-                arm64_movimm(emitter, scale.to_uint(), imm.to_uint64())
+                arm64_movimm(
+                  emitter,
+                  scale.reinterpret_as_uint(),
+                  imm.to_uint64(),
+                )
                 let base : Int = if is_add { 0x8b000000 } else { 0xcb000000 }
                 emit32(
                   emitter,
@@ -4154,7 +4259,13 @@ fn gen_expr_ptr(
                 give_reg(pool, scale)
               }
             }
-            arm64_strx(emitter, 3, updated.to_uint(), addr.to_uint(), 0)
+            arm64_strx(
+              emitter,
+              3,
+              updated.reinterpret_as_uint(),
+              addr.reinterpret_as_uint(),
+              0,
+            )
             if value_reg != dst {
               emit_mov(emitter, true, dst, value_reg)
               give_reg(pool, value_reg)
@@ -4183,7 +4294,11 @@ fn gen_expr_ptr(
                     return
                   }
                 }
-                arm64_movimm(emitter, scale.to_uint(), imm.to_uint64())
+                arm64_movimm(
+                  emitter,
+                  scale.reinterpret_as_uint(),
+                  imm.to_uint64(),
+                )
                 let base : Int = if is_add { 0x8b000000 } else { 0xcb000000 }
                 emit32(
                   emitter,
@@ -4196,7 +4311,13 @@ fn gen_expr_ptr(
                 give_reg(pool, scale)
               }
             }
-            arm64_strx(emitter, 3, value_reg.to_uint(), addr.to_uint(), 0)
+            arm64_strx(
+              emitter,
+              3,
+              value_reg.reinterpret_as_uint(),
+              addr.reinterpret_as_uint(),
+              0,
+            )
             if value_reg != dst {
               emit_mov(emitter, true, dst, value_reg)
               give_reg(pool, value_reg)
@@ -4265,7 +4386,14 @@ fn gen_expr_ptr(
           } else {
             dst
           }
-          arm64_ldrx(emitter, false, 3, value_reg.to_uint(), addr.to_uint(), 0)
+          arm64_ldrx(
+            emitter,
+            false,
+            3,
+            value_reg.reinterpret_as_uint(),
+            addr.reinterpret_as_uint(),
+            0,
+          )
 
           let idx = take_reg(pool) catch {
             err => {
@@ -4291,7 +4419,11 @@ fn gen_expr_ptr(
                 return
               }
             }
-            arm64_movimm(emitter, scale.to_uint(), elem_size.to_uint64())
+            arm64_movimm(
+              emitter,
+              scale.reinterpret_as_uint(),
+              elem_size.to_uint64(),
+            )
             emit32(
               emitter,
               (0x9b007c00 : Int)
@@ -4312,7 +4444,13 @@ fn gen_expr_ptr(
             .lor(idx << 16)
             .reinterpret_as_uint(),
           )
-          arm64_strx(emitter, 3, value_reg.to_uint(), addr.to_uint(), 0)
+          arm64_strx(
+            emitter,
+            3,
+            value_reg.reinterpret_as_uint(),
+            addr.reinterpret_as_uint(),
+            0,
+          )
           if value_reg != dst {
             emit_mov(emitter, true, dst, value_reg)
             give_reg(pool, value_reg)
@@ -4371,7 +4509,11 @@ fn gen_expr_ptr(
                 return
               }
             }
-            arm64_movimm(emitter, scale.to_uint(), elem_size.to_uint64())
+            arm64_movimm(
+              emitter,
+              scale.reinterpret_as_uint(),
+              elem_size.to_uint64(),
+            )
             emit32(
               emitter,
               (0x9b007c00 : Int)
@@ -4837,7 +4979,7 @@ fn gen_stmt(
               _ => ()
             }
             match strip_qual_attrs(slot0.ty) {
-              CType::Array(elem=elem_ty, size=None, size_expr=Some(expr)) =>
+              CType::Array(elem=_elem_ty, size=None, size_expr=Some(_expr)) =>
                 gen_vla_alloc_to_local_slot(
                   emitter,
                   alloc,
@@ -5138,7 +5280,11 @@ fn gen_stmt(
               9
             }
           }
-          arm64_movimm(emitter, tmp.to_uint(), info.start.to_uint64())
+          arm64_movimm(
+            emitter,
+            tmp.reinterpret_as_uint(),
+            info.start.to_uint64(),
+          )
           emit_cmp(emitter, false, 0, tmp)
           give_reg(pool, tmp)
           let at = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
@@ -5150,10 +5296,18 @@ fn gen_stmt(
               9
             }
           }
-          arm64_movimm(emitter, tmp.to_uint(), info.start.to_uint64())
+          arm64_movimm(
+            emitter,
+            tmp.reinterpret_as_uint(),
+            info.start.to_uint64(),
+          )
           emit_cmp(emitter, false, 0, tmp)
           let skip1 = emit_b_cond_placeholder(emitter, ARM64_COND_LT)
-          arm64_movimm(emitter, tmp.to_uint(), info.end.to_uint64())
+          arm64_movimm(
+            emitter,
+            tmp.reinterpret_as_uint(),
+            info.end.to_uint64(),
+          )
           emit_cmp(emitter, false, 0, tmp)
           let skip2 = emit_b_cond_placeholder(emitter, ARM64_COND_GT)
           give_reg(pool, tmp)
@@ -5359,9 +5513,23 @@ fn gen_stmt(
                             }
                             Some(v) => v
                           }
-                          arm64_ldrx(emitter, false, sz, (0 : UInt), addr.to_uint(), 0)
+                          arm64_ldrx(
+                            emitter,
+                            false,
+                            sz,
+                            (0 : UInt),
+                            addr.reinterpret_as_uint(),
+                            0,
+                          )
                         } else {
-                          arm64_ldrx(emitter, false, 3, (0 : UInt), addr.to_uint(), 0)
+                          arm64_ldrx(
+                            emitter,
+                            false,
+                            3,
+                            (0 : UInt),
+                            addr.reinterpret_as_uint(),
+                            0,
+                          )
                           let rest = size - 8
                           let sz1 = match arm64_sz_from_size(rest) {
                             None => {
@@ -5371,7 +5539,14 @@ fn gen_stmt(
                             }
                             Some(v) => v
                           }
-                          arm64_ldrx(emitter, false, sz1, (1 : UInt), addr.to_uint(), 8)
+                          arm64_ldrx(
+                            emitter,
+                            false,
+                            sz1,
+                            (1 : UInt),
+                            addr.reinterpret_as_uint(),
+                            8,
+                          )
                         }
                         give_reg(pool, addr)
                       }
@@ -5424,7 +5599,7 @@ fn emit_prologue(emitter : Arm64Emitter, frame_size : Int) -> Unit {
     arm64_strx(
       emitter,
       3,
-      regs[i].to_uint(),
+      regs[i].reinterpret_as_uint(),
       (29 : UInt),
       off.to_int64().reinterpret_as_uint64(),
     )
@@ -5446,7 +5621,7 @@ fn emit_epilogue(emitter : Arm64Emitter, frame_size : Int) -> Unit {
       emitter,
       false,
       3,
-      regs[i].to_uint(),
+      regs[i].reinterpret_as_uint(),
       (29 : UInt),
       off.to_int64().reinterpret_as_uint64(),
     )
@@ -5544,7 +5719,7 @@ fn gen_func_def(
                       arm64_strx(
                         emitter,
                         sz,
-                        gp.to_uint(),
+                        gp.reinterpret_as_uint(),
                         (29 : UInt),
                         slot.offset.to_int64().reinterpret_as_uint64(),
                       )
@@ -5557,7 +5732,7 @@ fn gen_func_def(
                       arm64_strx(
                         emitter,
                         3,
-                        gp.to_uint(),
+                        gp.reinterpret_as_uint(),
                         (29 : UInt),
                         slot.offset.to_int64().reinterpret_as_uint64(),
                       )
@@ -5573,7 +5748,7 @@ fn gen_func_def(
                       arm64_strx(
                         emitter,
                         sz1,
-                        (gp + 1).to_uint(),
+                        (gp + 1).reinterpret_as_uint(),
                         (29 : UInt),
                         (slot.offset + 8).to_int64().reinterpret_as_uint64(),
                       )
