@@ -145,6 +145,7 @@ fn format_diag_for_cli(map : SourceMap, d : Diag) -> String {
 
 ///|
 fn main {
+  touch_unused_symbols()
   match parse_cli_args(@env.args()) {
     CliParse::Help => ()
     CliParse::Error => @sys.exit(1)
