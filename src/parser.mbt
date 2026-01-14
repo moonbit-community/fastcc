@@ -22,7 +22,9 @@ fn collect_tokens(pp : Preprocessor) -> Array[Token] {
 
 ///|
 fn new_parser(tokens : Array[Token], diags : DiagBag) -> Parser {
-  { tokens, index: 0, diags, type_scopes: [{}], anon_tag_id: 0 }
+  let builtins : Map[String, CType] = {}
+  builtins.set("__builtin_va_list", CType::Pointer(CType::Void))
+  { tokens, index: 0, diags, type_scopes: [builtins], anon_tag_id: 0 }
 }
 
 ///|

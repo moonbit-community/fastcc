@@ -102,6 +102,22 @@ fn arm64_sz_from_size(size : Int) -> Int? {
 }
 
 ///|
+fn arm64_add_imm(emitter : Arm64Emitter, dst : Int, src : Int, imm : Int) ->
+  Unit {
+  if imm < 0 || imm > 4095 {
+    return
+  }
+  emit32(
+    emitter,
+    (0x91000000 : Int)
+    .lor((imm << 10))
+    .lor(src << 5)
+    .lor(dst)
+    .reinterpret_as_uint(),
+  )
+}
+
+///|
 fn strip_float_literal_suffix(text : String) -> String {
   let len = text.length()
   if len == 0 {
@@ -1869,6 +1885,192 @@ fn emit_call(emitter : Arm64Emitter, sym : Sym) -> Unit {
 }
 
 ///|
+fn gen_builtin_va_start(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : Map[String, Sym],
+  args : Array[Expr],
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  if args.length() < 1 {
+    add_error(bag, loc, "__builtin_va_start expects an ap argument")
+    return
+  }
+  let ap_addr = take_reg(pool) catch {
+    err => {
+      add_error(bag, loc, err.to_string())
+      return
+    }
+  }
+  gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, args[0], ap_addr, bag)
+  let base = take_reg(pool) catch {
+    err => {
+      add_error(bag, loc, err.to_string())
+      give_reg(pool, ap_addr)
+      return
+    }
+  }
+  arm64_add_imm(emitter, base, 29, 16)
+  arm64_strx(
+    emitter,
+    3,
+    base.reinterpret_as_uint(),
+    ap_addr.reinterpret_as_uint(),
+    0,
+  )
+  give_reg(pool, base)
+  give_reg(pool, ap_addr)
+}
+
+///|
+fn gen_builtin_va_copy(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : Map[String, Sym],
+  args : Array[Expr],
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  if args.length() < 2 {
+    add_error(bag, loc, "__builtin_va_copy expects 2 arguments")
+    return
+  }
+  let src_addr = take_reg(pool) catch {
+    err => {
+      add_error(bag, loc, err.to_string())
+      return
+    }
+  }
+  gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, args[1], src_addr, bag)
+  let tmp = take_reg(pool) catch {
+    err => {
+      add_error(bag, loc, err.to_string())
+      give_reg(pool, src_addr)
+      return
+    }
+  }
+  arm64_ldrx(
+    emitter,
+    false,
+    3,
+    tmp.reinterpret_as_uint(),
+    src_addr.reinterpret_as_uint(),
+    0,
+  )
+  let dst_addr = take_reg(pool) catch {
+    err => {
+      add_error(bag, loc, err.to_string())
+      give_reg(pool, tmp)
+      give_reg(pool, src_addr)
+      return
+    }
+  }
+  gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, args[0], dst_addr, bag)
+  arm64_strx(
+    emitter,
+    3,
+    tmp.reinterpret_as_uint(),
+    dst_addr.reinterpret_as_uint(),
+    0,
+  )
+  give_reg(pool, dst_addr)
+  give_reg(pool, tmp)
+  give_reg(pool, src_addr)
+}
+
+///|
+fn gen_builtin_va_arg_load(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : Map[String, Sym],
+  list_expr : Expr,
+  ty : CType,
+  dst : Int,
+  bag : DiagBag,
+) -> Bool {
+  let loc = expr_loc(list_expr)
+  let ap_addr = take_reg(pool) catch {
+    err => {
+      add_error(bag, loc, err.to_string())
+      return false
+    }
+  }
+  gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, list_expr, ap_addr, bag)
+  let cur = take_reg(pool) catch {
+    err => {
+      add_error(bag, loc, err.to_string())
+      give_reg(pool, ap_addr)
+      return false
+    }
+  }
+  arm64_ldrx(
+    emitter,
+    false,
+    3,
+    cur.reinterpret_as_uint(),
+    ap_addr.reinterpret_as_uint(),
+    0,
+  )
+
+  let base_ty = strip_qual_attrs(ty)
+  let (size, signed) = match float_kind_of_type(base_ty) {
+    Some(k) => {
+      let sz = if k == CFloatKind::Double { 8 } else { 4 }
+      (sz, false)
+    }
+    None =>
+      if type_is_pointer_like(base_ty) {
+        (8, false)
+      } else {
+        match scalar_size_signed_or_error(alloc.sem, base_ty, loc) {
+          None => {
+            give_reg(pool, cur)
+            give_reg(pool, ap_addr)
+            return false
+          }
+          Some(v) => v
+        }
+      }
+  }
+  let load_sz = match arm64_sz_from_size(size) {
+    None => {
+      add_error(bag, loc, "codegen: unsupported va_arg size")
+      give_reg(pool, cur)
+      give_reg(pool, ap_addr)
+      return false
+    }
+    Some(v) => v
+  }
+  arm64_ldrx(
+    emitter,
+    signed,
+    load_sz,
+    dst.reinterpret_as_uint(),
+    cur.reinterpret_as_uint(),
+    0,
+  )
+  let bump = align_up(size, 8)
+  arm64_add_imm(emitter, cur, cur, bump)
+  arm64_strx(
+    emitter,
+    3,
+    cur.reinterpret_as_uint(),
+    ap_addr.reinterpret_as_uint(),
+    0,
+  )
+  give_reg(pool, cur)
+  give_reg(pool, ap_addr)
+  true
+}
+
+///|
 fn gen_call_direct(
   emitter : Arm64Emitter,
   alloc : LocalAlloc,
@@ -2200,6 +2402,17 @@ fn gen_call_expr(
   bag : DiagBag,
 ) -> Unit {
   if callee is Expr::Ident(name~, ..) {
+    if name == "__builtin_va_start" {
+      gen_builtin_va_start(emitter, alloc, syms, pool, cstrings, args, loc, bag)
+      return
+    }
+    if name == "__builtin_va_copy" {
+      gen_builtin_va_copy(emitter, alloc, syms, pool, cstrings, args, loc, bag)
+      return
+    }
+    if name == "__builtin_va_end" {
+      return
+    }
     if lookup_local(alloc, name) is None && alloc.sem.functions.contains(name) {
       gen_call_direct(emitter, alloc, syms, pool, cstrings, name, args, loc, bag)
       let call_ty = type_of_expr(alloc.sem, Expr::Call(callee~, args~, loc~))
@@ -2591,6 +2804,23 @@ fn gen_expr_floatbits(
         None => add_error(bag, loc, "codegen: invalid float literal")
         Some(bits) => arm64_movimm(emitter, dst.reinterpret_as_uint(), bits)
       }
+    Expr::BuiltinVaArg(list~, ty~, loc~) => {
+      match float_kind_of_type(strip_qual_attrs(ty)) {
+        Some(_) =>
+          ignore(gen_builtin_va_arg_load(
+            emitter,
+            alloc,
+            syms,
+            pool,
+            cstrings,
+            list,
+            ty,
+            dst,
+            bag,
+          ))
+        None => add_error(bag, loc, "codegen: expected float type for va_arg")
+      }
+    }
     Expr::Ident(name~, loc~) =>
       match lookup_local(alloc, name) {
         Some(slot) =>
@@ -3020,6 +3250,25 @@ fn gen_expr_int32(
         0,
       )
       give_reg(pool, addr)
+    }
+    Expr::BuiltinVaArg(list~, ty~, loc~) => {
+      match float_kind_of_type(strip_qual_attrs(ty)) {
+        Some(_) => add_error(bag, loc, "codegen: va_arg for float handled elsewhere")
+        None =>
+          if !gen_builtin_va_arg_load(
+            emitter,
+            alloc,
+            syms,
+            pool,
+            cstrings,
+            list,
+            ty,
+            dst,
+            bag,
+          ) {
+            ()
+          }
+      }
     }
     Expr::Unary(op~, expr=inner, loc~) => {
       match op {
@@ -4147,6 +4396,25 @@ fn gen_expr_ptr(
             dst.reinterpret_as_uint(),
             0,
           )
+    }
+    Expr::BuiltinVaArg(list~, ty~, loc~) => {
+      if !type_is_pointer_like(strip_qual_attrs(ty)) {
+        add_error(bag, loc, "codegen: expected pointer type for va_arg")
+        return
+      }
+      ignore(
+        gen_builtin_va_arg_load(
+          emitter,
+          alloc,
+          syms,
+          pool,
+          cstrings,
+          list,
+          ty,
+          dst,
+          bag,
+        ),
+      )
     }
     Expr::Unary(op~, expr=inner, loc~) =>
       match op {

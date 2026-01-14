@@ -47,7 +47,7 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     functions: {},
     function_defs: {},
     locals: [],
-    type_aliases: {},
+    type_aliases: { "__builtin_va_list": CType::Pointer(CType::Void) },
     struct_defs: {},
     union_defs: {},
     enum_defs: {},
@@ -3824,6 +3824,22 @@ fn builtin_func_sig(name : String) -> FuncSig? {
       Some({
         return_type: int_ty,
         params: [voidp, voidp, size_t],
+        varargs: false,
+        is_old_style: false,
+        call_conv: CallConv::Default,
+      })
+    "__builtin_va_start" =>
+      Some({
+        return_type: CType::Void,
+        params: [voidp, int_ty],
+        varargs: false,
+        is_old_style: false,
+        call_conv: CallConv::Default,
+      })
+    "__builtin_va_copy" | "__builtin_va_end" =>
+      Some({
+        return_type: CType::Void,
+        params: [voidp],
         varargs: false,
         is_old_style: false,
         call_conv: CallConv::Default,
