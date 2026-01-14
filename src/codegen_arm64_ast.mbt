@@ -3816,12 +3816,6 @@ fn gen_expr_int32(
           }
           give_reg(pool, tmp)
         }
-        _ =>
-          add_error(
-            bag,
-            loc,
-            "codegen: unsupported binary operator for now",
-          )
       }
     Expr::Call(callee~, args~, loc~) => {
       gen_call_expr(emitter, alloc, syms, pool, cstrings, callee, args, loc, bag)
