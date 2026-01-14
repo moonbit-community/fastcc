@@ -47,7 +47,7 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     functions: {},
     function_defs: {},
     locals: [],
-    type_aliases: { "__builtin_va_list": CType::Pointer(CType::Void) },
+    type_aliases: {},
     struct_defs: {},
     union_defs: {},
     enum_defs: {},
@@ -60,7 +60,6 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     switch_depth: 0,
   }
 }
-
 
 ///|
 fn default_int_type() -> CType {
@@ -535,7 +534,20 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
               add_sem_error(ctx, loc, "sizeof incomplete array")
               None
             }
-            Some(_) => None
+            Some(expr) =>
+              match const_int_from_expr(ctx, expr, loc) {
+                None => {
+                  add_sem_error(ctx, loc, "sizeof variable length array not supported yet")
+                  None
+                }
+                Some(n) =>
+                  if n < 0 {
+                    add_sem_error(ctx, loc, "invalid array size")
+                    None
+                  } else {
+                    Some((elem_size * n, elem_align))
+                  }
+              }
           }
       }
     }
@@ -3824,22 +3836,6 @@ fn builtin_func_sig(name : String) -> FuncSig? {
       Some({
         return_type: int_ty,
         params: [voidp, voidp, size_t],
-        varargs: false,
-        is_old_style: false,
-        call_conv: CallConv::Default,
-      })
-    "__builtin_va_start" =>
-      Some({
-        return_type: CType::Void,
-        params: [voidp, int_ty],
-        varargs: false,
-        is_old_style: false,
-        call_conv: CallConv::Default,
-      })
-    "__builtin_va_copy" | "__builtin_va_end" =>
-      Some({
-        return_type: CType::Void,
-        params: [voidp],
         varargs: false,
         is_old_style: false,
         call_conv: CallConv::Default,

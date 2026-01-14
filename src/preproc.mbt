@@ -30,9 +30,9 @@ struct Preprocessor {
   logical_path_stack : Array[String]
   mut line_adjust : Int
   line_adjust_stack : Array[Int]
+  mut next_file_id : Int
   include_paths : Array[String]
   diags : DiagBag
-  map : SourceMap
   macros : Map[String, Macro]
   pending : Array[Token]
   mut held : Token?
@@ -43,153 +43,9 @@ struct Preprocessor {
 }
 
 ///|
-fn make_builtin_token(kind : TokenKind, lexeme : String) -> Token {
-  { kind, lexeme, loc: dummy_loc(0), line_start: false }
-}
-
-///|
-fn define_macro(
-  pp : Preprocessor,
-  name : String,
-  replacement : Array[Token],
-) -> Unit {
-  pp.macros.set(name, {
-    params: [],
-    is_variadic: false,
-    is_function: false,
-    replacement,
-  })
-}
-
-///|
-fn define_words_macro(pp : Preprocessor, name : String, words : Array[String]) ->
-  Unit {
-  let tokens = words.map(w => make_builtin_token(Ident, w))
-  define_macro(pp, name, tokens)
-}
-
-///|
-fn define_int_macro(pp : Preprocessor, name : String, value : Int) -> Unit {
-  define_macro(pp, name, [make_builtin_token(IntLit, value.to_string())])
-}
-
-///|
-fn define_func_macro_zero(pp : Preprocessor, name : String) -> Unit {
-  pp.macros.set(name, {
-    params: ["x"],
-    is_variadic: true,
-    is_function: true,
-    replacement: [make_builtin_token(IntLit, "0")],
-  })
-}
-
-///|
-fn define_func_macro_empty(pp : Preprocessor, name : String) -> Unit {
-  pp.macros.set(name, {
-    params: ["x"],
-    is_variadic: true,
-    is_function: true,
-    replacement: [],
-  })
-}
-
-///|
-fn init_builtin_macros(pp : Preprocessor) -> Unit {
-  define_int_macro(pp, "__APPLE__", 1)
-  define_int_macro(pp, "__MACH__", 1)
-  define_int_macro(pp, "__aarch64__", 1)
-  define_int_macro(pp, "__arm64__", 1)
-  define_int_macro(pp, "__LP64__", 1)
-
-  define_macro(pp, "__ORDER_LITTLE_ENDIAN__", [
-    make_builtin_token(IntLit, "1234"),
-  ])
-  define_macro(pp, "__ORDER_BIG_ENDIAN__", [
-    make_builtin_token(IntLit, "4321"),
-  ])
-  define_macro(pp, "__ORDER_PDP_ENDIAN__", [
-    make_builtin_token(IntLit, "3412"),
-  ])
-  define_macro(pp, "__BYTE_ORDER__", [
-    make_builtin_token(Ident, "__ORDER_LITTLE_ENDIAN__"),
-  ])
-  define_int_macro(pp, "__LITTLE_ENDIAN__", 1)
-
-  define_words_macro(pp, "__SIZE_TYPE__", ["unsigned", "long"])
-  define_words_macro(pp, "__PTRDIFF_TYPE__", ["long"])
-  define_words_macro(pp, "__INTMAX_TYPE__", ["long", "int"])
-  define_words_macro(pp, "__UINTMAX_TYPE__", ["long", "unsigned", "int"])
-  define_words_macro(pp, "__INTPTR_TYPE__", ["long"])
-  define_words_macro(pp, "__UINTPTR_TYPE__", ["unsigned", "long"])
-  define_words_macro(pp, "__INT8_TYPE__", ["signed", "char"])
-  define_words_macro(pp, "__UINT8_TYPE__", ["unsigned", "char"])
-  define_words_macro(pp, "__INT16_TYPE__", ["short"])
-  define_words_macro(pp, "__UINT16_TYPE__", ["unsigned", "short"])
-  define_words_macro(pp, "__INT32_TYPE__", ["int"])
-  define_words_macro(pp, "__UINT32_TYPE__", ["unsigned", "int"])
-  define_words_macro(pp, "__INT64_TYPE__", ["long", "long"])
-  define_words_macro(pp, "__UINT64_TYPE__", ["unsigned", "long", "long"])
-  define_words_macro(pp, "__int128_t", ["long", "double"])
-  define_words_macro(pp, "__uint128_t", ["long", "double"])
-
-  define_int_macro(pp, "__CHAR_BIT__", 8)
-  define_int_macro(pp, "__SIZEOF_POINTER__", 8)
-  define_int_macro(pp, "__SIZEOF_LONG__", 8)
-  define_int_macro(pp, "__SIZEOF_LONG_LONG__", 8)
-  define_int_macro(pp, "__SIZEOF_INT__", 4)
-  define_int_macro(pp, "__SIZEOF_SHORT__", 2)
-  define_int_macro(pp, "__SIZEOF_SIZE_T__", 8)
-  define_int_macro(pp, "__SIZEOF_PTRDIFF_T__", 8)
-  define_int_macro(pp, "__SIZEOF_WCHAR_T__", 4)
-  define_int_macro(pp, "__SIZEOF_WINT_T__", 4)
-
-  define_words_macro(pp, "__WCHAR_TYPE__", ["int"])
-  define_words_macro(pp, "__WINT_TYPE__", ["int"])
-
-  define_int_macro(pp, "__STDC__", 1)
-  define_int_macro(pp, "__STDC_HOSTED__", 1)
-  define_macro(pp, "__STDC_VERSION__", [
-    make_builtin_token(IntLit, "201112"),
-  ])
-
-  define_int_macro(pp, "__GNUC__", 4)
-  define_int_macro(pp, "__GNUC_MINOR__", 2)
-  define_int_macro(pp, "__GNUC_PATCHLEVEL__", 1)
-  define_int_macro(pp, "__GNUC_STDC_INLINE__", 1)
-  define_int_macro(pp, "__APPLE_CC__", 1)
-  define_int_macro(pp, "__FINITE_MATH_ONLY__", 1)
-  define_int_macro(pp, "_DONT_USE_CTYPE_INLINE_", 1)
-  define_int_macro(pp, "_FORTIFY_SOURCE", 0)
-  define_words_macro(pp, "_Float16", ["short", "unsigned", "int"])
-
-  define_func_macro_zero(pp, "__has_builtin")
-  define_func_macro_zero(pp, "__has_feature")
-  define_func_macro_zero(pp, "__has_extension")
-  define_func_macro_zero(pp, "__has_attribute")
-  define_func_macro_zero(pp, "__has_include")
-  define_func_macro_zero(pp, "__has_include_next")
-  define_func_macro_empty(pp, "__API_AVAILABLE")
-  define_func_macro_empty(pp, "__API_AVAILABLE_BEGIN")
-  define_func_macro_empty(pp, "__API_AVAILABLE_END")
-  define_func_macro_empty(pp, "__API_DEPRECATED")
-  define_func_macro_empty(pp, "__API_DEPRECATED_WITH_REPLACEMENT")
-  define_func_macro_empty(pp, "__API_UNAVAILABLE")
-  define_func_macro_empty(pp, "__API_UNAVAILABLE_BEGIN")
-  define_func_macro_empty(pp, "__API_UNAVAILABLE_END")
-  define_func_macro_empty(pp, "API_AVAILABLE")
-  define_func_macro_empty(pp, "API_AVAILABLE_BEGIN")
-  define_func_macro_empty(pp, "API_AVAILABLE_END")
-  define_func_macro_empty(pp, "API_UNAVAILABLE")
-  define_func_macro_empty(pp, "API_UNAVAILABLE_BEGIN")
-  define_func_macro_empty(pp, "API_UNAVAILABLE_END")
-  define_func_macro_empty(pp, "API_DEPRECATED")
-}
-
-///|
-fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
-  Preprocessor {
+fn new_preprocessor(file : SourceFile, diags : DiagBag) -> Preprocessor {
   let (date_literal, time_literal) = init_datetime_literals()
-  let pp = {
+  {
     lexer: new_lexer(file, diags),
     lexer_stack: [],
     held_stack: [],
@@ -199,9 +55,9 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
     logical_path_stack: [],
     line_adjust: 0,
     line_adjust_stack: [],
+    next_file_id: file.id + 1,
     include_paths: [],
     diags,
-    map,
     macros: {},
     pending: [],
     held: None,
@@ -210,8 +66,6 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
     date_literal,
     time_literal,
   }
-  init_builtin_macros(pp)
-  pp
 }
 
 ///|
@@ -411,7 +265,8 @@ fn include_file(
           add_pp_error(pp, loc, "failed to read include: \{err.to_string()}")
       } noraise {
         text => {
-          let file = add_file(pp.map, resolved, text)
+          let file = { id: pp.next_file_id, path: resolved, text }
+          pp.next_file_id = pp.next_file_id + 1
           pp.lexer_stack.push(pp.lexer)
           pp.held_stack.push(pp.held)
           pp.held = None
@@ -430,14 +285,10 @@ fn include_file(
 ///|
 fn parse_define_macro(
   pp : Preprocessor,
-  name_tok : Token,
   args : Array[Token],
   loc : SrcLoc,
 ) -> Macro? {
-  let is_function_like = args.length() > 0 &&
-    args[0].kind == LParen &&
-    is_adjacent(name_tok, args[0])
-  if is_function_like {
+  if args.length() > 0 && args[0].kind == LParen {
     match parse_macro_params(pp, args, loc) {
       None => None
       Some((params, is_variadic, replacement)) =>
@@ -1180,17 +1031,7 @@ fn match_kind(p : IfParser, kind : TokenKind) -> Bool {
 
 ///|
 fn parse_int_literal(pp : Preprocessor, lexeme : String, loc : SrcLoc) -> Int {
-  let mut end = lexeme.length()
-  while end > 0 {
-    let ch = lexeme[end - 1]
-    if ch == 'u' || ch == 'U' || ch == 'l' || ch == 'L' {
-      end = end - 1
-      continue
-    }
-    break
-  }
-  let trimmed = slice_string(lexeme, 0, end)
-  try @strconv.parse_int(trimmed, base=0) catch {
+  try @strconv.parse_int(lexeme, base=0) catch {
     _ => {
       add_pp_error(pp, loc, "invalid integer in #if")
       0
@@ -1225,10 +1066,6 @@ fn parse_primary(p : IfParser, loc : SrcLoc) -> Int {
       0
     }
     Some(tok) => {
-      if tok.kind == RParen {
-        p.index = p.index - 1
-        return 0
-      }
       if tok.kind == IntLit {
         return parse_int_literal(p.pp, tok.lexeme, tok.loc)
       }
@@ -1238,44 +1075,19 @@ fn parse_primary(p : IfParser, loc : SrcLoc) -> Int {
         }
         match macro_int_value(p.pp, tok.lexeme, tok.loc) {
           Some(v) => return v
-          None => {
-            if match_kind(p, LParen) {
-              skip_paren_expr(p, tok.loc)
-              return 0
-            }
-            return 0
-          }
+          None => return 0
         }
       }
       if tok.kind == LParen {
         let value = parse_logical_or(p, loc)
         if !match_kind(p, RParen) {
-          // try to resync to a later ')', but don't hard-fail
-          let mut idx = p.index
-          while idx < p.tokens.length() {
-            match p.tokens[idx] {
-              { kind: RParen, .. } => {
-                idx = idx + 1
-                break
-              }
-              _ => idx = idx + 1
-            }
-          }
-          p.index = idx
+          add_pp_error(p.pp, loc, "missing ')' in #if expression")
         }
         return value
       }
       add_pp_error(p.pp, loc, "unexpected token in #if expression")
       0
     }
-  }
-}
-
-///|
-fn peek_is_rparen(p : IfParser) -> Bool {
-  match peek_if(p) {
-    Some(tok) if tok.kind == RParen => true
-    _ => false
   }
 }
 
@@ -1310,25 +1122,6 @@ fn parse_defined(p : IfParser, loc : SrcLoc) -> Int {
 }
 
 ///|
-fn skip_paren_expr(p : IfParser, loc : SrcLoc) -> Unit {
-  let mut depth = 1
-  while depth > 0 {
-    match advance_if(p) {
-      None => {
-        add_pp_error(p.pp, loc, "missing ')' in #if expression")
-        return
-      }
-      Some(tok) =>
-        if tok.kind == LParen {
-          depth = depth + 1
-        } else if tok.kind == RParen {
-          depth = depth - 1
-        }
-    }
-  }
-}
-
-///|
 fn parse_unary(p : IfParser, loc : SrcLoc) -> Int {
   if match_kind(p, Bang) {
     return if parse_unary(p, loc) == 0 { 1 } else { 0 }
@@ -1349,9 +1142,6 @@ fn parse_unary(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_mul(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_unary(p, loc)
   while true {
-    if peek_is_rparen(p) {
-      break
-    }
     if match_kind(p, Star) {
       value = value * parse_unary(p, loc)
       continue
@@ -1385,9 +1175,6 @@ fn parse_mul(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_add(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_mul(p, loc)
   while true {
-    if peek_is_rparen(p) {
-      break
-    }
     if match_kind(p, Plus) {
       value = value + parse_mul(p, loc)
       continue
@@ -1405,9 +1192,6 @@ fn parse_add(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_shift(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_add(p, loc)
   while true {
-    if peek_is_rparen(p) {
-      break
-    }
     if match_kind(p, ShiftLeft) {
       value = value << parse_add(p, loc)
       continue
@@ -1425,9 +1209,6 @@ fn parse_shift(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_rel(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_shift(p, loc)
   while true {
-    if peek_is_rparen(p) {
-      break
-    }
     if match_kind(p, Lt) {
       value = if value < parse_shift(p, loc) { 1 } else { 0 }
       continue
@@ -1453,9 +1234,6 @@ fn parse_rel(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_eq(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_rel(p, loc)
   while true {
-    if peek_is_rparen(p) {
-      break
-    }
     if match_kind(p, Eq) {
       value = if value == parse_rel(p, loc) { 1 } else { 0 }
       continue
@@ -1473,9 +1251,6 @@ fn parse_eq(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_bit_and(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_eq(p, loc)
   while match_kind(p, Amp) {
-    if peek_is_rparen(p) {
-      break
-    }
     value = value & parse_eq(p, loc)
   }
   value
@@ -1485,9 +1260,6 @@ fn parse_bit_and(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_bit_xor(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_bit_and(p, loc)
   while match_kind(p, Caret) {
-    if peek_is_rparen(p) {
-      break
-    }
     value = value ^ parse_bit_and(p, loc)
   }
   value
@@ -1497,9 +1269,6 @@ fn parse_bit_xor(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_bit_or(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_bit_xor(p, loc)
   while match_kind(p, Pipe) {
-    if peek_is_rparen(p) {
-      break
-    }
     value = value | parse_bit_xor(p, loc)
   }
   value
@@ -1509,8 +1278,7 @@ fn parse_bit_or(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_logical_and(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_bit_or(p, loc)
   while match_kind(p, AmpAmp) {
-    let rhs = parse_bit_or(p, loc)
-    value = if value != 0 && rhs != 0 { 1 } else { 0 }
+    value = if value != 0 && parse_bit_or(p, loc) != 0 { 1 } else { 0 }
   }
   value
 }
@@ -1519,8 +1287,7 @@ fn parse_logical_and(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_logical_or(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_logical_and(p, loc)
   while match_kind(p, PipePipe) {
-    let rhs = parse_logical_and(p, loc)
-    value = if value != 0 || rhs != 0 { 1 } else { 0 }
+    value = if value != 0 || parse_logical_and(p, loc) != 0 { 1 } else { 0 }
   }
   value
 }
@@ -1543,7 +1310,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
       return
     }
     let macro_name = args[0].lexeme
-    match parse_define_macro(pp, args[0], slice_tokens(args, 1), name_tok.loc) {
+    match parse_define_macro(pp, slice_tokens(args, 1), name_tok.loc) {
       Some(macro_def) => pp.macros.set(macro_name, macro_def)
       None => ()
     }
@@ -1680,7 +1447,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
         Some(macro_def) =>
           if macro_def.is_function {
             let next_tok = next_raw_token(pp)
-            if next_tok.kind != LParen {
+            if next_tok.kind != LParen || !is_adjacent(tok, next_tok) {
               push_back(pp, next_tok)
               return tok
             }

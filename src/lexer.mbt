@@ -153,9 +153,8 @@ fn skip_ws(lex : Lexer) -> Unit {
           continue
         }
         if code == 92 && peek_char_offset(lex, 1) is Some(10) {
-          let _ = advance_comment(lex) // '\'
-          let _ = advance_comment(lex) // '\n'
-          lex.line_start = false
+          let _ = advance_comment(lex)
+          let _ = advance_comment(lex)
           continue
         }
         if code == 47 {
@@ -219,10 +218,7 @@ fn skip_block_comment(lex : Lexer, start_loc : SrcLoc) -> Unit {
 
 ///|
 fn is_ident_start(code : UInt16) -> Bool {
-  (code >= 65 && code <= 90) ||
-  (code >= 97 && code <= 122) ||
-  code == 95 ||
-  code == 64 // allow '@' so we can lex Objective-C tokens in skipped branches
+  (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code == 95
 }
 
 ///|
