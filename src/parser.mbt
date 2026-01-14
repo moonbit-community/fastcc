@@ -1069,7 +1069,7 @@ fn parse_attribute_clause(p : Parser, loc : SrcLoc) -> Attributes {
         }
       }
       "constructor" => {
-        attrs = merge_attrs(attrs, attrs_with(constructor=true))
+        attrs = merge_attrs(attrs, attrs_with(constructor_attr=true))
         if has_args {
           skip_paren_group(p)
         }
@@ -1098,8 +1098,8 @@ fn parse_attribute_clause(p : Parser, loc : SrcLoc) -> Attributes {
         if !has_args {
           add_parse_error(p, name_tok.loc, "expected '(' after alias")
         } else {
-          let alias = parse_attr_string(p, name_tok.loc)
-          attrs = merge_attrs(attrs, attrs_with(alias~))
+          let alias_name = parse_attr_string(p, name_tok.loc)
+          attrs = merge_attrs(attrs, attrs_with(alias_name~))
           expect(p, RParen, "expected ')' after alias") |> ignore
         }
       "visibility" =>
