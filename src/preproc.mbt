@@ -1736,20 +1736,24 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
 ///|
 fn next_pp_token(pp : Preprocessor) -> Token {
   while true {
+    let mut tok = make_builtin_token(Eof, "")
+    let mut from_pending = false
     if pp.pending.length() > 0 {
       match pp.pending.pop() {
-        Some(tok) => {
+        Some(t) => {
+          tok = t
+          from_pending = true
           release_expanding_guards(pp)
-          return tok
         }
-        None => ()
+        None => continue
       }
+    } else {
+      tok = next_input_token(pp)
     }
-    let tok = next_input_token(pp)
     if tok.kind == Eof {
       return tok
     }
-    if tok.kind == Hash && tok.line_start {
+    if tok.kind == Hash && tok.line_start && !from_pending {
       handle_directive(pp, tok)
       continue
     }

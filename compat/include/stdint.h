@@ -1,3 +1,4 @@
+#include <stddef.h>
 #ifndef _TCC_COMPAT_STDINT_H
 #define _TCC_COMPAT_STDINT_H
 
