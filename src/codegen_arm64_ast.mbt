@@ -269,7 +269,7 @@ fn gen_type_size_bytes_to_reg(
 ) -> Unit {
   match type_size_align(alloc.sem, ty, loc) {
     Some((size, _)) => {
-      arm64_movimm(emitter, dst.to_uint(), size.to_uint64())
+      arm64_movimm(emitter, dst.reinterpret_as_uint(), size.to_uint64())
       return
     }
     None => ()
@@ -295,7 +295,7 @@ fn gen_type_size_bytes_to_reg(
             return
           }
         }
-        arm64_movimm(emitter, scale.to_uint(), n.to_uint64())
+        arm64_movimm(emitter, scale.reinterpret_as_uint(), n.to_uint64())
         emit32(
           emitter,
           (0x9b007c00 : Int)
@@ -383,7 +383,7 @@ fn gen_vla_alloc_to_local_slot(
       arm64_strx(
         emitter,
         3,
-        bytes_reg.to_uint(),
+        bytes_reg.reinterpret_as_uint(),
         (29 : UInt),
         off.to_int64().reinterpret_as_uint64(),
       )
@@ -415,7 +415,7 @@ fn gen_vla_alloc_to_local_slot(
   arm64_strx(
     emitter,
     3,
-    bytes_reg.to_uint(),
+    bytes_reg.reinterpret_as_uint(),
     (29 : UInt),
     slot_offset.to_int64().reinterpret_as_uint64(),
   )
@@ -952,7 +952,7 @@ fn emit_zero_bytes(
       emitter,
       3,
       (31 : UInt),
-      base_reg.to_uint(),
+      base_reg.reinterpret_as_uint(),
       (base_off + off).to_int64().reinterpret_as_uint64(),
     )
     off = off + 8
@@ -962,7 +962,7 @@ fn emit_zero_bytes(
       emitter,
       2,
       (31 : UInt),
-      base_reg.to_uint(),
+      base_reg.reinterpret_as_uint(),
       (base_off + off).to_int64().reinterpret_as_uint64(),
     )
     off = off + 4
@@ -972,7 +972,7 @@ fn emit_zero_bytes(
       emitter,
       1,
       (31 : UInt),
-      base_reg.to_uint(),
+      base_reg.reinterpret_as_uint(),
       (base_off + off).to_int64().reinterpret_as_uint64(),
     )
     off = off + 2
@@ -982,7 +982,7 @@ fn emit_zero_bytes(
       emitter,
       0,
       (31 : UInt),
-      base_reg.to_uint(),
+      base_reg.reinterpret_as_uint(),
       (base_off + off).to_int64().reinterpret_as_uint64(),
     )
     off = off + 1
@@ -1013,15 +1013,15 @@ fn emit_copy_bytes(
       emitter,
       false,
       3,
-      tmp.to_uint(),
-      src_reg.to_uint(),
+      tmp.reinterpret_as_uint(),
+      src_reg.reinterpret_as_uint(),
       (src_off + off).to_int64().reinterpret_as_uint64(),
     )
     arm64_strx(
       emitter,
       3,
-      tmp.to_uint(),
-      dst_reg.to_uint(),
+      tmp.reinterpret_as_uint(),
+      dst_reg.reinterpret_as_uint(),
       (dst_off + off).to_int64().reinterpret_as_uint64(),
     )
     off = off + 8
@@ -1031,15 +1031,15 @@ fn emit_copy_bytes(
       emitter,
       false,
       2,
-      tmp.to_uint(),
-      src_reg.to_uint(),
+      tmp.reinterpret_as_uint(),
+      src_reg.reinterpret_as_uint(),
       (src_off + off).to_int64().reinterpret_as_uint64(),
     )
     arm64_strx(
       emitter,
       2,
-      tmp.to_uint(),
-      dst_reg.to_uint(),
+      tmp.reinterpret_as_uint(),
+      dst_reg.reinterpret_as_uint(),
       (dst_off + off).to_int64().reinterpret_as_uint64(),
     )
     off = off + 4
@@ -1049,15 +1049,15 @@ fn emit_copy_bytes(
       emitter,
       false,
       1,
-      tmp.to_uint(),
-      src_reg.to_uint(),
+      tmp.reinterpret_as_uint(),
+      src_reg.reinterpret_as_uint(),
       (src_off + off).to_int64().reinterpret_as_uint64(),
     )
     arm64_strx(
       emitter,
       1,
-      tmp.to_uint(),
-      dst_reg.to_uint(),
+      tmp.reinterpret_as_uint(),
+      dst_reg.reinterpret_as_uint(),
       (dst_off + off).to_int64().reinterpret_as_uint64(),
     )
     off = off + 2
@@ -1067,15 +1067,15 @@ fn emit_copy_bytes(
       emitter,
       false,
       0,
-      tmp.to_uint(),
-      src_reg.to_uint(),
+      tmp.reinterpret_as_uint(),
+      src_reg.reinterpret_as_uint(),
       (src_off + off).to_int64().reinterpret_as_uint64(),
     )
     arm64_strx(
       emitter,
       0,
-      tmp.to_uint(),
-      dst_reg.to_uint(),
+      tmp.reinterpret_as_uint(),
+      dst_reg.reinterpret_as_uint(),
       (dst_off + off).to_int64().reinterpret_as_uint64(),
     )
     off = off + 1
@@ -1107,7 +1107,7 @@ fn emit_store_agg_return_gp_to_addr(
       emitter,
       sz,
       (0 : UInt),
-      base_reg.to_uint(),
+      base_reg.reinterpret_as_uint(),
       base_off.to_int64().reinterpret_as_uint64(),
     )
     return
@@ -1117,7 +1117,7 @@ fn emit_store_agg_return_gp_to_addr(
       emitter,
       3,
       (0 : UInt),
-      base_reg.to_uint(),
+      base_reg.reinterpret_as_uint(),
       base_off.to_int64().reinterpret_as_uint64(),
     )
     let rest = size - 8
@@ -1132,7 +1132,7 @@ fn emit_store_agg_return_gp_to_addr(
       emitter,
       sz1,
       (1 : UInt),
-      base_reg.to_uint(),
+      base_reg.reinterpret_as_uint(),
       (base_off + 8).to_int64().reinterpret_as_uint64(),
     )
     return
@@ -1165,8 +1165,8 @@ fn emit_store_scalar_at(
   arm64_strx(
     emitter,
     sz,
-    value_reg.to_uint(),
-    base_reg.to_uint(),
+    value_reg.reinterpret_as_uint(),
+    base_reg.reinterpret_as_uint(),
     off.to_int64().reinterpret_as_uint64(),
   )
 }
@@ -1308,14 +1308,14 @@ fn gen_string_init_to_addr(
       false,
       0,
       (0 : UInt),
-      src_reg.to_uint(),
+      src_reg.reinterpret_as_uint(),
       i.to_uint64(),
     )
     arm64_strx(
       emitter,
       0,
       (0 : UInt),
-      dst_reg.to_uint(),
+      dst_reg.reinterpret_as_uint(),
       (dst_off + i).to_int64().reinterpret_as_uint64(),
     )
     i = i + 1
@@ -1663,12 +1663,12 @@ fn new_symtab() -> SymTable {
 ///|
 fn sym_for_name(tab : SymTable, name : String) -> Sym {
   match tab.name_to_id.get(name) {
-    Some(id) => { id }
+    Some(id) => Sym::{ id }
     None => {
       let id = tab.names.length() + 1
       tab.names.push(name)
       tab.name_to_id.set(name, id)
-      { id }
+      Sym::{ id }
     }
   }
 }
@@ -1685,7 +1685,7 @@ fn emit_load_local_int32(
   off : Int,
 ) -> Unit {
   let off_u64 = off.to_int64().reinterpret_as_uint64()
-  arm64_ldrx(emitter, false, 2, dst.to_uint(), (29 : UInt), off_u64)
+  arm64_ldrx(emitter, false, 2, dst.reinterpret_as_uint(), (29 : UInt), off_u64)
 }
 
 ///|
@@ -1695,7 +1695,7 @@ fn emit_store_local_int32(
   off : Int,
 ) -> Unit {
   let off_u64 = off.to_int64().reinterpret_as_uint64()
-  arm64_strx(emitter, 2, src.to_uint(), (29 : UInt), off_u64)
+  arm64_strx(emitter, 2, src.reinterpret_as_uint(), (29 : UInt), off_u64)
 }
 
 ///|
@@ -1720,7 +1720,7 @@ fn emit_load_local_scalar(
     Some(v) => v
   }
   let off_u64 = off.to_int64().reinterpret_as_uint64()
-  arm64_ldrx(emitter, signed, sz, dst.to_uint(), (29 : UInt), off_u64)
+  arm64_ldrx(emitter, signed, sz, dst.reinterpret_as_uint(), (29 : UInt), off_u64)
 }
 
 ///|
@@ -1745,7 +1745,7 @@ fn emit_store_local_scalar(
     Some(v) => v
   }
   let off_u64 = off.to_int64().reinterpret_as_uint64()
-  arm64_strx(emitter, sz, src.to_uint(), (29 : UInt), off_u64)
+  arm64_strx(emitter, sz, src.reinterpret_as_uint(), (29 : UInt), off_u64)
 }
 
 ///|
@@ -1780,7 +1780,7 @@ fn emit_addr_local(
     return
   }
 
-  arm64_movimm(emitter, dst.to_uint(), imm.to_uint64())
+  arm64_movimm(emitter, dst.reinterpret_as_uint(), imm.to_uint64())
   let base = if off < 0 { 0xcb000000 } else { 0x8b000000 }
   emit32(
     emitter,
@@ -1992,7 +1992,15 @@ fn gen_call_direct(
                   if size <= 8 {
                     match arm64_sz_from_size(size) {
                       None => add_error(bag, loc, "codegen: unsupported scalar size")
-                      Some(v) => arm64_ldrx(emitter, false, v, gp.to_uint(), addr.to_uint(), 0)
+                      Some(v) =>
+                        arm64_ldrx(
+                          emitter,
+                          false,
+                          v,
+                          gp.reinterpret_as_uint(),
+                          addr.reinterpret_as_uint(),
+                          0,
+                        )
                     }
                   } else if size <= 16 {
                     if gp + 1 >= 8 {
@@ -2000,7 +2008,14 @@ fn gen_call_direct(
                       give_reg(pool, addr)
                       return
                     }
-                    arm64_ldrx(emitter, false, 3, gp.to_uint(), addr.to_uint(), 0)
+                    arm64_ldrx(
+                      emitter,
+                      false,
+                      3,
+                      gp.reinterpret_as_uint(),
+                      addr.reinterpret_as_uint(),
+                      0,
+                    )
                     let rest = size - 8
                     match arm64_sz_from_size(rest) {
                       None => add_error(bag, loc, "codegen: unsupported scalar size")
