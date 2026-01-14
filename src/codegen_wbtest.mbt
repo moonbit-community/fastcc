@@ -32,21 +32,21 @@ fn macho_section_file_offset(
   seg : String,
   sect : String,
 ) -> Int? {
-  let ncmds = read_u32_le_at(bytes, 16).reinterpret_as_int()
+  let ncmds = read_u32_le_at(bytes, 16).to_int()
   let mut off = 32
   let mut i = 0
   while i < ncmds {
     let cmd = read_u32_le_at(bytes, off)
-    let cmdsize = read_u32_le_at(bytes, off + 4).reinterpret_as_int()
+    let cmdsize = read_u32_le_at(bytes, off + 4).to_int()
     if cmd == LC_SEGMENT_64 {
-      let nsects = read_u32_le_at(bytes, off + 64).reinterpret_as_int()
+      let nsects = read_u32_le_at(bytes, off + 64).to_int()
       let mut j = 0
       let mut sect_off = off + 72
       while j < nsects {
         let sectname = read_padded_name(bytes, sect_off)
         let segname = read_padded_name(bytes, sect_off + 16)
         if segname == seg && sectname == sect {
-          return Some(read_u32_le_at(bytes, sect_off + 48).reinterpret_as_int())
+          return Some(read_u32_le_at(bytes, sect_off + 48).to_int())
         }
         sect_off = sect_off + 80
         j = j + 1
@@ -61,9 +61,9 @@ fn macho_section_file_offset(
 ///|
 fn macho_text_section_offsets(bytes : Bytes) -> (Int, Int, Int) {
   let section_hdr = 32 + 72
-  let text_off = read_u32_le_at(bytes, section_hdr + 48).reinterpret_as_int()
-  let reloff = read_u32_le_at(bytes, section_hdr + 56).reinterpret_as_int()
-  let nreloc = read_u32_le_at(bytes, section_hdr + 60).reinterpret_as_int()
+  let text_off = read_u32_le_at(bytes, section_hdr + 48).to_int()
+  let reloff = read_u32_le_at(bytes, section_hdr + 56).to_int()
+  let nreloc = read_u32_le_at(bytes, section_hdr + 60).to_int()
   (text_off, reloff, nreloc)
 }
 
