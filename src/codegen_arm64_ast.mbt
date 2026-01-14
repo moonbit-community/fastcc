@@ -37,6 +37,7 @@ struct LocalAlloc {
   mut used_bytes : Int
   scopes : Array[Map[String, LocalSlot]]
   vla_scopes : Array[VlaScopeInfo]
+  func_name : String
 }
 
 ///|
@@ -47,8 +48,9 @@ struct VlaScopeInfo {
 }
 
 ///|
-fn new_local_alloc(sem : SemContext, ret_ty : CType) -> LocalAlloc {
-  { sem, ret_ty, used_bytes: 0, scopes: [], vla_scopes: [] }
+fn new_local_alloc(sem : SemContext, ret_ty : CType, func_name : String) ->
+  LocalAlloc {
+  { sem, ret_ty, used_bytes: 0, scopes: [], vla_scopes: [], func_name }
 }
 
 ///|
@@ -2477,6 +2479,43 @@ fn element_type_for_pointer_arith(ty : CType) -> CType? {
 }
 
 ///|
+fn gen_func_name_addr(
+  emitter : Arm64Emitter,
+  cstrings : Map[String, Sym],
+  alloc : LocalAlloc,
+  dst : Int,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Bool {
+  match cstrings.get(alloc.func_name) {
+    None => {
+      add_error(bag, loc, "codegen: missing __func__ string literal")
+      false
+    }
+    Some(sym) => {
+      let adrp_off = emitter_pc(emitter)
+      greloca(emitter, sym, adrp_off, R_AARCH64_ADR_PREL_PG_HI21, 0)
+      emit32(emitter, (0x90000000 : UInt64).lor(dst.to_uint64()).to_uint())
+      let add_off = emitter_pc(emitter)
+      greloca(emitter, sym, add_off, R_AARCH64_ADD_ABS_LO12_NC, 0)
+      emit32(
+        emitter,
+        (0x91000000 : UInt64)
+        .lor(dst.to_uint64())
+        .lor(dst.to_uint64() << 5)
+        .to_uint(),
+      )
+      true
+    }
+  }
+}
+
+///|
+fn is_func_name_ident(name : String) -> Bool {
+  name == "__func__" || name == "__FUNCTION__" || name == "__PRETTY_FUNCTION__"
+}
+
+///|
 fn gen_lvalue_addr(
   emitter : Arm64Emitter,
   alloc : LocalAlloc,
@@ -2488,7 +2527,12 @@ fn gen_lvalue_addr(
   bag : DiagBag,
 ) -> Unit {
   match expr {
-    Expr::Ident(name~, loc~) =>
+    Expr::Ident(name~, loc~) => {
+      if is_func_name_ident(name) {
+        if gen_func_name_addr(emitter, cstrings, alloc, dst, loc, bag) {
+          return
+        }
+      }
       match lookup_local(alloc, name) {
         Some(slot) =>
           match strip_qual_attrs(slot.ty) {
@@ -2508,6 +2552,7 @@ fn gen_lvalue_addr(
           emit_addr_global(emitter, sym, dst)
         }
       }
+    }
     Expr::Unary(op=UnaryOp::Deref, expr=inner, ..) =>
       gen_expr_ptr(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
     Expr::Index(base~, index~, loc~) => {
@@ -3174,7 +3219,12 @@ fn gen_expr_int32(
       }
     Expr::CharLit(value~, ..) =>
       arm64_movimm(emitter, dst.reinterpret_as_uint(), value.to_uint64())
-    Expr::Ident(name~, loc~) =>
+    Expr::Ident(name~, loc~) => {
+      if is_func_name_ident(name) {
+        if gen_func_name_addr(emitter, cstrings, alloc, dst, loc, bag) {
+          return
+        }
+      }
       match lookup_local(alloc, name) {
         Some(slot) =>
           emit_load_local_scalar(emitter, alloc.sem, slot.ty, dst, slot.offset, loc, bag)
@@ -3183,6 +3233,7 @@ fn gen_expr_int32(
           emit_load_global_int32(emitter, sym, dst)
         }
       }
+    }
     Expr::Index(base=_, index=_, loc~) => {
       let addr = take_reg(pool) catch {
         err => {
@@ -4267,7 +4318,12 @@ fn gen_expr_ptr(
         None => add_error(bag, loc, "codegen: missing string literal in cstring pool")
         Some(sym) => emit_addr_global(emitter, sym, dst)
       }
-    Expr::Ident(name~, loc~) =>
+    Expr::Ident(name~, loc~) => {
+      if is_func_name_ident(name) {
+        if gen_func_name_addr(emitter, cstrings, alloc, dst, loc, bag) {
+          return
+        }
+      }
       match lookup_local(alloc, name) {
         Some(slot) =>
           match strip_qual_attrs(slot.ty) {
@@ -4316,6 +4372,7 @@ fn gen_expr_ptr(
           )
         }
       }
+    }
     Expr::Member(base=_, name=_, is_arrow=_, loc~) => {
       let addr = take_reg(pool) catch {
         err => {
@@ -5838,7 +5895,7 @@ fn gen_stmt(
 
 ///|
 fn compute_frame_size(sem : SemContext, func : FuncDef) -> Int {
-  let alloc = new_local_alloc(sem, func.return_type)
+  let alloc = new_local_alloc(sem, func.return_type, func.name)
   cg_push_scope(alloc)
   for p in func.params {
     let param_ty = adjust_param_type_for_local(p.ty)
@@ -5934,7 +5991,7 @@ fn gen_func_def(
   func_offsets.set(link, start)
 
   let frame_size = compute_frame_size(sem, func)
-  let alloc = new_local_alloc(sem, func.return_type)
+  let alloc = new_local_alloc(sem, func.return_type, func.name)
   cg_push_scope(alloc)
   emit_prologue(emitter, frame_size)
 
@@ -6276,7 +6333,10 @@ fn codegen_arm64_object_bytes_from_ast(
   let cstring_seen : Map[String, Bool] = {}
   for decl in unit.decls {
     match decl {
-      Decl::FuncDef(func) => collect_cstring_stmt(cstring_order, cstring_seen, func.body)
+      Decl::FuncDef(func) => {
+        cstring_record(cstring_order, cstring_seen, func.name)
+        collect_cstring_stmt(cstring_order, cstring_seen, func.body)
+      }
       Decl::Var(var_decl) =>
         match var_decl.init {
           None => ()

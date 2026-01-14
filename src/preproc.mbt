@@ -38,13 +38,17 @@ struct Preprocessor {
   mut held : Token?
   cond_stack : Array[CondState]
   expanding : Array[String]
+  expanding_guards : Array[ExpandingGuard]
   date_literal : String
   time_literal : String
 }
 
 ///|
+struct ExpandingGuard { restore_len : Int }
+
+///|
 fn make_builtin_token(kind : TokenKind, lexeme : String) -> Token {
-  { kind, lexeme, loc: dummy_loc(0), line_start: false }
+  { kind, lexeme, loc: dummy_loc(0), line_start: false, hidden: [] }
 }
 
 ///|
@@ -207,6 +211,7 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
     held: None,
     cond_stack: [],
     expanding: [],
+    expanding_guards: [],
     date_literal,
     time_literal,
   }
@@ -265,7 +270,13 @@ fn next_input_token(pp : Preprocessor) -> Token {
       }
     }
   } else {
-    { kind: Eof, lexeme: "", loc: lexer_loc(pp.lexer), line_start: false }
+    {
+      kind: Eof,
+      lexeme: "",
+      loc: lexer_loc(pp.lexer),
+      line_start: false,
+      hidden: [],
+    }
   }
 }
 
@@ -504,7 +515,10 @@ fn parse_macro_params(
 fn next_raw_token(pp : Preprocessor) -> Token {
   if pp.pending.length() > 0 {
     match pp.pending.pop() {
-      Some(tok) => return tok
+      Some(tok) => {
+        release_expanding_guards(pp)
+        return tok
+      }
       None => ()
     }
   }
@@ -574,7 +588,9 @@ fn normalize_macro_args(
     let var_tokens : Array[Token] = []
     for i = param_count - 1; i < args.length(); i = i + 1 {
       if var_tokens.length() > 0 {
-        var_tokens.push({ kind: Comma, lexeme: ",", loc, line_start: false })
+        var_tokens.push(
+          { kind: Comma, lexeme: ",", loc, line_start: false, hidden: [] },
+        )
       }
       for t in args[i] {
         var_tokens.push(t)
@@ -627,7 +643,13 @@ fn stringize_tokens(tokens : Array[Token]) -> String {
 ///|
 fn make_string_literal(text : String, loc : SrcLoc) -> Token {
   let escaped = escape_string(text)
-  { kind: StrLit, lexeme: "\"" + escaped + "\"", loc, line_start: false }
+  {
+    kind: StrLit,
+    lexeme: "\"" + escaped + "\"",
+    loc,
+    line_start: false,
+    hidden: [],
+  }
 }
 
 ///|
@@ -652,7 +674,13 @@ fn logical_line(pp : Preprocessor, loc : SrcLoc) -> Int {
 
 ///|
 fn make_int_literal_token(value : Int, loc : SrcLoc) -> Token {
-  { kind: IntLit, lexeme: value.to_string(), loc, line_start: false }
+  {
+    kind: IntLit,
+    lexeme: value.to_string(),
+    loc,
+    line_start: false,
+    hidden: [],
+  }
 }
 
 ///|
@@ -816,6 +844,7 @@ fn substitute_macro(
         lexeme: last.lexeme + next_tokens[0].lexeme,
         loc: last.loc,
         line_start: false,
+        hidden: merge_hidden(last.hidden, next_tokens[0].hidden),
       }
       out.push(merged)
       if next_tokens.length() > 1 {
@@ -829,19 +858,20 @@ fn substitute_macro(
     if tok.kind == Ident {
       match lookup_param_index(params, tok.lexeme) {
         Some(idx) => {
-          let arg_tokens = if idx < expanded_args.length() {
-            expanded_args[idx]
-          } else {
-            []
-          }
-          for t in arg_tokens {
-            out.push({
-              kind: t.kind,
-              lexeme: t.lexeme,
-              loc: t.loc,
-              line_start: false,
-            })
-          }
+        let arg_tokens = if idx < expanded_args.length() {
+          expanded_args[idx]
+        } else {
+          []
+        }
+        for t in arg_tokens {
+          out.push({
+            kind: t.kind,
+            lexeme: t.lexeme,
+            loc: t.loc,
+            line_start: false,
+            hidden: t.hidden,
+          })
+        }
           i = i + 1
           continue
         }
@@ -918,14 +948,15 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
     }
     if tok.kind == Ident &&
       pp.macros.contains(tok.lexeme) &&
-      !is_expanding(pp, tok.lexeme) {
+      !is_expanding(pp, tok.lexeme) &&
+      !tok.hidden.contains(tok.lexeme) {
       match pp.macros.get(tok.lexeme) {
         None => ()
-        Some(macro_def) =>
-          if macro_def.is_function {
-            if i + 1 < tokens.length() && tokens[i + 1].kind == LParen {
-              match read_macro_args_from_tokens(pp, tokens, i + 2, tok.loc) {
-                None => {
+          Some(macro_def) =>
+            if macro_def.is_function {
+              if i + 1 < tokens.length() && tokens[i + 1].kind == LParen {
+                match read_macro_args_from_tokens(pp, tokens, i + 2, tok.loc) {
+                  None => {
                   out.push(tok)
                   i = i + 1
                   continue
@@ -944,16 +975,18 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                         pp, arg,
                       ))
                       let replaced = substitute_macro(
-                        macro_def,
-                        norm_raw,
-                        expanded_args,
-                        tok.loc,
-                      )
-                      let expanded = expand_tokens(pp, replaced)
-                      pop_expanding(pp)
-                      for t in expanded {
-                        out.push(t)
-                      }
+                          macro_def,
+                          norm_raw,
+                          expanded_args,
+                          tok.loc,
+                        )
+                        let expanded = expand_tokens(pp, replaced).map(t =>
+                          add_hidden(t, tok.lexeme)
+                        )
+                        pop_expanding(pp)
+                        for t in expanded {
+                          out.push(t)
+                        }
                       i = next_i
                       continue
                     }
@@ -963,13 +996,15 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
             out.push(tok)
             i = i + 1
             continue
-          } else {
-            push_expanding(pp, tok.lexeme)
-            let expanded = expand_tokens(pp, macro_def.replacement)
-            pop_expanding(pp)
-            for t in expanded {
-              out.push(t)
-            }
+            } else {
+              push_expanding(pp, tok.lexeme)
+              let expanded = expand_tokens(pp, macro_def.replacement).map(t =>
+                add_hidden(t, tok.lexeme)
+              )
+              pop_expanding(pp)
+              for t in expanded {
+                out.push(t)
+              }
             i = i + 1
             continue
           }
@@ -1044,6 +1079,7 @@ fn normalize_macro_tokens(tokens : Array[Token]) -> Array[Token] {
     lexeme: tok.lexeme,
     loc: tok.loc,
     line_start: false,
+    hidden: tok.hidden,
   })
 }
 
@@ -1099,6 +1135,52 @@ fn push_tokens(pp : Preprocessor, tokens : Array[Token]) -> Unit {
   while i > 0 {
     i = i - 1
     pp.pending.push(tokens[i])
+  }
+}
+
+///|
+fn release_expanding_guards(pp : Preprocessor) -> Unit {
+  while pp.expanding_guards.length() > 0 {
+    let guard_restore = pp.expanding_guards[
+      pp.expanding_guards.length() - 1
+    ].restore_len
+    if pp.pending.length() <= guard_restore {
+      pop_expanding(pp)
+      ignore(pp.expanding_guards.pop())
+    } else {
+      break
+    }
+  }
+}
+
+///|
+fn merge_hidden(a : Array[String], b : Array[String]) -> Array[String] {
+  let out : Array[String] = []
+  for h in a {
+    if !out.contains(h) {
+      out.push(h)
+    }
+  }
+  for h in b {
+    if !out.contains(h) {
+      out.push(h)
+    }
+  }
+  out
+}
+
+///|
+fn add_hidden(tok : Token, name : String) -> Token {
+  if tok.hidden.contains(name) {
+    tok
+  } else {
+    {
+      kind: tok.kind,
+      lexeme: tok.lexeme,
+      loc: tok.loc,
+      line_start: tok.line_start,
+      hidden: merge_hidden(tok.hidden, [name]),
+    }
   }
 }
 
@@ -1647,7 +1729,10 @@ fn next_pp_token(pp : Preprocessor) -> Token {
   while true {
     if pp.pending.length() > 0 {
       match pp.pending.pop() {
-        Some(tok) => return tok
+        Some(tok) => {
+          release_expanding_guards(pp)
+          return tok
+        }
         None => ()
       }
     }
@@ -1671,7 +1756,9 @@ fn next_pp_token(pp : Preprocessor) -> Token {
         None => ()
       }
     }
-    if tok.kind == Ident && pp.macros.contains(tok.lexeme) {
+    if tok.kind == Ident &&
+      pp.macros.contains(tok.lexeme) &&
+      !tok.hidden.contains(tok.lexeme) {
       if is_expanding(pp, tok.lexeme) {
         return tok
       }
@@ -1693,6 +1780,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
                     return tok
                   }
                   Some(norm_args) => {
+                    let restore_len = pp.pending.length()
                     push_expanding(pp, tok.lexeme)
                     let expanded_args = norm_args.map(arg => expand_tokens(
                       pp, arg,
@@ -1703,27 +1791,46 @@ fn next_pp_token(pp : Preprocessor) -> Token {
                       expanded_args,
                       tok.loc,
                     )
-                    let expanded = expand_tokens(pp, replaced)
-                    pop_expanding(pp)
+                    let expanded = expand_tokens(pp, replaced).map(t =>
+                      add_hidden(t, tok.lexeme)
+                    )
                     if expanded.length() > 0 {
+                      pp.expanding_guards.push({ restore_len, })
                       push_tokens(pp, expanded)
+                      release_expanding_guards(pp)
+                    } else {
+                      pop_expanding(pp)
                     }
                     continue
                   }
                 }
             }
           } else {
+            let restore_len = pp.pending.length()
             push_expanding(pp, tok.lexeme)
-            let expanded = expand_tokens(pp, macro_def.replacement)
-            pop_expanding(pp)
-            push_tokens(pp, expanded)
+            let expanded = expand_tokens(pp, macro_def.replacement).map(t =>
+              add_hidden(t, tok.lexeme)
+            )
+            if expanded.length() > 0 {
+              pp.expanding_guards.push({ restore_len, })
+              push_tokens(pp, expanded)
+              release_expanding_guards(pp)
+            } else {
+              pop_expanding(pp)
+            }
             continue
           }
       }
     }
     return tok
   } else {
-    { kind: Eof, lexeme: "", loc: lexer_loc(pp.lexer), line_start: false }
+    {
+      kind: Eof,
+      lexeme: "",
+      loc: lexer_loc(pp.lexer),
+      line_start: false,
+      hidden: [],
+    }
   }
 }
 

@@ -61,7 +61,7 @@ fn make_token(
   loc : SrcLoc,
   line_start : Bool,
 ) -> Token {
-  { kind, lexeme, loc, line_start }
+  { kind, lexeme, loc, line_start, hidden: [] }
 }
 
 ///|

@@ -103,6 +103,7 @@ struct Token {
   lexeme : String
   loc : SrcLoc
   line_start : Bool
+  hidden : Array[String]
 } derive(Show, Eq, ToJson)
 
 ///|
