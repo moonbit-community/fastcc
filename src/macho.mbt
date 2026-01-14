@@ -513,11 +513,30 @@ fn encode_macho_object(
           let layout = layouts[idx]
           for rel in layout.section.relocs {
             let (rtype, pcrel) = macho_reloc_type(rel.kind)
-            let symbolnum = match id_to_index.get(rel.sym.id) {
-              None => 0
-              Some(idx_val) => idx_val
+            let mut is_extern = true
+            let mut symbolnum = 0
+            match id_to_symbol.get(rel.sym.id) {
+              None => ()
+              Some(sym) =>
+                if !sym.is_external {
+                  is_extern = false
+                  match sym.section {
+                    None => ()
+                    Some(sec) =>
+                      match section_index_map.get(sec) {
+                        None => ()
+                        Some(idx_val) => symbolnum = idx_val
+                      }
+                  }
+                }
             }
-            let info = pack_reloc_info(symbolnum, pcrel, 2, true, rtype)
+            if is_extern {
+              match id_to_index.get(rel.sym.id) {
+                None => ()
+                Some(idx_val) => symbolnum = idx_val
+              }
+            }
+            let info = pack_reloc_info(symbolnum, pcrel, 2, is_extern, rtype)
             out.write_uint_le(rel.offset.to_uint())
             out.write_uint_le(info)
             fileoff = fileoff + 8
