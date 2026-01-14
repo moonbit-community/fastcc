@@ -23,6 +23,7 @@ fn parse_cli_args(
   args : Array[String],
 ) -> CliParse {
   let include_paths : Array[String] = []
+  include_paths.push("compat/include")
   let inputs : Array[String] = []
   let mut output : String? = None
   let mut compile_only = false
