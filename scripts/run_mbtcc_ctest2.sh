@@ -6,6 +6,8 @@ CTEST_DIR="${ROOT_DIR}/refs/mbtcc/ctest2"
 TMP_DIR="${ROOT_DIR}/target/mbtcc-ctest2"
 EXTRA_HDR="${ROOT_DIR}/tests/mbtcc/extra.h"
 PATCH_DIR="${ROOT_DIR}/tests/mbtcc/ctest2_patches"
+TINYCC_BIN="${TINYCC_BIN:-${ROOT_DIR}/_build/native/release/build/tinycc.exe}"
+TINYCC_BUILD_TARGET="${TINYCC_BUILD_TARGET:-${ROOT_DIR}/src}"
 
 FILTER="${FILTER:-}"
 MODE="${MODE:-strict}" # strict | allow-fail
@@ -34,6 +36,14 @@ command -v moon >/dev/null || { echo "error: moon not found"; exit 1; }
 command -v gcc >/dev/null || { echo "error: gcc not found"; exit 1; }
 command -v clang >/dev/null || { echo "error: clang not found"; exit 1; }
 [[ -f "${EXTRA_HDR}" ]] || { echo "error: missing ${EXTRA_HDR}"; exit 1; }
+
+# Build tinycc native executable once up front.
+echo "Building tinycc executable (${TINYCC_BIN})"
+moon build --release --target native "${TINYCC_BUILD_TARGET}"
+if [[ ! -x "${TINYCC_BIN}" ]]; then
+  echo "error: tinycc executable missing at ${TINYCC_BIN}"
+  exit 1
+fi
 
 rm -rf "${TMP_DIR}"
 mkdir -p "${TMP_DIR}"
@@ -97,8 +107,8 @@ EOF
   fi
 
   rm -f "${TMP_DIR}/${base}.o" "${TMP_DIR}/${base}.tinycc.out" "${TMP_DIR}/${base}.actual.txt"
-  if ! moon run --release "${ROOT_DIR}/src" -- -I "${CTEST_DIR}" -c -o "${TMP_DIR}/${base}.o" "${wrap_c}" >"${TMP_DIR}/${base}.tinycc.log" 2>&1; then
-    echo "FAILED: tinycc.mbt compilation failed"
+  if ! "${TINYCC_BIN}" -I "${CTEST_DIR}" -c -o "${TMP_DIR}/${base}.o" "${wrap_c}" >"${TMP_DIR}/${base}.tinycc.log" 2>&1; then
+    echo "FAILED: tinycc compilation failed"
     sed -n '1,120p' "${TMP_DIR}/${base}.tinycc.log" || true
     fail=$((fail + 1))
     continue

@@ -61,6 +61,7 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
   }
 }
 
+
 ///|
 fn default_int_type() -> CType {
   CType::Int(kind=CIntKind::Int, unsigned=false)
@@ -534,20 +535,7 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
               add_sem_error(ctx, loc, "sizeof incomplete array")
               None
             }
-            Some(expr) =>
-              match const_int_from_expr(ctx, expr, loc) {
-                None => {
-                  add_sem_error(ctx, loc, "sizeof variable length array not supported yet")
-                  None
-                }
-                Some(n) =>
-                  if n < 0 {
-                    add_sem_error(ctx, loc, "invalid array size")
-                    None
-                  } else {
-                    Some((elem_size * n, elem_align))
-                  }
-              }
+            Some(_) => None
           }
       }
     }
