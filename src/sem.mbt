@@ -281,7 +281,8 @@ fn float_size(kind : CFloatKind) -> Int {
   match kind {
     CFloatKind::Float => 4
     CFloatKind::Double => 8
-    CFloatKind::LongDouble => 16
+    // AArch64 uses 8-byte long double (same as double)
+    CFloatKind::LongDouble => 8
   }
 }
 
@@ -2410,8 +2411,12 @@ fn check_initializer(
       match expr {
         Expr::StringLit(length~, ..) =>
           match strip_qual_attrs(ty) {
-            CType::Array(elem~, size~, ..) =>
-              if is_char_type(elem) {
+            CType::Array(elem~, size~, ..) => {
+              let elem_sz = match type_size_align(ctx, elem, loc) {
+                Some((sz, _)) => sz
+                None => -1
+              }
+              if elem_sz == 1 {
                 match size {
                   None => Some(length)
                   Some(_n) => None
@@ -2428,6 +2433,7 @@ fn check_initializer(
                 }
                 None
               }
+            }
             _ => {
               let init_ty = type_of_expr(ctx, expr)
               if !can_assign(ty, init_ty) &&

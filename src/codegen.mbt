@@ -96,19 +96,6 @@ fn const_i64_from_expr(expr : Expr) -> Int64? {
 }
 
 ///|
-fn const_u32_from_initializer(init : Initializer) -> UInt? {
-  match init {
-    Initializer::Expr(expr~, ..) =>
-      match const_i64_from_expr(expr) {
-        None => None
-        Some(value) =>
-          Some((value.reinterpret_as_uint64() & (0xffff_ffff : UInt64)).to_uint())
-      }
-    _ => None
-  }
-}
-
-///|
 fn codegen_arm64_object_bytes(unit : TranslationUnit, bag : DiagBag) -> Bytes? {
   codegen_arm64_object_bytes_from_ast(unit, bag)
 }

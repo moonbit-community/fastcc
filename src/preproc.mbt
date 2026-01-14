@@ -931,6 +931,7 @@ fn read_macro_args_from_tokens(
 ///|
 fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
   let out : Array[Token] = []
+  let mut changed = false
   let mut i = 0
   while i < tokens.length() {
     let tok = tokens[i]
@@ -940,6 +941,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
           for t in tokens {
             out.push(t)
           }
+          changed = true
           i = i + 1
           continue
         }
@@ -952,11 +954,11 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
       !tok.hidden.contains(tok.lexeme) {
       match pp.macros.get(tok.lexeme) {
         None => ()
-          Some(macro_def) =>
-            if macro_def.is_function {
-              if i + 1 < tokens.length() && tokens[i + 1].kind == LParen {
-                match read_macro_args_from_tokens(pp, tokens, i + 2, tok.loc) {
-                  None => {
+        Some(macro_def) => {
+          if macro_def.is_function {
+            if i + 1 < tokens.length() && tokens[i + 1].kind == LParen {
+              match read_macro_args_from_tokens(pp, tokens, i + 2, tok.loc) {
+                None => {
                   out.push(tok)
                   i = i + 1
                   continue
@@ -975,18 +977,19 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                         pp, arg,
                       ))
                       let replaced = substitute_macro(
-                          macro_def,
-                          norm_raw,
-                          expanded_args,
-                          tok.loc,
-                        )
-                        let expanded = expand_tokens(pp, replaced).map(t =>
-                          add_hidden(t, tok.lexeme)
-                        )
-                        pop_expanding(pp)
-                        for t in expanded {
-                          out.push(t)
-                        }
+                        macro_def,
+                        norm_raw,
+                        expanded_args,
+                        tok.loc,
+                      )
+                      let expanded = expand_tokens(pp, replaced).map(t =>
+                        add_hidden(t, tok.lexeme)
+                      )
+                      pop_expanding(pp)
+                      for t in expanded {
+                        out.push(t)
+                      }
+                      changed = true
                       i = next_i
                       continue
                     }
@@ -996,24 +999,30 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
             out.push(tok)
             i = i + 1
             continue
-            } else {
-              push_expanding(pp, tok.lexeme)
-              let expanded = expand_tokens(pp, macro_def.replacement).map(t =>
-                add_hidden(t, tok.lexeme)
-              )
-              pop_expanding(pp)
-              for t in expanded {
-                out.push(t)
-              }
+          } else {
+            push_expanding(pp, tok.lexeme)
+            let expanded = expand_tokens(pp, macro_def.replacement).map(t =>
+              add_hidden(t, tok.lexeme)
+            )
+            pop_expanding(pp)
+            for t in expanded {
+              out.push(t)
+            }
+            changed = true
             i = i + 1
             continue
           }
+        }
       }
     }
     out.push(tok)
     i = i + 1
   }
-  out
+  if changed {
+    expand_tokens(pp, out)
+  } else {
+    out
+  }
 }
 
 ///|

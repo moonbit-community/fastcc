@@ -285,6 +285,41 @@ fn gen_type_size_bytes_to_reg(
   loc : SrcLoc,
   bag : DiagBag,
 ) -> Unit {
+  match strip_qual_attrs(ty) {
+    CType::Array(elem=elem_ty, size=None, size_expr=Some(len_expr)) => {
+      gen_expr_int32(emitter, alloc, syms, pool, cstrings, len_expr, dst, bag)
+      emit_sxtw(emitter, dst, dst)
+      let tmp = take_reg(pool) catch {
+        err => {
+          add_error(bag, loc, err.to_string())
+          return
+        }
+      }
+      gen_type_size_bytes_to_reg(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        elem_ty,
+        tmp,
+        loc,
+        bag,
+      )
+      emit32(
+        emitter,
+        (0x9b007c00 : Int)
+        .lor(dst)
+        .lor(dst << 5)
+        .lor(tmp << 16)
+        .reinterpret_as_uint(),
+      )
+      give_reg(pool, tmp)
+      return
+    }
+    _ => ()
+  }
+
   match type_size_align(alloc.sem, ty, loc) {
     Some((size, _)) => {
       arm64_movimm(emitter, dst.reinterpret_as_uint(), size.to_uint64())
@@ -324,36 +359,6 @@ fn gen_type_size_bytes_to_reg(
         )
         give_reg(pool, scale)
       }
-    }
-    CType::Array(elem=elem_ty, size=None, size_expr=Some(len_expr)) => {
-      gen_expr_int32(emitter, alloc, syms, pool, cstrings, len_expr, dst, bag)
-      emit_sxtw(emitter, dst, dst)
-      let tmp = take_reg(pool) catch {
-        err => {
-          add_error(bag, loc, err.to_string())
-          return
-        }
-      }
-      gen_type_size_bytes_to_reg(
-        emitter,
-        alloc,
-        syms,
-        pool,
-        cstrings,
-        elem_ty,
-        tmp,
-        loc,
-        bag,
-      )
-      emit32(
-        emitter,
-        (0x9b007c00 : Int)
-        .lor(dst)
-        .lor(dst << 5)
-        .lor(tmp << 16)
-        .reinterpret_as_uint(),
-      )
-      give_reg(pool, tmp)
     }
     _ =>
       add_error(
@@ -865,14 +870,6 @@ fn emit_cset_from_fp_tok(emitter : Arm64Emitter, tok : Int, dst : Int) -> Unit r
 }
 
 ///|
-fn type_is_supported_int32(ty : CType) -> Bool {
-  match strip_qualifiers(ty) {
-    CType::Int(kind=CIntKind::Int, ..) => true
-    _ => false
-  }
-}
-
-///|
 fn float_kind_of_type(ty : CType) -> CFloatKind? {
   match strip_qual_attrs(ty) {
     CType::Float(kind~) => Some(kind)
@@ -1216,13 +1213,12 @@ fn resolve_init_designator_offset_type(
       InitDesignator::Index(expr~, loc=des_loc) =>
         match strip_qual_attrs(current) {
           CType::Array(elem~, size~, ..) => {
-            let idx_i64 = const_i64_from_expr(expr)
-            let idx = match idx_i64 {
+            let idx = match const_int_from_expr(sem, expr, des_loc) {
               None => {
                 add_error(bag, des_loc, "codegen: array designator must be constant")
                 0
               }
-              Some(v) => v.to_int()
+              Some(v) => v
             }
             match size {
               None => ()
@@ -2586,31 +2582,79 @@ fn gen_lvalue_addr(
         }
         Some(t) => t
       }
-      let (elem_size, _) = match type_size_align_or_error(alloc.sem, elem_ty, loc) {
-        None => {
-          give_reg(pool, idx)
-          return
-        }
-        Some(v) => v
-      }
-      if elem_size != 1 {
-        let scale = take_reg(pool) catch {
-          err => {
-            add_error(bag, loc, err.to_string())
-            give_reg(pool, idx)
-            return
+      let mut elem_size_reg : Int? = None
+      let mut elem_size_const : Int? = None
+      match strip_qual_attrs(elem_ty) {
+        CType::Array(size=None, size_expr=Some(_), ..) => {
+          let scale = take_reg(pool) catch {
+            err => {
+              add_error(bag, loc, err.to_string())
+              give_reg(pool, idx)
+              return
+            }
           }
+          gen_type_size_bytes_to_reg(
+            emitter,
+            alloc,
+            syms,
+            pool,
+            cstrings,
+            elem_ty,
+            scale,
+            loc,
+            bag,
+          )
+          elem_size_reg = Some(scale)
         }
-        arm64_movimm(emitter, scale.reinterpret_as_uint(), elem_size.to_uint64())
-        emit32(
-          emitter,
-          (0x9b007c00 : Int)
-          .lor(idx)
-          .lor(idx << 5)
-          .lor(scale << 16)
-          .reinterpret_as_uint(),
-        )
-        give_reg(pool, scale)
+        _ =>
+          match type_size_align_or_error(alloc.sem, elem_ty, loc) {
+            None => {
+              give_reg(pool, idx)
+              return
+            }
+            Some((sz, _)) => elem_size_const = Some(sz)
+          }
+      }
+      match elem_size_reg {
+        Some(scale) => {
+          emit32(
+            emitter,
+            (0x9b007c00 : Int)
+            .lor(idx)
+            .lor(idx << 5)
+            .lor(scale << 16)
+            .reinterpret_as_uint(),
+          )
+          give_reg(pool, scale)
+        }
+        None =>
+          match elem_size_const {
+            Some(elem_size) =>
+              if elem_size != 1 {
+                let scale = take_reg(pool) catch {
+                  err => {
+                    add_error(bag, loc, err.to_string())
+                    give_reg(pool, idx)
+                    return
+                  }
+                }
+                arm64_movimm(
+                  emitter,
+                  scale.reinterpret_as_uint(),
+                  elem_size.to_uint64(),
+                )
+                emit32(
+                  emitter,
+                  (0x9b007c00 : Int)
+                  .lor(idx)
+                  .lor(idx << 5)
+                  .lor(scale << 16)
+                  .reinterpret_as_uint(),
+                )
+                give_reg(pool, scale)
+              }
+            None => ()
+          }
       }
       emit32(
         emitter,
@@ -3249,6 +3293,13 @@ fn gen_expr_int32(
     Expr::CharLit(value~, ..) =>
       arm64_movimm(emitter, dst.reinterpret_as_uint(), value.to_uint64())
     Expr::Ident(name~, loc~) => {
+      match alloc.sem.enum_consts.get(name) {
+        Some(v) => {
+          arm64_movimm(emitter, dst.reinterpret_as_uint(), v.to_uint64())
+          return
+        }
+        None => ()
+      }
       if is_func_name_ident(name) {
         if gen_func_name_addr(emitter, cstrings, alloc, dst, loc, bag) {
           return
@@ -6572,6 +6623,397 @@ fn collect_cstring_initializer(
 }
 
 ///|
+fn ensure_bytes_len(buf : Array[Int], size : Int) -> Unit {
+  while buf.length() < size {
+    buf.push(0)
+  }
+}
+
+///|
+fn store_int_le(buf : Array[Int], offset : Int, size : Int, value : Int) -> Unit {
+  ensure_bytes_len(buf, offset + size)
+  let mut v = value
+  let mut i = 0
+  while i < size {
+    buf[offset + i] = v & 0xff
+    v = v >> 8
+    i = i + 1
+  }
+}
+
+///|
+fn store_uint64_le(buf : Array[Int], offset : Int, size : Int, bits : UInt64) -> Unit {
+  ensure_bytes_len(buf, offset + size)
+  let mut v = bits
+  let mut i = 0
+  while i < size {
+    buf[offset + i] = (v & (0xff : UInt64)).to_int()
+    v = v >> 8
+    i = i + 1
+  }
+}
+
+///|
+fn const_pointer_from_expr(
+  _sem : SemContext,
+  syms : SymTable,
+  cstrings : Map[String, Sym],
+  expr : Expr,
+) -> (Sym, Int)? {
+  match expr {
+    Expr::StringLit(value~, ..) =>
+      match cstrings.get(value) {
+        Some(sym) => Some((sym, 0))
+        None => None
+      }
+    Expr::Ident(name~, ..) =>
+      Some((sym_for_name(syms, link_name(name)), 0))
+    Expr::Unary(op=UnaryOp::Addr, expr=Expr::Ident(name~, ..), ..) =>
+      Some((sym_for_name(syms, link_name(name)), 0))
+    Expr::Unary(op=UnaryOp::Addr, expr=Expr::StringLit(value~, ..), ..) =>
+      match cstrings.get(value) {
+        Some(sym) => Some((sym, 0))
+        None => None
+      }
+    Expr::Cast(expr=inner, ..) =>
+      const_pointer_from_expr(_sem, syms, cstrings, inner)
+    Expr::Unary(op=UnaryOp::Plus, expr=inner, ..) =>
+      const_pointer_from_expr(_sem, syms, cstrings, inner)
+    _ => None
+  }
+}
+
+///|
+fn fill_global_initializer_bytes(
+  sem : SemContext,
+  syms : SymTable,
+  cstrings : Map[String, Sym],
+  ty : CType,
+  init : Initializer,
+  bytes : Array[Int],
+  relocs : Array[Reloc],
+  base_off : Int,
+  bag : DiagBag,
+) -> Unit {
+  match init {
+    Initializer::Expr(expr~, loc~) => {
+      match strip_qual_attrs(ty) {
+        CType::Array(elem=elem_ty, size=Some(n), ..) =>
+          match expr {
+            Expr::StringLit(value~, ..) =>
+              if is_char_type(elem_ty) {
+                let (elem_sz, _) = match type_size_align_or_error(sem, elem_ty, loc) {
+                  None => return
+                  Some(v) => v
+                }
+                if elem_sz != 1 {
+                  add_error(bag, loc, "codegen: string initializer for non-byte array")
+                  return
+                }
+                let mut idx = 0
+                for b in value.to_bytes() {
+                  if idx >= n - 1 {
+                    break
+                  }
+                  store_int_le(bytes, base_off + idx, 1, b.to_int())
+                  idx = idx + 1
+                }
+                store_int_le(bytes, base_off + idx, 1, 0)
+              } else {
+                add_error(bag, loc, "codegen: string initializer for non-byte array")
+              }
+            _ =>
+              add_error(bag, loc, "codegen: scalar initializer for array not supported")
+          }
+        CType::Struct(..) | CType::Union(..) =>
+          add_error(bag, loc, "codegen: aggregate initializer must be a list")
+        _ => {
+          let (size, _) = match type_size_align_or_error(sem, ty, loc) {
+            None => return
+            Some(v) => v
+          }
+          ensure_bytes_len(bytes, base_off + size)
+          match float_kind_of_type(ty) {
+            Some(k_raw) => {
+              let k = normalize_float_kind(k_raw)
+              match expr {
+                Expr::FloatLit(value~, ..) =>
+                  match parse_float_literal_bits(value, k) {
+                    None => add_error(bag, loc, "codegen: invalid float initializer")
+                    Some(bits) => store_uint64_le(bytes, base_off, size, bits)
+                  }
+                _ => add_error(bag, loc, "codegen: non-constant float initializer")
+              }
+            }
+            None =>
+              if type_is_pointer_like(ty) {
+                match const_pointer_from_expr(sem, syms, cstrings, expr) {
+                  Some((sym, addend)) => {
+                    store_int_le(bytes, base_off, size, addend)
+                    relocs.push({
+                      offset: base_off,
+                      kind: R_AARCH64_POINTER,
+                      sym,
+                      addend: addend.to_int64(),
+                    })
+                  }
+                  None =>
+                    match const_int_from_expr(sem, expr, loc) {
+                      Some(v) => store_int_le(bytes, base_off, size, v)
+                      None =>
+                        add_error(
+                          bag,
+                          loc,
+                          "codegen: non-constant pointer initializer",
+                        )
+                    }
+                }
+              } else {
+                match const_int_from_expr(sem, expr, loc) {
+                  None =>
+                    add_error(
+                      bag,
+                      loc,
+                      "codegen: non-constant scalar initializer",
+                    )
+                  Some(v) => store_int_le(bytes, base_off, size, v)
+                }
+              }
+          }
+        }
+      }
+    }
+    Initializer::List(items~, loc~) => {
+      match strip_qual_attrs(ty) {
+        CType::Array(elem=elem_ty, size=Some(n), ..) => {
+          let (elem_size, _) = match type_size_align_or_error(sem, elem_ty, loc) {
+            None => return
+            Some(v) => v
+          }
+          let total_bytes = n * elem_size
+          ensure_bytes_len(bytes, base_off + total_bytes)
+          let mut next_index = 0
+          for item in items {
+            let mut idx = next_index
+            let mut has_index = false
+            if item.designators.length() > 0 {
+              match item.designators[0] {
+                InitDesignator::Index(expr~, loc=des_loc) =>
+                  match const_int_from_expr(sem, expr, des_loc) {
+                    None => ()
+                    Some(v) => {
+                      idx = v
+                      has_index = true
+                      if idx < 0 || idx >= n {
+                        add_error(bag, des_loc, "codegen: array designator out of bounds")
+                      }
+                    }
+                  }
+                _ => ()
+              }
+            }
+            if !has_index && idx >= n {
+              add_error(bag, item.loc, "codegen: too many initializers for array")
+              break
+            }
+            let (target_ty, rel_off) = if item.designators.length() > 0 {
+              match resolve_init_designator_offset_type(
+                sem,
+                ty,
+                item.designators,
+                item.loc,
+                bag,
+              ) {
+                None => (elem_ty, idx * elem_size)
+                Some((t, o)) => (t, o)
+              }
+            } else {
+              (elem_ty, idx * elem_size)
+            }
+            fill_global_initializer_bytes(
+              sem,
+              syms,
+              cstrings,
+              target_ty,
+              item.value,
+              bytes,
+              relocs,
+              base_off + rel_off,
+              bag,
+            )
+            if has_index {
+              if idx >= 0 {
+                next_index = idx + 1
+              }
+            } else {
+              next_index = next_index + 1
+            }
+          }
+        }
+        CType::Struct(name=tag, fields=field_list, attrs=_) => {
+          let fields = match field_list {
+            Some(list) => Some(record_items_to_fields(list))
+            None => lookup_struct_fields(sem, tag, is_union=false)
+          }
+          let list = match fields {
+            None => {
+              add_error(bag, loc, "codegen: incomplete struct '\{tag}'")
+              return
+            }
+            Some(v) => v
+          }
+          let (size, _) = match type_size_align_or_error(sem, ty, loc) {
+            None => return
+            Some(v) => v
+          }
+          ensure_bytes_len(bytes, base_off + size)
+          let mut index = 0
+          for item in items {
+            if item.designators.length() > 0 {
+              match resolve_init_designator_offset_type(
+                sem,
+                ty,
+                item.designators,
+                item.loc,
+                bag,
+              ) {
+                None => ()
+                Some((target_ty, rel_off)) =>
+                  fill_global_initializer_bytes(
+                    sem,
+                    syms,
+                    cstrings,
+                    target_ty,
+                    item.value,
+                    bytes,
+                    relocs,
+                    base_off + rel_off,
+                    bag,
+                  )
+              }
+              match item.designators[0] {
+                InitDesignator::Field(name~, ..) =>
+                  match find_field_index(list, name) {
+                    None => ()
+                    Some(idx) => index = idx + 1
+                  }
+                _ => ()
+              }
+            } else {
+              match next_init_field(list, index) {
+                None =>
+                  add_error(bag, item.loc, "codegen: too many initializers for aggregate")
+                Some((field, next_idx)) => {
+                  let field_off = match eval_builtin_offsetof(sem, ty, [field.name], item.loc) {
+                    None => 0
+                    Some(v) => v
+                  }
+                  fill_global_initializer_bytes(
+                    sem,
+                    syms,
+                    cstrings,
+                    field.ty,
+                    item.value,
+                    bytes,
+                    relocs,
+                    base_off + field_off,
+                    bag,
+                  )
+                  index = next_idx
+                }
+              }
+            }
+          }
+        }
+        CType::Union(name=tag, fields=field_list, attrs=_) => {
+          let fields = match field_list {
+            Some(list) => Some(record_items_to_fields(list))
+            None => lookup_struct_fields(sem, tag, is_union=true)
+          }
+          let list = match fields {
+            None => {
+              add_error(bag, loc, "codegen: incomplete union '\{tag}'")
+              return
+            }
+            Some(v) => v
+          }
+          let (size, _) = match type_size_align_or_error(sem, ty, loc) {
+            None => return
+            Some(v) => v
+          }
+          ensure_bytes_len(bytes, base_off + size)
+          if items.length() == 0 {
+            return
+          }
+          let first = items[0]
+          if first.designators.length() > 0 {
+            match resolve_init_designator_offset_type(
+              sem,
+              ty,
+              first.designators,
+              first.loc,
+              bag,
+            ) {
+              None => ()
+              Some((target_ty, rel_off)) =>
+                fill_global_initializer_bytes(
+                  sem,
+                  syms,
+                  cstrings,
+                  target_ty,
+                  first.value,
+                  bytes,
+                  relocs,
+                  base_off + rel_off,
+                  bag,
+                )
+            }
+          } else if list.length() > 0 {
+            let field = list[0]
+            fill_global_initializer_bytes(
+              sem,
+              syms,
+              cstrings,
+              field.ty,
+              first.value,
+              bytes,
+              relocs,
+              base_off,
+              bag,
+            )
+          }
+        }
+        _ => add_error(bag, loc, "codegen: initializer list for non-aggregate")
+      }
+    }
+  }
+}
+
+///|
+fn build_global_initializer_bytes(
+  sem : SemContext,
+  syms : SymTable,
+  cstrings : Map[String, Sym],
+  ty : CType,
+  init : Initializer,
+  bag : DiagBag,
+) -> (Array[Int], Array[Reloc])? {
+  let init_loc = match init {
+    Initializer::Expr(loc=loc, ..) => loc
+    Initializer::List(loc=loc, ..) => loc
+  }
+  let (size, _) = match type_size_align_or_error(sem, ty, init_loc) {
+    None => return None
+    Some(v) => v
+  }
+  let bytes : Array[Int] = []
+  ensure_bytes_len(bytes, size)
+  let relocs : Array[Reloc] = []
+  fill_global_initializer_bytes(sem, syms, cstrings, ty, init, bytes, relocs, 0, bag)
+  Some((bytes, relocs))
+}
+
+///|
 fn collect_cstring_stmt(order : Array[String], seen : Map[String, Bool], stmt : Stmt) -> Unit {
   match stmt {
     Stmt::Compound(stmts~, ..) =>
@@ -6779,6 +7221,7 @@ fn codegen_arm64_object_bytes_from_ast(
   }
 
   let data_words : Array[UInt] = []
+  let data_relocs : Array[Reloc] = []
   let mut bss_size = 0
   let mut bss_align = 4
   let def_symbols : Map[String, ObjSymbol] = {}
@@ -6814,7 +7257,11 @@ fn codegen_arm64_object_bytes_from_ast(
             is_external: true,
           })
         } else {
-          let (size, align) = match type_size_align_or_error(sem, var_decl.ty, var_decl.loc) {
+          let var_ty = match sem.globals.get(var_decl.name) {
+            Some(t) => t
+            None => var_decl.ty
+          }
+          let (size, align) = match type_size_align_or_error(sem, var_ty, var_decl.loc) {
             None => continue
             Some(v) => v
           }
@@ -6833,34 +7280,52 @@ fn codegen_arm64_object_bytes_from_ast(
                 is_external: var_decl.storage != StorageClass::Static,
               })
             }
-            Some(init) =>
-              if type_is_supported_int32(var_decl.ty) {
-                match const_u32_from_initializer(init) {
-                  None =>
-                    add_error(
-                      bag,
-                      var_decl.loc,
-                      "codegen: only constant int initializer for globals supported for now",
-                    )
-                  Some(word) => {
-                    let off = data_words.length() << 2
+            Some(init) => {
+              let data_off = align_up(data_words.length() << 2, align)
+              match build_global_initializer_bytes(
+                sem,
+                syms,
+                cstring_syms,
+                var_ty,
+                init,
+                bag,
+              ) {
+                None => ()
+                Some((bytes, rels)) => {
+                  while (data_words.length() << 2) < data_off {
+                    data_words.push(0)
+                  }
+                  let mut i = 0
+                  while i < bytes.length() {
+                    let mut word : UInt = 0
+                    let mut j = 0
+                    while j < 4 && i + j < bytes.length() {
+                      word = word.lor(
+                        (bytes[i + j].to_uint() & 0xff) << ((j & 3) << 3),
+                      )
+                      j = j + 1
+                    }
                     data_words.push(word)
-                    def_symbols.set(link, {
-                      id: syms.name_to_id.get(link).unwrap_or(0),
-                      name: link,
-                      section: Some(".data"),
-                      value: off,
-                      is_external: var_decl.storage != StorageClass::Static,
+                    i = i + 4
+                  }
+                  for rel in rels {
+                    data_relocs.push({
+                      offset: data_off + rel.offset,
+                      kind: rel.kind,
+                      sym: rel.sym,
+                      addend: rel.addend,
                     })
                   }
+                  def_symbols.set(link, {
+                    id: syms.name_to_id.get(link).unwrap_or(0),
+                    name: link,
+                    section: Some(".data"),
+                    value: data_off,
+                    is_external: var_decl.storage != StorageClass::Static,
+                  })
                 }
-              } else {
-                add_error(
-                  bag,
-                  var_decl.loc,
-                  "codegen: global initializer not supported for this type yet",
-                )
               }
+            }
           }
         }
       }
@@ -6920,7 +7385,7 @@ fn codegen_arm64_object_bytes_from_ast(
     sections.push({
       name: ".data",
       data: data_words,
-      relocs: [],
+      relocs: data_relocs,
       align: 4,
       size_bytes: data_words.length() << 2,
     })

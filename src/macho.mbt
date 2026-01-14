@@ -283,7 +283,16 @@ fn macho_reloc_type(kind : Int) -> (Int, Bool) {
     R_AARCH64_ADR_PREL_PG_HI21_NC => (ARM64_RELOC_PAGE21, true)
     R_AARCH64_ADD_ABS_LO12_NC => (ARM64_RELOC_PAGEOFF12, false)
     R_AARCH64_LDST8_ABS_LO12_NC => (ARM64_RELOC_PAGEOFF12, false)
+    R_AARCH64_POINTER => (ARM64_RELOC_UNSIGNED, false)
     _ => (ARM64_RELOC_UNSIGNED, false)
+  }
+}
+
+///|
+fn reloc_length(kind : Int) -> Int {
+  match kind {
+    R_AARCH64_POINTER => 3
+    _ => 2
   }
 }
 
@@ -366,11 +375,15 @@ fn encode_macho_object(
           } else {
             layout.info.align
           }
-          offset = align_up(offset, align)
-          let data_off = if layout.info.is_zerofill { 0 } else { offset }
+          let aligned = if layout.info.is_zerofill {
+            offset
+          } else {
+            align_up(offset, align)
+          }
+          let data_off = if layout.info.is_zerofill { 0 } else { aligned }
           let size = layout.size
           if !layout.info.is_zerofill {
-            offset = offset + size
+            offset = aligned + size
           }
           layouts[idx] = {
             section: layout.section,
@@ -517,7 +530,8 @@ fn encode_macho_object(
               None => 0
               Some(idx_val) => idx_val
             }
-            let info = pack_reloc_info(symbolnum, pcrel, 2, true, rtype)
+            let len = reloc_length(rel.kind)
+            let info = pack_reloc_info(symbolnum, pcrel, len, true, rtype)
             out.write_uint_le(rel.offset.reinterpret_as_uint())
             out.write_uint_le(info)
             fileoff = fileoff + 8
