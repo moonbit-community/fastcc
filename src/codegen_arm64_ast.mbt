@@ -923,12 +923,20 @@ fn gen_cond_expr_cmp_zero(
 
 ///|
 fn float_kind_supported(kind : CFloatKind) -> Bool {
-  kind == CFloatKind::Float || kind == CFloatKind::Double
+  kind == CFloatKind::Float || kind == CFloatKind::Double || kind == CFloatKind::LongDouble
 }
 
 ///|
 fn float_is_double(kind : CFloatKind) -> Bool {
   kind != CFloatKind::Float
+}
+
+///|
+fn normalize_float_kind(kind : CFloatKind) -> CFloatKind {
+  match kind {
+    CFloatKind::LongDouble => CFloatKind::Double
+    _ => kind
+  }
 }
 
 ///|
@@ -946,6 +954,10 @@ fn scalar_size_signed_or_error(
   ty : CType,
   loc : SrcLoc,
 ) -> (Int, Bool)? {
+  match strip_qualifiers(ty) {
+    CType::Float(kind=CFloatKind::LongDouble) => return Some((8, false))
+    _ => ()
+  }
   let (size, _) = match type_size_align_or_error(sem, ty, loc) {
     None => return None
     Some(v) => v
@@ -2763,23 +2775,25 @@ fn gen_expr_to_float_kind_bits(
   dst : Int,
   bag : DiagBag,
 ) -> Unit {
-  if !float_kind_supported(target_kind) {
+  let norm_target = normalize_float_kind(target_kind)
+  if !float_kind_supported(norm_target) {
     add_error(bag, expr_loc(expr), "codegen: unsupported float type")
     return
   }
   let src_ty = type_of_expr(alloc.sem, expr)
   match float_kind_of_type(src_ty) {
-    Some(src_kind) => {
+    Some(src_kind_raw) => {
+      let src_kind = normalize_float_kind(src_kind_raw)
       gen_expr_floatbits(emitter, alloc, syms, pool, cstrings, expr, dst, bag)
-      if src_kind == target_kind {
+      if src_kind == norm_target {
         return
       }
-      if src_kind == CFloatKind::Float && target_kind == CFloatKind::Double {
+      if src_kind == CFloatKind::Float && norm_target == CFloatKind::Double {
         // float -> double
         emit_fmov_w_to_s(emitter, 0, dst)
         emit32(emitter, (0x1e22c000 : UInt))
         emit_fmov_d_to_x(emitter, dst, 0)
-      } else if src_kind == CFloatKind::Double && target_kind == CFloatKind::Float {
+      } else if src_kind == CFloatKind::Double && norm_target == CFloatKind::Float {
         // double -> float
         emit_fmov_x_to_d(emitter, 0, dst)
         emit32(emitter, (0x1e624000 : UInt))
@@ -2795,7 +2809,7 @@ fn gen_expr_to_float_kind_bits(
         CType::Int(unsigned~, ..) => unsigned
         _ => false
       }
-      if target_kind == CFloatKind::Float {
+      if norm_target == CFloatKind::Float {
         let base : Int = if is_unsigned { 0x1e230000 } else { 0x1e220000 }
         emit32(
           emitter,
@@ -2831,13 +2845,14 @@ fn gen_expr_floatbits(
   dst : Int,
   bag : DiagBag,
 ) -> Unit {
-  let kind = match float_kind_of_type(type_of_expr(alloc.sem, expr)) {
+  let kind_raw = match float_kind_of_type(type_of_expr(alloc.sem, expr)) {
     None => {
       add_error(bag, expr_loc(expr), "codegen: expected float expression")
       return
     }
     Some(k) => k
   }
+  let kind = normalize_float_kind(kind_raw)
   if !float_kind_supported(kind) {
     add_error(bag, expr_loc(expr), "codegen: unsupported float type")
     return
@@ -3008,6 +3023,20 @@ fn gen_expr_floatbits(
     }
     Expr::Binary(op~, left~, right~, loc~) =>
       match op {
+        BinaryOp::Comma => {
+          gen_expr_any(emitter, alloc, syms, pool, cstrings, left, dst, bag)
+          gen_expr_to_float_kind_bits(
+            emitter,
+            alloc,
+        syms,
+        pool,
+        cstrings,
+        right,
+        kind,
+        dst,
+        bag,
+      )
+    }
         BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div => {
           let tmp = take_reg(pool) catch {
             err => {
@@ -3321,6 +3350,13 @@ fn gen_expr_int32(
           }
       }
     }
+    Expr::BuiltinOffsetof(ty~, path~, loc~) => {
+      match eval_builtin_offsetof(alloc.sem, ty, path, loc) {
+        None => add_error(bag, loc, "codegen: unsupported expression")
+        Some(off) =>
+          arm64_movimm(emitter, dst.reinterpret_as_uint(), off.to_uint64())
+      }
+    }
     Expr::Unary(op~, expr=inner, loc~) => {
       match op {
         UnaryOp::Plus =>
@@ -3392,13 +3428,103 @@ fn gen_expr_int32(
         UnaryOp::PreInc | UnaryOp::PreDec | UnaryOp::PostInc | UnaryOp::PostDec => {
           let ty = type_of_expr(alloc.sem, inner)
           if type_is_pointer_like(ty) {
-            add_error(bag, loc, "codegen: pointer inc/dec not supported yet")
+            let ptr_size = match type_size_align_or_error(alloc.sem, ty, loc) {
+              None => return
+              Some((size, _)) => size
+            }
+            let elem_ty = match element_type_for_pointer_arith(ty) {
+              None => {
+                add_error(bag, loc, "codegen: pointer inc/dec missing element type")
+                return
+              }
+              Some(t) => t
+            }
+            let (elem_size, _) = match type_size_align_or_error(alloc.sem, elem_ty, loc) {
+              None => return
+              Some(v) => v
+            }
+            let addr = take_reg(pool) catch {
+              err => {
+                add_error(bag, loc, err.to_string())
+                return
+              }
+            }
+            gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, inner, addr, bag)
+            let sz = match arm64_sz_from_size(ptr_size) {
+              None => {
+                add_error(bag, loc, "codegen: unsupported pointer size")
+                give_reg(pool, addr)
+                return
+              }
+              Some(v) => v
+            }
+            arm64_ldrx(
+              emitter,
+              false,
+              sz,
+              dst.reinterpret_as_uint(),
+              addr.reinterpret_as_uint(),
+              0,
+            )
+            let delta_reg = take_reg(pool) catch {
+              err => {
+                add_error(bag, loc, err.to_string())
+                give_reg(pool, addr)
+                return
+              }
+            }
+            arm64_movimm(emitter, delta_reg.reinterpret_as_uint(), elem_size.to_uint64())
+            let mut updated_reg = dst
+            if op == UnaryOp::PostInc || op == UnaryOp::PostDec {
+              updated_reg = take_reg(pool) catch {
+                err => {
+                  add_error(bag, loc, err.to_string())
+                  give_reg(pool, delta_reg)
+                  give_reg(pool, addr)
+                  return
+                }
+              }
+              emit_mov(emitter, true, updated_reg, dst)
+            }
+            let base : Int = if op == UnaryOp::PreDec || op == UnaryOp::PostDec {
+              0xcb000000
+            } else {
+              0x8b000000
+            }
+            emit32(
+              emitter,
+              (base : Int)
+              .lor(updated_reg)
+              .lor(updated_reg << 5)
+              .lor(delta_reg << 16)
+              .reinterpret_as_uint(),
+            )
+            arm64_strx(
+              emitter,
+              sz,
+              updated_reg.reinterpret_as_uint(),
+              addr.reinterpret_as_uint(),
+              0,
+            )
+            give_reg(pool, delta_reg)
+            if updated_reg != dst {
+              give_reg(pool, updated_reg)
+            }
+            give_reg(pool, addr)
             return
           }
-          if !type_is_supported_int32(ty) {
-            add_error(bag, loc, "codegen: inc/dec only supported for int for now")
-            return
+          let (size, signed) = match scalar_size_signed_or_error(alloc.sem, ty, loc) {
+            None => return
+            Some(v) => v
           }
+          let sz = match arm64_sz_from_size(size) {
+            None => {
+              add_error(bag, loc, "codegen: unsupported scalar size")
+              return
+            }
+            Some(v) => v
+          }
+          let is64 = size == 8
           let addr = take_reg(pool) catch {
             err => {
               add_error(bag, loc, err.to_string())
@@ -3408,8 +3534,8 @@ fn gen_expr_int32(
           gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, inner, addr, bag)
           arm64_ldrx(
             emitter,
-            false,
-            2,
+            signed,
+            sz,
             dst.reinterpret_as_uint(),
             addr.reinterpret_as_uint(),
             0,
@@ -3431,57 +3557,45 @@ fn gen_expr_int32(
                 return
               }
             }
-            emit_mov(emitter, false, updated, dst)
-            if op == UnaryOp::PostInc {
-              emit32(
-                emitter,
-                (0x0b000000 : Int)
-                .lor(updated)
-                .lor(updated << 5)
-                .lor(one << 16)
-                .reinterpret_as_uint(),
-              )
+            emit_mov(emitter, is64, updated, dst)
+            let base_post = if op == UnaryOp::PostInc {
+              if is64 { 0x8b000000 } else { 0x0b000000 }
             } else {
-              emit32(
-                emitter,
-                (0x4b000000 : Int)
-                .lor(updated)
-                .lor(updated << 5)
-                .lor(one << 16)
-                .reinterpret_as_uint(),
-              )
+              if is64 { 0xcb000000 } else { 0x4b000000 }
             }
+            emit32(
+              emitter,
+              (base_post : Int)
+              .lor(updated)
+              .lor(updated << 5)
+              .lor(one << 16)
+              .reinterpret_as_uint(),
+            )
             arm64_strx(
               emitter,
-              2,
+              sz,
               updated.reinterpret_as_uint(),
               addr.reinterpret_as_uint(),
               0,
             )
             give_reg(pool, updated)
           } else {
-            if op == UnaryOp::PreInc {
-              emit32(
-                emitter,
-                (0x0b000000 : Int)
-                .lor(dst)
-                .lor(dst << 5)
-                .lor(one << 16)
-                .reinterpret_as_uint(),
-              )
+            let base_pre = if op == UnaryOp::PreInc {
+              if is64 { 0x8b000000 } else { 0x0b000000 }
             } else {
-              emit32(
-                emitter,
-                (0x4b000000 : Int)
-                .lor(dst)
-                .lor(dst << 5)
-                .lor(one << 16)
-                .reinterpret_as_uint(),
-              )
+              if is64 { 0xcb000000 } else { 0x4b000000 }
             }
+            emit32(
+              emitter,
+              (base_pre : Int)
+              .lor(dst)
+              .lor(dst << 5)
+              .lor(one << 16)
+              .reinterpret_as_uint(),
+            )
             arm64_strx(
               emitter,
-              2,
+              sz,
               dst.reinterpret_as_uint(),
               addr.reinterpret_as_uint(),
               0,
@@ -3684,14 +3798,19 @@ fn gen_expr_int32(
             }
             return
           }
-          if !type_is_supported_int32(left_ty) {
-            add_error(bag, loc, "codegen: compound assign only supported for int for now")
-            return
+          let (lhs_size, lhs_signed) = match scalar_size_signed_or_error(alloc.sem, left_ty, loc) {
+            None => return
+            Some(v) => v
           }
-          let is_unsigned = match strip_qualifiers(left_ty) {
-            CType::Int(unsigned~, ..) => unsigned
-            _ => false
+          let sz = match arm64_sz_from_size(lhs_size) {
+            None => {
+              add_error(bag, loc, "codegen: unsupported scalar size")
+              return
+            }
+            Some(v) => v
           }
+          let is_unsigned = !lhs_signed
+          let is64 = lhs_size == 8
           let addr = take_reg(pool) catch {
             err => {
               add_error(bag, loc, err.to_string())
@@ -3701,8 +3820,8 @@ fn gen_expr_int32(
           gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, left, addr, bag)
           arm64_ldrx(
             emitter,
-            false,
-            2,
+            lhs_signed,
+            sz,
             dst.reinterpret_as_uint(),
             addr.reinterpret_as_uint(),
             0,
@@ -3714,13 +3833,13 @@ fn gen_expr_int32(
               return
             }
           }
-          emit_mov(emitter, false, tmp_old, dst)
+          emit_mov(emitter, is64, tmp_old, dst)
           gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, dst, bag)
           match op {
             BinaryOp::AddAssign =>
               emit32(
                 emitter,
-                (0x0b000000 : Int)
+                (if is64 { 0x8b000000 } else { 0x0b000000 } : Int)
                 .lor(dst)
                 .lor(tmp_old << 5)
                 .lor(dst << 16)
@@ -3729,7 +3848,7 @@ fn gen_expr_int32(
             BinaryOp::SubAssign =>
               emit32(
                 emitter,
-                (0x4b000000 : Int)
+                (if is64 { 0xcb000000 } else { 0x4b000000 } : Int)
                 .lor(dst)
                 .lor(tmp_old << 5)
                 .lor(dst << 16)
@@ -3738,7 +3857,7 @@ fn gen_expr_int32(
             BinaryOp::MulAssign =>
               emit32(
                 emitter,
-                (0x1b007c00 : Int)
+                (if is64 { 0x9b007c00 } else { 0x1b007c00 } : Int)
                 .lor(dst)
                 .lor(tmp_old << 5)
                 .lor(dst << 16)
@@ -3747,7 +3866,11 @@ fn gen_expr_int32(
             BinaryOp::DivAssign =>
               emit32(
                 emitter,
-                (0x1ac00c00 : Int)
+                (if is_unsigned {
+                  if is64 { 0x9ac00800 } else { 0x1ac00800 }
+                } else {
+                  if is64 { 0x9ac00c00 } else { 0x1ac00c00 }
+                } : Int)
                 .lor(dst)
                 .lor(tmp_old << 5)
                 .lor(dst << 16)
@@ -3756,7 +3879,11 @@ fn gen_expr_int32(
             BinaryOp::ModAssign => {
               emit32(
                 emitter,
-                (0x1ac00c00 : Int)
+                (if is_unsigned {
+                  if is64 { 0x9ac00800 } else { 0x1ac00800 }
+                } else {
+                  if is64 { 0x9ac00c00 } else { 0x1ac00c00 }
+                } : Int)
                 .lor(30)
                 .lor(tmp_old << 5)
                 .lor(dst << 16)
@@ -3764,7 +3891,7 @@ fn gen_expr_int32(
               )
               emit32(
                 emitter,
-                (0x1b008000 : Int)
+                (if is64 { 0x9b008000 } else { 0x1b008000 } : Int)
                 .lor(dst)
                 .lor(30 << 5)
                 .lor(dst << 16)
@@ -3775,7 +3902,7 @@ fn gen_expr_int32(
             BinaryOp::ShlAssign =>
               emit32(
                 emitter,
-                (0x1ac02000 : Int)
+                ((0x1ac02000 : Int).lor(if is64 { 0x80000000 } else { 0 }))
                 .lor(dst)
                 .lor(tmp_old << 5)
                 .lor(dst << 16)
@@ -3783,9 +3910,10 @@ fn gen_expr_int32(
               )
             BinaryOp::ShrAssign => {
               let base : Int = if is_unsigned { 0x1ac02400 } else { 0x1ac02800 }
+              let base64 = if is64 { base.lor(0x80000000) } else { base }
               emit32(
                 emitter,
-                base
+                base64
                 .lor(dst)
                 .lor(tmp_old << 5)
                 .lor(dst << 16)
@@ -3795,7 +3923,7 @@ fn gen_expr_int32(
             BinaryOp::BitAndAssign =>
               emit32(
                 emitter,
-                (0x0a000000 : Int)
+                (if is64 { 0x8a000000 } else { 0x0a000000 } : Int)
                 .lor(dst)
                 .lor(tmp_old << 5)
                 .lor(dst << 16)
@@ -3804,7 +3932,7 @@ fn gen_expr_int32(
             BinaryOp::BitOrAssign =>
               emit32(
                 emitter,
-                (0x2a000000 : Int)
+                (if is64 { 0xaa000000 } else { 0x2a000000 } : Int)
                 .lor(dst)
                 .lor(tmp_old << 5)
                 .lor(dst << 16)
@@ -3813,7 +3941,7 @@ fn gen_expr_int32(
             BinaryOp::BitXorAssign =>
               emit32(
                 emitter,
-                (0x4a000000 : Int)
+                (if is64 { 0xca000000 } else { 0x4a000000 } : Int)
                 .lor(dst)
                 .lor(tmp_old << 5)
                 .lor(dst << 16)
@@ -3823,7 +3951,7 @@ fn gen_expr_int32(
           }
           arm64_strx(
             emitter,
-            2,
+            sz,
             dst.reinterpret_as_uint(),
             addr.reinterpret_as_uint(),
             0,
@@ -3887,43 +4015,110 @@ fn gen_expr_int32(
           let has_ptr = type_is_pointer_like(left_ty) || type_is_pointer_like(right_ty)
           if has_ptr {
             match op {
-              BinaryOp::Eq | BinaryOp::Ne => ()
+              BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le |
+              BinaryOp::Gt | BinaryOp::Ge => {
+                let tmp = take_reg(pool) catch {
+                  err => {
+                    add_error(bag, loc, err.to_string())
+                    return
+                  }
+                }
+                if type_is_pointer_like(left_ty) {
+                  gen_expr_ptr(emitter, alloc, syms, pool, cstrings, left, tmp, bag)
+                } else {
+                  gen_expr_int32(emitter, alloc, syms, pool, cstrings, left, tmp, bag)
+                  emit_sxtw(emitter, tmp, tmp)
+                }
+                if type_is_pointer_like(right_ty) {
+                  gen_expr_ptr(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+                } else {
+                  gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+                  emit_sxtw(emitter, dst, dst)
+                }
+                emit_cmp(emitter, true, tmp, dst)
+                let tok = match op {
+                  BinaryOp::Eq => TOK_EQ
+                  BinaryOp::Ne => TOK_NE
+                  BinaryOp::Lt => TOK_LT
+                  BinaryOp::Le => TOK_LE
+                  BinaryOp::Gt => TOK_GT
+                  BinaryOp::Ge => TOK_GE
+                  _ => TOK_EQ
+                }
+                emit_cset_from_tok(emitter, tok, dst) catch {
+                  err => add_error(bag, loc, err.to_string())
+                }
+                give_reg(pool, tmp)
+                return
+              }
+              BinaryOp::Sub =>
+                if type_is_pointer_like(left_ty) && type_is_pointer_like(right_ty) {
+                  let left_reg = take_reg(pool) catch {
+                    err => {
+                      add_error(bag, loc, err.to_string())
+                      return
+                    }
+                  }
+                  gen_expr_ptr(emitter, alloc, syms, pool, cstrings, left, left_reg, bag)
+                  gen_expr_ptr(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+                  let elem_ty = match element_type_for_pointer_arith(left_ty) {
+                    None => {
+                      add_error(bag, loc, "codegen: pointer arithmetic missing element type")
+                      give_reg(pool, left_reg)
+                      return
+                    }
+                    Some(t) => t
+                  }
+                  let (elem_size, _) = match type_size_align_or_error(alloc.sem, elem_ty, loc) {
+                    None => {
+                      give_reg(pool, left_reg)
+                      return
+                    }
+                    Some(v) => v
+                  }
+                  emit32(
+                    emitter,
+                    (0xcb000000 : Int)
+                    .lor(dst)
+                    .lor(left_reg << 5)
+                    .lor(dst << 16)
+                    .reinterpret_as_uint(),
+                  )
+                  if elem_size != 1 {
+                    let scale = take_reg(pool) catch {
+                      err => {
+                        add_error(bag, loc, err.to_string())
+                        give_reg(pool, left_reg)
+                        return
+                      }
+                    }
+                    arm64_movimm(
+                      emitter,
+                      scale.reinterpret_as_uint(),
+                      elem_size.to_uint64(),
+                    )
+                    emit32(
+                      emitter,
+                      (0x9ac00c00 : Int)
+                      .lor(dst)
+                      .lor(dst << 5)
+                      .lor(scale << 16)
+                      .reinterpret_as_uint(),
+                    )
+                    give_reg(pool, scale)
+                  }
+                  emit_mov(emitter, false, dst, dst)
+                  give_reg(pool, left_reg)
+                  return
+                } else {
+                  add_error(bag, loc, "codegen: pointer +/- pointer not supported yet")
+                  return
+                }
               _ => {
-                add_error(
-                  bag,
-                  loc,
-                  "codegen: only ==/!= supported for pointer comparisons for now",
-                )
+                add_error(bag, loc, "codegen: unsupported pointer expression")
                 return
               }
             }
-            let tmp = take_reg(pool) catch {
-              err => {
-                add_error(bag, loc, err.to_string())
-                return
-              }
-            }
-            if type_is_pointer_like(left_ty) {
-              gen_expr_ptr(emitter, alloc, syms, pool, cstrings, left, tmp, bag)
-            } else {
-              gen_expr_int32(emitter, alloc, syms, pool, cstrings, left, tmp, bag)
-              emit_sxtw(emitter, tmp, tmp)
-            }
-            if type_is_pointer_like(right_ty) {
-              gen_expr_ptr(emitter, alloc, syms, pool, cstrings, right, dst, bag)
-            } else {
-              gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, dst, bag)
-              emit_sxtw(emitter, dst, dst)
-            }
-            emit_cmp(emitter, true, tmp, dst)
-            emit_cset_from_tok(
-              emitter,
-              if op == BinaryOp::Eq { TOK_EQ } else { TOK_NE },
-              dst,
-            )
-            catch { err => add_error(bag, loc, err.to_string()) }
-            give_reg(pool, tmp)
-            return
           }
           let left_reg = dst
           gen_expr_int32(
@@ -4664,6 +4859,10 @@ fn gen_expr_ptr(
     }
     Expr::Binary(op~, left~, right~, loc~) =>
       match op {
+        BinaryOp::Comma => {
+          gen_expr_any(emitter, alloc, syms, pool, cstrings, left, dst, bag)
+          gen_expr_ptr(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+        }
         BinaryOp::AddAssign | BinaryOp::SubAssign => {
           let lhs_ty = type_of_expr(alloc.sem, left)
           if !type_is_pointer_like(lhs_ty) {
@@ -5122,7 +5321,7 @@ fn gen_switch_body(
         case_addrs[next_case0] = emitter_pc(emitter)
         next_case0 = next_case0 + 1
       }
-      let chain = gen_stmt(
+      let (chain, new_default, new_next) = gen_switch_body(
         emitter,
         alloc,
         syms,
@@ -5135,12 +5334,15 @@ fn gen_switch_body(
         case_body,
         bag,
         return_chain,
+        case_addrs,
+        default_addr0,
+        next_case0,
       )
-      (chain, default_addr0, next_case0)
+      (chain, new_default, new_next)
     }
     Stmt::Default(body=def_body, ..) => {
       default_addr0 = Some(emitter_pc(emitter))
-      let chain = gen_stmt(
+      let (chain, new_default, new_next) = gen_switch_body(
         emitter,
         alloc,
         syms,
@@ -5153,8 +5355,11 @@ fn gen_switch_body(
         def_body,
         bag,
         return_chain,
+        case_addrs,
+        default_addr0,
+        next_case0,
       )
-      (chain, default_addr0, next_case0)
+      (chain, new_default, new_next)
     }
 	    Stmt::Compound(stmts~, ..) => {
 	      cg_push_scope(alloc)
@@ -5200,6 +5405,44 @@ fn gen_switch_body(
         return_chain,
       )
       (chain, default_addr0, next_case0)
+    }
+    Stmt::Label(name~, body~, loc~) => {
+      let addr = emitter_pc(emitter)
+      if labels.addrs.contains(name) {
+        add_error(bag, loc, "codegen: duplicate label")
+      }
+      match labels.chains.get(name) {
+        None => ()
+        Some(chain) =>
+          if chain != 0 {
+            gsym_addr(emitter, chain, addr) catch {
+              err => add_error(bag, loc, err.to_string())
+            }
+          }
+      }
+      labels.addrs.set(name, addr)
+      labels.chains.set(name, 0)
+      match current_scope_vla_loc(alloc) {
+        None => ()
+        Some(off) => emit_vla_sp_restore(emitter, off)
+      }
+      gen_switch_body(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        loops,
+        switches,
+        breakables,
+        labels,
+        cstrings,
+        body,
+        bag,
+        return_chain,
+        case_addrs,
+        default_addr0,
+        next_case0,
+      )
     }
     _ => {
       let chain = gen_stmt(

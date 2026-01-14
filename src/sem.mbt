@@ -529,8 +529,7 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
       }
     }
     CType::Function(..) => {
-      add_sem_error(ctx, loc, "invalid application of sizeof to function")
-      None
+      Some((8, 8))
     }
     CType::Array(elem~, size~, size_expr~) => {
       let (elem_size, elem_align) = match type_size_align(ctx, elem, loc) {
@@ -1869,8 +1868,7 @@ fn struct_field_offset_and_type(
           bit_offset = 0
         }
         if field.name == name {
-          add_sem_error(ctx, loc, "cannot apply __builtin_offsetof to bit-field '\{name}'")
-          return None
+          return Some((size, field.ty))
         }
         bit_offset = bit_offset + width
         if bit_offset == bit_unit_bits {
@@ -1953,9 +1951,9 @@ fn union_field_offset_and_type(
   let _attrs = merge_attrs(def.attrs, union_attrs)
   for field in fields {
     if field.name == name {
-      if field.bit_width is Some(_) {
-        add_sem_error(ctx, loc, "cannot apply __builtin_offsetof to bit-field '\{name}'")
-        return None
+      match field.bit_width {
+        Some(_) => return Some((0, field.ty))
+        None => ()
       }
       return Some((0, field.ty))
     }
