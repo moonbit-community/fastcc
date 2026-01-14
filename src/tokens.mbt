@@ -103,6 +103,7 @@ struct Token {
   lexeme : String
   loc : SrcLoc
   line_start : Bool
+  hidden : Array[String]
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -155,16 +156,6 @@ fn keyword_or_ident(name : String) -> TokenKind {
     "asm" => KwAsm
     "__asm" => KwAsm
     "__asm__" => KwAsm
-    "__const" => KwConst
-    "__const__" => KwConst
-    "__volatile" => KwVolatile
-    "__volatile__" => KwVolatile
-    "__restrict" => KwRestrict
-    "__restrict__" => KwRestrict
-    "__inline" => KwInline
-    "__inline__" => KwInline
-    "__signed" => KwSigned
-    "__signed__" => KwSigned
     _ => Ident
   }
 }
