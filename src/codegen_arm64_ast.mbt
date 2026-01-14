@@ -256,6 +256,97 @@ fn cg_pop_scope_codegen(emitter : Arm64Emitter, alloc : LocalAlloc) -> Unit {
 }
 
 ///|
+fn gen_type_size_bytes_to_reg(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : Map[String, Sym],
+  ty : CType,
+  dst : Int,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  match type_size_align(alloc.sem, ty, loc) {
+    Some((size, _)) => {
+      arm64_movimm(emitter, dst.to_uint(), size.to_uint64())
+      return
+    }
+    None => ()
+  }
+
+  match strip_qual_attrs(ty) {
+    CType::Array(elem=elem_ty, size=Some(n), ..) => {
+      gen_type_size_bytes_to_reg(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        elem_ty,
+        dst,
+        loc,
+        bag,
+      )
+      if n != 1 {
+        let scale = take_reg(pool) catch {
+          err => {
+            add_error(bag, loc, err.to_string())
+            return
+          }
+        }
+        arm64_movimm(emitter, scale.to_uint(), n.to_uint64())
+        emit32(
+          emitter,
+          (0x9b007c00 : Int)
+          .lor(dst)
+          .lor(dst << 5)
+          .lor(scale << 16)
+          .reinterpret_as_uint(),
+        )
+        give_reg(pool, scale)
+      }
+    }
+    CType::Array(elem=elem_ty, size=None, size_expr=Some(len_expr)) => {
+      gen_expr_int32(emitter, alloc, syms, pool, cstrings, len_expr, dst, bag)
+      emit_sxtw(emitter, dst, dst)
+      let tmp = take_reg(pool) catch {
+        err => {
+          add_error(bag, loc, err.to_string())
+          return
+        }
+      }
+      gen_type_size_bytes_to_reg(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        elem_ty,
+        tmp,
+        loc,
+        bag,
+      )
+      emit32(
+        emitter,
+        (0x9b007c00 : Int)
+        .lor(dst)
+        .lor(dst << 5)
+        .lor(tmp << 16)
+        .reinterpret_as_uint(),
+      )
+      give_reg(pool, tmp)
+    }
+    _ =>
+      add_error(
+        bag,
+        loc,
+        "codegen: unsupported dynamic sizeof for type",
+      )
+  }
+}
+
+///|
 fn gen_vla_alloc_to_local_slot(
   emitter : Arm64Emitter,
   alloc : LocalAlloc,
@@ -264,8 +355,7 @@ fn gen_vla_alloc_to_local_slot(
   cstrings : Map[String, Sym],
   slot_offset : Int,
   size_slot_offset : Int?,
-  elem_ty : CType,
-  size_expr : Expr,
+  array_ty : CType,
   loc : SrcLoc,
   bag : DiagBag,
 ) -> Unit {
@@ -275,35 +365,17 @@ fn gen_vla_alloc_to_local_slot(
       return
     }
   }
-  gen_expr_int32(emitter, alloc, syms, pool, cstrings, size_expr, bytes_reg, bag)
-  emit_sxtw(emitter, bytes_reg, bytes_reg)
-
-  let (elem_size, _elem_align) = match type_size_align_or_error(alloc.sem, elem_ty, loc) {
-    None => {
-      give_reg(pool, bytes_reg)
-      return
-    }
-    Some(v) => v
-  }
-  if elem_size != 1 {
-    let scale = take_reg(pool) catch {
-      err => {
-        add_error(bag, loc, err.to_string())
-        give_reg(pool, bytes_reg)
-        return
-      }
-    }
-    arm64_movimm(emitter, scale.to_uint(), elem_size.to_uint64())
-    emit32(
-      emitter,
-      (0x9b007c00 : Int)
-      .lor(bytes_reg)
-      .lor(bytes_reg << 5)
-      .lor(scale << 16)
-      .reinterpret_as_uint(),
-    )
-    give_reg(pool, scale)
-  }
+  gen_type_size_bytes_to_reg(
+    emitter,
+    alloc,
+    syms,
+    pool,
+    cstrings,
+    array_ty,
+    bytes_reg,
+    loc,
+    bag,
+  )
 
   match size_slot_offset {
     None => ()
@@ -363,27 +435,17 @@ fn gen_vla_size_bytes_to_reg(
   loc : SrcLoc,
   bag : DiagBag,
 ) -> Unit {
-  gen_expr_int32(emitter, alloc, syms, pool, cstrings, size_expr, dst, bag)
-  emit_sxtw(emitter, dst, dst)
-  let (elem_size, _elem_align) = match type_size_align_or_error(alloc.sem, elem_ty, loc) {
-    None => return
-    Some(v) => v
-  }
-  if elem_size == 1 {
-    return
-  }
-  let scale = take_reg(pool) catch {
-    err => {
-      add_error(bag, loc, err.to_string())
-      return
-    }
-  }
-  arm64_movimm(emitter, scale.to_uint(), elem_size.to_uint64())
-  emit32(
+  gen_type_size_bytes_to_reg(
     emitter,
-    (0x9b007c00 : Int).lor(dst).lor(dst << 5).lor(scale << 16).reinterpret_as_uint(),
+    alloc,
+    syms,
+    pool,
+    cstrings,
+    CType::Array(elem=elem_ty, size=None, size_expr=Some(size_expr)),
+    dst,
+    loc,
+    bag,
   )
-  give_reg(pool, scale)
 }
 
 ///|
@@ -4687,8 +4749,7 @@ fn gen_stmt(
                   cstrings,
                   slot0.offset,
                   slot0.vla_size_offset,
-                  elem_ty,
-                  expr,
+                  slot0.ty,
                   d.loc,
                   bag,
                 )
