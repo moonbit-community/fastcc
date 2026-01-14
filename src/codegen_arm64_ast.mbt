@@ -27,6 +27,7 @@ fn give_reg(pool : RegPool, r : Int) -> Unit {
 struct LocalSlot {
   offset : Int
   ty : CType
+  vla_size_offset : Int?
 }
 
 ///|
@@ -35,22 +36,32 @@ struct LocalAlloc {
   ret_ty : CType
   mut used_bytes : Int
   scopes : Array[Map[String, LocalSlot]]
+  vla_scopes : Array[VlaScopeInfo]
+}
+
+///|
+struct VlaScopeInfo {
+  num : Int
+  loc : Int
+  locorig : Int
 }
 
 ///|
 fn new_local_alloc(sem : SemContext, ret_ty : CType) -> LocalAlloc {
-  { sem, ret_ty, used_bytes: 0, scopes: [] }
+  { sem, ret_ty, used_bytes: 0, scopes: [], vla_scopes: [] }
 }
 
 ///|
 fn cg_push_scope(alloc : LocalAlloc) -> Unit {
   alloc.scopes.push({})
+  alloc.vla_scopes.push({ num: 0, loc: 0, locorig: 0 })
   push_scope(alloc.sem)
 }
 
 ///|
 fn cg_pop_scope(alloc : LocalAlloc) -> Unit {
   alloc.scopes.pop() |> ignore
+  alloc.vla_scopes.pop() |> ignore
   pop_scope(alloc.sem)
 }
 
@@ -145,12 +156,93 @@ fn alloc_local(
   let aligned = align_up(alloc.used_bytes, align)
   alloc.used_bytes = aligned + size
   let offset = -(aligned + size)
-  let slot = { offset, ty }
+  let slot = { offset, ty, vla_size_offset: None }
   let idx = alloc.scopes.length() - 1
   alloc.scopes[idx].set(name, slot)
   let sem_idx = alloc.sem.locals.length() - 1
   alloc.sem.locals[sem_idx].set(name, ty)
   Some(slot)
+}
+
+///|
+fn alloc_hidden_slot(alloc : LocalAlloc, size : Int, align : Int) -> Int {
+  let aligned = align_up(alloc.used_bytes, align)
+  alloc.used_bytes = aligned + size
+  -(aligned + size)
+}
+
+///|
+fn emit_vla_sp_save(emitter : Arm64Emitter, slot_offset : Int) -> Unit {
+  emit32(emitter, (0x910003e0 : Int).lor(30).reinterpret_as_uint())
+  arm64_strx(
+    emitter,
+    3,
+    (30 : UInt),
+    (29 : UInt),
+    slot_offset.to_int64().reinterpret_as_uint64(),
+  )
+}
+
+///|
+fn emit_vla_sp_restore(emitter : Arm64Emitter, slot_offset : Int) -> Unit {
+  arm64_ldrx(
+    emitter,
+    false,
+    3,
+    (30 : UInt),
+    (29 : UInt),
+    slot_offset.to_int64().reinterpret_as_uint64(),
+  )
+  emit32(emitter, (0x9100001f : Int).lor(30 << 5).reinterpret_as_uint())
+}
+
+///|
+fn vla_record_decl(alloc : LocalAlloc, vla_slot_offset : Int) -> Int? {
+  let idx = alloc.vla_scopes.length() - 1
+  let cur = alloc.vla_scopes[idx]
+  let mut locorig = cur.locorig
+  let mut needs_save : Int? = None
+  if cur.num == 0 {
+    if idx > 0 {
+      let parent = alloc.vla_scopes[idx - 1]
+      if parent.num > 0 {
+        locorig = parent.loc
+      } else {
+        let off = alloc_hidden_slot(alloc, 8, 8)
+        locorig = off
+        needs_save = Some(off)
+      }
+    } else {
+      let off = alloc_hidden_slot(alloc, 8, 8)
+      locorig = off
+      needs_save = Some(off)
+    }
+  }
+  alloc.vla_scopes[idx] = { num: cur.num + 1, loc: vla_slot_offset, locorig }
+  needs_save
+}
+
+///|
+fn emit_vla_leave(emitter : Arm64Emitter, alloc : LocalAlloc, target_depth : Int) -> Unit {
+  let mut restore_off = 0
+  let mut i = alloc.vla_scopes.length()
+  while i > target_depth {
+    i = i - 1
+    let scope = alloc.vla_scopes[i]
+    if scope.num > 0 {
+      restore_off = scope.locorig
+    }
+  }
+  if restore_off != 0 {
+    emit_vla_sp_restore(emitter, restore_off)
+  }
+}
+
+///|
+fn cg_pop_scope_codegen(emitter : Arm64Emitter, alloc : LocalAlloc) -> Unit {
+  let target_depth = alloc.scopes.length() - 1
+  emit_vla_leave(emitter, alloc, target_depth)
+  cg_pop_scope(alloc)
 }
 
 ///|
@@ -161,6 +253,7 @@ fn gen_vla_alloc_to_local_slot(
   pool : RegPool,
   cstrings : Map[String, Sym],
   slot_offset : Int,
+  size_slot_offset : Int?,
   elem_ty : CType,
   size_expr : Expr,
   loc : SrcLoc,
@@ -202,6 +295,18 @@ fn gen_vla_alloc_to_local_slot(
     give_reg(pool, scale)
   }
 
+  match size_slot_offset {
+    None => ()
+    Some(off) =>
+      arm64_strx(
+        emitter,
+        3,
+        bytes_reg.to_uint(),
+        (29 : UInt),
+        off.to_int64().reinterpret_as_uint64(),
+      )
+  }
+
   // Round allocation up to 16 to preserve AArch64 stack alignment.
   emit32(
     emitter,
@@ -233,6 +338,42 @@ fn gen_vla_alloc_to_local_slot(
     slot_offset.to_int64().reinterpret_as_uint64(),
   )
   give_reg(pool, bytes_reg)
+}
+
+///|
+fn gen_vla_size_bytes_to_reg(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : Map[String, Sym],
+  elem_ty : CType,
+  size_expr : Expr,
+  dst : Int,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  gen_expr_int32(emitter, alloc, syms, pool, cstrings, size_expr, dst, bag)
+  emit_sxtw(emitter, dst, dst)
+  let (elem_size, _elem_align) = match type_size_align_or_error(alloc.sem, elem_ty, loc) {
+    None => return
+    Some(v) => v
+  }
+  if elem_size == 1 {
+    return
+  }
+  let scale = take_reg(pool) catch {
+    err => {
+      add_error(bag, loc, err.to_string())
+      return
+    }
+  }
+  arm64_movimm(emitter, scale.to_uint(), elem_size.to_uint64())
+  emit32(
+    emitter,
+    (0x9b007c00 : Int).lor(dst).lor(dst << 5).lor(scale << 16).reinterpret_as_uint(),
+  )
+  give_reg(pool, scale)
 }
 
 ///|
@@ -297,7 +438,24 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
             }
           _ => ()
         }
-        alloc_local(alloc, d.name, decl_ty, d.loc) |> ignore
+        match alloc_local(alloc, d.name, decl_ty, d.loc) {
+          None => ()
+          Some(slot) =>
+            match strip_qual_attrs(slot.ty) {
+              CType::Array(size=None, size_expr=Some(_), ..) => {
+                let size_off = alloc_hidden_slot(alloc, 8, 8)
+                let updated = {
+                  offset: slot.offset,
+                  ty: slot.ty,
+                  vla_size_offset: Some(size_off),
+                }
+                let scope_idx = alloc.scopes.length() - 1
+                alloc.scopes[scope_idx].set(d.name, updated)
+                vla_record_decl(alloc, slot.offset) |> ignore
+              }
+              _ => ()
+            }
+        }
         match d.init {
           None => ()
           Some(init) => layout_initializer(alloc, init)
@@ -3449,21 +3607,79 @@ fn gen_expr_int32(
         emit_mov(emitter, true, dst, 0)
       }
     }
-    Expr::SizeofExpr(expr=inner, loc~) => {
-      let ty = type_for_sizeof(alloc.sem, inner)
-      match type_size_align_or_error(alloc.sem, ty, loc) {
-        None => ()
-        Some((size, _)) => arm64_movimm(emitter, dst.to_uint(), size.to_uint64())
-      }
-    }
-    Expr::SizeofType(ty~, loc~) =>
-      match type_size_align_or_error(alloc.sem, ty, loc) {
-        None => ()
-        Some((size, _)) => arm64_movimm(emitter, dst.to_uint(), size.to_uint64())
-      }
-    Expr::Cast(ty=to_ty, expr=inner, loc=cast_loc) => {
-      let from_ty = type_of_expr(alloc.sem, inner)
-      match (strip_qualifiers(to_ty), strip_qualifiers(from_ty)) {
+	    Expr::SizeofExpr(expr=inner, loc~) => {
+	      match inner {
+	        Expr::Ident(name~, ..) =>
+	          match lookup_local(alloc, name) {
+	            None => ()
+	            Some(slot) =>
+	              match strip_qual_attrs(slot.ty) {
+	                CType::Array(size=None, size_expr=Some(_), ..) =>
+	                  match slot.vla_size_offset {
+	                    None => add_error(bag, loc, "codegen: missing VLA byte size slot")
+	                    Some(off) => {
+	                      arm64_ldrx(
+	                        emitter,
+	                        false,
+	                        3,
+	                        dst.to_uint(),
+	                        (29 : UInt),
+	                        off.to_int64().reinterpret_as_uint64(),
+	                      )
+	                      return
+	                    }
+	                  }
+	                _ => ()
+	              }
+	          }
+	        _ => ()
+	      }
+	      let ty = type_for_sizeof(alloc.sem, inner)
+	      match strip_qual_attrs(ty) {
+	        CType::Array(elem=elem_ty, size=None, size_expr=Some(expr)) =>
+	          gen_vla_size_bytes_to_reg(
+	            emitter,
+	            alloc,
+	            syms,
+	            pool,
+	            cstrings,
+	            elem_ty,
+	            expr,
+	            dst,
+	            loc,
+	            bag,
+	          )
+	        _ =>
+	          match type_size_align_or_error(alloc.sem, ty, loc) {
+	            None => ()
+	            Some((size, _)) => arm64_movimm(emitter, dst.to_uint(), size.to_uint64())
+	          }
+	      }
+	    }
+	    Expr::SizeofType(ty~, loc~) =>
+	      match strip_qual_attrs(ty) {
+	        CType::Array(elem=elem_ty, size=None, size_expr=Some(expr)) =>
+	          gen_vla_size_bytes_to_reg(
+	            emitter,
+	            alloc,
+	            syms,
+	            pool,
+	            cstrings,
+	            elem_ty,
+	            expr,
+	            dst,
+	            loc,
+	            bag,
+	          )
+	        _ =>
+	          match type_size_align_or_error(alloc.sem, ty, loc) {
+	            None => ()
+	            Some((size, _)) => arm64_movimm(emitter, dst.to_uint(), size.to_uint64())
+	          }
+	      }
+	    Expr::Cast(ty=to_ty, expr=inner, loc=cast_loc) => {
+	      let from_ty = type_of_expr(alloc.sem, inner)
+	      match (strip_qualifiers(to_ty), strip_qualifiers(from_ty)) {
         (CType::Int(kind=to_kind, unsigned=to_unsigned), CType::Float(kind=from_kind)) => {
           if !float_kind_supported(from_kind) {
             add_error(bag, cast_loc, "codegen: unsupported float type")
@@ -4096,11 +4312,14 @@ fn stmt_loc(stmt : Stmt) -> SrcLoc {
 struct LoopChains {
   break_chain : Int
   cont_chain : Int
+  break_depth : Int
+  cont_depth : Int
 }
 
 ///|
 struct SwitchChains {
   break_chain : Int
+  break_depth : Int
 }
 
 ///|
@@ -4121,7 +4340,12 @@ fn loop_append_break(
     None => add_error(bag, loc, "codegen: break outside of loop")
     Some(info) => {
       let chain = gjmp(emitter, info.break_chain)
-      loops[idx] = { break_chain: chain, cont_chain: info.cont_chain }
+      loops[idx] = {
+        break_chain: chain,
+        cont_chain: info.cont_chain,
+        break_depth: info.break_depth,
+        cont_depth: info.cont_depth,
+      }
     }
   }
 }
@@ -4138,7 +4362,12 @@ fn loop_append_continue(
     None => add_error(bag, loc, "codegen: continue outside of loop")
     Some(info) => {
       let chain = gjmp(emitter, info.cont_chain)
-      loops[idx] = { break_chain: info.break_chain, cont_chain: chain }
+      loops[idx] = {
+        break_chain: info.break_chain,
+        cont_chain: chain,
+        break_depth: info.break_depth,
+        cont_depth: info.cont_depth,
+      }
     }
   }
 }
@@ -4155,7 +4384,7 @@ fn switch_append_break(
     None => add_error(bag, loc, "codegen: break outside of loop/switch")
     Some(info) => {
       let chain = gjmp(emitter, info.break_chain)
-      switches[idx] = { break_chain: chain }
+      switches[idx] = { break_chain: chain, break_depth: info.break_depth }
     }
   }
 }
@@ -4281,9 +4510,9 @@ fn gen_switch_body(
       )
       (chain, default_addr0, next_case0)
     }
-    Stmt::Compound(stmts~, ..) => {
-      cg_push_scope(alloc)
-      let mut chain = return_chain
+	    Stmt::Compound(stmts~, ..) => {
+	      cg_push_scope(alloc)
+	      let mut chain = return_chain
       for s in stmts {
         let (new_chain, new_default, new_next) = gen_switch_body(
           emitter,
@@ -4305,9 +4534,9 @@ fn gen_switch_body(
         default_addr0 = new_default
         next_case0 = new_next
       }
-      cg_pop_scope(alloc)
-      (chain, default_addr0, next_case0)
-    }
+	      cg_pop_scope_codegen(emitter, alloc)
+	      (chain, default_addr0, next_case0)
+	    }
     Stmt::Switch(..) => {
       let chain = gen_stmt(
         emitter,
@@ -4358,9 +4587,9 @@ fn gen_stmt(
   return_chain : Int,
 ) -> Int {
   match stmt {
-    Stmt::Compound(stmts~, ..) => {
-      cg_push_scope(alloc)
-      let mut chain = return_chain
+	    Stmt::Compound(stmts~, ..) => {
+	      cg_push_scope(alloc)
+	      let mut chain = return_chain
       for s in stmts {
         chain = gen_stmt(
           emitter,
@@ -4376,9 +4605,9 @@ fn gen_stmt(
           chain,
         )
       }
-      cg_pop_scope(alloc)
-      chain
-    }
+	      cg_pop_scope_codegen(emitter, alloc)
+	      chain
+	    }
     Stmt::DeclStmt(decls~, ..) => {
       for d in decls {
         let mut decl_ty = d.ty
@@ -4400,7 +4629,26 @@ fn gen_stmt(
         match alloc_local(alloc, d.name, decl_ty, d.loc) {
           None => ()
           Some(slot) => {
-            match strip_qual_attrs(slot.ty) {
+            let mut slot0 = slot
+            match strip_qual_attrs(slot0.ty) {
+              CType::Array(size=None, size_expr=Some(_), ..) => {
+                let size_off = alloc_hidden_slot(alloc, 8, 8)
+                let updated = {
+                  offset: slot0.offset,
+                  ty: slot0.ty,
+                  vla_size_offset: Some(size_off),
+                }
+                let scope_idx = alloc.scopes.length() - 1
+                alloc.scopes[scope_idx].set(d.name, updated)
+                slot0 = updated
+                match vla_record_decl(alloc, slot0.offset) {
+                  None => ()
+                  Some(off) => emit_vla_sp_save(emitter, off)
+                }
+              }
+              _ => ()
+            }
+            match strip_qual_attrs(slot0.ty) {
               CType::Array(elem=elem_ty, size=None, size_expr=Some(expr)) =>
                 gen_vla_alloc_to_local_slot(
                   emitter,
@@ -4408,7 +4656,8 @@ fn gen_stmt(
                   syms,
                   pool,
                   cstrings,
-                  slot.offset,
+                  slot0.offset,
+                  slot0.vla_size_offset,
                   elem_ty,
                   expr,
                   d.loc,
@@ -4419,11 +4668,11 @@ fn gen_stmt(
             match d.init {
               None => ()
               Some(init) => {
-                match type_size_align_or_error(alloc.sem, slot.ty, d.loc) {
+                match type_size_align_or_error(alloc.sem, slot0.ty, d.loc) {
                   None => ()
                   Some((size, _)) =>
                     if size > 0 {
-                      emit_zero_bytes(emitter, 29, slot.offset, size)
+                      emit_zero_bytes(emitter, 29, slot0.offset, size)
                     }
                 }
                 gen_initializer_to_addr(
@@ -4433,8 +4682,8 @@ fn gen_stmt(
                   pool,
                   cstrings,
                   29,
-                  slot.offset,
-                  slot.ty,
+                  slot0.offset,
+                  slot0.ty,
                   init,
                   bag,
                 )
@@ -4496,15 +4745,21 @@ fn gen_stmt(
         }
       }
     }
-    Stmt::While(cond~, body~, loc~) => {
-      let start_pc = emitter_pc(emitter)
-      gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, cond, bag)
-      let br_end = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
-
-      loops.push({ break_chain: 0, cont_chain: 0 })
-      breakables.push(BREAKABLE_LOOP)
-      let chain1 = gen_stmt(
-        emitter,
+	    Stmt::While(cond~, body~, loc~) => {
+	      let start_pc = emitter_pc(emitter)
+	      gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, cond, bag)
+	      let br_end = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
+	
+	      let loop_depth = alloc.scopes.length()
+	      loops.push({
+	        break_chain: 0,
+	        cont_chain: 0,
+	        break_depth: loop_depth,
+	        cont_depth: loop_depth,
+	      })
+	      breakables.push(BREAKABLE_LOOP)
+	      let chain1 = gen_stmt(
+	        emitter,
         alloc,
         syms,
         pool,
@@ -4515,11 +4770,16 @@ fn gen_stmt(
         body,
         bag,
         return_chain,
-      )
-      breakables.pop() |> ignore
-      let loop_info = loops.pop().unwrap_or({ break_chain: 0, cont_chain: 0 })
-
-      gsym_addr(emitter, loop_info.cont_chain, start_pc) catch {
+	      )
+	      breakables.pop() |> ignore
+	      let loop_info = loops.pop().unwrap_or({
+	        break_chain: 0,
+	        cont_chain: 0,
+	        break_depth: 0,
+	        cont_depth: 0,
+	      })
+	
+	      gsym_addr(emitter, loop_info.cont_chain, start_pc) catch {
         err => add_error(bag, loc, err.to_string())
       }
       gjmp_addr(emitter, start_pc) catch {
@@ -4534,11 +4794,17 @@ fn gen_stmt(
       }
       chain1
     }
-    Stmt::DoWhile(cond~, body~, loc~) => {
-      let start_pc = emitter_pc(emitter)
-      loops.push({ break_chain: 0, cont_chain: 0 })
-      breakables.push(BREAKABLE_LOOP)
-      let chain1 = gen_stmt(
+	    Stmt::DoWhile(cond~, body~, loc~) => {
+	      let start_pc = emitter_pc(emitter)
+	      let loop_depth = alloc.scopes.length()
+	      loops.push({
+	        break_chain: 0,
+	        cont_chain: 0,
+	        break_depth: loop_depth,
+	        cont_depth: loop_depth,
+	      })
+	      breakables.push(BREAKABLE_LOOP)
+	      let chain1 = gen_stmt(
         emitter,
         alloc,
         syms,
@@ -4550,12 +4816,17 @@ fn gen_stmt(
         body,
         bag,
         return_chain,
-      )
-      breakables.pop() |> ignore
-      let cond_pc = emitter_pc(emitter)
-      let loop_info = loops.pop().unwrap_or({ break_chain: 0, cont_chain: 0 })
-      gsym_addr(emitter, loop_info.cont_chain, cond_pc) catch {
-        err => add_error(bag, loc, err.to_string())
+	      )
+	      breakables.pop() |> ignore
+	      let cond_pc = emitter_pc(emitter)
+	      let loop_info = loops.pop().unwrap_or({
+	        break_chain: 0,
+	        cont_chain: 0,
+	        break_depth: 0,
+	        cont_depth: 0,
+	      })
+	      gsym_addr(emitter, loop_info.cont_chain, cond_pc) catch {
+	        err => add_error(bag, loc, err.to_string())
       }
 
       gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, cond, bag)
@@ -4569,10 +4840,12 @@ fn gen_stmt(
       }
       chain1
     }
-    Stmt::For(init~, cond~, step~, body~, loc~) => {
-      cg_push_scope(alloc)
-      let mut chain0 = return_chain
-      match init {
+	    Stmt::For(init~, cond~, step~, body~, loc~) => {
+	      cg_push_scope(alloc)
+	      let cont_depth = alloc.scopes.length()
+	      let break_depth = cont_depth - 1
+	      let mut chain0 = return_chain
+	      match init {
         None => ()
         Some(s) =>
           chain0 = gen_stmt(
@@ -4596,11 +4869,16 @@ fn gen_stmt(
           gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, e, bag)
           Some(emit_b_cond_placeholder(emitter, ARM64_COND_EQ))
         }
-      }
-
-      loops.push({ break_chain: 0, cont_chain: 0 })
-      breakables.push(BREAKABLE_LOOP)
-      let chain1 = gen_stmt(
+	      }
+	
+	      loops.push({
+	        break_chain: 0,
+	        cont_chain: 0,
+	        break_depth,
+	        cont_depth,
+	      })
+	      breakables.push(BREAKABLE_LOOP)
+	      let chain1 = gen_stmt(
         emitter,
         alloc,
         syms,
@@ -4613,12 +4891,17 @@ fn gen_stmt(
         bag,
         chain0,
       )
-      let step_pc = emitter_pc(emitter)
-      breakables.pop() |> ignore
-      let loop_info = loops.pop().unwrap_or({ break_chain: 0, cont_chain: 0 })
-      let continue_target = if step is Some(_) { step_pc } else { cond_pc }
-      gsym_addr(emitter, loop_info.cont_chain, continue_target) catch {
-        err => add_error(bag, loc, err.to_string())
+	      let step_pc = emitter_pc(emitter)
+	      breakables.pop() |> ignore
+	      let loop_info = loops.pop().unwrap_or({
+	        break_chain: 0,
+	        cont_chain: 0,
+	        break_depth: 0,
+	        cont_depth: 0,
+	      })
+	      let continue_target = if step is Some(_) { step_pc } else { cond_pc }
+	      gsym_addr(emitter, loop_info.cont_chain, continue_target) catch {
+	        err => add_error(bag, loc, err.to_string())
       }
       match step {
         None => ()
@@ -4638,9 +4921,9 @@ fn gen_stmt(
       gsym_addr(emitter, loop_info.break_chain, end_pc) catch {
         err => add_error(bag, loc, err.to_string())
       }
-      cg_pop_scope(alloc)
-      chain1
-    }
+	      cg_pop_scope_codegen(emitter, alloc)
+	      chain1
+	    }
     Stmt::Switch(cond~, body~, loc~) => {
       let (cases, _has_default) = collect_switch_labels(alloc.sem, body)
       let case_addrs : Array[Int] = []
@@ -4696,7 +4979,8 @@ fn gen_stmt(
 
       let default_jmp = gjmp(emitter, 0)
 
-      switches.push({ break_chain: 0 })
+      let break_depth = alloc.scopes.length()
+      switches.push({ break_chain: 0, break_depth })
       breakables.push(BREAKABLE_SWITCH)
       let (chain1, new_default, _next_case) = gen_switch_body(
         emitter,
@@ -4718,7 +5002,7 @@ fn gen_stmt(
 
       let end_pc = emitter_pc(emitter)
       breakables.pop() |> ignore
-      let sw_info = switches.pop().unwrap_or({ break_chain: 0 })
+      let sw_info = switches.pop().unwrap_or({ break_chain: 0, break_depth: 0 })
       gsym_addr(emitter, sw_info.break_chain, end_pc) catch {
         err => add_error(bag, loc, err.to_string())
       }
@@ -4746,23 +5030,35 @@ fn gen_stmt(
       }
       chain1
     }
-    Stmt::Break(loc~) => {
-      let idx = breakables.length() - 1
-      match breakables.get(idx) {
-        None => add_error(bag, loc, "codegen: break outside of loop/switch")
-        Some(kind) =>
-          if kind == BREAKABLE_LOOP {
-            loop_append_break(loops, emitter, loc, bag)
-          } else {
-            switch_append_break(switches, emitter, loc, bag)
-          }
-      }
-      return_chain
-    }
-    Stmt::Continue(loc~) => {
-      loop_append_continue(loops, emitter, loc, bag)
-      return_chain
-    }
+	    Stmt::Break(loc~) => {
+	      let idx = breakables.length() - 1
+	      match breakables.get(idx) {
+	        None => add_error(bag, loc, "codegen: break outside of loop/switch")
+	        Some(kind) =>
+	          if kind == BREAKABLE_LOOP {
+	            match loops.get(loops.length() - 1) {
+	              None => add_error(bag, loc, "codegen: break outside of loop")
+	              Some(info) => emit_vla_leave(emitter, alloc, info.break_depth)
+	            }
+	            loop_append_break(loops, emitter, loc, bag)
+	          } else {
+	            match switches.get(switches.length() - 1) {
+	              None => add_error(bag, loc, "codegen: break outside of switch")
+	              Some(info) => emit_vla_leave(emitter, alloc, info.break_depth)
+	            }
+	            switch_append_break(switches, emitter, loc, bag)
+	          }
+	      }
+	      return_chain
+	    }
+	    Stmt::Continue(loc~) => {
+	      match loops.get(loops.length() - 1) {
+	        None => add_error(bag, loc, "codegen: continue outside of loop")
+	        Some(info) => emit_vla_leave(emitter, alloc, info.cont_depth)
+	      }
+	      loop_append_continue(loops, emitter, loc, bag)
+	      return_chain
+	    }
     Stmt::ExprStmt(expr~, ..) => {
       gen_expr_any(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
       return_chain

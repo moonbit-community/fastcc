@@ -978,6 +978,17 @@ fn type_contains_vla(ty : CType) -> Bool {
 }
 
 ///|
+fn type_has_vla_object_size(ty : CType) -> Bool {
+  match strip_qual_attrs(ty) {
+    CType::Array(size=None, size_expr=Some(_), ..) => true
+    CType::Array(elem~, ..) => type_has_vla_object_size(elem)
+    CType::Qualified(base~, ..) => type_has_vla_object_size(base)
+    CType::Attributed(base~, ..) => type_has_vla_object_size(base)
+    _ => false
+  }
+}
+
+///|
 fn check_translation_unit(unit : TranslationUnit, diags : DiagBag) -> SemContext {
   let ctx = new_sem_context(diags)
   for decl in unit.decls {
@@ -1596,16 +1607,24 @@ fn eval_const_expr_value(
     Expr::Cast(expr~, ..) => eval_const_expr_value(ctx, expr, loc)
     Expr::SizeofExpr(expr~, loc~) => {
       let ty = type_for_sizeof(ctx, expr)
+      match strip_qual_attrs(ty) {
+        CType::Array(size=None, size_expr=Some(_), ..) => (0, false)
+        _ =>
       match type_size_align(ctx, ty, loc) {
         None => (0, false)
         Some((size, _)) => (size, true)
       }
+      }
     }
     Expr::SizeofType(ty~, loc~) => {
       register_type_defs(ctx, ty, loc)
+      match strip_qual_attrs(resolve_type(ctx, ty, loc)) {
+        CType::Array(size=None, size_expr=Some(_), ..) => (0, false)
+        _ =>
       match type_size_align(ctx, ty, loc) {
         None => (0, false)
         Some((size, _)) => (size, true)
+      }
       }
     }
     Expr::AlignofExpr(expr~, loc~) => {
@@ -1898,8 +1917,15 @@ fn is_constant_expr_for_builtin(ctx : SemContext, expr : Expr) -> Bool {
       }
     Expr::Cast(expr=inner, ..) => is_constant_expr_for_builtin(ctx, inner)
     Expr::SizeofExpr(expr=inner, loc~) =>
-      type_size_align(ctx, type_for_sizeof(ctx, inner), loc) is Some(_)
-    Expr::SizeofType(ty~, loc~) => type_size_align(ctx, ty, loc) is Some(_)
+      match strip_qual_attrs(type_for_sizeof(ctx, inner)) {
+        CType::Array(size=None, size_expr=Some(_), ..) => false
+        _ => type_size_align(ctx, type_for_sizeof(ctx, inner), loc) is Some(_)
+      }
+    Expr::SizeofType(ty~, loc~) =>
+      match strip_qual_attrs(resolve_type(ctx, ty, loc)) {
+        CType::Array(size=None, size_expr=Some(_), ..) => false
+        _ => type_size_align(ctx, ty, loc) is Some(_)
+      }
     Expr::AlignofExpr(expr=inner, loc~) =>
       type_size_align(ctx, type_for_sizeof(ctx, inner), loc) is Some(_)
     Expr::AlignofType(ty~, loc~) => type_size_align(ctx, ty, loc) is Some(_)
@@ -2242,7 +2268,7 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
   } else {
     declare_global(ctx, decl.name, final_ty, decl.loc)
   }
-  if type_contains_vla(final_ty) && decl.init is Some(_) {
+  if type_has_vla_object_size(final_ty) && decl.init is Some(_) {
     add_sem_error(ctx, decl.loc, "variable length array cannot be initialized")
   } else {
     match decl.init {
@@ -3321,13 +3347,19 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
     }
     Expr::SizeofExpr(expr~, ..) => {
       let ty = type_for_sizeof(ctx, expr)
-      type_size_align(ctx, ty, expr_loc(expr)) |> ignore
+      match strip_qual_attrs(ty) {
+        CType::Array(size=None, size_expr=Some(_), ..) => ()
+        _ => type_size_align(ctx, ty, expr_loc(expr)) |> ignore
+      }
       default_int_type()
     }
     Expr::SizeofType(ty~, loc~) => {
       register_type_defs(ctx, ty, loc)
       let resolved = resolve_type(ctx, ty, loc)
-      type_size_align(ctx, resolved, loc) |> ignore
+      match strip_qual_attrs(resolved) {
+        CType::Array(size=None, size_expr=Some(_), ..) => ()
+        _ => type_size_align(ctx, resolved, loc) |> ignore
+      }
       default_int_type()
     }
     Expr::AlignofExpr(expr~, loc~) => {
