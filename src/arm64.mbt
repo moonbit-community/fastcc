@@ -86,6 +86,9 @@ const R_AARCH64_LDST8_ABS_LO12_NC : Int = 278
 ///|
 const R_AARCH64_JUMP26 : Int = 282
 
+///| Absolute 64-bit relocation used for data/pointer references.
+const R_AARCH64_POINTER : Int = 257
+
 ///|
 struct Arm64Emitter {
   code : Array[UInt]

@@ -3,7 +3,7 @@ fn parse_text(text : String) -> (TranslationUnit, DiagBag) {
   let bag = new_diag_bag()
   let map = new_source_map()
   let file = add_file(map, "<test>", text)
-  let pp = new_preprocessor(file, bag)
+  let pp = new_preprocessor(map, file, bag)
   let unit = parse_translation_unit(pp)
   (unit, bag)
 }
@@ -864,6 +864,17 @@ test "sem adjusts function parameters to pointers" {
 ///|
 test "sem accepts reversed array indexing" {
   let (_, bag) = check_text("int a[2]; int main(){return 1[a];}")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "parse _Float16 prototype" {
+  let (_, bag) = check_text("extern _Float16 foo(_Float16);")
+  if has_errors(bag) {
+    for d in bag.diags {
+      println("\{d.loc.line}:\{d.loc.col}: \{d.message}")
+    }
+  }
   assert_true(!has_errors(bag))
 }
 
