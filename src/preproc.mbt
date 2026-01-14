@@ -84,6 +84,16 @@ fn define_func_macro_zero(pp : Preprocessor, name : String) -> Unit {
 }
 
 ///|
+fn define_func_macro_empty(pp : Preprocessor, name : String) -> Unit {
+  pp.macros.set(name, {
+    params: ["x"],
+    is_variadic: true,
+    is_function: true,
+    replacement: [],
+  })
+}
+
+///|
 fn init_builtin_macros(pp : Preprocessor) -> Unit {
   define_int_macro(pp, "__APPLE__", 1)
   define_int_macro(pp, "__MACH__", 1)
@@ -111,8 +121,16 @@ fn init_builtin_macros(pp : Preprocessor) -> Unit {
   define_words_macro(pp, "__UINTMAX_TYPE__", ["long", "unsigned", "int"])
   define_words_macro(pp, "__INTPTR_TYPE__", ["long"])
   define_words_macro(pp, "__UINTPTR_TYPE__", ["unsigned", "long"])
+  define_words_macro(pp, "__INT8_TYPE__", ["signed", "char"])
+  define_words_macro(pp, "__UINT8_TYPE__", ["unsigned", "char"])
+  define_words_macro(pp, "__INT16_TYPE__", ["short"])
+  define_words_macro(pp, "__UINT16_TYPE__", ["unsigned", "short"])
   define_words_macro(pp, "__INT32_TYPE__", ["int"])
+  define_words_macro(pp, "__UINT32_TYPE__", ["unsigned", "int"])
   define_words_macro(pp, "__INT64_TYPE__", ["long", "long"])
+  define_words_macro(pp, "__UINT64_TYPE__", ["unsigned", "long", "long"])
+  define_words_macro(pp, "__int128_t", ["long", "double"])
+  define_words_macro(pp, "__uint128_t", ["long", "double"])
 
   define_int_macro(pp, "__CHAR_BIT__", 8)
   define_int_macro(pp, "__SIZEOF_POINTER__", 8)
@@ -150,6 +168,21 @@ fn init_builtin_macros(pp : Preprocessor) -> Unit {
   define_func_macro_zero(pp, "__has_attribute")
   define_func_macro_zero(pp, "__has_include")
   define_func_macro_zero(pp, "__has_include_next")
+  define_func_macro_empty(pp, "__API_AVAILABLE")
+  define_func_macro_empty(pp, "__API_AVAILABLE_BEGIN")
+  define_func_macro_empty(pp, "__API_AVAILABLE_END")
+  define_func_macro_empty(pp, "__API_DEPRECATED")
+  define_func_macro_empty(pp, "__API_DEPRECATED_WITH_REPLACEMENT")
+  define_func_macro_empty(pp, "__API_UNAVAILABLE")
+  define_func_macro_empty(pp, "__API_UNAVAILABLE_BEGIN")
+  define_func_macro_empty(pp, "__API_UNAVAILABLE_END")
+  define_func_macro_empty(pp, "API_AVAILABLE")
+  define_func_macro_empty(pp, "API_AVAILABLE_BEGIN")
+  define_func_macro_empty(pp, "API_AVAILABLE_END")
+  define_func_macro_empty(pp, "API_UNAVAILABLE")
+  define_func_macro_empty(pp, "API_UNAVAILABLE_BEGIN")
+  define_func_macro_empty(pp, "API_UNAVAILABLE_END")
+  define_func_macro_empty(pp, "API_DEPRECATED")
 }
 
 ///|
@@ -1647,7 +1680,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
         Some(macro_def) =>
           if macro_def.is_function {
             let next_tok = next_raw_token(pp)
-            if next_tok.kind != LParen || !is_adjacent(tok, next_tok) {
+            if next_tok.kind != LParen {
               push_back(pp, next_tok)
               return tok
             }

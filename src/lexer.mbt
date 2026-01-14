@@ -219,7 +219,10 @@ fn skip_block_comment(lex : Lexer, start_loc : SrcLoc) -> Unit {
 
 ///|
 fn is_ident_start(code : UInt16) -> Bool {
-  (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code == 95
+  (code >= 65 && code <= 90) ||
+  (code >= 97 && code <= 122) ||
+  code == 95 ||
+  code == 64 // allow '@' so we can lex Objective-C tokens in skipped branches
 }
 
 ///|

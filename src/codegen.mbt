@@ -53,7 +53,8 @@ fn parse_int64_literal(text : String) -> Int64? {
 
   let mut acc : UInt64 = 0
   let base_u64 = base.to_uint64()
-  let mut any_digit = false
+  // Leading zero already contributes a digit for octal/decimal zero forms like "0l".
+  let mut any_digit = start == 1
 
   let mut i = start
   while i < len {

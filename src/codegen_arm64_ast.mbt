@@ -3301,6 +3301,9 @@ fn gen_expr_int32(
             (0x1a9f17e0 : Int).lor(dst).reinterpret_as_uint(),
           )
         }
+        UnaryOp::Addr => {
+          gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
+        }
         UnaryOp::Deref => {
           let addr = take_reg(pool) catch {
             err => {
@@ -3436,7 +3439,6 @@ fn gen_expr_int32(
           give_reg(pool, one)
           give_reg(pool, addr)
         }
-        _ => add_error(bag, loc, "codegen: unsupported unary operator")
       }
     }
     Expr::Binary(op~, left~, right~, loc~) =>
@@ -5721,6 +5723,13 @@ fn gen_stmt(
 	    }
     Stmt::ExprStmt(expr~, ..) => {
       gen_expr_any(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
+      return_chain
+    }
+    Stmt::Asm(stmt) => {
+      // Treat inline asm as a barrier when it clobbers memory; otherwise ignore.
+      if stmt.is_volatile || stmt.clobbers.contains("memory") {
+        emit32(emitter, (0xd5033bbf : Int).reinterpret_as_uint())
+      }
       return_chain
     }
     Stmt::Return(value~, loc~) => {

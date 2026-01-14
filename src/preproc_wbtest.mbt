@@ -103,6 +103,36 @@ test "preprocess include search path" {
 }
 
 ///|
+test "preprocess _Float16 builtin macro" {
+  let (toks, bag) = pp_tokens("_Float16 x;")
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=[
+    "Ident:short", "Ident:unsigned", "Ident:int", "Ident:x", "Semicolon:;",
+  ])
+}
+
+///|
+test "preprocess _Float16 prototype tokens" {
+  let (toks, bag) = pp_tokens("extern _Float16 foo(_Float16);")
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=[
+    "KwExtern:extern",
+    "Ident:short",
+    "Ident:unsigned",
+    "Ident:int",
+    "Ident:foo",
+    "LParen:(",
+    "Ident:short",
+    "Ident:unsigned",
+    "Ident:int",
+    "RParen:)",
+    "Semicolon:;",
+  ])
+}
+
+///|
 test "preprocess function-like macro" {
   let (toks, bag) = pp_tokens("#define ADD(a,b) a + b\nint x = ADD(1, 2);")
   assert_true(!has_errors(bag))
@@ -180,8 +210,7 @@ test "preprocess whitespace before paren" {
   assert_true(!has_errors(bag))
   let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
   @json.inspect(items, content=[
-    "KwInt:int", "Ident:y", "Assign:=", "Ident:F", "LParen:(", "IntLit:1", "RParen:)",
-    "Semicolon:;",
+    "KwInt:int", "Ident:y", "Assign:=", "IntLit:1", "Semicolon:;",
   ])
 }
 

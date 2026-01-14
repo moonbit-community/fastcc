@@ -868,6 +868,17 @@ test "sem accepts reversed array indexing" {
 }
 
 ///|
+test "parse _Float16 prototype" {
+  let (_, bag) = check_text("extern _Float16 foo(_Float16);")
+  if has_errors(bag) {
+    for d in bag.diags {
+      println("\{d.loc.line}:\{d.loc.col}: \{d.message}")
+    }
+  }
+  assert_true(!has_errors(bag))
+}
+
+///|
 test "int literal type selection by base" {
   let ty_decimal = int_literal_type("2147483648")
   assert_true(type_to_string(ty_decimal) == "long")
