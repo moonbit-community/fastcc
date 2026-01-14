@@ -61,11 +61,11 @@ struct Attributes {
   weak : Bool
   visibility : Visibility?
   section : String?
-  alias_name : String?
+  alias : String?
   asm_label : String?
   cleanup : String?
   noreturn : Bool
-  constructor_attr : Bool
+  constructor : Bool
   destructor : Bool
   always_inline : Bool
   call_conv : CallConv?
@@ -83,11 +83,11 @@ fn empty_attrs() -> Attributes {
     weak: false,
     visibility: None,
     section: None,
-    alias_name: None,
+    alias: None,
     asm_label: None,
     cleanup: None,
     noreturn: false,
-    constructor_attr: false,
+    constructor: false,
     destructor: false,
     always_inline: false,
     call_conv: None,
@@ -105,11 +105,11 @@ fn attrs_with(
   weak? : Bool = false,
   visibility? : Visibility? = None,
   section? : String? = None,
-  alias_name? : String? = None,
+  alias? : String? = None,
   asm_label? : String? = None,
   cleanup? : String? = None,
   noreturn? : Bool = false,
-  constructor_attr? : Bool = false,
+  constructor? : Bool = false,
   destructor? : Bool = false,
   always_inline? : Bool = false,
   call_conv? : CallConv? = None,
@@ -124,11 +124,11 @@ fn attrs_with(
     weak,
     visibility,
     section,
-    alias_name,
+    alias,
     asm_label,
     cleanup,
     noreturn,
-    constructor_attr,
+    constructor,
     destructor,
     always_inline,
     call_conv,
@@ -149,9 +149,9 @@ fn merge_attrs(base : Attributes, incoming : Attributes) -> Attributes {
     Some(_) => incoming.section
     None => base.section
   }
-  let alias_name = match incoming.alias_name {
-    Some(_) => incoming.alias_name
-    None => base.alias_name
+  let alias = match incoming.alias {
+    Some(_) => incoming.alias
+    None => base.alias
   }
   let asm_label = match incoming.asm_label {
     Some(_) => incoming.asm_label
@@ -175,11 +175,11 @@ fn merge_attrs(base : Attributes, incoming : Attributes) -> Attributes {
     weak: base.weak || incoming.weak,
     visibility,
     section,
-    alias_name,
+    alias,
     asm_label,
     cleanup,
     noreturn: base.noreturn || incoming.noreturn,
-    constructor_attr: base.constructor_attr || incoming.constructor_attr,
+    constructor: base.constructor || incoming.constructor,
     destructor: base.destructor || incoming.destructor,
     always_inline: base.always_inline || incoming.always_inline,
     call_conv,
@@ -198,11 +198,11 @@ fn type_attrs_from(attrs : Attributes) -> Attributes {
     weak: false,
     visibility: None,
     section: None,
-    alias_name: None,
+    alias: None,
     asm_label: None,
     cleanup: None,
     noreturn: false,
-    constructor_attr: false,
+    constructor: false,
     destructor: false,
     always_inline: false,
     call_conv: None,

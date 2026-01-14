@@ -69,14 +69,6 @@ fn parse_cli_args(
       i = i + 1
       continue
     }
-    if arg.has_prefix("-W") || arg.has_prefix("-w") {
-      i = i + 1
-      continue
-    }
-    if arg.has_prefix("-O") || arg.has_prefix("-g") {
-      i = i + 1
-      continue
-    }
     if arg == "-isystem" {
       if i + 1 >= args.length() {
         println("error: missing argument for -isystem")
@@ -153,7 +145,6 @@ fn format_diag_for_cli(map : SourceMap, d : Diag) -> String {
 
 ///|
 fn main {
-  touch_unused_symbols()
   match parse_cli_args(@env.args()) {
     CliParse::Help => ()
     CliParse::Error => @sys.exit(1)
@@ -169,7 +160,7 @@ fn main {
             let bag = new_diag_bag()
             let map = new_source_map()
             let file = add_file(map, path, text)
-            let pp = new_preprocessor(map, file, bag)
+            let pp = new_preprocessor(file, bag)
             for p in cfg.include_paths {
               add_include_path(pp, p)
             }
@@ -201,7 +192,7 @@ fn main {
             if has_errors(bag) {
               any_errors = true
               for d in bag.diags {
-                println(format_diag_for_cli(pp.map, d))
+                println(format_diag_for_cli(map, d))
               }
             }
           }
