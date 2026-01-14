@@ -5,6 +5,7 @@ ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 CTEST_DIR="${ROOT_DIR}/refs/mbtcc/ctest2"
 TMP_DIR="${ROOT_DIR}/target/mbtcc-ctest2"
 EXTRA_HDR="${ROOT_DIR}/tests/mbtcc/extra.h"
+PATCH_DIR="${ROOT_DIR}/tests/mbtcc/ctest2_patches"
 
 FILTER="${FILTER:-}"
 MODE="${MODE:-strict}" # strict | allow-fail
@@ -52,7 +53,6 @@ fi
 
 fail=0
 total=0
-skip=0
 
 echo "Running mbtcc ctest2 (count=${tests_count})"
 while IFS= read -r c_file; do
@@ -61,21 +61,20 @@ while IFS= read -r c_file; do
   echo "-------------------------------------------"
   echo "Testing ${base}.c"
 
-  case "${base}" in
-    complex_function3|dsa_graph_prim|dsa_dp_edit_distance)
-      echo "SKIPPED: gcc baseline mismatch / UB (see tinyccmbt-17o.3)"
-      skip=$((skip + 1))
-      continue
-      ;;
-  esac
+  source_c="${c_file}"
+  patch_c="${PATCH_DIR}/${base}.c"
+  if [[ -f "${patch_c}" ]]; then
+    echo "PATCHED: using ${patch_c}"
+    source_c="${patch_c}"
+  fi
 
   wrap_c="${TMP_DIR}/${base}.wrap.c"
   cat >"${wrap_c}" <<EOF
 #include "${EXTRA_HDR}"
-#include "${c_file}"
+#include "${source_c}"
 EOF
 
-  gcc "${wrap_c}" -lm -o "${TMP_DIR}/${base}.gcc.out" >"${TMP_DIR}/${base}.gcc.log" 2>&1 || {
+  gcc -I "${CTEST_DIR}" "${wrap_c}" -lm -o "${TMP_DIR}/${base}.gcc.out" >"${TMP_DIR}/${base}.gcc.log" 2>&1 || {
     echo "FAILED: gcc compilation failed"
     sed -n '1,120p' "${TMP_DIR}/${base}.gcc.log" || true
     fail=$((fail + 1))
@@ -120,7 +119,7 @@ EOF
 done <"${tests_file}"
 
 echo "-------------------------------------------"
-echo "Summary: total=${total} failed=${fail} skipped=${skip}"
+echo "Summary: total=${total} failed=${fail}"
 if [[ "${fail}" -ne 0 && "${MODE}" != "allow-fail" ]]; then
   exit 1
 fi
