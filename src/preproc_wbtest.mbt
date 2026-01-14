@@ -3,7 +3,7 @@ fn pp_tokens(text : String) -> (Array[Token], DiagBag) {
   let bag = new_diag_bag()
   let map = new_source_map()
   let file = add_file(map, "<test>", text)
-  let pp = new_preprocessor(map, file, bag)
+  let pp = new_preprocessor(file, bag)
   let out = dump_tokens(pp, 512)
   (out.filter(tok => tok.kind != Eof), bag)
 }
@@ -16,7 +16,7 @@ fn pp_tokens_with_paths(
   let bag = new_diag_bag()
   let map = new_source_map()
   let file = add_file(map, "<test>", text)
-  let pp = new_preprocessor(map, file, bag)
+  let pp = new_preprocessor(file, bag)
   for path in paths {
     add_include_path(pp, path)
   }
