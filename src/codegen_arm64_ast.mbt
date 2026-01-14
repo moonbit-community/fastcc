@@ -7337,6 +7337,7 @@ fn codegen_arm64_object_bytes_from_ast(
     match decl {
       Decl::FuncDef(func) => {
         let link = link_name(func.name)
+        sym_for_name(syms, link) |> ignore
         def_symbols.set(link, {
           id: syms.name_to_id.get(link).unwrap_or(0),
           name: link,
