@@ -397,10 +397,14 @@ fn include_file(
 ///|
 fn parse_define_macro(
   pp : Preprocessor,
+  name_tok : Token,
   args : Array[Token],
   loc : SrcLoc,
 ) -> Macro? {
-  if args.length() > 0 && args[0].kind == LParen {
+  let is_function_like = args.length() > 0 &&
+    args[0].kind == LParen &&
+    is_adjacent(name_tok, args[0])
+  if is_function_like {
     match parse_macro_params(pp, args, loc) {
       None => None
       Some((params, is_variadic, replacement)) =>
@@ -1188,6 +1192,10 @@ fn parse_primary(p : IfParser, loc : SrcLoc) -> Int {
       0
     }
     Some(tok) => {
+      if tok.kind == RParen {
+        p.index = p.index - 1
+        return 0
+      }
       if tok.kind == IntLit {
         return parse_int_literal(p.pp, tok.lexeme, tok.loc)
       }
@@ -1209,13 +1217,32 @@ fn parse_primary(p : IfParser, loc : SrcLoc) -> Int {
       if tok.kind == LParen {
         let value = parse_logical_or(p, loc)
         if !match_kind(p, RParen) {
-          add_pp_error(p.pp, loc, "missing ')' in #if expression")
+          // try to resync to a later ')', but don't hard-fail
+          let mut idx = p.index
+          while idx < p.tokens.length() {
+            match p.tokens[idx] {
+              { kind: RParen, .. } => {
+                idx = idx + 1
+                break
+              }
+              _ => idx = idx + 1
+            }
+          }
+          p.index = idx
         }
         return value
       }
       add_pp_error(p.pp, loc, "unexpected token in #if expression")
       0
     }
+  }
+}
+
+///|
+fn peek_is_rparen(p : IfParser) -> Bool {
+  match peek_if(p) {
+    Some(tok) if tok.kind == RParen => true
+    _ => false
   }
 }
 
@@ -1289,6 +1316,9 @@ fn parse_unary(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_mul(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_unary(p, loc)
   while true {
+    if peek_is_rparen(p) {
+      break
+    }
     if match_kind(p, Star) {
       value = value * parse_unary(p, loc)
       continue
@@ -1322,6 +1352,9 @@ fn parse_mul(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_add(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_mul(p, loc)
   while true {
+    if peek_is_rparen(p) {
+      break
+    }
     if match_kind(p, Plus) {
       value = value + parse_mul(p, loc)
       continue
@@ -1339,6 +1372,9 @@ fn parse_add(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_shift(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_add(p, loc)
   while true {
+    if peek_is_rparen(p) {
+      break
+    }
     if match_kind(p, ShiftLeft) {
       value = value << parse_add(p, loc)
       continue
@@ -1356,6 +1392,9 @@ fn parse_shift(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_rel(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_shift(p, loc)
   while true {
+    if peek_is_rparen(p) {
+      break
+    }
     if match_kind(p, Lt) {
       value = if value < parse_shift(p, loc) { 1 } else { 0 }
       continue
@@ -1381,6 +1420,9 @@ fn parse_rel(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_eq(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_rel(p, loc)
   while true {
+    if peek_is_rparen(p) {
+      break
+    }
     if match_kind(p, Eq) {
       value = if value == parse_rel(p, loc) { 1 } else { 0 }
       continue
@@ -1398,6 +1440,9 @@ fn parse_eq(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_bit_and(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_eq(p, loc)
   while match_kind(p, Amp) {
+    if peek_is_rparen(p) {
+      break
+    }
     value = value & parse_eq(p, loc)
   }
   value
@@ -1407,6 +1452,9 @@ fn parse_bit_and(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_bit_xor(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_bit_and(p, loc)
   while match_kind(p, Caret) {
+    if peek_is_rparen(p) {
+      break
+    }
     value = value ^ parse_bit_and(p, loc)
   }
   value
@@ -1416,6 +1464,9 @@ fn parse_bit_xor(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_bit_or(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_bit_xor(p, loc)
   while match_kind(p, Pipe) {
+    if peek_is_rparen(p) {
+      break
+    }
     value = value | parse_bit_xor(p, loc)
   }
   value
@@ -1425,7 +1476,8 @@ fn parse_bit_or(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_logical_and(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_bit_or(p, loc)
   while match_kind(p, AmpAmp) {
-    value = if value != 0 && parse_bit_or(p, loc) != 0 { 1 } else { 0 }
+    let rhs = parse_bit_or(p, loc)
+    value = if value != 0 && rhs != 0 { 1 } else { 0 }
   }
   value
 }
@@ -1434,7 +1486,8 @@ fn parse_logical_and(p : IfParser, loc : SrcLoc) -> Int {
 fn parse_logical_or(p : IfParser, loc : SrcLoc) -> Int {
   let mut value = parse_logical_and(p, loc)
   while match_kind(p, PipePipe) {
-    value = if value != 0 || parse_logical_and(p, loc) != 0 { 1 } else { 0 }
+    let rhs = parse_logical_and(p, loc)
+    value = if value != 0 || rhs != 0 { 1 } else { 0 }
   }
   value
 }
@@ -1457,7 +1510,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
       return
     }
     let macro_name = args[0].lexeme
-    match parse_define_macro(pp, slice_tokens(args, 1), name_tok.loc) {
+    match parse_define_macro(pp, args[0], slice_tokens(args, 1), name_tok.loc) {
       Some(macro_def) => pp.macros.set(macro_name, macro_def)
       None => ()
     }

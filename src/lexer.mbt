@@ -153,8 +153,9 @@ fn skip_ws(lex : Lexer) -> Unit {
           continue
         }
         if code == 92 && peek_char_offset(lex, 1) is Some(10) {
-          let _ = advance_comment(lex)
-          let _ = advance_comment(lex)
+          let _ = advance_comment(lex) // '\'
+          let _ = advance_comment(lex) // '\n'
+          lex.line_start = false
           continue
         }
         if code == 47 {
