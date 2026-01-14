@@ -220,9 +220,7 @@ fn vpop_value() -> SValue raise {
 fn vdup() -> Unit {
   let idx = vtop_index()
   if idx >= 0 {
-    let val = vstack[idx]
-    let _ = (val.jtrue, val.jfalse, val.cmp_op)
-    vstack.push(val)
+    vstack.push(vstack[idx])
   }
 }
 
@@ -650,7 +648,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
       arm64_ldrv(
         emitter,
         arm64_type_size(svtt),
-        fltr(r).reinterpret_as_uint(),
+        fltr(r).to_uint(),
         (29 : UInt),
         svcul,
       )
@@ -659,7 +657,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
         emitter,
         (svtt & VT_UNSIGNED) == 0,
         arm64_type_size(svtt),
-        intr(r).reinterpret_as_uint(),
+        intr(r).to_uint(),
         (29 : UInt),
         svcul,
       )
@@ -679,7 +677,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
       arm64_ldrv(
         emitter,
         arm64_type_size(svtt),
-        fltr(r).reinterpret_as_uint(),
+        fltr(r).to_uint(),
         (30 : UInt),
         arm64_check_offset(true, arm64_type_size(svtt), i),
       )
@@ -688,7 +686,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
         emitter,
         (svtt & VT_UNSIGNED) == 0,
         arm64_type_size(svtt),
-        intr(r).reinterpret_as_uint(),
+        intr(r).to_uint(),
         (30 : UInt),
         arm64_check_offset(true, arm64_type_size(svtt), i),
       )
@@ -701,8 +699,8 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
         arm64_ldrv(
           emitter,
           arm64_type_size(svtt),
-          fltr(r).reinterpret_as_uint(),
-          intr(svrv).reinterpret_as_uint(),
+          fltr(r).to_uint(),
+          intr(svrv).to_uint(),
           0,
         )
       } else {
@@ -710,8 +708,8 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
           emitter,
           (svtt & VT_UNSIGNED) == 0,
           arm64_type_size(svtt),
-          intr(r).reinterpret_as_uint(),
-          intr(svrv).reinterpret_as_uint(),
+          intr(r).to_uint(),
+          intr(svrv).to_uint(),
           0,
         )
       }
@@ -728,7 +726,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
       arm64_ldrv(
         emitter,
         arm64_type_size(svtt),
-        fltr(r).reinterpret_as_uint(),
+        fltr(r).to_uint(),
         (30 : UInt),
         arm64_check_offset(true, arm64_type_size(svtt), svcul),
       )
@@ -737,7 +735,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
         emitter,
         (svtt & VT_UNSIGNED) == 0,
         arm64_type_size(svtt),
-        intr(r).reinterpret_as_uint(),
+        intr(r).to_uint(),
         (30 : UInt),
         arm64_check_offset(true, arm64_type_size(svtt), svcul),
       )
@@ -746,7 +744,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
   }
   if svr == (VT_CONST | VT_SYM) {
     match sv.sym {
-      Some(sym) => arm64_sym(emitter, intr(r).reinterpret_as_uint(), sym, svcul)
+      Some(sym) => arm64_sym(emitter, intr(r).to_uint(), sym, svcul)
       None => fail("missing symbol for VT_SYM")
     }
     return
@@ -758,7 +756,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
       } else {
         svcul
       }
-      arm64_movimm(emitter, intr(r).reinterpret_as_uint(), value)
+      arm64_movimm(emitter, intr(r).to_uint(), value)
     }
     return
   }
@@ -799,7 +797,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
         emitter,
         (0xd10003a0 : Int)
         .lor(intr(r))
-        .lor(neg.reinterpret_as_int64().to_int() << 10)
+        .lor(neg.to_int() << 10)
         .reinterpret_as_uint(),
       )
     } else {
@@ -813,10 +811,10 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
   }
   if svr == VT_JMP || svr == VT_JMPI {
     let t = if svr == VT_JMPI { 1 } else { 0 }
-    arm64_movimm(emitter, intr(r).reinterpret_as_uint(), t.to_uint64())
+    arm64_movimm(emitter, intr(r).to_uint(), t.to_uint64())
     emit32(emitter, (0x14000002 : UInt))
-    gsym(emitter, svcul.reinterpret_as_int64().to_int())
-    arm64_movimm(emitter, intr(r).reinterpret_as_uint(), (1 - t).to_uint64())
+    gsym(emitter, svcul.to_int())
+    arm64_movimm(emitter, intr(r).to_uint(), (1 - t).to_uint64())
     return
   }
   if svr == (VT_LLOCAL | VT_LVAL) {
@@ -825,7 +823,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
       arm64_ldrv(
         emitter,
         arm64_type_size(svtt),
-        fltr(r).reinterpret_as_uint(),
+        fltr(r).to_uint(),
         (30 : UInt),
         0,
       )
@@ -834,7 +832,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
         emitter,
         (svtt & VT_UNSIGNED) == 0,
         arm64_type_size(svtt),
-        intr(r).reinterpret_as_uint(),
+        intr(r).to_uint(),
         (30 : UInt),
         0,
       )
