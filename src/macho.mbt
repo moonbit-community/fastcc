@@ -260,7 +260,7 @@ fn build_symtab(
     if n_sect == 0 {
       n_type = n_type | N_UNDF
     }
-    buf.write_uint_le(strx.to_uint())
+    buf.write_uint_le(strx.reinterpret_as_uint())
     buf.write_byte(n_type.to_byte())
     buf.write_byte(n_sect.to_byte())
     buf.write_uint16_le((0 : Int).to_uint16())
@@ -283,7 +283,16 @@ fn macho_reloc_type(kind : Int) -> (Int, Bool) {
     R_AARCH64_ADR_PREL_PG_HI21_NC => (ARM64_RELOC_PAGE21, true)
     R_AARCH64_ADD_ABS_LO12_NC => (ARM64_RELOC_PAGEOFF12, false)
     R_AARCH64_LDST8_ABS_LO12_NC => (ARM64_RELOC_PAGEOFF12, false)
+    R_AARCH64_POINTER => (ARM64_RELOC_UNSIGNED, false)
     _ => (ARM64_RELOC_UNSIGNED, false)
+  }
+}
+
+///|
+fn reloc_length(kind : Int) -> Int {
+  match kind {
+    R_AARCH64_POINTER => 3
+    _ => 2
   }
 }
 
@@ -304,7 +313,7 @@ fn pack_reloc_info(
     info = info | (1 << 27)
   }
   info = info | ((r_type & 0xf) << 28)
-  info.to_uint()
+  info.reinterpret_as_uint()
 }
 
 ///|
@@ -366,11 +375,15 @@ fn encode_macho_object(
           } else {
             layout.info.align
           }
-          offset = align_up(offset, align)
-          let data_off = if layout.info.is_zerofill { 0 } else { offset }
+          let aligned = if layout.info.is_zerofill {
+            offset
+          } else {
+            align_up(offset, align)
+          }
+          let data_off = if layout.info.is_zerofill { 0 } else { aligned }
           let size = layout.size
           if !layout.info.is_zerofill {
-            offset = offset + size
+            offset = aligned + size
           }
           layouts[idx] = {
             section: layout.section,
@@ -413,7 +426,7 @@ fn encode_macho_object(
   }
   let symoff = align_up(reloc_offset, 4)
   let section_index_map = collect_section_indices(layouts)
-  let (symtab, id_to_index, id_to_symbol) = build_symtab(
+  let (symtab, id_to_index, _id_to_symbol) = build_symtab(
     symbols, str_offsets, section_index_map,
   )
   let stroff = symoff + symtab.length()
@@ -423,8 +436,8 @@ fn encode_macho_object(
   out.write_int_le(CPU_TYPE_ARM64)
   out.write_int_le(CPU_SUBTYPE_ARM64_ALL)
   out.write_uint_le(MH_OBJECT)
-  out.write_uint_le(ncmds.to_uint())
-  out.write_uint_le(sizeofcmds.to_uint())
+  out.write_uint_le(ncmds.reinterpret_as_uint())
+  out.write_uint_le(sizeofcmds.reinterpret_as_uint())
   out.write_uint_le(0)
   out.write_uint_le(0)
   for seg in segment_order {
@@ -436,7 +449,7 @@ fn encode_macho_object(
     let (fileoff, filesize) = segment_file_range(indices, layouts)
     let (maxprot, initprot) = segment_prot(seg)
     out.write_uint_le(LC_SEGMENT_64)
-    out.write_uint_le(cmdsize.to_uint())
+    out.write_uint_le(cmdsize.reinterpret_as_uint())
     write_padded_name(out, seg, 16)
     out.write_uint64_le(0)
     out.write_uint64_le(0)
@@ -444,7 +457,7 @@ fn encode_macho_object(
     out.write_uint64_le(filesize.to_uint64())
     out.write_int_le(maxprot)
     out.write_int_le(initprot)
-    out.write_uint_le(indices.length().to_uint())
+    out.write_uint_le(indices.length().reinterpret_as_uint())
     out.write_uint_le(0)
     for idx in indices {
       let layout = layouts[idx]
@@ -452,10 +465,10 @@ fn encode_macho_object(
       write_padded_name(out, layout.info.segname, 16)
       out.write_uint64_le(0)
       out.write_uint64_le(layout.size.to_uint64())
-      out.write_uint_le(layout.offset.to_uint())
-      out.write_uint_le(layout.align_log2.to_uint())
-      out.write_uint_le(layout.reloff.to_uint())
-      out.write_uint_le(layout.nreloc.to_uint())
+      out.write_uint_le(layout.offset.reinterpret_as_uint())
+      out.write_uint_le(layout.align_log2.reinterpret_as_uint())
+      out.write_uint_le(layout.reloff.reinterpret_as_uint())
+      out.write_uint_le(layout.nreloc.reinterpret_as_uint())
       out.write_uint_le(layout.info.flags)
       out.write_uint_le(0)
       out.write_uint_le(0)
@@ -464,10 +477,10 @@ fn encode_macho_object(
   }
   out.write_uint_le(LC_SYMTAB)
   out.write_uint_le(24)
-  out.write_uint_le(symoff.to_uint())
-  out.write_uint_le(symbols.length().to_uint())
-  out.write_uint_le(stroff.to_uint())
-  out.write_uint_le(strtab.length().to_uint())
+  out.write_uint_le(symoff.reinterpret_as_uint())
+  out.write_uint_le(symbols.length().reinterpret_as_uint())
+  out.write_uint_le(stroff.reinterpret_as_uint())
+  out.write_uint_le(strtab.length().reinterpret_as_uint())
   out.write_uint_le(LC_BUILD_VERSION)
   out.write_uint_le(24)
   out.write_uint_le(PLATFORM_MACOS)
@@ -513,31 +526,13 @@ fn encode_macho_object(
           let layout = layouts[idx]
           for rel in layout.section.relocs {
             let (rtype, pcrel) = macho_reloc_type(rel.kind)
-            let mut is_extern = true
-            let mut symbolnum = 0
-            match id_to_symbol.get(rel.sym.id) {
-              None => ()
-              Some(sym) =>
-                if !sym.is_external {
-                  is_extern = false
-                  match sym.section {
-                    None => ()
-                    Some(sec) =>
-                      match section_index_map.get(sec) {
-                        None => ()
-                        Some(idx_val) => symbolnum = idx_val
-                      }
-                  }
-                }
+            let symbolnum = match id_to_index.get(rel.sym.id) {
+              None => 0
+              Some(idx_val) => idx_val
             }
-            if is_extern {
-              match id_to_index.get(rel.sym.id) {
-                None => ()
-                Some(idx_val) => symbolnum = idx_val
-              }
-            }
-            let info = pack_reloc_info(symbolnum, pcrel, 2, is_extern, rtype)
-            out.write_uint_le(rel.offset.to_uint())
+            let len = reloc_length(rel.kind)
+            let info = pack_reloc_info(symbolnum, pcrel, len, true, rtype)
+            out.write_uint_le(rel.offset.reinterpret_as_uint())
             out.write_uint_le(info)
             fileoff = fileoff + 8
           }
@@ -613,3 +608,6 @@ fn write_macho_object(
   let bytes = encode_macho_object(sections, symbols)
   @fs.write_bytes_to_file(path, bytes)
 }
+
+///| keep unused definitions referenced to silence warnings
+let _macho_layout_sentinel : MachoSegmentLayout? = None
