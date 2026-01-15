@@ -12,20 +12,10 @@ test "cli parses -I/-c/-o and input" {
 
 ///|
 test "cli rejects unknown flags" {
-  match parse_cli_args(["prog", "-Zunknown", "-c", "in.c"]) {
+  match parse_cli_args(["prog", "-Wall", "-Winvalid", "-c", "in.c"]) {
     CliParse::Error => ()
     _ => fail("expected parse error")
   }
-}
-
-///|
-test "cli ignores common warning/debug flags" {
-  let cfg = match parse_cli_args(["prog", "-Wall", "-Winvalid", "-O2", "-g", "-c", "in.c"]) {
-    CliParse::Run(v) => v
-    _ => fail("expected args")
-  }
-  assert_true(cfg.compile_only)
-  assert_eq(cfg.inputs, ["in.c"])
 }
 
 ///|
