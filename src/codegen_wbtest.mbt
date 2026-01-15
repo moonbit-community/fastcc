@@ -212,6 +212,26 @@ test "codegen emits .cstring and relocs for extern call with string literal" {
 }
 
 ///|
+test "codegen stores embedded-nul strings in .rodata" {
+  let (unit, bag) = parse_text(
+    "int main(){const char *s=\"a\\0b\"; return s[0];}",
+  )
+  assert_true(!has_errors(bag))
+  check_translation_unit(unit, bag) |> ignore
+  assert_true(!has_errors(bag))
+  let bytes = match codegen_arm64_object_bytes(unit, bag) {
+    None => fail("expected object bytes")
+    Some(b) => b
+  }
+  assert_true(!has_errors(bag))
+  let rodata_off = match macho_section_file_offset(bytes, "__TEXT", "__const") {
+    None => fail("expected __TEXT,__const section")
+    Some(v) => v
+  }
+  assert_eq(read_u32_le_at(bytes, rodata_off), (0x00620061 : UInt))
+}
+
+///|
 test "codegen supports local pointers: addr, deref, compare" {
   let (unit, bag) = parse_text(
     "int main(){int x=1; int *p=&x; if(p!=0){*p=3;} return x;}",

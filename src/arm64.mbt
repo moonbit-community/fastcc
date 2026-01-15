@@ -763,9 +763,11 @@ fn arm64_gen_opic(
       }
       let val2 : Int = (val1 & (n - 1).to_uint64()).to_int()
       if val2 == 0 {
+        // Shift-by-zero is a no-op; preserve the destination register.
+        let base : Int = if l != 0 { 0xaa0003e0 } else { 0x2a0003e0 }
         emit32(
           emitter,
-          (0x2a0003e0 : Int).lor(l << 31).lor(a << 16).reinterpret_as_uint(),
+          base.lor(x).lor(a << 16).reinterpret_as_uint(),
         )
         return true
       }

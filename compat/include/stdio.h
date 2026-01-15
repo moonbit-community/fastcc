@@ -13,13 +13,13 @@
 typedef struct __tcc_file FILE;
 typedef long fpos_t;
 
-extern FILE *___stdinp;
-extern FILE *___stdoutp;
-extern FILE *___stderrp;
+extern FILE *__stdinp;
+extern FILE *__stdoutp;
+extern FILE *__stderrp;
 
-#define stdin ___stdinp
-#define stdout ___stdoutp
-#define stderr ___stderrp
+#define stdin __stdinp
+#define stdout __stdoutp
+#define stderr __stderrp
 
 int remove(const char *path);
 int rename(const char *oldpath, const char *newpath);

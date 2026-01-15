@@ -861,7 +861,11 @@ fn type_for_sizeof(ctx : SemContext, expr : Expr) -> CType {
       }
     Expr::StringLit(length~, ..) =>
       CType::Array(elem=char_type(), size=Some(length), size_expr=None)
-    _ => type_of_expr(ctx, expr)
+    _ =>
+      match type_of_lvalue(ctx, expr) {
+        Some(ty) => ty
+        None => type_of_expr(ctx, expr)
+      }
   }
 }
 
@@ -2329,6 +2333,7 @@ fn require_complete_object_type(
 fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
   register_type_defs(ctx, decl.ty, decl.loc)
   let resolved = resolve_type(ctx, decl.ty, decl.loc)
+  let is_local = is_local && decl.storage != StorageClass::Extern
   let resolved_with_attrs = apply_type_attrs(
     resolved,
     type_attrs_from(decl.attrs),

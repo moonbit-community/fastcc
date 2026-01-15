@@ -18,7 +18,6 @@ fn touch_unused_symbols() -> Unit {
   let emit_cset_from_fp_tok_ref = emit_cset_from_fp_tok
   let emit_load_local_int32_ref = emit_load_local_int32
   let emit_store_local_int32_ref = emit_store_local_int32
-  let emit_store_global_int32_ref = emit_store_global_int32
 
   // codegen state constants/functions
   let tok_land_ref = TOK_LAND
@@ -72,7 +71,6 @@ fn touch_unused_symbols() -> Unit {
     emit_cset_from_fp_tok_ref,
     emit_load_local_int32_ref,
     emit_store_local_int32_ref,
-    emit_store_global_int32_ref,
     tok_land_ref,
     tok_lor_ref,
     rc_iret_ref,
