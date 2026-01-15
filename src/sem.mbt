@@ -26,6 +26,7 @@ struct SemContext {
   enum_defs : Map[String, Array[EnumItem]]
   enum_consts : Map[String, Int]
   enum_types : Map[String, CType]
+  compound_literal_types : Map[String, CType]
   switch_stack : Array[SwitchInfo]
   mut labels_defined : Map[String, Bool]
   mut labels_used : Array[(String, SrcLoc)]
@@ -62,6 +63,7 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     enum_defs: {},
     enum_consts: {},
     enum_types: {},
+    compound_literal_types: {},
     switch_stack: [],
     labels_defined: {},
     labels_used: [],
@@ -438,7 +440,16 @@ fn can_assign(dst : CType, src : CType) -> Bool {
 
 ///|
 fn pointer_compatible(a : CType, b : CType) -> Bool {
-  type_eq(a, b) || is_void_type(a) || is_void_type(b)
+  if type_eq(a, b) || is_void_type(a) || is_void_type(b) {
+    return true
+  }
+  // Match tcc leniency: same-size integer pointer types are compatible.
+  match (strip_qual_attrs(a), strip_qual_attrs(b)) {
+    (CType::Int(kind=a_kind, unsigned=a_unsigned),
+     CType::Int(kind=b_kind, unsigned=b_unsigned)) =>
+      a_unsigned == b_unsigned && int_size(a_kind) == int_size(b_kind)
+    _ => false
+  }
 }
 
 ///|
@@ -2270,6 +2281,36 @@ fn apply_inferred_array_size(ty : CType, size : Int) -> CType {
 }
 
 ///|
+fn compound_literal_key(loc : SrcLoc) -> String {
+  "\{loc.file_id}:\{loc.offset}"
+}
+
+///|
+fn compound_literal_type(
+  ctx : SemContext,
+  ty : CType,
+  init : Initializer,
+  loc : SrcLoc,
+) -> CType {
+  let key = compound_literal_key(loc)
+  match ctx.compound_literal_types.get(key) {
+    Some(resolved) => resolved
+    None => {
+      register_type_defs(ctx, ty, loc)
+      let resolved = resolve_type(ctx, ty, loc)
+      let mut final_ty = resolved
+      match check_initializer(ctx, resolved, init, loc) {
+        None => ()
+        Some(size) => final_ty = apply_inferred_array_size(final_ty, size)
+      }
+      require_complete_object_type(ctx, final_ty, loc)
+      ctx.compound_literal_types.set(key, final_ty)
+      final_ty
+    }
+  }
+}
+
+///|
 fn update_decl_type(
   ctx : SemContext,
   name : String,
@@ -2413,20 +2454,36 @@ fn check_initializer(
 ) -> Int? {
   match init {
     Initializer::Expr(expr~, ..) =>
-      match expr {
-        Expr::StringLit(length~, ..) =>
-          match strip_qual_attrs(ty) {
-            CType::Array(elem~, size~, ..) => {
-              let elem_sz = match type_size_align(ctx, elem, loc) {
-                Some((sz, _)) => sz
-                None => -1
-              }
-              if elem_sz == 1 {
-                match size {
-                  None => Some(length)
-                  Some(_n) => None
+      if is_zero_aggregate_init(ctx, ty, expr) {
+        None
+      } else {
+        match expr {
+          Expr::StringLit(length~, ..) =>
+            match strip_qual_attrs(ty) {
+              CType::Array(elem~, size~, ..) => {
+                let elem_sz = match type_size_align(ctx, elem, loc) {
+                  Some((sz, _)) => sz
+                  None => -1
                 }
-              } else {
+                if elem_sz == 1 {
+                  match size {
+                    None => Some(length)
+                    Some(_n) => None
+                  }
+                } else {
+                  let init_ty = type_of_expr(ctx, expr)
+                  if !can_assign(ty, init_ty) &&
+                    !(is_pointer_type(ty) && is_null_pointer_expr(ctx, expr)) {
+                    add_sem_error(
+                      ctx,
+                      loc,
+                      "cannot assign '\{type_to_string(init_ty)}' to '\{type_to_string(ty)}'",
+                    )
+                  }
+                  None
+                }
+              }
+              _ => {
                 let init_ty = type_of_expr(ctx, expr)
                 if !can_assign(ty, init_ty) &&
                   !(is_pointer_type(ty) && is_null_pointer_expr(ctx, expr)) {
@@ -2439,33 +2496,33 @@ fn check_initializer(
                 None
               }
             }
-            _ => {
-              let init_ty = type_of_expr(ctx, expr)
-              if !can_assign(ty, init_ty) &&
-                !(is_pointer_type(ty) && is_null_pointer_expr(ctx, expr)) {
-                add_sem_error(
-                  ctx,
-                  loc,
-                  "cannot assign '\{type_to_string(init_ty)}' to '\{type_to_string(ty)}'",
-                )
-              }
-              None
+          _ => {
+            let init_ty = type_of_expr(ctx, expr)
+            if !can_assign(ty, init_ty) &&
+              !(is_pointer_type(ty) && is_null_pointer_expr(ctx, expr)) {
+              add_sem_error(
+                ctx,
+                loc,
+                "cannot assign '\{type_to_string(init_ty)}' to '\{type_to_string(ty)}'",
+              )
             }
+            None
           }
-        _ => {
-          let init_ty = type_of_expr(ctx, expr)
-          if !can_assign(ty, init_ty) &&
-            !(is_pointer_type(ty) && is_null_pointer_expr(ctx, expr)) {
-            add_sem_error(
-              ctx,
-              loc,
-              "cannot assign '\{type_to_string(init_ty)}' to '\{type_to_string(ty)}'",
-            )
-          }
-          None
         }
       }
     Initializer::List(items~, ..) => check_initializer_list(ctx, ty, items, loc)
+  }
+}
+
+///|
+fn is_zero_aggregate_init(ctx : SemContext, ty : CType, expr : Expr) -> Bool {
+  match try_eval_int_const(ctx, expr) {
+    Some(v) if v == 0 =>
+      match strip_qual_attrs(ty) {
+        CType::Struct(..) | CType::Union(..) | CType::Array(..) => true
+        _ => false
+      }
+    _ => false
   }
 }
 
@@ -2513,7 +2570,8 @@ fn check_initializer_list(
             None => ()
             Some(n) =>
               if index >= n {
-                add_sem_error(ctx, item.loc, "too many initializers for array")
+                // TCC accepts excess array initializers and truncates them.
+                ()
               }
           }
         }
@@ -2579,7 +2637,7 @@ fn check_struct_initializer(
     if item.designators.length() > 0 {
       match item.designators[0] {
         InitDesignator::Field(name~, ..) =>
-          match find_field_index(fields, name) {
+          match find_field_index(ctx, fields, name) {
             None => ()
             Some(idx) => index = idx + 1
           }
@@ -2686,7 +2744,7 @@ fn resolve_designator_type(
                 return None
               }
               Some(list) =>
-                match find_field(list, name) {
+                match find_field(ctx, list, name) {
                   Some(field) => current = field.ty
                   None => {
                     add_sem_error(ctx, loc, "unknown field '\{name}'")
@@ -2706,7 +2764,7 @@ fn resolve_designator_type(
                 return None
               }
               Some(list) =>
-                match find_field(list, name) {
+                match find_field(ctx, list, name) {
                   Some(field) => current = field.ty
                   None => {
                     add_sem_error(ctx, loc, "unknown field '\{name}'")
@@ -3182,20 +3240,90 @@ fn lookup_struct_fields(
 }
 
 ///|
-fn find_field(fields : Array[Field], name : String) -> Field? {
+fn find_field(ctx : SemContext, fields : Array[Field], name : String) -> Field? {
   for field in fields {
     if field.name == name {
       return Some(field)
+    }
+    if field.name == "" {
+      match strip_qual_attrs(field.ty) {
+        CType::Struct(name=tag, fields=field_list, attrs=_) => {
+          let nested = match field_list {
+            Some(list) => Some(record_items_to_fields(list))
+            None => lookup_struct_fields(ctx, tag, is_union=false)
+          }
+          match nested {
+            None => ()
+            Some(list) =>
+              match find_field(ctx, list, name) {
+                Some(found) => return Some(found)
+                None => ()
+              }
+          }
+        }
+        CType::Union(name=tag, fields=field_list, attrs=_) => {
+          let nested = match field_list {
+            Some(list) => Some(record_items_to_fields(list))
+            None => lookup_struct_fields(ctx, tag, is_union=true)
+          }
+          match nested {
+            None => ()
+            Some(list) =>
+              match find_field(ctx, list, name) {
+                Some(found) => return Some(found)
+                None => ()
+              }
+          }
+        }
+        _ => ()
+      }
     }
   }
   None
 }
 
 ///|
-fn find_field_index(fields : Array[Field], name : String) -> Int? {
+fn find_field_index(
+  ctx : SemContext,
+  fields : Array[Field],
+  name : String,
+) -> Int? {
   for i = 0; i < fields.length(); i = i + 1 {
     if fields[i].name == name {
       return Some(i)
+    }
+    if fields[i].name == "" {
+      match strip_qual_attrs(fields[i].ty) {
+        CType::Struct(name=tag, fields=field_list, attrs=_) => {
+          let nested = match field_list {
+            Some(list) => Some(record_items_to_fields(list))
+            None => lookup_struct_fields(ctx, tag, is_union=false)
+          }
+          match nested {
+            None => ()
+            Some(list) =>
+              match find_field(ctx, list, name) {
+                Some(_) => return Some(i)
+                None => ()
+              }
+          }
+        }
+        CType::Union(name=tag, fields=field_list, attrs=_) => {
+          let nested = match field_list {
+            Some(list) => Some(record_items_to_fields(list))
+            None => lookup_struct_fields(ctx, tag, is_union=true)
+          }
+          match nested {
+            None => ()
+            Some(list) =>
+              match find_field(ctx, list, name) {
+                Some(_) => return Some(i)
+                None => ()
+              }
+          }
+        }
+        _ => ()
+      }
     }
   }
   None
@@ -3365,11 +3493,92 @@ fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
         }
       }
     }
+    Expr::CompoundLiteral(ty~, init~, loc~) =>
+      Some(compound_literal_type(ctx, ty, init, loc))
+    Expr::StmtExpr(stmts~, loc~) =>
+      stmt_expr_lvalue_type(ctx, stmts, loc)
     _ => {
       add_sem_error(ctx, expr_loc(expr), "expression is not assignable")
       None
     }
   }
+}
+
+///|
+fn current_return_type(ctx : SemContext) -> CType {
+  match ctx.current_func_name {
+    None => CType::Void
+    Some(name) =>
+      match ctx.functions.get(name) {
+        Some(sig) => sig.return_type
+        None => CType::Void
+      }
+  }
+}
+
+///|
+fn stmt_expr_result_type(ctx : SemContext, stmts : Array[Stmt], _loc : SrcLoc) ->
+  CType {
+  let return_type = current_return_type(ctx)
+  push_scope(ctx)
+  let mut result = CType::Void
+  let len = stmts.length()
+  if len == 0 {
+    pop_scope(ctx)
+    return result
+  }
+  for i = 0; i < len; {
+    let stmt = stmts[i]
+    if i == len - 1 {
+      match stmt {
+        Stmt::ExprStmt(expr~, ..) => result = type_of_expr(ctx, expr)
+        _ => {
+          check_stmt(ctx, stmt, return_type)
+          result = CType::Void
+        }
+      }
+    } else {
+      check_stmt(ctx, stmt, return_type)
+    }
+    continue i + 1
+  }
+  pop_scope(ctx)
+  result
+}
+
+///|
+fn stmt_expr_lvalue_type(
+  ctx : SemContext,
+  stmts : Array[Stmt],
+  loc : SrcLoc,
+) -> CType? {
+  let return_type = current_return_type(ctx)
+  push_scope(ctx)
+  let mut result : CType? = None
+  let len = stmts.length()
+  if len == 0 {
+    pop_scope(ctx)
+    add_sem_error(ctx, loc, "statement expression is not assignable")
+    return None
+  }
+  for i = 0; i < len; {
+    let stmt = stmts[i]
+    if i == len - 1 {
+      match stmt {
+        Stmt::ExprStmt(expr~, ..) => result = type_of_lvalue(ctx, expr)
+        _ => {
+          check_stmt(ctx, stmt, return_type)
+          add_sem_error(ctx, loc, "statement expression is not assignable")
+          result = None
+        }
+      }
+    } else {
+      check_stmt(ctx, stmt, return_type)
+    }
+    continue i + 1
+  }
+  pop_scope(ctx)
+  result
 }
 
 ///|
@@ -3402,6 +3611,11 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
       register_type_defs(ctx, ty, loc)
       resolve_type(ctx, ty, loc)
     }
+    Expr::CompoundLiteral(ty~, init~, loc~) => {
+      let resolved = compound_literal_type(ctx, ty, init, loc)
+      decay_type(resolved)
+    }
+    Expr::StmtExpr(stmts~, loc~) => stmt_expr_result_type(ctx, stmts, loc)
     Expr::Unary(op~, expr~, loc~) =>
       match op {
         UnaryOp::Addr =>
@@ -3878,7 +4092,15 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
               if !can_assign(params[i], arg_ty) &&
                 !(is_pointer_type(params[i]) &&
                 is_null_pointer_expr(ctx, args[i])) {
-                add_sem_error(ctx, loc, "argument type mismatch in call")
+                let call_name = match callee {
+                  Expr::Ident(name~, ..) => name
+                  _ => "<call>"
+                }
+                add_sem_error(
+                  ctx,
+                  loc,
+                  "argument type mismatch in call to \{call_name}: expected '\{type_to_string(params[i])}', got '\{type_to_string(arg_ty)}'",
+                )
                 break
               }
             }

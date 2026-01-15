@@ -46,6 +46,7 @@ struct LocalAlloc {
   scopes : Array[Map[String, LocalSlot]]
   vla_scopes : Array[VlaScopeInfo]
   func_name : String
+  compound_literal_slots : Map[String, Int]
 }
 
 ///|
@@ -58,7 +59,15 @@ struct VlaScopeInfo {
 ///|
 fn new_local_alloc(sem : SemContext, ret_ty : CType, func_name : String) ->
   LocalAlloc {
-  { sem, ret_ty, used_bytes: 0, scopes: [], vla_scopes: [], func_name }
+  {
+    sem,
+    ret_ty,
+    used_bytes: 0,
+    scopes: [],
+    vla_scopes: [],
+    func_name,
+    compound_literal_slots: {},
+  }
 }
 
 ///|
@@ -647,10 +656,165 @@ fn layout_initializer(alloc : LocalAlloc, init : Initializer) -> Unit {
 }
 
 ///|
+fn reserve_compound_literal_slot(
+  alloc : LocalAlloc,
+  ty : CType,
+  init : Initializer,
+  loc : SrcLoc,
+) -> Unit {
+  let key = compound_literal_key(loc)
+  if alloc.compound_literal_slots.contains(key) {
+    return
+  }
+  let resolved = compound_literal_type(alloc.sem, ty, init, loc)
+  match type_size_align_or_error(alloc.sem, resolved, loc) {
+    None => ()
+    Some((size, align)) =>
+      if size > 0 {
+        let offset = alloc_hidden_slot(alloc, size, align)
+        alloc.compound_literal_slots.set(key, offset)
+      }
+  }
+}
+
+///|
+fn reserve_compound_literals_initializer(
+  alloc : LocalAlloc,
+  init : Initializer,
+) -> Unit {
+  match init {
+    Initializer::Expr(expr~, ..) => reserve_compound_literals_expr(alloc, expr)
+    Initializer::List(items~, ..) =>
+      for item in items {
+        reserve_compound_literals_initializer(alloc, item.value)
+      }
+  }
+}
+
+///|
+fn reserve_compound_literals_expr(alloc : LocalAlloc, expr : Expr) -> Unit {
+  match expr {
+    Expr::CompoundLiteral(ty~, init~, loc~) => {
+      reserve_compound_literal_slot(alloc, ty, init, loc)
+      reserve_compound_literals_initializer(alloc, init)
+    }
+    Expr::Unary(expr=inner, ..) => reserve_compound_literals_expr(alloc, inner)
+    Expr::Cast(expr=inner, ..) => reserve_compound_literals_expr(alloc, inner)
+    Expr::SizeofExpr(expr=inner, ..) => reserve_compound_literals_expr(alloc, inner)
+    Expr::AlignofExpr(expr=inner, ..) => reserve_compound_literals_expr(alloc, inner)
+    Expr::Binary(left~, right~, ..) => {
+      reserve_compound_literals_expr(alloc, left)
+      reserve_compound_literals_expr(alloc, right)
+    }
+    Expr::Conditional(cond~, then_expr~, else_expr~, ..) => {
+      reserve_compound_literals_expr(alloc, cond)
+      reserve_compound_literals_expr(alloc, then_expr)
+      reserve_compound_literals_expr(alloc, else_expr)
+    }
+    Expr::Call(callee~, args~, ..) => {
+      reserve_compound_literals_expr(alloc, callee)
+      for a in args {
+        reserve_compound_literals_expr(alloc, a)
+      }
+    }
+    Expr::StmtExpr(stmts~, ..) =>
+      for s in stmts {
+        reserve_compound_literals_stmt(alloc, s)
+      }
+    Expr::Index(base~, index~, ..) => {
+      reserve_compound_literals_expr(alloc, base)
+      reserve_compound_literals_expr(alloc, index)
+    }
+    Expr::Member(base~, ..) => reserve_compound_literals_expr(alloc, base)
+    Expr::BuiltinVaArg(list~, ..) => reserve_compound_literals_expr(alloc, list)
+    _ => ()
+  }
+}
+
+///|
+fn reserve_compound_literals_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
+  match stmt {
+    Stmt::Compound(stmts~, ..) =>
+      for s in stmts {
+        reserve_compound_literals_stmt(alloc, s)
+      }
+    Stmt::DeclStmt(decls~, ..) =>
+      for d in decls {
+        match d.init {
+          None => ()
+          Some(init) => reserve_compound_literals_initializer(alloc, init)
+        }
+      }
+    Stmt::If(cond~, then_branch~, else_branch~, ..) => {
+      reserve_compound_literals_expr(alloc, cond)
+      reserve_compound_literals_stmt(alloc, then_branch)
+      match else_branch {
+        None => ()
+        Some(s) => reserve_compound_literals_stmt(alloc, s)
+      }
+    }
+    Stmt::While(cond~, body~, ..) => {
+      reserve_compound_literals_expr(alloc, cond)
+      reserve_compound_literals_stmt(alloc, body)
+    }
+    Stmt::DoWhile(cond~, body~, ..) => {
+      reserve_compound_literals_stmt(alloc, body)
+      reserve_compound_literals_expr(alloc, cond)
+    }
+    Stmt::For(init~, cond~, step~, body~, ..) => {
+      match init {
+        None => ()
+        Some(s) => reserve_compound_literals_stmt(alloc, s)
+      }
+      match cond {
+        None => ()
+        Some(e) => reserve_compound_literals_expr(alloc, e)
+      }
+      match step {
+        None => ()
+        Some(e) => reserve_compound_literals_expr(alloc, e)
+      }
+      reserve_compound_literals_stmt(alloc, body)
+    }
+    Stmt::Switch(cond~, body~, ..) => {
+      reserve_compound_literals_expr(alloc, cond)
+      reserve_compound_literals_stmt(alloc, body)
+    }
+    Stmt::Case(expr~, end_expr~, body~, ..) => {
+      reserve_compound_literals_expr(alloc, expr)
+      match end_expr {
+        None => ()
+        Some(e) => reserve_compound_literals_expr(alloc, e)
+      }
+      reserve_compound_literals_stmt(alloc, body)
+    }
+    Stmt::Default(body~, ..) => reserve_compound_literals_stmt(alloc, body)
+    Stmt::Label(body=body, ..) => reserve_compound_literals_stmt(alloc, body)
+    Stmt::Return(value~, ..) =>
+      match value {
+        None => ()
+        Some(e) => reserve_compound_literals_expr(alloc, e)
+      }
+    Stmt::Asm(stmt) => {
+      for op in stmt.outputs {
+        reserve_compound_literals_expr(alloc, op.expr)
+      }
+      for op in stmt.inputs {
+        reserve_compound_literals_expr(alloc, op.expr)
+      }
+    }
+    Stmt::ExprStmt(expr~, ..) => reserve_compound_literals_expr(alloc, expr)
+    Stmt::TagDef(..) | Stmt::StaticAssert(_) | Stmt::Empty(..) | Stmt::Goto(..) |
+    Stmt::Break(..) | Stmt::Continue(..) => ()
+  }
+}
+
+///|
 fn layout_expr(alloc : LocalAlloc, expr : Expr) -> Unit {
   match expr {
     Expr::Unary(expr=inner, ..) => layout_expr(alloc, inner)
     Expr::Cast(expr=inner, ..) => layout_expr(alloc, inner)
+    Expr::CompoundLiteral(init~, ..) => layout_initializer(alloc, init)
     Expr::SizeofExpr(expr=inner, ..) => layout_expr(alloc, inner)
     Expr::AlignofExpr(expr=inner, ..) => layout_expr(alloc, inner)
     Expr::Binary(left~, right~, ..) => {
@@ -667,6 +831,13 @@ fn layout_expr(alloc : LocalAlloc, expr : Expr) -> Unit {
       for a in args {
         layout_expr(alloc, a)
       }
+    }
+    Expr::StmtExpr(stmts~, ..) => {
+      cg_push_scope(alloc)
+      for s in stmts {
+        layout_stmt(alloc, s)
+      }
+      cg_pop_scope(alloc)
     }
     Expr::Index(base~, index~, ..) => {
       layout_expr(alloc, base)
@@ -1401,7 +1572,7 @@ fn resolve_init_designator_offset_type(
                 return None
               }
               Some(list) =>
-                match find_field(list, name) {
+                match find_field(sem, list, name) {
                   None => {
                     add_error(bag, des_loc, "codegen: unknown field '\{name}'")
                     return None
@@ -1428,7 +1599,7 @@ fn resolve_init_designator_offset_type(
                 return None
               }
               Some(list) =>
-                match find_field(list, name) {
+                match find_field(sem, list, name) {
                   None => {
                     add_error(bag, des_loc, "codegen: unknown field '\{name}'")
                     return None
@@ -1750,8 +1921,8 @@ fn gen_initializer_to_addr(
             }
             if !has_index {
               if idx >= n {
-                add_error(bag, item.loc, "codegen: too many initializers for array")
-                break
+                // TCC accepts excess array initializers and truncates them.
+                continue
               }
             }
             let (target_ty, rel_off) = if item.designators.length() > 0 {
@@ -1806,7 +1977,7 @@ fn gen_initializer_to_addr(
             if item.designators.length() > 0 {
               match item.designators[0] {
                 InitDesignator::Field(name~, ..) =>
-                  match find_field_index(list, name) {
+                  match find_field_index(alloc.sem, list, name) {
                     None => ()
                     Some(idx) => index = idx + 1
                   }
@@ -3327,6 +3498,64 @@ fn gen_lvalue_addr(
         }
       }
     }
+    Expr::CompoundLiteral(ty~, init~, loc~) => {
+      let key = compound_literal_key(loc)
+      match alloc.compound_literal_slots.get(key) {
+        None => {
+          add_error(bag, loc, "codegen: missing compound literal slot")
+          return
+        }
+        Some(off) => {
+          let resolved = compound_literal_type(alloc.sem, ty, init, loc)
+          match type_size_align_or_error(alloc.sem, resolved, loc) {
+            None => ()
+            Some((size, _)) =>
+              if size > 0 {
+                emit_zero_bytes(emitter, 29, off, size)
+              }
+          }
+          gen_initializer_to_addr(
+            emitter,
+            alloc,
+            syms,
+            pool,
+            cstrings,
+            29,
+            off,
+            resolved,
+            init,
+            bag,
+          )
+          emit_addr_local(emitter, dst, off, loc, bag)
+        }
+      }
+    }
+    Expr::StmtExpr(stmts~, loc~) => {
+      let mut last_is_expr = false
+      if stmts.length() > 0 {
+        match stmts[stmts.length() - 1] {
+          Stmt::ExprStmt(..) => last_is_expr = true
+          _ => ()
+        }
+      }
+      gen_stmt_expr_with(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        stmts,
+        dst,
+        true,
+        loc,
+        bag,
+        (expr, dst) =>
+          gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, expr, dst, bag),
+      )
+      if !last_is_expr {
+        add_error(bag, loc, "codegen: statement expression is not assignable")
+      }
+    }
     Expr::Unary(op=UnaryOp::Deref, expr=inner, ..) =>
       gen_expr_ptr(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
     Expr::Index(base~, index~, loc~) => {
@@ -4228,6 +4457,21 @@ fn gen_expr_floatbits(
         None => add_error(bag, loc, "codegen: invalid float literal")
         Some(bits) => arm64_movimm(emitter, dst.reinterpret_as_uint(), bits)
       }
+    Expr::StmtExpr(stmts~, loc~) =>
+      gen_stmt_expr_with(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        stmts,
+        dst,
+        true,
+        loc,
+        bag,
+        (expr, dst) =>
+          gen_expr_floatbits(emitter, alloc, syms, pool, cstrings, expr, dst, bag),
+      )
     Expr::BuiltinVaArg(list~, ty~, loc~) => {
       match float_kind_of_type(strip_qual_attrs(ty)) {
         Some(_) =>
@@ -4271,7 +4515,8 @@ fn gen_expr_floatbits(
           )
         }
       }
-    Expr::Index(base=_, index=_, loc~) | Expr::Member(loc=loc, ..) | Expr::Unary(op=UnaryOp::Deref, loc=loc, ..) => {
+    Expr::Index(base=_, index=_, loc~) | Expr::Member(loc=loc, ..) |
+    Expr::Unary(op=UnaryOp::Deref, loc=loc, ..) | Expr::CompoundLiteral(loc=loc, ..) => {
       let addr = take_reg(pool) catch {
         err => {
           add_error(bag, loc, err.to_string())
@@ -4612,6 +4857,21 @@ fn gen_expr_int32(
       }
     Expr::CharLit(value~, ..) =>
       arm64_movimm(emitter, dst.reinterpret_as_uint(), value.to_uint64())
+    Expr::StmtExpr(stmts~, loc~) =>
+      gen_stmt_expr_with(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        stmts,
+        dst,
+        false,
+        loc,
+        bag,
+        (expr, dst) =>
+          gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, dst, bag),
+      )
     Expr::Ident(name~, loc~) => {
       match alloc.sem.enum_consts.get(name) {
         Some(v) => {
@@ -4718,6 +4978,40 @@ fn gen_expr_int32(
           }
         None => ()
       }
+      let addr = take_reg(pool) catch {
+        err => {
+          add_error(bag, loc, err.to_string())
+          return
+        }
+      }
+      gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, expr, addr, bag)
+      let ty = type_of_expr(alloc.sem, expr)
+      let (size, signed) = match scalar_size_signed_or_error(alloc.sem, ty, loc) {
+        None => {
+          give_reg(pool, addr)
+          return
+        }
+        Some(v) => v
+      }
+      let sz = match arm64_sz_from_size(size) {
+        None => {
+          add_error(bag, loc, "codegen: unsupported scalar size")
+          give_reg(pool, addr)
+          return
+        }
+        Some(v) => v
+      }
+      arm64_ldrx(
+        emitter,
+        signed,
+        sz,
+        dst.reinterpret_as_uint(),
+        addr.reinterpret_as_uint(),
+        0,
+      )
+      give_reg(pool, addr)
+    }
+    Expr::CompoundLiteral(loc=loc, ..) => {
       let addr = take_reg(pool) catch {
         err => {
           add_error(bag, loc, err.to_string())
@@ -6351,6 +6645,21 @@ fn gen_expr_ptr(
       }
     Expr::CharLit(value~, ..) =>
       arm64_movimm(emitter, dst.reinterpret_as_uint(), value.to_uint64())
+    Expr::StmtExpr(stmts~, loc~) =>
+      gen_stmt_expr_with(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        stmts,
+        dst,
+        true,
+        loc,
+        bag,
+        (expr, dst) =>
+          gen_expr_ptr(emitter, alloc, syms, pool, cstrings, expr, dst, bag),
+      )
     Expr::StringLit(value=value, loc=loc, ..) =>
       match cstrings.get(value) {
         None => add_error(bag, loc, "codegen: missing string literal in cstring pool")
@@ -6465,6 +6774,52 @@ fn gen_expr_ptr(
                 addr.reinterpret_as_uint(),
                 0,
               )
+          }
+      }
+      give_reg(pool, addr)
+    }
+    Expr::CompoundLiteral(ty=_, init=_, loc~) => {
+      let addr = take_reg(pool) catch {
+        err => {
+          add_error(bag, loc, err.to_string())
+          return
+        }
+      }
+      gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, expr, addr, bag)
+      match type_of_lvalue(alloc.sem, expr) {
+        None => ()
+        Some(lty) =>
+          match strip_qual_attrs(lty) {
+            CType::Array(..) | CType::Function(..) =>
+              if dst != addr {
+                emit_mov(emitter, true, dst, addr)
+              }
+            _ => {
+              let ty = type_of_expr(alloc.sem, expr)
+              let (size, signed) = match scalar_size_signed_or_error(alloc.sem, ty, loc) {
+                None => {
+                  give_reg(pool, addr)
+                  return
+                }
+                Some(v) => v
+              }
+              let sz = match arm64_sz_from_size(size) {
+                None => {
+                  add_error(bag, loc, "codegen: unsupported scalar size")
+                  give_reg(pool, addr)
+                  return
+                }
+                Some(v) => v
+              }
+              arm64_ldrx(
+                emitter,
+                signed,
+                sz,
+                dst.reinterpret_as_uint(),
+                addr.reinterpret_as_uint(),
+                0,
+              )
+            }
           }
       }
       give_reg(pool, addr)
@@ -6998,6 +7353,86 @@ struct LabelCtx {
 ///|
 fn new_label_ctx() -> LabelCtx {
   { addrs: {}, chains: {} }
+}
+
+///|
+fn gen_stmt_expr_with(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : Map[String, Sym],
+  stmts : Array[Stmt],
+  dst : Int,
+  zero_is64 : Bool,
+  loc : SrcLoc,
+  bag : DiagBag,
+  gen_last : (Expr, Int) -> Unit,
+) -> Unit {
+  cg_push_scope(alloc)
+  let loops : Array[LoopChains] = []
+  let switches : Array[SwitchChains] = []
+  let breakables : Array[Int] = []
+  let labels = new_label_ctx()
+  let mut chain = 0
+  let len = stmts.length()
+  if len == 0 {
+    if dst != 0 {
+      emit_mov(emitter, zero_is64, dst, 31)
+    }
+    cg_pop_scope_codegen(emitter, alloc)
+    return
+  }
+  for i = 0; i < len; {
+    let stmt = stmts[i]
+    if i == len - 1 {
+      match stmt {
+        Stmt::ExprStmt(expr~, ..) => gen_last(expr, dst)
+        _ => {
+          chain = gen_stmt(
+            emitter,
+            alloc,
+            syms,
+            pool,
+            loops,
+            switches,
+            breakables,
+            labels,
+            cstrings,
+            stmt,
+            bag,
+            chain,
+          )
+          if dst != 0 {
+            emit_mov(emitter, zero_is64, dst, 31)
+          }
+        }
+      }
+    } else {
+      chain = gen_stmt(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        loops,
+        switches,
+        breakables,
+        labels,
+        cstrings,
+        stmt,
+        bag,
+        chain,
+      )
+    }
+    continue i + 1
+  }
+  if chain != 0 {
+    gsym(emitter, chain) catch {
+      err => add_error(bag, loc, err.to_string())
+    }
+    add_error(bag, loc, "codegen: return in statement expression not supported")
+  }
+  cg_pop_scope_codegen(emitter, alloc)
 }
 
 ///|
@@ -7987,6 +8422,7 @@ fn compute_frame_size(sem : SemContext, func : FuncDef) -> Int {
     let param_ty = adjust_param_type_for_local(p.ty)
     alloc_local(alloc, p.name, param_ty, p.loc) |> ignore
   }
+  reserve_compound_literals_stmt(alloc, func.body)
   layout_stmt(alloc, func.body)
   let size = align_up(alloc.used_bytes, 16)
   cg_pop_scope(alloc)
@@ -8191,6 +8627,8 @@ fn gen_func_def(
     }
   }
 
+  reserve_compound_literals_stmt(alloc, func.body)
+
   let loops : Array[LoopChains] = []
   let switches : Array[SwitchChains] = []
   let breakables : Array[Int] = []
@@ -8275,6 +8713,12 @@ fn collect_cstring_expr(order : Array[String], seen : Map[String, Bool], expr : 
     }
     Expr::Member(base~, ..) => collect_cstring_expr(order, seen, base)
     Expr::BuiltinVaArg(list~, ..) => collect_cstring_expr(order, seen, list)
+    Expr::CompoundLiteral(init~, ..) =>
+      collect_cstring_initializer(order, seen, init)
+    Expr::StmtExpr(stmts~, ..) =>
+      for s in stmts {
+        collect_cstring_stmt(order, seen, s)
+      }
     _ => ()
   }
 }
@@ -8531,8 +8975,8 @@ fn fill_global_initializer_bytes(
               }
             }
             if !has_index && idx >= n {
-              add_error(bag, item.loc, "codegen: too many initializers for array")
-              break
+              // TCC accepts excess array initializers and truncates them.
+              continue
             }
             let (target_ty, rel_off) = if item.designators.length() > 0 {
               match resolve_init_designator_offset_type(
@@ -8641,7 +9085,7 @@ fn fill_global_initializer_bytes(
               }
               match item.designators[0] {
                 InitDesignator::Field(name~, ..) =>
-                  match find_field_index(list, name) {
+                  match find_field_index(sem, list, name) {
                     None => ()
                     Some(idx) => index = idx + 1
                   }

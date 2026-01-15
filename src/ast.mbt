@@ -467,6 +467,8 @@ enum Expr {
   BuiltinVaArg(list~ : Expr, ty~ : CType, loc~ : SrcLoc)
   Unary(op~ : UnaryOp, expr~ : Expr, loc~ : SrcLoc)
   Cast(ty~ : CType, expr~ : Expr, loc~ : SrcLoc)
+  CompoundLiteral(ty~ : CType, init~ : Initializer, loc~ : SrcLoc)
+  StmtExpr(stmts~ : Array[Stmt], loc~ : SrcLoc)
   SizeofExpr(expr~ : Expr, loc~ : SrcLoc)
   SizeofType(ty~ : CType, loc~ : SrcLoc)
   AlignofExpr(expr~ : Expr, loc~ : SrcLoc)

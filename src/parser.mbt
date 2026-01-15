@@ -51,6 +51,7 @@ fn special_ident_kind(name : String) -> TokenKind? {
     "__inline" | "__inline__" => Some(KwInline)
     "__signed" | "__signed__" => Some(KwSigned)
     "__unsigned" | "__unsigned__" => Some(KwUnsigned)
+    "_Noreturn" => Some(KwNoreturn)
     _ => None
   }
 }
@@ -561,6 +562,12 @@ fn parse_type_specifiers(
           saw_any = true
           continue
         }
+      KwNoreturn => {
+        attrs = merge_attrs(attrs, attrs_with(noreturn=true))
+        ignore(advance_token(p))
+        saw_any = true
+        continue
+      }
       KwConst => {
         qual = with_const(qual)
         ignore(advance_token(p))
@@ -2775,6 +2782,11 @@ fn parse_expr_unary(p : Parser) -> Expr {
       }
       Some(ty) => {
         expect(p, RParen, "expected ')' after cast type") |> ignore
+        if peek_kind(p, 0) == LBrace {
+          let init = parse_initializer(p)
+          let literal = Expr::CompoundLiteral(ty~, init~, loc=lparen.loc)
+          return parse_postfix_tail(p, literal)
+        }
         let expr = parse_expr_unary(p)
         return Expr::Cast(ty~, expr~, loc=lparen.loc)
       }
@@ -2841,7 +2853,13 @@ fn parse_expr_unary(p : Parser) -> Expr {
 
 ///|
 fn parse_expr_postfix(p : Parser) -> Expr {
-  let mut expr = parse_expr_primary(p)
+  let expr = parse_expr_primary(p)
+  parse_postfix_tail(p, expr)
+}
+
+///|
+fn parse_postfix_tail(p : Parser, base : Expr) -> Expr {
+  let mut expr = base
   while true {
     match match_token(p, LParen) {
       Some(tok) => {
@@ -2994,9 +3012,18 @@ fn parse_expr_primary(p : Parser) -> Expr {
         Expr::Ident(name=tok.lexeme, loc=tok.loc)
       }
     LParen => {
-      let expr = parse_expr(p)
-      expect(p, RParen, "expected ')'") |> ignore
-      expr
+      if match_token(p, LBrace) is Some(lbrace) {
+        let block = parse_compound_stmt(p, lbrace.loc)
+        expect(p, RParen, "expected ')' after statement expression") |> ignore
+        match block {
+          Stmt::Compound(stmts~, ..) => Expr::StmtExpr(stmts~, loc=tok.loc)
+          _ => Expr::StmtExpr(stmts=[], loc=tok.loc)
+        }
+      } else {
+        let expr = parse_expr(p)
+        expect(p, RParen, "expected ')'") |> ignore
+        expr
+      }
     }
     _ => {
       add_parse_error(p, tok.loc, "unexpected token in expression")
@@ -3254,6 +3281,8 @@ fn expr_loc(expr : Expr) -> SrcLoc {
     Expr::BuiltinVaArg(loc~, ..) => loc
     Expr::Unary(loc~, ..) => loc
     Expr::Cast(loc~, ..) => loc
+    Expr::CompoundLiteral(loc~, ..) => loc
+    Expr::StmtExpr(loc~, ..) => loc
     Expr::SizeofExpr(loc~, ..) => loc
     Expr::SizeofType(loc~, ..) => loc
     Expr::AlignofExpr(loc~, ..) => loc

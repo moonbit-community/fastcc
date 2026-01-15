@@ -14,6 +14,7 @@
 #define STDERR_FILENO 2
 
 #define _SC_PAGESIZE 29
+#define _SC_NPROCESSORS_ONLN 83
 
 int access(const char *path, int mode);
 int unlink(const char *path);

@@ -16,6 +16,7 @@ struct tm {
   int tm_wday;
   int tm_yday;
   int tm_isdst;
+  long tm_gmtoff;
 };
 
 struct timespec {
@@ -24,6 +25,7 @@ struct timespec {
 };
 
 #define CLOCKS_PER_SEC 1000000
+#define CLOCK_REALTIME 0
 
 time_t time(time_t *tloc);
 double difftime(time_t end, time_t beginning);

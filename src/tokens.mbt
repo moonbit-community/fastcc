@@ -28,6 +28,7 @@ enum TokenKind {
   KwRegister
   KwAuto
   KwInline
+  KwNoreturn
   KwRestrict
   KwVoid
   KwChar
@@ -130,6 +131,7 @@ fn keyword_or_ident(name : String) -> TokenKind {
     "register" => KwRegister
     "auto" => KwAuto
     "inline" => KwInline
+    "_Noreturn" => KwNoreturn
     "restrict" => KwRestrict
     "void" => KwVoid
     "char" => KwChar
