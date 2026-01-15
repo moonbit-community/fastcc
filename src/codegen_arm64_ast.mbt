@@ -1304,6 +1304,7 @@ fn resolve_init_designator_offset_type(
 ///|
 fn gen_string_init_to_addr(
   emitter : Arm64Emitter,
+  syms : SymTable,
   pool : RegPool,
   cstrings : Map[String, Sym],
   value : String,
@@ -1326,7 +1327,7 @@ fn gen_string_init_to_addr(
       return
     }
   }
-  emit_addr_global(emitter, sym, src_reg)
+  emit_addr_global(emitter, syms, sym, src_reg)
   let mut i = 0
   while i < length {
     arm64_ldrx(
@@ -1376,6 +1377,7 @@ fn gen_initializer_to_addr(
                     let copy_len = if length > n { n } else { length }
                     gen_string_init_to_addr(
                       emitter,
+                      syms,
                       pool,
                       cstrings,
                       value,
@@ -1679,11 +1681,12 @@ fn gen_initializer_to_addr(
 struct SymTable {
   names : Array[String]
   name_to_id : Map[String, Int]
+  externals : Map[Int, Bool]
 }
 
 ///|
 fn new_symtab() -> SymTable {
-  { names: [], name_to_id: {} }
+  { names: [], name_to_id: {}, externals: {} }
 }
 
 ///|
@@ -1694,6 +1697,7 @@ fn sym_for_name(tab : SymTable, name : String) -> Sym {
       let id = tab.names.length() + 1
       tab.names.push(name)
       tab.name_to_id.set(name, id)
+      tab.externals.set(id, true)
       Sym::{ id }
     }
   }
@@ -1702,6 +1706,32 @@ fn sym_for_name(tab : SymTable, name : String) -> Sym {
 ///|
 fn link_name(name : String) -> String {
   if name.has_prefix("_") { name } else { "_\{name}" }
+}
+
+///|
+fn sym_is_external(syms : SymTable, sym : Sym) -> Bool {
+  match syms.externals.get(sym.id) {
+    Some(v) => v
+    None => true
+  }
+}
+
+///|
+fn collect_external_globals(unit : TranslationUnit, syms : SymTable) -> Unit {
+  for decl in unit.decls {
+    match decl {
+      Decl::Var(var_decl) => {
+        let sym = sym_for_name(syms, link_name(var_decl.name))
+        let is_ext = var_decl.storage == StorageClass::Extern
+        syms.externals.set(sym.id, is_ext)
+      }
+      Decl::FuncDecl(func_decl) => {
+        let sym = sym_for_name(syms, link_name(func_decl.name))
+        syms.externals.set(sym.id, true)
+      }
+      _ => ()
+    }
+  }
 }
 
 ///|
@@ -1819,72 +1849,69 @@ fn emit_addr_local(
 }
 
 ///|
-fn emit_addr_global(emitter : Arm64Emitter, sym : Sym, dst : Int) -> Unit {
-  let adrp_off = emitter_pc(emitter)
-  greloca(emitter, sym, adrp_off, R_AARCH64_ADR_PREL_PG_HI21, 0)
-  emit32(emitter, (0x90000000 : UInt64).lor(dst.to_uint64()).to_uint())
-  let add_off = emitter_pc(emitter)
-  greloca(emitter, sym, add_off, R_AARCH64_ADD_ABS_LO12_NC, 0)
-  emit32(
+fn emit_addr_global(
+  emitter : Arm64Emitter,
+  syms : SymTable,
+  sym : Sym,
+  dst : Int,
+) -> Unit {
+  if sym_is_external(syms, sym) {
+    let ind0 = emitter_pc(emitter)
+    greloca(emitter, sym, ind0, R_AARCH64_ADR_GOT_PAGE, 0)
+    emit32(emitter, (0x90000000 : UInt64).lor(dst.to_uint64()).to_uint())
+    let ind1 = emitter_pc(emitter)
+    greloca(emitter, sym, ind1, R_AARCH64_LD64_GOT_LO12_NC, 0)
+    emit32(
+      emitter,
+      (0xf9400000 : UInt64)
+      .lor(dst.to_uint64())
+      .lor(dst.to_uint64() << 5)
+      .to_uint(),
+    )
+  } else {
+    let adrp_off = emitter_pc(emitter)
+    greloca(emitter, sym, adrp_off, R_AARCH64_ADR_PREL_PG_HI21, 0)
+    emit32(emitter, (0x90000000 : UInt64).lor(dst.to_uint64()).to_uint())
+    let add_off = emitter_pc(emitter)
+    greloca(emitter, sym, add_off, R_AARCH64_ADD_ABS_LO12_NC, 0)
+    emit32(
+      emitter,
+      (0x91000000 : UInt64)
+      .lor(dst.to_uint64())
+      .lor(dst.to_uint64() << 5)
+      .to_uint(),
+    )
+  }
+}
+
+///|
+fn emit_load_global_int32(
+  emitter : Arm64Emitter,
+  syms : SymTable,
+  sym : Sym,
+  dst : Int,
+) -> Unit {
+  emit_addr_global(emitter, syms, sym, dst)
+  arm64_ldrx(
     emitter,
-    (0x91000000 : UInt64)
-    .lor(dst.to_uint64())
-    .lor(dst.to_uint64() << 5)
-    .to_uint(),
+    false,
+    2,
+    dst.reinterpret_as_uint(),
+    dst.reinterpret_as_uint(),
+    0,
   )
 }
 
 ///|
-fn emit_load_global_int32(emitter : Arm64Emitter, sym : Sym, dst : Int) -> Unit {
-  let adrp_off = emitter_pc(emitter)
-  greloca(emitter, sym, adrp_off, R_AARCH64_ADR_PREL_PG_HI21, 0)
-  emit32(
-    emitter,
-    (0x90000000 : UInt64).lor(dst.to_uint64()).to_uint(),
-  )
-  let add_off = emitter_pc(emitter)
-  greloca(emitter, sym, add_off, R_AARCH64_LDST8_ABS_LO12_NC, 0)
-  emit32(
-    emitter,
-    (0x91000000 : UInt64)
-    .lor(dst.to_uint64())
-    .lor(dst.to_uint64() << 5)
-    .to_uint(),
-  )
-  emit32(
-    emitter,
-    (0xb9400000 : UInt64)
-    .lor(dst.to_uint64())
-    .lor(dst.to_uint64() << 5)
-    .to_uint(),
-  )
-}
-
-///|
-fn emit_store_global_int32(emitter : Arm64Emitter, sym : Sym, src : Int) -> Unit {
+fn emit_store_global_int32(
+  emitter : Arm64Emitter,
+  syms : SymTable,
+  sym : Sym,
+  src : Int,
+) -> Unit {
   let addr_reg : Int = 16
-  let adrp_off = emitter_pc(emitter)
-  greloca(emitter, sym, adrp_off, R_AARCH64_ADR_PREL_PG_HI21, 0)
-  emit32(
-    emitter,
-    (0x90000000 : UInt64).lor(addr_reg.to_uint64()).to_uint(),
-  )
-  let add_off = emitter_pc(emitter)
-  greloca(emitter, sym, add_off, R_AARCH64_LDST8_ABS_LO12_NC, 0)
-  emit32(
-    emitter,
-    (0x91000000 : UInt64)
-    .lor(addr_reg.to_uint64())
-    .lor(addr_reg.to_uint64() << 5)
-    .to_uint(),
-  )
-  emit32(
-    emitter,
-    (0xb9000000 : UInt64)
-    .lor(src.to_uint64())
-    .lor(addr_reg.to_uint64() << 5)
-    .to_uint(),
-  )
+  emit_addr_global(emitter, syms, sym, addr_reg)
+  arm64_strx(emitter, 2, src.reinterpret_as_uint(), addr_reg.reinterpret_as_uint(), 0)
 }
 
 ///|
@@ -2557,7 +2584,7 @@ fn gen_lvalue_addr(
           }
         None => {
           let sym = sym_for_name(syms, link_name(name))
-          emit_addr_global(emitter, sym, dst)
+          emit_addr_global(emitter, syms, sym, dst)
         }
       }
     }
@@ -2751,7 +2778,7 @@ fn store_lvalue_scalar(
         None => {
           let sym = sym_for_name(syms, link_name(name))
           let addr_reg : Int = 16
-          emit_addr_global(emitter, sym, addr_reg)
+          emit_addr_global(emitter, syms, sym, addr_reg)
           let (size, _) = match scalar_size_signed_or_error(alloc.sem, value_ty, loc) {
             None => return
             Some(v) => v
@@ -2932,7 +2959,7 @@ fn gen_expr_floatbits(
         None => {
           let sym = sym_for_name(syms, link_name(name))
           let addr_reg : Int = 16
-          emit_addr_global(emitter, sym, addr_reg)
+          emit_addr_global(emitter, syms, sym, addr_reg)
           let size = if is_double { 8 } else { 4 }
           let sz = match arm64_sz_from_size(size) {
             None => {
@@ -3310,7 +3337,7 @@ fn gen_expr_int32(
           emit_load_local_scalar(emitter, alloc.sem, slot.ty, dst, slot.offset, loc, bag)
         None => {
           let sym = sym_for_name(syms, link_name(name))
-          emit_load_global_int32(emitter, sym, dst)
+          emit_load_global_int32(emitter, syms, sym, dst)
         }
       }
     }
@@ -4698,7 +4725,7 @@ fn gen_expr_ptr(
     Expr::StringLit(value=value, loc=loc, ..) =>
       match cstrings.get(value) {
         None => add_error(bag, loc, "codegen: missing string literal in cstring pool")
-        Some(sym) => emit_addr_global(emitter, sym, dst)
+        Some(sym) => emit_addr_global(emitter, syms, sym, dst)
       }
     Expr::Ident(name~, loc~) => {
       if is_func_name_ident(name) {
@@ -4732,7 +4759,7 @@ fn gen_expr_ptr(
           }
         None => {
           let sym = sym_for_name(syms, link_name(name))
-          emit_addr_global(emitter, sym, dst)
+          emit_addr_global(emitter, syms, sym, dst)
           if alloc.sem.functions.contains(name) {
             return
           }
@@ -7148,6 +7175,7 @@ fn codegen_arm64_object_bytes_from_ast(
 
   let emitter = new_arm64_emitter()
   let syms = new_symtab()
+  collect_external_globals(unit, syms)
   let func_offsets : Map[String, Int] = {}
 
   let cstring_order : Array[String] = []
@@ -7232,13 +7260,15 @@ fn codegen_arm64_object_bytes_from_ast(
       let value = cstring_order[i]
       let name = "_L_.str.\{i}"
       let off = cstring_offsets.get(value).unwrap_or(0)
+      let id = syms.name_to_id.get(name).unwrap_or(0)
       def_symbols.set(name, {
-        id: syms.name_to_id.get(name).unwrap_or(0),
+        id,
         name,
         section: Some(".cstring"),
         value: off,
-        is_external: true,
+        is_external: false,
       })
+      syms.externals.set(id, false)
       i = i + 1
     }
   }
@@ -7249,13 +7279,15 @@ fn codegen_arm64_object_bytes_from_ast(
         let link = link_name(var_decl.name)
         sym_for_name(syms, link) |> ignore
         if var_decl.storage == StorageClass::Extern {
+          let id = syms.name_to_id.get(link).unwrap_or(0)
           def_symbols.set(link, {
-            id: syms.name_to_id.get(link).unwrap_or(0),
+            id,
             name: link,
             section: None,
             value: 0,
             is_external: true,
           })
+          syms.externals.set(id, true)
         } else {
           let var_ty = match sem.globals.get(var_decl.name) {
             Some(t) => t
@@ -7272,6 +7304,7 @@ fn codegen_arm64_object_bytes_from_ast(
               if align > bss_align {
                 bss_align = align
               }
+              let id = syms.name_to_id.get(link).unwrap_or(0)
               def_symbols.set(link, {
                 id: syms.name_to_id.get(link).unwrap_or(0),
                 name: link,
@@ -7279,6 +7312,7 @@ fn codegen_arm64_object_bytes_from_ast(
                 value: aligned,
                 is_external: var_decl.storage != StorageClass::Static,
               })
+              syms.externals.set(id, false)
             }
             Some(init) => {
               let data_off = align_up(data_words.length() << 2, align)
@@ -7316,13 +7350,15 @@ fn codegen_arm64_object_bytes_from_ast(
                       addend: rel.addend,
                     })
                   }
+                  let id = syms.name_to_id.get(link).unwrap_or(0)
                   def_symbols.set(link, {
-                    id: syms.name_to_id.get(link).unwrap_or(0),
+                    id,
                     name: link,
                     section: Some(".data"),
                     value: data_off,
                     is_external: var_decl.storage != StorageClass::Static,
                   })
+                  syms.externals.set(id, false)
                 }
               }
             }
@@ -7338,13 +7374,16 @@ fn codegen_arm64_object_bytes_from_ast(
       Decl::FuncDef(func) => {
         let link = link_name(func.name)
         sym_for_name(syms, link) |> ignore
+        let id = syms.name_to_id.get(link).unwrap_or(0)
+        let is_ext = func.storage != StorageClass::Static
         def_symbols.set(link, {
-          id: syms.name_to_id.get(link).unwrap_or(0),
+          id,
           name: link,
           section: Some(".text"),
           value: func_offsets.get(link).unwrap_or(0),
-          is_external: func.storage != StorageClass::Static,
+          is_external: is_ext,
         })
+        syms.externals.set(id, false)
       }
       _ => ()
     }
