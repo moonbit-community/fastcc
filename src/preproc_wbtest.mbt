@@ -3,7 +3,7 @@ fn pp_tokens(text : String) -> (Array[Token], DiagBag) {
   let bag = new_diag_bag()
   let map = new_source_map()
   let file = add_file(map, "<test>", text)
-  let pp = new_preprocessor(file, bag)
+  let pp = new_preprocessor(map, file, bag)
   let out = dump_tokens(pp, 512)
   (out.filter(tok => tok.kind != Eof), bag)
 }
@@ -16,7 +16,7 @@ fn pp_tokens_with_paths(
   let bag = new_diag_bag()
   let map = new_source_map()
   let file = add_file(map, "<test>", text)
-  let pp = new_preprocessor(file, bag)
+  let pp = new_preprocessor(map, file, bag)
   for path in paths {
     add_include_path(pp, path)
   }
@@ -103,6 +103,36 @@ test "preprocess include search path" {
 }
 
 ///|
+test "preprocess _Float16 builtin macro" {
+  let (toks, bag) = pp_tokens("_Float16 x;")
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=[
+    "Ident:short", "Ident:unsigned", "Ident:int", "Ident:x", "Semicolon:;",
+  ])
+}
+
+///|
+test "preprocess _Float16 prototype tokens" {
+  let (toks, bag) = pp_tokens("extern _Float16 foo(_Float16);")
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=[
+    "KwExtern:extern",
+    "Ident:short",
+    "Ident:unsigned",
+    "Ident:int",
+    "Ident:foo",
+    "LParen:(",
+    "Ident:short",
+    "Ident:unsigned",
+    "Ident:int",
+    "RParen:)",
+    "Semicolon:;",
+  ])
+}
+
+///|
 test "preprocess function-like macro" {
   let (toks, bag) = pp_tokens("#define ADD(a,b) a + b\nint x = ADD(1, 2);")
   assert_true(!has_errors(bag))
@@ -144,13 +174,43 @@ test "preprocess if macro expression" {
 }
 
 ///|
+test "preprocess gcc style version check" {
+  let text =
+    "#if defined(__GNUC__) && (__GNUC__ == 3 && __GNUC_MINOR__ >= 5 || __GNUC__ > 3)\nint ok;\n#endif\nint main(){return 0;}\n"
+  let bag = new_diag_bag()
+  let map = new_source_map()
+  let file = add_file(map, "<test>", text)
+  let pp = new_preprocessor(map, file, bag)
+  ignore(next_input_token(pp)) // consume '#'
+  let directive_tokens = read_directive_tokens(pp)
+  let args = slice_tokens(directive_tokens, 1)
+  let expanded = expand_if_tokens(pp, args)
+  let has_gcc = pp.macros.contains("__GNUC__")
+  let cond = eval_if_expr(pp, expanded, directive_tokens[0].loc)
+  let simple_file = add_file(map, "<simple>", "#if 1 && (0 && 0 || 1)\n")
+  let simple_pp = new_preprocessor(map, simple_file, new_diag_bag())
+  ignore(next_input_token(simple_pp))
+  let simple_toks = read_directive_tokens(simple_pp)
+  let simple_cond = eval_if_expr(simple_pp, slice_tokens(simple_toks, 1), simple_toks[0].loc)
+  if has_errors(bag) {
+    for d in bag.diags {
+      println("\{d.loc.file_id}:\{d.loc.line}:\{d.loc.col}: \{d.message}")
+    }
+    println(expanded.map(tok => "\{tok.kind}:\{tok.lexeme}").join(" "))
+  }
+  assert_true(has_gcc)
+  assert_true(cond)
+  assert_true(simple_cond)
+  assert_true(!has_errors(bag))
+}
+
+///|
 test "preprocess whitespace before paren" {
   let (toks, bag) = pp_tokens("#define F(x) x\nint y = F (1);")
   assert_true(!has_errors(bag))
   let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
   @json.inspect(items, content=[
-    "KwInt:int", "Ident:y", "Assign:=", "Ident:F", "LParen:(", "IntLit:1", "RParen:)",
-    "Semicolon:;",
+    "KwInt:int", "Ident:y", "Assign:=", "IntLit:1", "Semicolon:;",
   ])
 }
 
