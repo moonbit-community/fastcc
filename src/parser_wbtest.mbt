@@ -53,6 +53,67 @@ test "sem accepts local declarations" {
 }
 
 ///|
+test "parse typedef struct local decl" {
+  let (unit, bag) = parse_text(
+    "typedef struct { int x; } T; int main(){ T r; r.x = 1; return r.x; }",
+  )
+  assert_true(!has_errors(bag))
+  assert_eq(unit.decls.length(), 2)
+  guard unit.decls.length() >= 2 else { fail("expected two declarations") }
+  match unit.decls[1] {
+    Decl::FuncDef(func) =>
+      match func.body {
+        Stmt::Compound(stmts~, ..) => {
+          let mut found = false
+          for stmt in stmts {
+            if stmt is Stmt::DeclStmt(..) {
+              found = true
+            }
+          }
+          assert_true(found)
+          assert_eq(stmts.length(), 3)
+        }
+        _ => fail("expected compound body")
+      }
+    _ => fail("expected function definition")
+  }
+}
+
+///|
+test "parser tracks typedef struct name" {
+  let bag = new_diag_bag()
+  let map = new_source_map()
+  let file = add_file(
+    map,
+    "<test>",
+    "typedef struct { int x; } T; int main(){ T r; return r.x; }",
+  )
+  let pp = new_preprocessor(map, file, bag)
+  let tokens = collect_tokens(pp)
+  let parser = new_parser(tokens, bag)
+  ignore(parse_translation_unit_with(parser))
+  let scope0 = parser.type_scopes[0]
+  assert_true(scope0.contains("T"))
+}
+
+///|
+test "sem accepts typedef struct local decl" {
+  let (_, bag) = check_text(
+    "typedef struct { int x; } T; int main(){ T r; r.x = 1; return r.x; }",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts typedef struct local decl imaxdiv_t" {
+  let (_, bag) = check_text(
+    "typedef struct { int x; } imaxdiv_t; int main(){ imaxdiv_t r; r.x = 1; return r.x; }",
+  )
+  assert_true(!has_errors(bag))
+}
+
+
+///|
 test "sem rejects missing return value" {
   let (_, bag) = check_text("int main(){return;}")
   assert_true(has_errors(bag))

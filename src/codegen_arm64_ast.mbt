@@ -28,6 +28,7 @@ struct LocalSlot {
   offset : Int
   ty : CType
   vla_size_offset : Int?
+  byref : Bool
 }
 
 ///|
@@ -47,6 +48,10 @@ struct LocalAlloc {
   vla_scopes : Array[VlaScopeInfo]
   func_name : String
   compound_literal_slots : Map[String, Int]
+  mut agg_temp_offset : Int?
+  mut agg_temp_size : Int
+  mut agg_temp_align : Int
+  mut sret_offset : Int?
 }
 
 ///|
@@ -67,6 +72,10 @@ fn new_local_alloc(sem : SemContext, ret_ty : CType, func_name : String) ->
     vla_scopes: [],
     func_name,
     compound_literal_slots: {},
+    agg_temp_offset: None,
+    agg_temp_size: 0,
+    agg_temp_align: 1,
+    sret_offset: None,
   }
 }
 
@@ -191,7 +200,7 @@ fn alloc_local(
   let aligned = align_up(alloc.used_bytes, align)
   alloc.used_bytes = aligned + size
   let offset = -(aligned + size)
-  let slot = { offset, ty, vla_size_offset: None }
+  let slot = { offset, ty, vla_size_offset: None, byref: false }
   let idx = alloc.scopes.length() - 1
   alloc.scopes[idx].set(name, slot)
   let sem_idx = alloc.sem.locals.length() - 1
@@ -200,10 +209,41 @@ fn alloc_local(
 }
 
 ///|
+fn alloc_local_byref(
+  alloc : LocalAlloc,
+  name : String,
+  ty : CType,
+) -> LocalSlot {
+  let size = 8
+  let align = 8
+  let aligned = align_up(alloc.used_bytes, align)
+  alloc.used_bytes = aligned + size
+  let offset = -(aligned + size)
+  let slot = { offset, ty, vla_size_offset: None, byref: true }
+  let idx = alloc.scopes.length() - 1
+  alloc.scopes[idx].set(name, slot)
+  let sem_idx = alloc.sem.locals.length() - 1
+  alloc.sem.locals[sem_idx].set(name, ty)
+  slot
+}
+
+///|
 fn alloc_hidden_slot(alloc : LocalAlloc, size : Int, align : Int) -> Int {
   let aligned = align_up(alloc.used_bytes, align)
   alloc.used_bytes = aligned + size
   -(aligned + size)
+}
+
+///|
+fn reserve_sret_slot(alloc : LocalAlloc, loc : SrcLoc, bag : DiagBag) -> Unit {
+  if alloc.sret_offset is Some(_) {
+    return
+  }
+  let ret_loc = arm64_pcs(alloc.sem, 0, alloc.ret_ty, [], loc, bag).ret_loc
+  if ret_loc == 1 {
+    let off = alloc_hidden_slot(alloc, 8, 8)
+    alloc.sret_offset = Some(off)
+  }
 }
 
 ///|
@@ -567,6 +607,7 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
                   offset: slot.offset,
                   ty: slot.ty,
                   vla_size_offset: Some(size_off),
+                  byref: slot.byref,
                 }
                 let scope_idx = alloc.scopes.length() - 1
                 alloc.scopes[scope_idx].set(d.name, updated)
@@ -806,6 +847,217 @@ fn reserve_compound_literals_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
     Stmt::ExprStmt(expr~, ..) => reserve_compound_literals_expr(alloc, expr)
     Stmt::TagDef(..) | Stmt::StaticAssert(_) | Stmt::Empty(..) | Stmt::Goto(..) |
     Stmt::Break(..) | Stmt::Continue(..) => ()
+  }
+}
+
+///|
+fn expr_is_lvalue_simple(expr : Expr) -> Bool {
+  match expr {
+    Expr::Ident(..) => true
+    Expr::Index(..) => true
+    Expr::Member(base~, is_arrow~, ..) =>
+      if is_arrow { true } else { expr_is_lvalue_simple(base) }
+    Expr::Unary(op=UnaryOp::Deref, ..) => true
+    Expr::CompoundLiteral(..) => true
+    Expr::StmtExpr(stmts~, ..) => {
+      if stmts.length() == 0 {
+        false
+      } else {
+        match stmts[stmts.length() - 1] {
+          Stmt::ExprStmt(expr~, ..) => expr_is_lvalue_simple(expr)
+          _ => false
+        }
+      }
+    }
+    _ => false
+  }
+}
+
+///|
+fn reserve_agg_temp_for_type(
+  alloc : LocalAlloc,
+  ty : CType,
+  loc : SrcLoc,
+) -> Unit {
+  match strip_qual_attrs(ty) {
+    CType::Struct(..) | CType::Union(..) =>
+      match type_size_align_or_error(alloc.sem, ty, loc) {
+        None => ()
+        Some((size, align)) =>
+          if size > 0 {
+            if size > alloc.agg_temp_size {
+              alloc.agg_temp_size = size
+            }
+            if align > alloc.agg_temp_align {
+              alloc.agg_temp_align = align
+            }
+          }
+      }
+    _ => ()
+  }
+}
+
+///|
+fn reserve_agg_temp_initializer(alloc : LocalAlloc, init : Initializer) -> Unit {
+  match init {
+    Initializer::Expr(expr~, ..) => reserve_agg_temp_expr(alloc, expr)
+    Initializer::List(items~, ..) =>
+      for item in items {
+        reserve_agg_temp_initializer(alloc, item.value)
+      }
+  }
+}
+
+///|
+fn reserve_agg_temp_expr(alloc : LocalAlloc, expr : Expr) -> Unit {
+  match expr {
+    Expr::Member(base~, is_arrow~, loc~, ..) => {
+      if !is_arrow && !expr_is_lvalue_simple(base) {
+        let base_ty = type_of_expr(alloc.sem, base)
+        reserve_agg_temp_for_type(alloc, base_ty, loc)
+      }
+      reserve_agg_temp_expr(alloc, base)
+    }
+    Expr::CompoundLiteral(init~, ..) => reserve_agg_temp_initializer(alloc, init)
+    Expr::Unary(expr=inner, ..) => reserve_agg_temp_expr(alloc, inner)
+    Expr::Cast(expr=inner, ..) => reserve_agg_temp_expr(alloc, inner)
+    Expr::SizeofExpr(expr=inner, ..) => reserve_agg_temp_expr(alloc, inner)
+    Expr::AlignofExpr(expr=inner, ..) => reserve_agg_temp_expr(alloc, inner)
+    Expr::Binary(left~, right~, ..) => {
+      reserve_agg_temp_expr(alloc, left)
+      reserve_agg_temp_expr(alloc, right)
+    }
+    Expr::Conditional(cond~, then_expr~, else_expr~, ..) => {
+      reserve_agg_temp_expr(alloc, cond)
+      reserve_agg_temp_expr(alloc, then_expr)
+      reserve_agg_temp_expr(alloc, else_expr)
+    }
+    Expr::Call(callee~, args~, ..) => {
+      reserve_agg_temp_expr(alloc, callee)
+      for a in args {
+        reserve_agg_temp_expr(alloc, a)
+      }
+    }
+    Expr::StmtExpr(stmts~, ..) =>
+      for s in stmts {
+        reserve_agg_temp_stmt(alloc, s)
+      }
+    Expr::Index(base~, index~, ..) => {
+      reserve_agg_temp_expr(alloc, base)
+      reserve_agg_temp_expr(alloc, index)
+    }
+    Expr::BuiltinVaArg(list~, ..) => reserve_agg_temp_expr(alloc, list)
+    _ => ()
+  }
+  if !expr_is_lvalue_simple(expr) {
+    reserve_agg_temp_for_type(alloc, type_of_expr(alloc.sem, expr), expr_loc(expr))
+  }
+}
+
+///|
+fn reserve_agg_temp_decl(alloc : LocalAlloc, decl : VarDecl) -> Unit {
+  if decl.storage == StorageClass::Extern {
+    return
+  }
+  match strip_qual_attrs(decl.ty) {
+    CType::Function(..) => return
+    _ => ()
+  }
+  let sem_idx = alloc.sem.locals.length() - 1
+  alloc.sem.locals[sem_idx].set(decl.name, decl.ty)
+}
+
+///|
+fn reserve_agg_temp_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
+  match stmt {
+    Stmt::Compound(stmts~, ..) => {
+      cg_push_scope(alloc)
+      for s in stmts {
+        reserve_agg_temp_stmt(alloc, s)
+      }
+      cg_pop_scope(alloc)
+    }
+    Stmt::DeclStmt(decls~, ..) =>
+      for d in decls {
+        reserve_agg_temp_decl(alloc, d)
+        match d.init {
+          None => ()
+          Some(init) => reserve_agg_temp_initializer(alloc, init)
+        }
+      }
+    Stmt::If(cond~, then_branch~, else_branch~, ..) => {
+      reserve_agg_temp_expr(alloc, cond)
+      reserve_agg_temp_stmt(alloc, then_branch)
+      match else_branch {
+        None => ()
+        Some(s) => reserve_agg_temp_stmt(alloc, s)
+      }
+    }
+    Stmt::While(cond~, body~, ..) => {
+      reserve_agg_temp_expr(alloc, cond)
+      reserve_agg_temp_stmt(alloc, body)
+    }
+    Stmt::DoWhile(cond~, body~, ..) => {
+      reserve_agg_temp_stmt(alloc, body)
+      reserve_agg_temp_expr(alloc, cond)
+    }
+    Stmt::For(init~, cond~, step~, body~, ..) => {
+      cg_push_scope(alloc)
+      match init {
+        None => ()
+        Some(s) => reserve_agg_temp_stmt(alloc, s)
+      }
+      match cond {
+        None => ()
+        Some(e) => reserve_agg_temp_expr(alloc, e)
+      }
+      match step {
+        None => ()
+        Some(e) => reserve_agg_temp_expr(alloc, e)
+      }
+      reserve_agg_temp_stmt(alloc, body)
+      cg_pop_scope(alloc)
+    }
+    Stmt::Switch(cond~, body~, ..) => {
+      reserve_agg_temp_expr(alloc, cond)
+      reserve_agg_temp_stmt(alloc, body)
+    }
+    Stmt::Case(expr~, end_expr~, body~, ..) => {
+      reserve_agg_temp_expr(alloc, expr)
+      match end_expr {
+        None => ()
+        Some(e) => reserve_agg_temp_expr(alloc, e)
+      }
+      reserve_agg_temp_stmt(alloc, body)
+    }
+    Stmt::Label(body=body, ..) => reserve_agg_temp_stmt(alloc, body)
+    Stmt::ExprStmt(expr~, ..) => reserve_agg_temp_expr(alloc, expr)
+    Stmt::Return(value~, ..) =>
+      match value {
+        None => ()
+        Some(e) => reserve_agg_temp_expr(alloc, e)
+      }
+    Stmt::Asm(stmt) =>
+      for op in stmt.outputs {
+        reserve_agg_temp_expr(alloc, op.expr)
+      }
+    Stmt::TagDef(..)
+    | Stmt::Break(..)
+    | Stmt::Continue(..)
+    | Stmt::Goto(..)
+    | Stmt::Default(..)
+    | Stmt::StaticAssert(_)
+    | Stmt::Empty(..) => ()
+  }
+}
+
+///|
+fn reserve_agg_temp_slots_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
+  reserve_agg_temp_stmt(alloc, stmt)
+  if alloc.agg_temp_size > 0 && alloc.agg_temp_offset is None {
+    let align = if alloc.agg_temp_align <= 0 { 1 } else { alloc.agg_temp_align }
+    let off = alloc_hidden_slot(alloc, alloc.agg_temp_size, align)
+    alloc.agg_temp_offset = Some(off)
   }
 }
 
@@ -1439,52 +1691,308 @@ fn emit_store_agg_return_gp_to_addr(
   loc : SrcLoc,
   bag : DiagBag,
 ) -> Unit {
+  emit_store_gp_regs_to_addr(
+    emitter,
+    (0 : Int),
+    (1 : Int),
+    size,
+    base_reg,
+    base_off,
+    loc,
+    bag,
+  )
+}
+
+///|
+fn emit_store_gp_regs_to_addr(
+  emitter : Arm64Emitter,
+  reg0 : Int,
+  reg1 : Int,
+  size : Int,
+  base_reg : Int,
+  base_off : Int,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  let emit_store_reg_bytes = fn(
+    reg : Int,
+    dst_reg : Int,
+    dst_off : Int,
+    len : Int,
+  ) -> Unit {
+    let mut off = 0
+    if len <= 0 {
+      return
+    }
+    if off + 8 <= len {
+      arm64_strx(
+        emitter,
+        3,
+        reg.reinterpret_as_uint(),
+        dst_reg.reinterpret_as_uint(),
+        (dst_off + off).to_int64().reinterpret_as_uint64(),
+      )
+      off = off + 8
+    }
+    if off + 4 <= len {
+      arm64_strx(
+        emitter,
+        2,
+        reg.reinterpret_as_uint(),
+        dst_reg.reinterpret_as_uint(),
+        (dst_off + off).to_int64().reinterpret_as_uint64(),
+      )
+      off = off + 4
+    }
+    if off + 2 <= len {
+      arm64_strx(
+        emitter,
+        1,
+        reg.reinterpret_as_uint(),
+        dst_reg.reinterpret_as_uint(),
+        (dst_off + off).to_int64().reinterpret_as_uint64(),
+      )
+      off = off + 2
+    }
+    while off < len {
+      arm64_strx(
+        emitter,
+        0,
+        reg.reinterpret_as_uint(),
+        dst_reg.reinterpret_as_uint(),
+        (dst_off + off).to_int64().reinterpret_as_uint64(),
+      )
+      off = off + 1
+    }
+  }
   if size <= 0 {
     return
   }
   if size <= 8 {
-    let sz = match arm64_sz_from_size(size) {
-      None => {
-        add_error(bag, loc, "codegen: unsupported scalar size")
-        return
-      }
-      Some(v) => v
-    }
-    arm64_strx(
-      emitter,
-      sz,
-      (0 : UInt),
-      base_reg.reinterpret_as_uint(),
-      base_off.to_int64().reinterpret_as_uint64(),
-    )
+    emit_store_reg_bytes(reg0, base_reg, base_off, size)
     return
   }
   if size <= 16 {
-    arm64_strx(
-      emitter,
-      3,
-      (0 : UInt),
-      base_reg.reinterpret_as_uint(),
-      base_off.to_int64().reinterpret_as_uint64(),
-    )
     let rest = size - 8
-    let sz1 = match arm64_sz_from_size(rest) {
-      None => {
-        add_error(bag, loc, "codegen: unsupported scalar size")
-        return
-      }
-      Some(v) => v
-    }
-    arm64_strx(
-      emitter,
-      sz1,
-      (1 : UInt),
-      base_reg.reinterpret_as_uint(),
-      (base_off + 8).to_int64().reinterpret_as_uint64(),
-    )
+    emit_store_reg_bytes(reg0, base_reg, base_off, 8)
+    emit_store_reg_bytes(reg1, base_reg, base_off + 8, rest)
     return
   }
   add_error(bag, loc, "codegen: aggregate return >16 bytes not supported yet")
+}
+
+///|
+fn gen_agg_expr_to_addr(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : Map[String, Sym],
+  expr : Expr,
+  dst_reg : Int,
+  dst_off : Int,
+  ty : CType,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  let (size, _) = match type_size_align_or_error(alloc.sem, ty, loc) {
+    None => return
+    Some(v) => v
+  }
+  if size <= 0 {
+    return
+  }
+  match expr {
+    Expr::Call(callee~, args~, ..) => {
+      let ret_loc = arm64_pcs(alloc.sem, 0, ty, [], loc, bag).ret_loc
+      if ret_loc == 1 {
+        gen_call_expr_with_sret(
+          emitter,
+          alloc,
+          syms,
+          pool,
+          cstrings,
+          callee,
+          args,
+          dst_reg,
+          dst_off,
+          loc,
+          bag,
+        )
+        return
+      }
+      gen_call_expr(emitter, alloc, syms, pool, cstrings, callee, args, loc, bag)
+      if size <= 0 {
+        return
+      }
+      if ret_loc == 16 {
+        match arm64_hfa(alloc.sem, ty, loc, bag) {
+          None => emit_store_agg_return_gp_to_addr(emitter, size, dst_reg, dst_off, loc, bag)
+          Some((count, fsize)) => {
+            let mut i = 0
+            while i < count {
+              let tmp = take_reg(pool) catch {
+                err => {
+                  add_error(bag, loc, err.to_string())
+                  return
+                }
+              }
+              if fsize == 8 {
+                emit_fmov_d_to_x(emitter, tmp, i)
+                arm64_strx(
+                  emitter,
+                  3,
+                  tmp.reinterpret_as_uint(),
+                  dst_reg.reinterpret_as_uint(),
+                  (dst_off + i * 8).to_int64().reinterpret_as_uint64(),
+                )
+              } else {
+                emit_fmov_s_to_w(emitter, tmp, i)
+                arm64_strx(
+                  emitter,
+                  2,
+                  tmp.reinterpret_as_uint(),
+                  dst_reg.reinterpret_as_uint(),
+                  (dst_off + i * 4).to_int64().reinterpret_as_uint64(),
+                )
+              }
+              give_reg(pool, tmp)
+              i = i + 1
+            }
+          }
+        }
+      } else {
+        emit_store_agg_return_gp_to_addr(emitter, size, dst_reg, dst_off, loc, bag)
+      }
+    }
+    Expr::Cast(expr=inner, ..) =>
+      gen_agg_expr_to_addr(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        inner,
+        dst_reg,
+        dst_off,
+        ty,
+        loc,
+        bag,
+      )
+    Expr::IntLit(value~, loc~) =>
+      match parse_int64_literal(value) {
+        Some(v) =>
+          if v == 0 {
+            emit_zero_bytes(emitter, dst_reg, dst_off, size)
+          } else {
+            add_error(bag, loc, "codegen: non-zero scalar for aggregate")
+          }
+        None => add_error(bag, loc, "codegen: invalid integer literal")
+      }
+    Expr::Binary(op=BinaryOp::Comma, left~, right~, ..) => {
+      gen_expr_any(emitter, alloc, syms, pool, cstrings, left, 0, bag)
+      gen_agg_expr_to_addr(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        right,
+        dst_reg,
+        dst_off,
+        ty,
+        loc,
+        bag,
+      )
+    }
+    Expr::Conditional(cond~, then_expr~, else_expr~, loc~) => {
+      gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, cond, bag)
+      let br_else = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
+      gen_agg_expr_to_addr(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        then_expr,
+        dst_reg,
+        dst_off,
+        ty,
+        loc,
+        bag,
+      )
+      let br_end = gjmp(emitter, 0)
+      let else_pc = emitter_pc(emitter)
+      patch_b_cond(emitter, br_else, else_pc, ARM64_COND_EQ) catch {
+        err => add_error(bag, loc, err.to_string())
+      }
+      gen_agg_expr_to_addr(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        else_expr,
+        dst_reg,
+        dst_off,
+        ty,
+        loc,
+        bag,
+      )
+      let end_pc = emitter_pc(emitter)
+      gsym_addr(emitter, br_end, end_pc) catch {
+        err => add_error(bag, loc, err.to_string())
+      }
+    }
+    Expr::StmtExpr(stmts~, loc~) =>
+      gen_stmt_expr_with(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        stmts,
+        0,
+        true,
+        loc,
+        bag,
+        (expr, _) =>
+          gen_agg_expr_to_addr(
+            emitter,
+            alloc,
+            syms,
+            pool,
+            cstrings,
+            expr,
+            dst_reg,
+            dst_off,
+            ty,
+            loc,
+            bag,
+          ),
+      )
+    _ => {
+      let src_addr = take_reg(pool) catch {
+        err => {
+          add_error(bag, loc, err.to_string())
+          return
+        }
+      }
+      gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, expr, src_addr, bag)
+      emit_copy_bytes(
+        emitter,
+        pool,
+        src_addr,
+        0,
+        dst_reg,
+        dst_off,
+        size,
+        loc,
+        bag,
+      )
+      give_reg(pool, src_addr)
+    }
+  }
 }
 
 ///|
@@ -1817,40 +2325,19 @@ fn gen_initializer_to_addr(
           if size <= 0 {
             return
           }
-          match expr {
-            Expr::Call(callee~, args~, ..) => {
-              gen_call_expr(emitter, alloc, syms, pool, cstrings, callee, args, loc, bag)
-              emit_store_agg_return_gp_to_addr(
-                emitter,
-                size,
-                base_reg,
-                base_off,
-                loc,
-                bag,
-              )
-            }
-            _ => {
-              let src = take_reg(pool) catch {
-                err => {
-                  add_error(bag, loc, err.to_string())
-                  return
-                }
-              }
-              gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, expr, src, bag)
-              emit_copy_bytes(
-                emitter,
-                pool,
-                src,
-                0,
-                base_reg,
-                base_off,
-                size,
-                loc,
-                bag,
-              )
-              give_reg(pool, src)
-            }
-          }
+          gen_agg_expr_to_addr(
+            emitter,
+            alloc,
+            syms,
+            pool,
+            cstrings,
+            expr,
+            base_reg,
+            base_off,
+            ty,
+            loc,
+            bag,
+          )
         }
         _ => {
           match float_kind_of_type(ty) {
@@ -2480,6 +2967,84 @@ fn emit_addr_global(
 }
 
 ///|
+fn emit_addr_sp(
+  emitter : Arm64Emitter,
+  dst : Int,
+  off : Int,
+  _loc : SrcLoc,
+  _bag : DiagBag,
+) -> Unit {
+  let imm = if off < 0 { -off } else { off }
+  if imm <= 0xfff {
+    if off < 0 {
+      emit32(
+        emitter,
+        (0xd1000000 : Int)
+        .lor(dst)
+        .lor(31 << 5)
+        .lor(imm << 10)
+        .reinterpret_as_uint(),
+      )
+    } else {
+      arm64_add_imm(emitter, dst, 31, imm)
+    }
+  } else {
+    arm64_movimm(emitter, dst.reinterpret_as_uint(), imm.to_uint64())
+    let base : Int = if off < 0 { 0xcb000000 } else { 0x8b000000 }
+    emit32(
+      emitter,
+      (base : Int)
+      .lor(dst)
+      .lor(31 << 5)
+      .lor(dst << 16)
+      .reinterpret_as_uint(),
+    )
+  }
+}
+
+///|
+fn emit_addr_reg(
+  emitter : Arm64Emitter,
+  dst : Int,
+  base_reg : Int,
+  off : Int,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  if base_reg == 29 {
+    emit_addr_local(emitter, dst, off, loc, bag)
+    return
+  }
+  if base_reg == 31 {
+    emit_addr_sp(emitter, dst, off, loc, bag)
+    return
+  }
+  let imm = if off < 0 { -off } else { off }
+  if imm <= 0xfff {
+    let base : Int = if off < 0 { 0xd1000000 } else { 0x91000000 }
+    emit32(
+      emitter,
+      (base : Int)
+      .lor(dst)
+      .lor(base_reg << 5)
+      .lor(imm << 10)
+      .reinterpret_as_uint(),
+    )
+  } else {
+    arm64_movimm(emitter, dst.reinterpret_as_uint(), imm.to_uint64())
+    let base : Int = if off < 0 { 0xcb000000 } else { 0x8b000000 }
+    emit32(
+      emitter,
+      (base : Int)
+      .lor(dst)
+      .lor(base_reg << 5)
+      .lor(dst << 16)
+      .reinterpret_as_uint(),
+    )
+  }
+}
+
+///|
 ///|
 fn emit_call(emitter : Arm64Emitter, sym : Sym) -> Unit {
   let ind = emitter_pc(emitter)
@@ -2674,6 +3239,325 @@ fn gen_builtin_va_arg_load(
 }
 
 ///|
+struct Arm64PcsLayout {
+  ret_loc : Int
+  arg_locs : Array[Int]
+  stack_size : Int
+}
+
+///|
+struct SRetAddr {
+  base_reg : Int
+  off : Int
+}
+
+///|
+fn arm64_hfa_aux(
+  sem : SemContext,
+  ty : CType,
+  fsize : Int,
+  num : Int,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> (Int, Int)? {
+  match float_kind_of_type(ty) {
+    Some(_) =>
+      match type_size_align_or_error(sem, ty, loc) {
+        None => return None
+        Some((size, _)) =>
+          if num >= 4 || (fsize != 0 && fsize != size) {
+            return None
+          } else {
+            let next_size = if fsize == 0 { size } else { fsize }
+            return Some((num + 1, next_size))
+          }
+      }
+    None => ()
+  }
+  match strip_qual_attrs(ty) {
+    CType::Struct(name=tag, fields=field_list, attrs=struct_attrs) =>
+      match ensure_struct_fields(sem, tag, field_list, is_union=false, loc) {
+        None => None
+        Some(def) => {
+          for field in def.fields {
+            if field.bit_width is Some(_) {
+              return None
+            }
+          }
+          let mut num_cur = num
+          let mut fsize_cur = fsize
+          for field in def.fields {
+            match arm64_hfa_aux(sem, field.ty, fsize_cur, num_cur, loc, bag) {
+              None => return None
+              Some((n1, s1)) => {
+                num_cur = n1
+                fsize_cur = s1
+              }
+            }
+          }
+          let merged = merge_attrs(def.attrs, struct_attrs)
+          let (struct_size, _) = struct_size_align(sem, def.fields, merged, loc)
+          if fsize_cur == 0 || struct_size != (num_cur - num) * fsize_cur {
+            None
+          } else {
+            Some((num_cur, fsize_cur))
+          }
+        }
+      }
+    CType::Union(name=tag, fields=field_list, attrs=union_attrs) =>
+      match ensure_struct_fields(sem, tag, field_list, is_union=true, loc) {
+        None => None
+        Some(def) => {
+          for field in def.fields {
+            if field.bit_width is Some(_) {
+              return None
+            }
+          }
+          let mut best_num : Int? = None
+          let mut best_size : Int = 0
+          for field in def.fields {
+            match arm64_hfa_aux(sem, field.ty, fsize, num, loc, bag) {
+              None => return None
+              Some((n1, s1)) =>
+                match best_num {
+                  None => {
+                    best_num = Some(n1)
+                    best_size = s1
+                  }
+                  Some(prev) =>
+                    if n1 < prev {
+                      best_num = Some(n1)
+                      best_size = s1
+                    }
+                }
+            }
+          }
+          match best_num {
+            None => None
+            Some(num_best) => {
+              let merged = merge_attrs(def.attrs, union_attrs)
+              let (union_size, _) = union_size_align(sem, def.fields, merged, loc)
+              if best_size == 0 || union_size != (num_best - num) * best_size {
+                None
+              } else {
+                Some((num_best, best_size))
+              }
+            }
+          }
+        }
+      }
+    CType::Array(elem~, size~, ..) =>
+      match size {
+        None => None
+        Some(count) =>
+          if count == 0 {
+            Some((num, fsize))
+          } else {
+            match arm64_hfa_aux(sem, elem, fsize, num, loc, bag) {
+              None => None
+              Some((num1, fsize1)) => {
+                let elem_count = num1 - num
+                if elem_count == 0 || (elem_count != 0 && count > 4) {
+                  None
+                } else {
+                  let total = num + count * elem_count
+                  if total > 4 {
+                    None
+                  } else {
+                    Some((total, fsize1))
+                  }
+                }
+              }
+            }
+          }
+      }
+    _ => None
+  }
+}
+
+///|
+fn arm64_hfa(
+  sem : SemContext,
+  ty : CType,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> (Int, Int)? {
+  match arm64_hfa_aux(sem, ty, 0, 0, loc, bag) {
+    None => None
+    Some((num, fsize)) =>
+      if num > 0 && num <= 4 && fsize > 0 {
+        Some((num, fsize))
+      } else {
+        None
+      }
+  }
+}
+
+///|
+fn arm64_pcs_size_align(
+  sem : SemContext,
+  ty : CType,
+  loc : SrcLoc,
+  _bag : DiagBag,
+) -> (Int, Int)? {
+  match strip_qual_attrs(ty) {
+    CType::Array(..) | CType::Function(..) => Some((8, 8))
+    _ => type_size_align_or_error(sem, ty, loc)
+  }
+}
+
+///|
+fn arm64_pcs_aux(
+  sem : SemContext,
+  variadic_index : Int,
+  types : Array[CType],
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> (Array[Int], Int) {
+  let mut nx = 0
+  let mut nv = 0
+  let mut ns = 32
+  let locs : Array[Int] = []
+  let is_macho = true
+  for i = 0; i < types.length(); i = i + 1 {
+    let ty = types[i]
+    let (hfa_count, _hfa_size) = match arm64_hfa(sem, ty, loc, bag) {
+      None => (0, 0)
+      Some(v) => v
+    }
+    let (size0, align0) = match arm64_pcs_size_align(sem, ty, loc, bag) {
+      None => (0, 1)
+      Some(v) => v
+    }
+    let is_struct = match strip_qual_attrs(ty) {
+      CType::Struct(..) | CType::Union(..) => true
+      _ => false
+    }
+    let is_float = float_kind_of_type(ty) is Some(_)
+    let is_long_double = match strip_qual_attrs(ty) {
+      CType::Float(kind=CFloatKind::LongDouble) => true
+      _ => false
+    }
+    let mut size = size0
+    let align = align0
+
+    if is_macho && variadic_index > 0 && i == variadic_index {
+      nx = 8
+      nv = 8
+    }
+
+    if hfa_count == 0 && size > 16 {
+      if nx < 8 {
+        locs.push((nx << 1) | 1)
+        nx = nx + 1
+      } else {
+        ns = align_up(ns, 8)
+        locs.push(ns | 1)
+        ns = ns + 8
+      }
+      continue
+    } else if is_struct {
+      size = align_up(size, 8)
+    }
+
+    if is_float && nv < 8 {
+      locs.push(16 + (nv << 1))
+      nv = nv + 1
+      continue
+    }
+
+    if hfa_count > 0 && nv + hfa_count <= 8 {
+      locs.push(16 + (nv << 1))
+      nv = nv + hfa_count
+      continue
+    }
+
+    if hfa_count > 0 {
+      nv = 8
+      size = align_up(size, 8)
+    }
+
+    if hfa_count > 0 || is_long_double {
+      ns = align_up(ns, 8)
+      ns = align_up(ns, align)
+    }
+
+    if is_float {
+      size = 8
+    }
+
+    if hfa_count > 0 || is_float {
+      locs.push(ns)
+      ns = ns + size
+      continue
+    }
+
+    if !is_struct && size <= 8 && nx < 8 {
+      locs.push(nx << 1)
+      nx = nx + 1
+      continue
+    }
+
+    if align == 16 {
+      nx = (nx + 1) & (0xfffffffe : Int)
+    }
+
+    if !is_struct && size == 16 && nx < 7 {
+      locs.push(nx << 1)
+      nx = nx + 2
+      continue
+    }
+
+    if is_struct && size <= (8 - nx) * 8 {
+      locs.push(nx << 1)
+      nx = nx + ((size + 7) >> 3)
+      continue
+    }
+
+    nx = 8
+
+    ns = align_up(ns, 8)
+    ns = align_up(ns, align)
+
+    if is_struct {
+      locs.push(ns)
+      ns = ns + size
+      continue
+    }
+
+    if size < 8 {
+      size = 8
+    }
+    locs.push(ns)
+    ns = ns + size
+  }
+  (locs, ns - 32)
+}
+
+///|
+fn arm64_pcs(
+  sem : SemContext,
+  variadic_index : Int,
+  ret_ty : CType,
+  arg_tys : Array[CType],
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Arm64PcsLayout {
+  let ret_loc = match strip_qual_attrs(ret_ty) {
+    CType::Void => -1
+    _ => {
+      let (locs, _) = arm64_pcs_aux(sem, 0, [ret_ty], loc, bag)
+      match locs.get(0) {
+        None => -1
+        Some(v) => v
+      }
+    }
+  }
+  let (arg_locs, stack_size) = arm64_pcs_aux(sem, variadic_index, arg_tys, loc, bag)
+  { ret_loc, arg_locs, stack_size }
+}
+
+///|
 fn call_arg_slot_count(
   alloc : LocalAlloc,
   ty : CType,
@@ -2732,94 +3616,24 @@ fn store_call_arg_to_slot(
         CType::Struct(..) | CType::Union(..) =>
           match type_size_align_or_error(alloc.sem, ty, loc) {
             None => ()
-            Some((size, _)) => {
-              let addr = take_reg(pool) catch {
-                err => {
-                  add_error(bag, loc, err.to_string())
-                  return
-                }
-              }
-              gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, arg, addr, bag)
-              if size <= 8 {
-                let tmp = take_reg(pool) catch {
-                  err => {
-                    add_error(bag, loc, err.to_string())
-                    give_reg(pool, addr)
-                    return
-                  }
-                }
-                match arm64_sz_from_size(size) {
-                  None => add_error(bag, loc, "codegen: unsupported scalar size")
-                  Some(v) => {
-                    arm64_ldrx(
-                      emitter,
-                      false,
-                      v,
-                      tmp.reinterpret_as_uint(),
-                      addr.reinterpret_as_uint(),
-                      0,
-                    )
-                    arm64_strx(emitter, v, tmp.reinterpret_as_uint(), (31 : UInt), slot_off)
-                  }
-                }
-                give_reg(pool, tmp)
-              } else if size <= 16 {
-                let tmp0 = take_reg(pool) catch {
-                  err => {
-                    add_error(bag, loc, err.to_string())
-                    give_reg(pool, addr)
-                    return
-                  }
-                }
-                let tmp1 = take_reg(pool) catch {
-                  err => {
-                    add_error(bag, loc, err.to_string())
-                    give_reg(pool, tmp0)
-                    give_reg(pool, addr)
-                    return
-                  }
-                }
-                arm64_ldrx(
+            Some((size, _)) =>
+              if size <= 16 {
+                gen_agg_expr_to_addr(
                   emitter,
-                  false,
-                  3,
-                  tmp0.reinterpret_as_uint(),
-                  addr.reinterpret_as_uint(),
-                  0,
+                  alloc,
+                  syms,
+                  pool,
+                  cstrings,
+                  arg,
+                  31,
+                  slot_off.to_int(),
+                  ty,
+                  loc,
+                  bag,
                 )
-                let rest = size - 8
-                match arm64_sz_from_size(rest) {
-                  None => add_error(bag, loc, "codegen: unsupported scalar size")
-                  Some(v) => {
-                    arm64_ldrx(
-                      emitter,
-                      false,
-                      v,
-                      tmp1.reinterpret_as_uint(),
-                      addr.reinterpret_as_uint(),
-                      8,
-                    )
-                    arm64_strx(
-                      emitter,
-                      3,
-                      tmp0.reinterpret_as_uint(),
-                      (31 : UInt),
-                      slot_off,
-                    )
-                    arm64_strx(
-                      emitter,
-                      v,
-                      tmp1.reinterpret_as_uint(),
-                      (31 : UInt),
-                      slot_off + 8,
-                    )
-                  }
-                }
-                give_reg(pool, tmp1)
-                give_reg(pool, tmp0)
+              } else {
+                add_error(bag, loc, "codegen: struct args >16 bytes not supported yet")
               }
-              give_reg(pool, addr)
-            }
           }
         _ => {
           let tmp = take_reg(pool) catch {
@@ -2864,192 +3678,28 @@ fn gen_call_direct(
   cstrings : Map[String, Sym],
   name : String,
   args : Array[Expr],
+  sret : SRetAddr?,
   loc : SrcLoc,
   bag : DiagBag,
 ) -> Unit {
   let sig = alloc.sem.functions.get(name)
-  let (fixed_count, is_varargs) = match sig {
-    None => (0, false)
-    Some(s) => (s.params.length(), s.varargs)
+  let (fixed_count, is_varargs, ret_ty) = match sig {
+    None => (
+      0,
+      false,
+      type_of_expr(
+        alloc.sem,
+        Expr::Call(
+          callee=Expr::Ident(name=name, loc=loc),
+          args=args,
+          loc=loc,
+        ),
+      ),
+    )
+    Some(s) => (s.params.length(), s.varargs, s.return_type)
   }
   let is_varargs_call = is_varargs && args.length() > fixed_count
-
-  if is_varargs_call {
-    if fixed_count > 8 {
-      add_error(bag, loc, "codegen: too many fixed args for varargs call")
-      return
-    }
-
-    let arg_tys : Array[CType] = []
-    let mut i = 0
-    while i < args.length() {
-      let arg = args[i]
-      let param_ty = match sig {
-        None => type_of_expr(alloc.sem, arg)
-        Some(s) =>
-          if i < s.params.length() {
-            s.params[i]
-          } else {
-            type_of_expr(alloc.sem, arg)
-          }
-      }
-      arg_tys.push(param_ty)
-      i = i + 1
-    }
-
-    let slot_indices : Array[Int] = []
-    let slot_counts : Array[Int] = []
-    i = 0
-    while i < args.length() {
-      let slots = match call_arg_slot_count(alloc, arg_tys[i], loc, bag) {
-        None => return
-        Some(v) => v
-      }
-      slot_counts.push(slots)
-      i = i + 1
-    }
-
-    let mut vararg_slots = 0
-    i = fixed_count
-    while i < args.length() {
-      vararg_slots = vararg_slots + slot_counts[i]
-      i = i + 1
-    }
-
-    let mut vararg_off = 0
-    let mut fixed_slots = 0
-    i = 0
-    while i < args.length() {
-      let slots = slot_counts[i]
-      if i >= fixed_count {
-        slot_indices.push(vararg_off)
-        vararg_off = vararg_off + slots
-      } else {
-        slot_indices.push(vararg_slots + fixed_slots)
-        fixed_slots = fixed_slots + slots
-      }
-      i = i + 1
-    }
-
-    let total_slots = vararg_slots + fixed_slots
-    let stack_bytes = align_up(total_slots * 8, 16)
-    if stack_bytes > 0 {
-      let off = (0 : UInt64) - stack_bytes.to_uint64()
-      arm64_spoff(emitter, (31 : UInt), off)
-    }
-
-    i = 0
-    while i < args.length() {
-      let store_ty =
-        if i >= fixed_count {
-          promote_vararg_type(arg_tys[i])
-        } else {
-          arg_tys[i]
-        }
-      store_call_arg_to_slot(
-        emitter,
-        alloc,
-        syms,
-        pool,
-        cstrings,
-        args[i],
-        store_ty,
-        (slot_indices[i] * 8).to_uint64(),
-        loc,
-        bag,
-      )
-      i = i + 1
-    }
-
-    let mut gp = 0
-    let mut fp = 0
-    i = 0
-    while i < fixed_count && i < args.length() {
-      let param_ty = arg_tys[i]
-      let off = (slot_indices[i] * 8).to_uint64()
-      match float_kind_of_type(param_ty) {
-        Some(k) => {
-          if fp >= 8 {
-            add_error(bag, loc, "codegen: only supports up to 8 float args for now")
-            return
-          }
-          let tmp = take_reg(pool) catch {
-            err => {
-              add_error(bag, loc, err.to_string())
-              return
-            }
-          }
-          if k == CFloatKind::Double {
-            arm64_ldrx(emitter, false, 3, tmp.reinterpret_as_uint(), (31 : UInt), off)
-            emit_fmov_x_to_d(emitter, fp, tmp)
-          } else {
-            arm64_ldrx(emitter, false, 2, tmp.reinterpret_as_uint(), (31 : UInt), off)
-            emit_fmov_w_to_s(emitter, fp, tmp)
-          }
-          give_reg(pool, tmp)
-          fp = fp + 1
-        }
-        None => {
-          if gp >= 8 {
-            add_error(bag, loc, "codegen: only supports up to 8 args for now")
-            return
-          }
-          match strip_qual_attrs(param_ty) {
-            CType::Struct(..) | CType::Union(..) =>
-              match type_size_align_or_error(alloc.sem, param_ty, loc) {
-                None => ()
-                Some((size, _)) => {
-                  if size <= 8 {
-                    match arm64_sz_from_size(size) {
-                      None => add_error(bag, loc, "codegen: unsupported scalar size")
-                      Some(v) =>
-                        arm64_ldrx(emitter, false, v, gp.reinterpret_as_uint(), (31 : UInt), off)
-                    }
-                    gp = gp + 1
-                  } else if size <= 16 {
-                    if gp + 1 >= 8 {
-                      add_error(bag, loc, "codegen: only supports up to 8 args for now")
-                      return
-                    }
-                    arm64_ldrx(emitter, false, 3, gp.reinterpret_as_uint(), (31 : UInt), off)
-                    let rest = size - 8
-                    match arm64_sz_from_size(rest) {
-                      None => add_error(bag, loc, "codegen: unsupported scalar size")
-                      Some(v) =>
-                        arm64_ldrx(
-                          emitter,
-                          false,
-                          v,
-                          (gp + 1).reinterpret_as_uint(),
-                          (31 : UInt),
-                          off + 8,
-                        )
-                    }
-                    gp = gp + 2
-                  } else {
-                    add_error(bag, loc, "codegen: struct args >16 bytes not supported yet")
-                    return
-                  }
-                }
-              }
-            _ => {
-              arm64_ldrx(emitter, false, 3, gp.reinterpret_as_uint(), (31 : UInt), off)
-              gp = gp + 1
-            }
-          }
-        }
-      }
-      i = i + 1
-    }
-
-    let sym = sym_for_name(syms, link_name(name))
-    emit_call(emitter, sym)
-
-    if stack_bytes > 0 {
-      arm64_spoff(emitter, (31 : UInt), stack_bytes.to_uint64())
-    }
-    return
-  }
+  let variadic_index = if is_varargs_call { fixed_count } else { 0 }
 
   let arg_tys : Array[CType] = []
   let mut i = 0
@@ -3064,131 +3714,33 @@ fn gen_call_direct(
           type_of_expr(alloc.sem, arg)
         }
     }
-    arg_tys.push(param_ty)
-    i = i + 1
-  }
-
-  let slot_indices : Array[Int] = []
-  let mut total_slots = 0
-  i = 0
-  while i < args.length() {
-    let slots = match call_arg_slot_count(alloc, arg_tys[i], loc, bag) {
-      None => return
-      Some(v) => v
-    }
-    slot_indices.push(total_slots)
-    total_slots = total_slots + slots
-    i = i + 1
-  }
-
-  let stack_bytes = align_up(total_slots * 8, 16)
-  if stack_bytes > 0 {
-    let off = (0 : UInt64) - stack_bytes.to_uint64()
-    arm64_spoff(emitter, (31 : UInt), off)
-  }
-
-  i = 0
-  while i < args.length() {
-    store_call_arg_to_slot(
-      emitter,
-      alloc,
-      syms,
-      pool,
-      cstrings,
-      args[i],
-      arg_tys[i],
-      (slot_indices[i] * 8).to_uint64(),
-      loc,
-      bag,
-    )
-    i = i + 1
-  }
-
-  let mut gp = 0
-  let mut fp = 0
-  i = 0
-  while i < args.length() {
-    let param_ty = arg_tys[i]
-    let off = (slot_indices[i] * 8).to_uint64()
-    match float_kind_of_type(param_ty) {
-      Some(k) => {
-        if fp >= 8 {
-          add_error(bag, loc, "codegen: only supports up to 8 float args for now")
-          return
-        }
-        let tmp = take_reg(pool) catch {
-          err => {
-            add_error(bag, loc, err.to_string())
-            return
-          }
-        }
-        if k == CFloatKind::Double {
-          arm64_ldrx(emitter, false, 3, tmp.reinterpret_as_uint(), (31 : UInt), off)
-          emit_fmov_x_to_d(emitter, fp, tmp)
-        } else {
-          arm64_ldrx(emitter, false, 2, tmp.reinterpret_as_uint(), (31 : UInt), off)
-          emit_fmov_w_to_s(emitter, fp, tmp)
-        }
-        give_reg(pool, tmp)
-        fp = fp + 1
+    let store_ty =
+      if is_varargs_call && i >= fixed_count {
+        promote_vararg_type(param_ty)
+      } else {
+        param_ty
       }
-      None => {
-        if gp >= 8 {
-          add_error(bag, loc, "codegen: only supports up to 8 args for now")
-          return
-        }
-        match strip_qual_attrs(param_ty) {
-          CType::Struct(..) | CType::Union(..) =>
-            match type_size_align_or_error(alloc.sem, param_ty, loc) {
-              None => ()
-              Some((size, _)) => {
-                if size <= 8 {
-                  match arm64_sz_from_size(size) {
-                    None => add_error(bag, loc, "codegen: unsupported scalar size")
-                    Some(v) =>
-                      arm64_ldrx(emitter, false, v, gp.reinterpret_as_uint(), (31 : UInt), off)
-                  }
-                  gp = gp + 1
-                } else if size <= 16 {
-                  if gp + 1 >= 8 {
-                    add_error(bag, loc, "codegen: only supports up to 8 args for now")
-                    return
-                  }
-                  arm64_ldrx(emitter, false, 3, gp.reinterpret_as_uint(), (31 : UInt), off)
-                  let rest = size - 8
-                  match arm64_sz_from_size(rest) {
-                    None => add_error(bag, loc, "codegen: unsupported scalar size")
-                    Some(v) =>
-                      arm64_ldrx(
-                        emitter,
-                        false,
-                        v,
-                        (gp + 1).reinterpret_as_uint(),
-                        (31 : UInt),
-                        off + 8,
-                      )
-                  }
-                  gp = gp + 2
-                } else {
-                  add_error(bag, loc, "codegen: struct args >16 bytes not supported yet")
-                  return
-                }
-              }
-            }
-          _ => {
-            arm64_ldrx(emitter, false, 3, gp.reinterpret_as_uint(), (31 : UInt), off)
-            gp = gp + 1
-          }
-        }
-      }
-    }
+    arg_tys.push(store_ty)
     i = i + 1
   }
+
   let sym = sym_for_name(syms, link_name(name))
-  emit_call(emitter, sym)
-  if stack_bytes > 0 {
-    arm64_spoff(emitter, (31 : UInt), stack_bytes.to_uint64())
-  }
+  let emit_call_fn = fn() { emit_call(emitter, sym) }
+  gen_call_with_layout(
+    emitter,
+    alloc,
+    syms,
+    pool,
+    cstrings,
+    args,
+    arg_tys,
+    ret_ty,
+    variadic_index,
+    sret,
+    loc,
+    bag,
+    emit_call_fn,
+  )
 }
 
 ///|
@@ -3202,7 +3754,328 @@ fn emit_blr(emitter : Arm64Emitter, reg : Int) -> Unit {
 }
 
 ///|
-fn gen_call_expr(
+fn gen_call_with_layout(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : Map[String, Sym],
+  args : Array[Expr],
+  arg_tys : Array[CType],
+  ret_ty : CType,
+  variadic_index : Int,
+  sret : SRetAddr?,
+  loc : SrcLoc,
+  bag : DiagBag,
+  emit_call : () -> Unit,
+) -> Unit {
+  let layout = arm64_pcs(alloc.sem, variadic_index, ret_ty, arg_tys, loc, bag)
+  let arg_locs = layout.arg_locs
+  let stack_args_size = align_up(layout.stack_size, 16)
+
+  let arg_sizes : Array[Int] = []
+  let arg_aligns : Array[Int] = []
+  let arg_hfa_counts : Array[Int] = []
+  let arg_hfa_sizes : Array[Int] = []
+  let arg_is_agg : Array[Bool] = []
+
+  let mut i = 0
+  while i < arg_tys.length() {
+    let ty = arg_tys[i]
+    let is_agg = match strip_qual_attrs(ty) {
+      CType::Struct(..) | CType::Union(..) => true
+      _ => false
+    }
+    let (size, align) =
+      if is_agg {
+        match type_size_align_or_error(alloc.sem, ty, loc) {
+          None => (0, 1)
+          Some(v) => v
+        }
+      } else {
+        match arm64_pcs_size_align(alloc.sem, ty, loc, bag) {
+          None => (0, 1)
+          Some(v) => v
+        }
+      }
+    arg_sizes.push(size)
+    arg_aligns.push(align)
+    arg_is_agg.push(is_agg)
+    match arm64_hfa(alloc.sem, ty, loc, bag) {
+      None => {
+        arg_hfa_counts.push(0)
+        arg_hfa_sizes.push(0)
+      }
+      Some((count, fsize)) => {
+        arg_hfa_counts.push(count)
+        arg_hfa_sizes.push(fsize)
+      }
+    }
+    i = i + 1
+  }
+
+  let spill_offs : Array[Int?] = []
+  let copy_offs : Array[Int?] = []
+  let mut scratch_off = stack_args_size
+
+  i = 0
+  while i < args.length() {
+    let loc_i = arg_locs.get(i).unwrap_or(0)
+    let byref = (loc_i & 1) != 0
+    let is_stack = loc_i >= 32
+    let is_agg = arg_is_agg[i]
+    let needs_copy = byref || (is_agg && !is_stack)
+
+    if needs_copy {
+      let align = arg_aligns[i]
+      let size = arg_sizes[i]
+      let aligned = align_up(scratch_off, align)
+      copy_offs.push(Some(aligned))
+      scratch_off = aligned + size
+    } else {
+      copy_offs.push(None)
+    }
+
+    if !is_stack {
+      if needs_copy && !byref {
+        spill_offs.push(copy_offs[i])
+      } else {
+        let spill_size =
+          if byref {
+            8
+          } else {
+            match float_kind_of_type(arg_tys[i]) {
+              Some(k) =>
+                if k == CFloatKind::Float {
+                  4
+                } else {
+                  8
+                }
+              None => 8
+            }
+          }
+        let spill_align = if spill_size < 8 { 4 } else { 8 }
+        let aligned = align_up(scratch_off, spill_align)
+        spill_offs.push(Some(aligned))
+        scratch_off = aligned + spill_size
+      }
+    } else {
+      spill_offs.push(None)
+    }
+    i = i + 1
+  }
+
+  let mut sret_addr = sret
+  if layout.ret_loc == 1 {
+    match sret_addr {
+      None =>
+        match type_size_align_or_error(alloc.sem, ret_ty, loc) {
+          None => ()
+          Some((ret_size, ret_align)) => {
+            let aligned = align_up(scratch_off, ret_align)
+            sret_addr = Some({ base_reg: 31, off: aligned })
+            scratch_off = aligned + ret_size
+          }
+        }
+      Some(_) => ()
+    }
+  }
+
+  let total_stack = align_up(scratch_off, 16)
+  if total_stack > 0 {
+    let off = (0 : UInt64) - total_stack.to_uint64()
+    arm64_spoff(emitter, (31 : UInt), off)
+  }
+
+  if layout.ret_loc == 1 {
+    match sret_addr {
+      None => ()
+      Some(addr) => {
+        let base = addr.base_reg
+        let mut off = addr.off
+        if base == 31 {
+          off = off + total_stack
+        }
+        emit_addr_reg(emitter, 8, base, off, loc, bag)
+      }
+    }
+  }
+
+  i = 0
+  while i < args.length() {
+    let loc_i = arg_locs.get(i).unwrap_or(0)
+    let byref = (loc_i & 1) != 0
+    let is_stack = loc_i >= 32
+    let stack_off = if is_stack { (loc_i & (0xfffffffe : Int)) - 32 } else { 0 }
+    if byref {
+      let copy_off = copy_offs[i].unwrap_or(0)
+      gen_agg_expr_to_addr(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        args[i],
+        31,
+        copy_off,
+        arg_tys[i],
+        loc,
+        bag,
+      )
+      let tmp = take_reg(pool) catch {
+        err => {
+          add_error(bag, loc, err.to_string())
+          return
+        }
+      }
+      emit_addr_sp(emitter, tmp, copy_off, loc, bag)
+      if is_stack {
+        arm64_strx(
+          emitter,
+          3,
+          tmp.reinterpret_as_uint(),
+          (31 : UInt),
+          stack_off.to_int64().reinterpret_as_uint64(),
+        )
+      } else {
+        let spill = spill_offs[i].unwrap_or(0)
+        arm64_strx(
+          emitter,
+          3,
+          tmp.reinterpret_as_uint(),
+          (31 : UInt),
+          spill.to_int64().reinterpret_as_uint64(),
+        )
+      }
+      give_reg(pool, tmp)
+    } else {
+      let slot_off =
+        if is_stack {
+          stack_off
+        } else {
+          spill_offs[i].unwrap_or(0)
+        }
+      store_call_arg_to_slot(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        args[i],
+        arg_tys[i],
+        slot_off.to_uint64(),
+        loc,
+        bag,
+      )
+    }
+    i = i + 1
+  }
+
+  i = 0
+  while i < args.length() {
+    let loc_i = arg_locs.get(i).unwrap_or(0)
+    if loc_i < 16 {
+      let spill_off = spill_offs[i].unwrap_or(0)
+      let reg = loc_i >> 1
+      if arg_is_agg[i] {
+        let size = arg_sizes[i]
+        emit_addr_sp(emitter, reg, spill_off, loc, bag)
+        arm64_ldrs(emitter, reg.reinterpret_as_uint(), size)
+      } else {
+        arm64_ldrx(
+          emitter,
+          false,
+          3,
+          reg.reinterpret_as_uint(),
+          (31 : UInt),
+          spill_off.to_int64().reinterpret_as_uint64(),
+        )
+      }
+    } else if loc_i < 32 {
+      let spill_off = spill_offs[i].unwrap_or(0)
+      let fp_base = (loc_i >> 1) - 8
+      let hfa_count = arg_hfa_counts[i]
+      let hfa_size = arg_hfa_sizes[i]
+      if hfa_count > 0 {
+        let mut j = 0
+        while j < hfa_count {
+          let tmp = take_reg(pool) catch {
+            err => {
+              add_error(bag, loc, err.to_string())
+              return
+            }
+          }
+          if hfa_size == 8 {
+            arm64_ldrx(
+              emitter,
+              false,
+              3,
+              tmp.reinterpret_as_uint(),
+              (31 : UInt),
+              (spill_off + j * 8).to_int64().reinterpret_as_uint64(),
+            )
+            emit_fmov_x_to_d(emitter, fp_base + j, tmp)
+          } else {
+            arm64_ldrx(
+              emitter,
+              false,
+              2,
+              tmp.reinterpret_as_uint(),
+              (31 : UInt),
+              (spill_off + j * 4).to_int64().reinterpret_as_uint64(),
+            )
+            emit_fmov_w_to_s(emitter, fp_base + j, tmp)
+          }
+          give_reg(pool, tmp)
+          j = j + 1
+        }
+      } else {
+        let tmp = take_reg(pool) catch {
+          err => {
+            add_error(bag, loc, err.to_string())
+            return
+          }
+        }
+        match float_kind_of_type(arg_tys[i]) {
+          Some(k) =>
+            if k == CFloatKind::Double || k == CFloatKind::LongDouble {
+              arm64_ldrx(
+                emitter,
+                false,
+                3,
+                tmp.reinterpret_as_uint(),
+                (31 : UInt),
+                spill_off.to_int64().reinterpret_as_uint64(),
+              )
+              emit_fmov_x_to_d(emitter, fp_base, tmp)
+            } else {
+              arm64_ldrx(
+                emitter,
+                false,
+                2,
+                tmp.reinterpret_as_uint(),
+                (31 : UInt),
+                spill_off.to_int64().reinterpret_as_uint64(),
+              )
+              emit_fmov_w_to_s(emitter, fp_base, tmp)
+            }
+          None => ()
+        }
+        give_reg(pool, tmp)
+      }
+    }
+    i = i + 1
+  }
+
+  emit_call()
+
+  if total_stack > 0 {
+    arm64_spoff(emitter, (31 : UInt), total_stack.to_uint64())
+  }
+}
+
+///|
+fn gen_call_expr_impl(
   emitter : Arm64Emitter,
   alloc : LocalAlloc,
   syms : SymTable,
@@ -3210,6 +4083,7 @@ fn gen_call_expr(
   cstrings : Map[String, Sym],
   callee : Expr,
   args : Array[Expr],
+  sret : SRetAddr?,
   loc : SrcLoc,
   bag : DiagBag,
 ) -> Unit {
@@ -3226,7 +4100,7 @@ fn gen_call_expr(
       return
     }
     if lookup_local(alloc, name) is None && alloc.sem.functions.contains(name) {
-      gen_call_direct(emitter, alloc, syms, pool, cstrings, name, args, loc, bag)
+      gen_call_direct(emitter, alloc, syms, pool, cstrings, name, args, sret, loc, bag)
       let call_ty = type_of_expr(alloc.sem, Expr::Call(callee~, args~, loc~))
       match float_kind_of_type(call_ty) {
         Some(k) =>
@@ -3242,167 +4116,71 @@ fn gen_call_expr(
   }
 
   // Indirect call via function pointer expression.
+  let call_ty = type_of_expr(alloc.sem, Expr::Call(callee~, args~, loc~))
+  let callee_ty = type_of_expr(alloc.sem, callee)
+  let mut param_tys : Array[CType] = []
+  let mut is_varargs = false
+  match strip_qual_attrs(callee_ty) {
+    CType::Pointer(inner) =>
+      match strip_qual_attrs(inner) {
+        CType::Function(return_type=_, params~, varargs~, ..) => {
+          param_tys = params
+          is_varargs = varargs
+        }
+        _ => ()
+      }
+    CType::Function(return_type=_, params~, varargs~, ..) => {
+      param_tys = params
+      is_varargs = varargs
+    }
+    _ => ()
+  }
+
   let arg_tys : Array[CType] = []
   let mut i = 0
   while i < args.length() {
-    arg_tys.push(type_of_expr(alloc.sem, args[i]))
+    let param_ty =
+      if i < param_tys.length() {
+        param_tys[i]
+      } else {
+        type_of_expr(alloc.sem, args[i])
+      }
+    let store_ty =
+      if is_varargs && i >= param_tys.length() {
+        promote_vararg_type(param_ty)
+      } else {
+        param_ty
+      }
+    arg_tys.push(store_ty)
     i = i + 1
   }
-
-  let slot_indices : Array[Int] = []
-  let mut total_slots = 0
-  i = 0
-  while i < args.length() {
-    let slots = match call_arg_slot_count(alloc, arg_tys[i], loc, bag) {
-      None => return
-      Some(v) => v
-    }
-    slot_indices.push(total_slots)
-    total_slots = total_slots + slots
-    i = i + 1
-  }
-
-  let stack_bytes = align_up(total_slots * 8, 16)
-  if stack_bytes > 0 {
-    let off = (0 : UInt64) - stack_bytes.to_uint64()
-    arm64_spoff(emitter, (31 : UInt), off)
-  }
-
-  i = 0
-  while i < args.length() {
-    store_call_arg_to_slot(
-      emitter,
-      alloc,
-      syms,
-      pool,
-      cstrings,
-      args[i],
-      arg_tys[i],
-      (slot_indices[i] * 8).to_uint64(),
-      loc,
-      bag,
-    )
-    i = i + 1
-  }
+  let variadic_index = if is_varargs { param_tys.length() } else { 0 }
 
   let fn_reg = take_reg(pool) catch {
     err => {
       add_error(bag, loc, err.to_string())
-      if stack_bytes > 0 {
-        arm64_spoff(emitter, (31 : UInt), stack_bytes.to_uint64())
-      }
       return
     }
   }
   gen_expr_ptr(emitter, alloc, syms, pool, cstrings, callee, fn_reg, bag)
-
-  let mut gp = 0
-  let mut fp = 0
-  i = 0
-  while i < args.length() {
-    let param_ty = arg_tys[i]
-    let off = (slot_indices[i] * 8).to_uint64()
-    match float_kind_of_type(param_ty) {
-      Some(k) => {
-        if fp >= 8 {
-          add_error(bag, loc, "codegen: only supports up to 8 float args for now")
-          give_reg(pool, fn_reg)
-          if stack_bytes > 0 {
-            arm64_spoff(emitter, (31 : UInt), stack_bytes.to_uint64())
-          }
-          return
-        }
-        let tmp = take_reg(pool) catch {
-          err => {
-            add_error(bag, loc, err.to_string())
-            give_reg(pool, fn_reg)
-            if stack_bytes > 0 {
-              arm64_spoff(emitter, (31 : UInt), stack_bytes.to_uint64())
-            }
-            return
-          }
-        }
-        if k == CFloatKind::Double {
-          arm64_ldrx(emitter, false, 3, tmp.reinterpret_as_uint(), (31 : UInt), off)
-          emit_fmov_x_to_d(emitter, fp, tmp)
-        } else {
-          arm64_ldrx(emitter, false, 2, tmp.reinterpret_as_uint(), (31 : UInt), off)
-          emit_fmov_w_to_s(emitter, fp, tmp)
-        }
-        give_reg(pool, tmp)
-        fp = fp + 1
-      }
-      None => {
-        if gp >= 8 {
-          add_error(bag, loc, "codegen: only supports up to 8 args for now")
-          give_reg(pool, fn_reg)
-          if stack_bytes > 0 {
-            arm64_spoff(emitter, (31 : UInt), stack_bytes.to_uint64())
-          }
-          return
-        }
-        match strip_qual_attrs(param_ty) {
-          CType::Struct(..) | CType::Union(..) =>
-            match type_size_align_or_error(alloc.sem, param_ty, loc) {
-              None => ()
-              Some((size, _)) => {
-                if size <= 8 {
-                  match arm64_sz_from_size(size) {
-                    None => add_error(bag, loc, "codegen: unsupported scalar size")
-                    Some(v) =>
-                      arm64_ldrx(emitter, false, v, gp.reinterpret_as_uint(), (31 : UInt), off)
-                  }
-                  gp = gp + 1
-                } else if size <= 16 {
-                  if gp + 1 >= 8 {
-                    add_error(bag, loc, "codegen: only supports up to 8 args for now")
-                    give_reg(pool, fn_reg)
-                    if stack_bytes > 0 {
-                      arm64_spoff(emitter, (31 : UInt), stack_bytes.to_uint64())
-                    }
-                    return
-                  }
-                  arm64_ldrx(emitter, false, 3, gp.reinterpret_as_uint(), (31 : UInt), off)
-                  let rest = size - 8
-                  match arm64_sz_from_size(rest) {
-                    None => add_error(bag, loc, "codegen: unsupported scalar size")
-                    Some(v) =>
-                      arm64_ldrx(
-                        emitter,
-                        false,
-                        v,
-                        (gp + 1).reinterpret_as_uint(),
-                        (31 : UInt),
-                        off + 8,
-                      )
-                  }
-                  gp = gp + 2
-                } else {
-                  add_error(bag, loc, "codegen: struct args >16 bytes not supported yet")
-                  give_reg(pool, fn_reg)
-                  if stack_bytes > 0 {
-                    arm64_spoff(emitter, (31 : UInt), stack_bytes.to_uint64())
-                  }
-                  return
-                }
-              }
-            }
-          _ => {
-            arm64_ldrx(emitter, false, 3, gp.reinterpret_as_uint(), (31 : UInt), off)
-            gp = gp + 1
-          }
-        }
-      }
-    }
-    i = i + 1
-  }
-  emit_blr(emitter, fn_reg)
+  let emit_call_fn = fn() { emit_blr(emitter, fn_reg) }
+  gen_call_with_layout(
+    emitter,
+    alloc,
+    syms,
+    pool,
+    cstrings,
+    args,
+    arg_tys,
+    call_ty,
+    variadic_index,
+    sret,
+    loc,
+    bag,
+    emit_call_fn,
+  )
   give_reg(pool, fn_reg)
-  if stack_bytes > 0 {
-    arm64_spoff(emitter, (31 : UInt), stack_bytes.to_uint64())
-  }
 
-  let call_ty = type_of_expr(alloc.sem, Expr::Call(callee~, args~, loc~))
   match float_kind_of_type(call_ty) {
     Some(k) =>
       if k == CFloatKind::Double {
@@ -3412,6 +4190,60 @@ fn gen_call_expr(
       }
     None => ()
   }
+}
+
+///|
+fn gen_call_expr(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : Map[String, Sym],
+  callee : Expr,
+  args : Array[Expr],
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  gen_call_expr_impl(
+    emitter,
+    alloc,
+    syms,
+    pool,
+    cstrings,
+    callee,
+    args,
+    None,
+    loc,
+    bag,
+  )
+}
+
+///|
+fn gen_call_expr_with_sret(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : Map[String, Sym],
+  callee : Expr,
+  args : Array[Expr],
+  sret_reg : Int,
+  sret_off : Int,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  gen_call_expr_impl(
+    emitter,
+    alloc,
+    syms,
+    pool,
+    cstrings,
+    callee,
+    args,
+    Some({ base_reg: sret_reg, off: sret_off }),
+    loc,
+    bag,
+  )
 }
 
 ///|
@@ -3480,17 +4312,28 @@ fn gen_lvalue_addr(
       }
       match lookup_local(alloc, name) {
         Some(slot) =>
-          match strip_qual_attrs(slot.ty) {
-            CType::Array(size=None, size_expr=Some(_), ..) =>
-              arm64_ldrx(
-                emitter,
-                false,
-                3,
-                dst.reinterpret_as_uint(),
-                (29 : UInt),
-                slot.offset.to_int64().reinterpret_as_uint64(),
-              )
-            _ => emit_addr_local(emitter, dst, slot.offset, loc, bag)
+          if slot.byref {
+            arm64_ldrx(
+              emitter,
+              false,
+              3,
+              dst.reinterpret_as_uint(),
+              (29 : UInt),
+              slot.offset.to_int64().reinterpret_as_uint64(),
+            )
+          } else {
+            match strip_qual_attrs(slot.ty) {
+              CType::Array(size=None, size_expr=Some(_), ..) =>
+                arm64_ldrx(
+                  emitter,
+                  false,
+                  3,
+                  dst.reinterpret_as_uint(),
+                  (29 : UInt),
+                  slot.offset.to_int64().reinterpret_as_uint64(),
+                )
+              _ => emit_addr_local(emitter, dst, slot.offset, loc, bag)
+            }
           }
         None => {
           let sym = sym_for_name(syms, link_name(name))
@@ -3663,13 +4506,45 @@ fn gen_lvalue_addr(
       give_reg(pool, idx)
     }
     Expr::Member(base~, name~, is_arrow~, loc~) => {
+      let base_ty = type_of_expr(alloc.sem, base)
       if is_arrow {
         gen_expr_ptr(emitter, alloc, syms, pool, cstrings, base, dst, bag)
+      } else if !expr_is_lvalue_simple(base) {
+        match strip_qual_attrs(base_ty) {
+          CType::Struct(..) | CType::Union(..) =>
+            match type_size_align_or_error(alloc.sem, base_ty, loc) {
+              None => ()
+              Some((size, _)) =>
+                match alloc.agg_temp_offset {
+                  None => add_error(bag, loc, "codegen: missing aggregate temp slot")
+                  Some(tmp_off) => {
+                    if size > alloc.agg_temp_size {
+                      add_error(bag, loc, "codegen: aggregate temp too small")
+                      return
+                    }
+                    gen_agg_expr_to_addr(
+                      emitter,
+                      alloc,
+                      syms,
+                      pool,
+                      cstrings,
+                      base,
+                      29,
+                      tmp_off,
+                      base_ty,
+                      loc,
+                      bag,
+                    )
+                    emit_addr_local(emitter, dst, tmp_off, loc, bag)
+                  }
+                }
+            }
+          _ => gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, base, dst, bag)
+        }
       } else {
         gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, base, dst, bag)
       }
 
-      let base_ty = type_of_expr(alloc.sem, base)
       let record_ty = if is_arrow {
         match strip_qual_attrs(base_ty) {
           CType::Pointer(pointee) => pointee
@@ -5430,41 +6305,19 @@ fn gen_expr_int32(
                     }
                   }
                   gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, left, dst_addr, bag)
-                  match right {
-                    Expr::Call(callee~, args~, ..) => {
-                      gen_call_expr(emitter, alloc, syms, pool, cstrings, callee, args, loc, bag)
-                      emit_store_agg_return_gp_to_addr(
-                        emitter,
-                        size,
-                        dst_addr,
-                        0,
-                        loc,
-                        bag,
-                      )
-                    }
-                    _ => {
-                      let src_addr = take_reg(pool) catch {
-                        err => {
-                          add_error(bag, loc, err.to_string())
-                          give_reg(pool, dst_addr)
-                          return
-                        }
-                      }
-                      gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, right, src_addr, bag)
-                      emit_copy_bytes(
-                        emitter,
-                        pool,
-                        src_addr,
-                        0,
-                        dst_addr,
-                        0,
-                        size,
-                        loc,
-                        bag,
-                      )
-                      give_reg(pool, src_addr)
-                    }
-                  }
+                  gen_agg_expr_to_addr(
+                    emitter,
+                    alloc,
+                    syms,
+                    pool,
+                    cstrings,
+                    right,
+                    dst_addr,
+                    0,
+                    lhs_ty,
+                    loc,
+                    bag,
+                  )
                   give_reg(pool, dst_addr)
                 }
               }
@@ -7809,6 +8662,7 @@ fn gen_stmt(
                   offset: slot0.offset,
                   ty: slot0.ty,
                   vla_size_offset: Some(size_off),
+                  byref: slot0.byref,
                 }
                 let scope_idx = alloc.scopes.length() - 1
                 alloc.scopes[scope_idx].set(d.name, updated)
@@ -8343,61 +9197,143 @@ fn gen_stmt(
                     Some((size, _)) =>
                       if size == 0 {
                         ()
-                      } else if expr is Expr::Call(callee~, args~, ..) {
-                        gen_call_expr(emitter, alloc, syms, pool, cstrings, callee, args, loc, bag)
                       } else {
-                        let addr = take_reg(pool) catch {
-                          err => {
-                            add_error(bag, loc, err.to_string())
-                            return gjmp(emitter, return_chain)
-                          }
-                        }
-                        gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, expr, addr, bag)
-                        if size <= 8 {
-                          let sz = match arm64_sz_from_size(size) {
-                            None => {
-                              add_error(bag, loc, "codegen: unsupported scalar size")
-                              give_reg(pool, addr)
-                              return gjmp(emitter, return_chain)
+                        let ret_loc = arm64_pcs(alloc.sem, 0, alloc.ret_ty, [], loc, bag).ret_loc
+                        if ret_loc == 1 {
+                          match alloc.sret_offset {
+                            None => add_error(bag, loc, "codegen: missing sret slot")
+                            Some(off) => {
+                              let tmp = take_reg(pool) catch {
+                                err => {
+                                  add_error(bag, loc, err.to_string())
+                                  return gjmp(emitter, return_chain)
+                                }
+                              }
+                              arm64_ldrx(
+                                emitter,
+                                false,
+                                3,
+                                tmp.reinterpret_as_uint(),
+                                (29 : UInt),
+                                off.to_int64().reinterpret_as_uint64(),
+                              )
+                              gen_agg_expr_to_addr(
+                                emitter,
+                                alloc,
+                                syms,
+                                pool,
+                                cstrings,
+                                expr,
+                                tmp,
+                                0,
+                                alloc.ret_ty,
+                                loc,
+                                bag,
+                              )
+                              give_reg(pool, tmp)
                             }
-                            Some(v) => v
                           }
-                          arm64_ldrx(
-                            emitter,
-                            false,
-                            sz,
-                            (0 : UInt),
-                            addr.reinterpret_as_uint(),
-                            0,
-                          )
+                        } else if ret_loc == 16 {
+                          if expr is Expr::Call(callee~, args~, ..) {
+                            gen_call_expr(emitter, alloc, syms, pool, cstrings, callee, args, loc, bag)
+                          } else {
+                            let base_reg : Int = 0
+                            if expr_is_lvalue_simple(expr) {
+                              gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, expr, base_reg, bag)
+                            } else {
+                              match alloc.agg_temp_offset {
+                                None => {
+                                  add_error(bag, loc, "codegen: missing aggregate temp for return")
+                                  return gjmp(emitter, return_chain)
+                                }
+                                Some(off) => {
+                                  gen_agg_expr_to_addr(
+                                    emitter,
+                                    alloc,
+                                    syms,
+                                    pool,
+                                    cstrings,
+                                    expr,
+                                    29,
+                                    off,
+                                    alloc.ret_ty,
+                                    loc,
+                                    bag,
+                                  )
+                                  emit_addr_local(emitter, base_reg, off, loc, bag)
+                                }
+                              }
+                            }
+                            match arm64_hfa(alloc.sem, rt, loc, bag) {
+                              None => add_error(bag, loc, "codegen: expected HFA return")
+                              Some((count, fsize)) => {
+                                let mut j = 0
+                                while j < count {
+                                  let tmp = take_reg(pool) catch {
+                                    err => {
+                                      add_error(bag, loc, err.to_string())
+                                      return gjmp(emitter, return_chain)
+                                    }
+                                  }
+                                  if fsize == 8 {
+                                    arm64_ldrx(
+                                      emitter,
+                                      false,
+                                      3,
+                                      tmp.reinterpret_as_uint(),
+                                      base_reg.reinterpret_as_uint(),
+                                      (j * 8).to_int64().reinterpret_as_uint64(),
+                                    )
+                                    emit_fmov_x_to_d(emitter, j, tmp)
+                                  } else {
+                                    arm64_ldrx(
+                                      emitter,
+                                      false,
+                                      2,
+                                      tmp.reinterpret_as_uint(),
+                                      base_reg.reinterpret_as_uint(),
+                                      (j * 4).to_int64().reinterpret_as_uint64(),
+                                    )
+                                    emit_fmov_w_to_s(emitter, j, tmp)
+                                  }
+                                  give_reg(pool, tmp)
+                                  j = j + 1
+                                }
+                              }
+                            }
+                          }
+                        } else if expr is Expr::Call(callee~, args~, ..) {
+                          gen_call_expr(emitter, alloc, syms, pool, cstrings, callee, args, loc, bag)
                         } else {
-                          arm64_ldrx(
-                            emitter,
-                            false,
-                            3,
-                            (0 : UInt),
-                            addr.reinterpret_as_uint(),
-                            0,
-                          )
-                          let rest = size - 8
-                          let sz1 = match arm64_sz_from_size(rest) {
-                            None => {
-                              add_error(bag, loc, "codegen: unsupported scalar size")
-                              give_reg(pool, addr)
-                              return gjmp(emitter, return_chain)
+                          let base_reg : Int = 0
+                          if expr_is_lvalue_simple(expr) {
+                            gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, expr, base_reg, bag)
+                          } else {
+                            match alloc.agg_temp_offset {
+                              None => {
+                                add_error(bag, loc, "codegen: missing aggregate temp for return")
+                                return gjmp(emitter, return_chain)
+                              }
+                              Some(off) => {
+                                gen_agg_expr_to_addr(
+                                  emitter,
+                                  alloc,
+                                  syms,
+                                  pool,
+                                  cstrings,
+                                  expr,
+                                  29,
+                                  off,
+                                  alloc.ret_ty,
+                                  loc,
+                                  bag,
+                                )
+                                emit_addr_local(emitter, base_reg, off, loc, bag)
+                              }
                             }
-                            Some(v) => v
                           }
-                          arm64_ldrx(
-                            emitter,
-                            false,
-                            sz1,
-                            (1 : UInt),
-                            addr.reinterpret_as_uint(),
-                            8,
-                          )
+                          arm64_ldrs(emitter, base_reg.reinterpret_as_uint(), size)
                         }
-                        give_reg(pool, addr)
                       }
                   }
                 _ => gen_expr_any(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
@@ -8415,14 +9351,30 @@ fn gen_stmt(
 }
 
 ///|
-fn compute_frame_size(sem : SemContext, func : FuncDef) -> Int {
+fn compute_frame_size(sem : SemContext, func : FuncDef, bag : DiagBag) -> Int {
   let alloc = new_local_alloc(sem, func.return_type, func.name)
   cg_push_scope(alloc)
+  reserve_sret_slot(alloc, func.loc, bag)
+  let param_tys : Array[CType] = []
   for p in func.params {
-    let param_ty = adjust_param_type_for_local(p.ty)
-    alloc_local(alloc, p.name, param_ty, p.loc) |> ignore
+    param_tys.push(adjust_param_type_for_local(p.ty))
+  }
+  let variadic_index = if func.varargs { param_tys.length() } else { 0 }
+  let layout = arm64_pcs(sem, variadic_index, func.return_type, param_tys, func.loc, bag)
+  let mut i = 0
+  while i < func.params.length() {
+    let p = func.params[i]
+    let param_ty = param_tys[i]
+    let loc_i = layout.arg_locs.get(i).unwrap_or(0)
+    if (loc_i & 1) != 0 {
+      alloc_local_byref(alloc, p.name, param_ty) |> ignore
+    } else {
+      alloc_local(alloc, p.name, param_ty, p.loc) |> ignore
+    }
+    i = i + 1
   }
   reserve_compound_literals_stmt(alloc, func.body)
+  reserve_agg_temp_slots_stmt(alloc, func.body)
   layout_stmt(alloc, func.body)
   let size = align_up(alloc.used_bytes, 16)
   cg_pop_scope(alloc)
@@ -8512,122 +9464,196 @@ fn gen_func_def(
   let start = emitter_pc(emitter)
   func_offsets.set(link, start)
 
-  let frame_size = compute_frame_size(sem, func)
+  let frame_size = compute_frame_size(sem, func, bag)
   let alloc = new_local_alloc(sem, func.return_type, func.name)
   cg_push_scope(alloc)
+  reserve_sret_slot(alloc, func.loc, bag)
   emit_prologue(emitter, frame_size)
 
   let pool = new_reg_pool()
-  let mut gp = 0
-  let mut fp = 0
+  match alloc.sret_offset {
+    None => ()
+    Some(off) =>
+      arm64_strx(
+        emitter,
+        3,
+        (8 : UInt),
+        (29 : UInt),
+        off.to_int64().reinterpret_as_uint64(),
+      )
+  }
+
+  let param_tys : Array[CType] = []
   for p in func.params {
-    let param_ty = adjust_param_type_for_local(p.ty)
-    match alloc_local(alloc, p.name, param_ty, p.loc) {
+    param_tys.push(adjust_param_type_for_local(p.ty))
+  }
+  let variadic_index = if func.varargs { param_tys.length() } else { 0 }
+  let layout = arm64_pcs(alloc.sem, variadic_index, alloc.ret_ty, param_tys, func.loc, bag)
+  let arg_locs = layout.arg_locs
+
+  let mut i = 0
+  while i < func.params.length() {
+    let p = func.params[i]
+    let param_ty = param_tys[i]
+    let loc_i = arg_locs.get(i).unwrap_or(0)
+    let byref = (loc_i & 1) != 0
+    let slot =
+      if byref {
+        Some(alloc_local_byref(alloc, p.name, param_ty))
+      } else {
+        alloc_local(alloc, p.name, param_ty, p.loc)
+      }
+    match slot {
       None => ()
       Some(slot) =>
-        match float_kind_of_type(slot.ty) {
-          Some(k) => {
-            if fp >= 8 {
-              add_error(bag, p.loc, "codegen: only supports up to 8 float params for now")
-              continue
-            }
-            let tmp_reg : Int = 16
-            if k == CFloatKind::Double {
-              emit_fmov_d_to_x(emitter, tmp_reg, fp)
-            } else {
-              emit_fmov_s_to_w(emitter, tmp_reg, fp)
-            }
-            emit_store_local_scalar(
+        if byref {
+          if loc_i < 16 {
+            arm64_strx(
               emitter,
-              alloc.sem,
-              slot.ty,
-              tmp_reg,
-              slot.offset,
-              p.loc,
-              bag,
+              3,
+              (loc_i >> 1).reinterpret_as_uint(),
+              (29 : UInt),
+              slot.offset.to_int64().reinterpret_as_uint64(),
             )
-            fp = fp + 1
+          } else if loc_i >= 32 {
+            let stack_off = (loc_i & (0xfffffffe : Int)) - 32
+            let tmp = take_reg(pool) catch {
+              err => {
+                add_error(bag, p.loc, err.to_string())
+                i = i + 1
+                continue
+              }
+            }
+            arm64_ldrx(
+              emitter,
+              false,
+              3,
+              tmp.reinterpret_as_uint(),
+              (29 : UInt),
+              (16 + stack_off).to_int64().reinterpret_as_uint64(),
+            )
+            arm64_strx(
+              emitter,
+              3,
+              tmp.reinterpret_as_uint(),
+              (29 : UInt),
+              slot.offset.to_int64().reinterpret_as_uint64(),
+            )
+            give_reg(pool, tmp)
           }
-          None =>
-            match strip_qual_attrs(slot.ty) {
-              CType::Struct(..) | CType::Union(..) =>
-                match type_size_align_or_error(alloc.sem, slot.ty, p.loc) {
-                  None => ()
-                  Some((size, _)) =>
-                    if size <= 8 {
-                      if gp >= 8 {
-                        add_error(bag, p.loc, "codegen: only supports up to 8 params for now")
-                        continue
-                      }
-                      let sz = match arm64_sz_from_size(size) {
-                        None => {
-                          add_error(bag, p.loc, "codegen: unsupported scalar size")
-                          continue
-                        }
-                        Some(v) => v
-                      }
-                      arm64_strx(
-                        emitter,
-                        sz,
-                        gp.reinterpret_as_uint(),
-                        (29 : UInt),
-                        slot.offset.to_int64().reinterpret_as_uint64(),
-                      )
-                      gp = gp + 1
-                    } else if size <= 16 {
-                      if gp + 1 >= 8 {
-                        add_error(bag, p.loc, "codegen: only supports up to 8 params for now")
-                        continue
-                      }
-                      arm64_strx(
-                        emitter,
-                        3,
-                        gp.reinterpret_as_uint(),
-                        (29 : UInt),
-                        slot.offset.to_int64().reinterpret_as_uint64(),
-                      )
-                      let rest = size - 8
-                      let sz1 = match arm64_sz_from_size(rest) {
-                        None => {
-                          add_error(bag, p.loc, "codegen: unsupported scalar size")
-                          gp = gp + 2
-                          continue
-                        }
-                        Some(v) => v
-                      }
-                      arm64_strx(
-                        emitter,
-                        sz1,
-                        (gp + 1).reinterpret_as_uint(),
-                        (29 : UInt),
-                        (slot.offset + 8).to_int64().reinterpret_as_uint64(),
-                      )
-                      gp = gp + 2
-                    } else {
-                      add_error(bag, p.loc, "codegen: struct params >16 bytes not supported yet")
-                    }
-                }
-              _ =>
-                if gp < 8 {
-                  emit_store_local_scalar(
+        } else if loc_i < 16 {
+          let reg = loc_i >> 1
+          match strip_qual_attrs(slot.ty) {
+            CType::Struct(..) | CType::Union(..) =>
+              match type_size_align_or_error(alloc.sem, slot.ty, p.loc) {
+                None => ()
+                Some((size, _)) =>
+                  emit_store_gp_regs_to_addr(
                     emitter,
-                    alloc.sem,
-                    slot.ty,
-                    gp,
+                    reg,
+                    reg + 1,
+                    size,
+                    29,
                     slot.offset,
                     p.loc,
                     bag,
                   )
-                  gp = gp + 1
-                } else {
-                  add_error(bag, p.loc, "codegen: only supports up to 8 params for now")
+              }
+            _ =>
+              emit_store_local_scalar(
+                emitter,
+                alloc.sem,
+                slot.ty,
+                reg,
+                slot.offset,
+                p.loc,
+                bag,
+              )
+          }
+        } else if loc_i < 32 {
+          let fp_reg = (loc_i >> 1) - 8
+          match arm64_hfa(alloc.sem, slot.ty, p.loc, bag) {
+            Some((count, fsize)) => {
+              let mut j = 0
+              while j < count {
+                let tmp = take_reg(pool) catch {
+                  err => {
+                    add_error(bag, p.loc, err.to_string())
+                    j = count
+                    continue
+                  }
                 }
+                if fsize == 8 {
+                  emit_fmov_d_to_x(emitter, tmp, fp_reg + j)
+                  arm64_strx(
+                    emitter,
+                    3,
+                    tmp.reinterpret_as_uint(),
+                    (29 : UInt),
+                    (slot.offset + j * 8).to_int64().reinterpret_as_uint64(),
+                  )
+                } else {
+                  emit_fmov_s_to_w(emitter, tmp, fp_reg + j)
+                  arm64_strx(
+                    emitter,
+                    2,
+                    tmp.reinterpret_as_uint(),
+                    (29 : UInt),
+                    (slot.offset + j * 4).to_int64().reinterpret_as_uint64(),
+                  )
+                }
+                give_reg(pool, tmp)
+                j = j + 1
+              }
             }
+            None =>
+              match float_kind_of_type(slot.ty) {
+                Some(k) => {
+                  let tmp_reg : Int = 16
+                  if k == CFloatKind::Double || k == CFloatKind::LongDouble {
+                    emit_fmov_d_to_x(emitter, tmp_reg, fp_reg)
+                  } else {
+                    emit_fmov_s_to_w(emitter, tmp_reg, fp_reg)
+                  }
+                  emit_store_local_scalar(
+                    emitter,
+                    alloc.sem,
+                    slot.ty,
+                    tmp_reg,
+                    slot.offset,
+                    p.loc,
+                    bag,
+                  )
+                }
+                None => ()
+              }
+          }
+        } else if loc_i >= 32 {
+          match type_size_align_or_error(alloc.sem, slot.ty, p.loc) {
+            None => ()
+            Some((size, _)) =>
+              if size > 0 {
+                let stack_off = (loc_i & (0xfffffffe : Int)) - 32
+                emit_copy_bytes(
+                  emitter,
+                  pool,
+                  29,
+                  16 + stack_off,
+                  29,
+                  slot.offset,
+                  size,
+                  p.loc,
+                  bag,
+                )
+              }
+          }
         }
     }
+    i = i + 1
   }
 
   reserve_compound_literals_stmt(alloc, func.body)
+  reserve_agg_temp_slots_stmt(alloc, func.body)
 
   let loops : Array[LoopChains] = []
   let switches : Array[SwitchChains] = []
