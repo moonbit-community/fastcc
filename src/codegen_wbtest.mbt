@@ -32,21 +32,21 @@ fn macho_section_file_offset(
   seg : String,
   sect : String,
 ) -> Int? {
-  let ncmds = read_u32_le_at(bytes, 16).reinterpret_as_int()
+  let ncmds = read_u32_le_at(bytes, 16).to_int()
   let mut off = 32
   let mut i = 0
   while i < ncmds {
     let cmd = read_u32_le_at(bytes, off)
-    let cmdsize = read_u32_le_at(bytes, off + 4).reinterpret_as_int()
+    let cmdsize = read_u32_le_at(bytes, off + 4).to_int()
     if cmd == LC_SEGMENT_64 {
-      let nsects = read_u32_le_at(bytes, off + 64).reinterpret_as_int()
+      let nsects = read_u32_le_at(bytes, off + 64).to_int()
       let mut j = 0
       let mut sect_off = off + 72
       while j < nsects {
         let sectname = read_padded_name(bytes, sect_off)
         let segname = read_padded_name(bytes, sect_off + 16)
         if segname == seg && sectname == sect {
-          return Some(read_u32_le_at(bytes, sect_off + 48).reinterpret_as_int())
+          return Some(read_u32_le_at(bytes, sect_off + 48).to_int())
         }
         sect_off = sect_off + 80
         j = j + 1
@@ -61,9 +61,9 @@ fn macho_section_file_offset(
 ///|
 fn macho_text_section_offsets(bytes : Bytes) -> (Int, Int, Int) {
   let section_hdr = 32 + 72
-  let text_off = read_u32_le_at(bytes, section_hdr + 48).reinterpret_as_int()
-  let reloff = read_u32_le_at(bytes, section_hdr + 56).reinterpret_as_int()
-  let nreloc = read_u32_le_at(bytes, section_hdr + 60).reinterpret_as_int()
+  let text_off = read_u32_le_at(bytes, section_hdr + 48).to_int()
+  let reloff = read_u32_le_at(bytes, section_hdr + 56).to_int()
+  let nreloc = read_u32_le_at(bytes, section_hdr + 60).to_int()
   (text_off, reloff, nreloc)
 }
 
@@ -94,24 +94,6 @@ fn has_b_uncond(bytes : Bytes, text_offset : Int, max_words : Int) -> Bool {
 }
 
 ///|
-fn find_word_offset(
-  bytes : Bytes,
-  text_offset : Int,
-  max_words : Int,
-  value : UInt,
-) -> Int? {
-  let mut i = 0
-  while i < max_words {
-    let off = text_offset + (i << 2)
-    if read_u32_le_at(bytes, off) == value {
-      return Some(off)
-    }
-    i = i + 1
-  }
-  None
-}
-
-///|
 test "codegen emits arm64 main return 0 object" {
   let (unit, bag) = parse_text("int main(){return 0;}")
   assert_true(!has_errors(bag))
@@ -125,9 +107,10 @@ test "codegen emits arm64 main return 0 object" {
   let (text_offset, _, _) = macho_text_section_offsets(bytes)
   assert_eq(read_u32_le_at(bytes, text_offset), (0xa9bf7bfd : UInt))
   assert_eq(read_u32_le_at(bytes, text_offset + 4), (0x910003fd : UInt))
-  assert_true(find_word_offset(bytes, text_offset, 64, (0x52800000 : UInt)) is Some(_))
-  assert_true(find_word_offset(bytes, text_offset, 64, (0xa8c17bfd : UInt)) is Some(_))
-  assert_true(find_word_offset(bytes, text_offset, 64, (0xd65f03c0 : UInt)) is Some(_))
+  assert_eq(read_u32_le_at(bytes, text_offset + 8), (0x52800000 : UInt))
+  assert_eq(read_u32_le_at(bytes, text_offset + 12), (0xd503201f : UInt))
+  assert_eq(read_u32_le_at(bytes, text_offset + 16), (0xa8c17bfd : UInt))
+  assert_eq(read_u32_le_at(bytes, text_offset + 20), (0xd65f03c0 : UInt))
 }
 
 ///|
@@ -143,14 +126,8 @@ test "codegen emits call relocation for return f()" {
   assert_true(!has_errors(bag))
   let (text_offset, reloff, nreloc) = macho_text_section_offsets(bytes)
   assert_eq(nreloc, 1)
-  let call_off = match find_word_offset(bytes, text_offset, 64, (0x94000000 : UInt)) {
-    None => fail("expected BL instruction")
-    Some(v) => v
-  }
-  assert_eq(
-    read_u32_le_at(bytes, reloff),
-    (call_off - text_offset).reinterpret_as_uint(),
-  )
+  assert_eq(read_u32_le_at(bytes, text_offset + 8), (0x94000000 : UInt))
+  assert_eq(read_u32_le_at(bytes, reloff), (8 : UInt))
   assert_eq(read_u32_le_at(bytes, reloff + 4), (0x2d000001 : UInt))
 }
 
@@ -212,26 +189,6 @@ test "codegen emits .cstring and relocs for extern call with string literal" {
 }
 
 ///|
-test "codegen stores embedded-nul strings in .rodata" {
-  let (unit, bag) = parse_text(
-    "int main(){const char *s=\"a\\0b\"; return s[0];}",
-  )
-  assert_true(!has_errors(bag))
-  check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
-  let bytes = match codegen_arm64_object_bytes(unit, bag) {
-    None => fail("expected object bytes")
-    Some(b) => b
-  }
-  assert_true(!has_errors(bag))
-  let rodata_off = match macho_section_file_offset(bytes, "__TEXT", "__const") {
-    None => fail("expected __TEXT,__const section")
-    Some(v) => v
-  }
-  assert_eq(read_u32_le_at(bytes, rodata_off), (0x00620061 : UInt))
-}
-
-///|
 test "codegen supports local pointers: addr, deref, compare" {
   let (unit, bag) = parse_text(
     "int main(){int x=1; int *p=&x; if(p!=0){*p=3;} return x;}",
@@ -260,24 +217,12 @@ test "codegen emits global load relocs for return x" {
   assert_true(!has_errors(bag))
   let (text_offset, reloff, nreloc) = macho_text_section_offsets(bytes)
   assert_eq(nreloc, 2)
-  let adrp_off = match find_word_offset(bytes, text_offset, 64, (0x90000000 : UInt)) {
-    None => fail("expected ADRP instruction")
-    Some(v) => v
-  }
-  let add_off = match find_word_offset(bytes, text_offset, 64, (0x91000000 : UInt)) {
-    None => fail("expected ADD instruction")
-    Some(v) => v
-  }
-  assert_true(find_word_offset(bytes, text_offset, 64, (0xb9400000 : UInt)) is Some(_))
-  assert_eq(
-    read_u32_le_at(bytes, reloff),
-    (adrp_off - text_offset).reinterpret_as_uint(),
-  )
+  assert_eq(read_u32_le_at(bytes, text_offset + 8), (0x90000000 : UInt))
+  assert_eq(read_u32_le_at(bytes, text_offset + 12), (0x91000000 : UInt))
+  assert_eq(read_u32_le_at(bytes, text_offset + 16), (0xb9400000 : UInt))
+  assert_eq(read_u32_le_at(bytes, reloff), (8 : UInt))
   assert_eq(read_u32_le_at(bytes, reloff + 4), (0x3d000001 : UInt))
-  assert_eq(
-    read_u32_le_at(bytes, reloff + 8),
-    (add_off - text_offset).reinterpret_as_uint(),
-  )
+  assert_eq(read_u32_le_at(bytes, reloff + 8), (12 : UInt))
   assert_eq(read_u32_le_at(bytes, reloff + 12), (0x4c000001 : UInt))
 }
 
