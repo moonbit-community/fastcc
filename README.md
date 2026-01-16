@@ -31,4 +31,4 @@ Results (3 runs):
 
 - avg: 0.1145s
 - throughput: 1206568 LOC/s
-- notes: arm64 benchmark uses a small `refs/vc/v.c` patch to size the closure byte array correctly; tcc emits implicit declaration warnings with the compat headers
+- notes: arm64 benchmark applies `refs/vc_patches/arm64_closure_bytes.patch` to `refs/vc/v.c` for the closure byte array size; tcc emits implicit declaration warnings with the compat headers
