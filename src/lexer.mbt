@@ -256,6 +256,13 @@ fn slice_to_string(text : String, start : Int, end : Int) -> String {
 }
 
 ///|
+fn slice_to_view(text : String, start : Int, end : Int) -> StringView {
+  try text[start:end] catch {
+    _ => ""[:]
+  }
+}
+
+///|
 fn lex_ident(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
   let start = lex.index
   let _ = advance(lex)
@@ -271,8 +278,15 @@ fn lex_ident(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
       None => break
     }
   }
-  let name = slice_to_string(lex.text, start, lex.index)
-  make_token(keyword_or_ident(name), name, loc, line_start)
+  let name_view = slice_to_view(lex.text, start, lex.index)
+  let (kind, keyword_lexeme) = keyword_or_ident_view(name_view)
+  match keyword_lexeme {
+    Some(lexeme) => make_token(kind, lexeme, loc, line_start)
+    None => {
+      let name = name_view.to_string()
+      make_token(kind, name, loc, line_start)
+    }
+  }
 }
 
 ///|
