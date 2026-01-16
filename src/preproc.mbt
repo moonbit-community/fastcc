@@ -1136,7 +1136,8 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
   let mut i = 0
   while i < tokens.length() {
     let tok = tokens[i]
-    if is_macro_name_token(tok) {
+    let is_macro_name = is_macro_name_token(tok)
+    if is_macro_name {
       match builtin_macro_tokens(pp, tok) {
         Some(replacement) => {
           let out = match out_opt {
@@ -1157,13 +1158,19 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
         None => ()
       }
     }
-    if is_macro_name_token(tok) &&
-      pp.macros.contains(tok.lexeme) &&
-      !is_expanding(pp, tok.lexeme) &&
-      !tok.hidden.contains(tok.lexeme) {
+    let hidden_ok = tok.hidden.length() == 0 || !tok.hidden.contains(tok.lexeme)
+    if is_macro_name && hidden_ok {
       match pp.macros.get(tok.lexeme) {
         None => ()
         Some(macro_def) => {
+          if is_expanding(pp, tok.lexeme) {
+            match out_opt {
+              Some(arr) => arr.push(tok)
+              None => ()
+            }
+            i = i + 1
+            continue
+          }
           if macro_def.is_function {
             if i + 1 < tokens.length() && tokens[i + 1].kind == LParen {
               match read_macro_args_from_tokens(pp, tokens, i + 2, tok.loc) {
@@ -2233,7 +2240,8 @@ fn next_pp_token(pp : Preprocessor) -> Token {
     if !current_active(pp) {
       continue
     }
-    if is_macro_name_token(tok) {
+    let is_macro_name = is_macro_name_token(tok)
+    if is_macro_name {
       match builtin_macro_tokens(pp, tok) {
         Some(tokens) => {
           push_tokens(pp, tokens)
@@ -2242,15 +2250,14 @@ fn next_pp_token(pp : Preprocessor) -> Token {
         None => ()
       }
     }
-    if is_macro_name_token(tok) &&
-      pp.macros.contains(tok.lexeme) &&
-      !tok.hidden.contains(tok.lexeme) {
-      if is_expanding(pp, tok.lexeme) {
-        return tok
-      }
+    let hidden_ok = tok.hidden.length() == 0 || !tok.hidden.contains(tok.lexeme)
+    if is_macro_name && hidden_ok {
       match pp.macros.get(tok.lexeme) {
         None => ()
-        Some(macro_def) =>
+        Some(macro_def) => {
+          if is_expanding(pp, tok.lexeme) {
+            return tok
+          }
           if macro_def.is_function {
             let next_tok = next_raw_token(pp)
             if next_tok.kind != LParen {
@@ -2306,6 +2313,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
             }
             continue
           }
+        }
       }
     }
     return tok
