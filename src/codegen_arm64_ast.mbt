@@ -11215,18 +11215,7 @@ fn codegen_arm64_object_bytes_from_ast(
   if has_errors(bag) {
     return None
   }
-  codegen_arm64_object_bytes_with_sem(unit, sem, bag)
-}
 
-///|
-fn codegen_arm64_object_bytes_with_sem(
-  unit : TranslationUnit,
-  sem : SemContext,
-  bag : DiagBag,
-) -> Bytes? {
-  if has_errors(bag) {
-    return None
-  }
   let emitter = new_arm64_emitter()
   let syms = new_symtab()
   collect_external_globals(unit, syms)
