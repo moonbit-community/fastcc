@@ -446,12 +446,6 @@ fn encode_macho_object(
   let symoff = align_up(reloc_offset, 4)
   let section_index_map = collect_section_indices(layouts)
   let symtab = build_symtab(symbols, str_offsets, section_index_map)
-  let id_to_index : Map[Int, Int] = {}
-  let mut i = 0
-  while i < symbols.length() {
-    id_to_index.set(symbols[i].id, i)
-    i = i + 1
-  }
   let stroff = symoff + symtab.length()
   let ncmds = segment_order.length() + 3
   let out = @buffer.new(size_hint=stroff + strtab.length())
@@ -549,10 +543,7 @@ fn encode_macho_object(
           let layout = layouts[idx]
           for rel in layout.section.relocs {
             let (rtype, pcrel) = macho_reloc_type(rel.kind)
-            let symbolnum = match id_to_index.get(rel.sym.id) {
-              None => 0
-              Some(idx) => idx
-            }
+            let symbolnum = if rel.sym.id > 0 { rel.sym.id - 1 } else { 0 }
             let len = reloc_length(rel.kind)
             let info = pack_reloc_info(symbolnum, pcrel, len, true, rtype)
             out.write_uint_le(rel.offset.reinterpret_as_uint())

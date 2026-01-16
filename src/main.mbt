@@ -24,6 +24,7 @@ fn parse_cli_args(
   args : Array[String],
 ) -> CliParse {
   let include_paths : Array[String] = []
+  include_paths.push("compat/include")
   let inputs : Array[String] = []
   let mut output : String? = None
   let mut compile_only = false
@@ -261,7 +262,6 @@ fn main {
             let map = new_source_map()
             let file = add_file(map, path, text)
             let pp = new_preprocessor(map, file, bag)
-            add_include_path(pp, "compat/include")
             for p in cfg.include_paths {
               add_include_path(pp, p)
             }
