@@ -11182,8 +11182,13 @@ fn build_string_section(
   if entries.length() == 0 {
     return ({}, None)
   }
+  let mut size_hint = 0
+  for entry in entries {
+    size_hint = size_hint + entry.value.length() + 1
+    size_hint = (size_hint + 3) & -4
+  }
   let offsets : Map[String, Int] = {}
-  let buf = @buffer.new()
+  let buf = @buffer.new(size_hint=size_hint)
   for entry in entries {
     let off = buf.length()
     offsets.set(entry.value, off)
