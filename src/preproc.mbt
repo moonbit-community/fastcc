@@ -775,6 +775,9 @@ fn stringize_tokens(tokens : Array[Token]) -> String {
   if tokens.length() == 0 {
     return ""
   }
+  if tokens.length() == 1 {
+    return tokens[0].lexeme
+  }
   let mut size_hint = 0
   for tok in tokens {
     size_hint = size_hint + tok.lexeme.length() + 1
@@ -809,6 +812,9 @@ fn make_string_literal(text : String, loc : SrcLoc) -> Token {
 
 ///|
 fn escape_string(text : String) -> String {
+  if !text.contains("\\") && !text.contains("\"") {
+    return text
+  }
   let sb = StringBuilder::new(size_hint=text.length())
   for ch in text {
     if ch == '\\' {
