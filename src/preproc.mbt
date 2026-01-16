@@ -365,9 +365,6 @@ fn read_directive_text(pp : Preprocessor) -> String {
 
 ///|
 fn slice_tokens(tokens : Array[Token], start : Int) -> Array[Token] {
-  if start <= 0 {
-    return tokens
-  }
   if start >= tokens.length() {
     return []
   }
@@ -1353,16 +1350,6 @@ fn pop_cond(pp : Preprocessor, loc : SrcLoc) -> Unit {
 
 ///|
 fn normalize_macro_tokens(tokens : Array[Token]) -> Array[Token] {
-  let mut needs_copy = false
-  for tok in tokens {
-    if tok.line_start {
-      needs_copy = true
-      break
-    }
-  }
-  if !needs_copy {
-    return tokens
-  }
   tokens.map(tok => {
     kind: tok.kind,
     lexeme: tok.lexeme,
@@ -1374,16 +1361,6 @@ fn normalize_macro_tokens(tokens : Array[Token]) -> Array[Token] {
 
 ///|
 fn expand_if_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
-  let mut has_defined = false
-  for tok in tokens {
-    if tok.kind == Ident && tok.lexeme == "defined" {
-      has_defined = true
-      break
-    }
-  }
-  if !has_defined {
-    return expand_tokens(pp, tokens)
-  }
   let out : Array[Token] = []
   let mut segment : Array[Token] = []
   let mut i = 0
@@ -1454,13 +1431,12 @@ fn release_expanding_guards(pp : Preprocessor) -> Unit {
 
 ///|
 fn merge_hidden(a : Array[String], b : Array[String]) -> Array[String] {
-  if a.length() == 0 {
-    return b.copy()
+  let out : Array[String] = []
+  for h in a {
+    if !out.contains(h) {
+      out.push(h)
+    }
   }
-  if b.length() == 0 {
-    return a.copy()
-  }
-  let out = a.copy()
   for h in b {
     if !out.contains(h) {
       out.push(h)
