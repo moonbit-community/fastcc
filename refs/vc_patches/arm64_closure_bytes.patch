@@ -1,0 +1,101 @@
+diff --git a/v.c b/v.c
+index eee580a..33c9e9f 100644
+--- a/v.c
++++ b/v.c
+@@ -13281,7 +13281,11 @@ string _const_v__builder__c_compilation_error_title; // a string literal, inited
+ builtin__closure__Closure g_closure; // global 6
+ 
+ Array_fixed_u8_15 _const_builtin__closure__closure_thunk; // inited later
++#if defined(__V_arm64)
++Array_fixed_u8_8 _const_builtin__closure__closure_get_data_bytes; // inited later
++#else
+ Array_fixed_u8_6 _const_builtin__closure__closure_get_data_bytes; // inited later
++#endif
+ const u32 _const_math__bits__de_bruijn32 = 125613361; // precomputed2
+ Array_fixed_u8_32 _const_math__bits__de_bruijn32tab = {((u8)(0)), 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8, 
+ 31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6, 11, 5, 10, 9}; // fixed array const
+@@ -20408,7 +20412,7 @@ VV_LOC void builtin__closure__closure_init(void) {
+ 	builtin__closure__closure_alloc();
+ 	{ // Unsafe block
+ 		builtin__closure__closure_memory_protect_platform(g_closure.closure_ptr, page_size, builtin__closure__MemoryProtectAtrr__read_write);
+-		builtin__vmemcpy(g_closure.closure_ptr, &_const_builtin__closure__closure_get_data_bytes[0], 6);
++		builtin__vmemcpy(g_closure.closure_ptr, &_const_builtin__closure__closure_get_data_bytes[0], sizeof(_const_builtin__closure__closure_get_data_bytes));
+ 		builtin__closure__closure_memory_protect_platform(g_closure.closure_ptr, page_size, builtin__closure__MemoryProtectAtrr__read_exec);
+ 	}
+ 	g_closure.closure_get_data = (voidptr)g_closure.closure_ptr;
+@@ -137326,59 +137330,63 @@ Array_fixed_u8_15 _t1;
+ }
+ {
+ {
++#if defined(__V_arm64)
++Array_fixed_u8_8 _t12;
++#else
+ Array_fixed_u8_6 _t12;
++#endif
+ #if defined(__V_amd64)
+ 	{ Array_fixed_u8_6 _t13 = {((u8)(0x66)), 0x4C, 0x0F, 0x7E, 0xF8, 0xC3}	;
+-	memcpy(&_t12, &_t13, sizeof(Array_fixed_u8_6));
++	memcpy(&_t12, &_t13, sizeof(_t12));
+ 	}
+ 	;
+ #elif defined(__V_x86)
+ 	{ Array_fixed_u8_6 _t14 = {((u8)(0x66)), 0x0F, 0x7E, 0xF8, 0x8B, 0x80, 0xFB, 0xBF, 0xFF, 0xFF, 0xc3}	;
+-	memcpy(&_t12, &_t14, sizeof(Array_fixed_u8_6));
++	memcpy(&_t12, &_t14, sizeof(_t12));
+ 	}
+ 	;
+ #elif defined(__V_arm64)
+-	{ Array_fixed_u8_6 _t15 = {((u8)(0x20)), 0x02, 0x66, 0x9E, 0xC0, 0x03, 0x5F, 0xD6}	;
+-	memcpy(&_t12, &_t15, sizeof(Array_fixed_u8_6));
++	{ Array_fixed_u8_8 _t15 = {((u8)(0x20)), 0x02, 0x66, 0x9E, 0xC0, 0x03, 0x5F, 0xD6}	;
++	memcpy(&_t12, &_t15, sizeof(_t12));
+ 	}
+ 	;
+ #elif defined(__V_arm32)
+ 	{ Array_fixed_u8_6 _t16 = {((u8)(0x90)), 0x0A, 0x17, 0xEE, 0x04, 0x00, 0x10, 0xE5, 0x1E, 0xFF, 0x2F, 0xE1}	;
+-	memcpy(&_t12, &_t16, sizeof(Array_fixed_u8_6));
++	memcpy(&_t12, &_t16, sizeof(_t12));
+ 	}
+ 	;
+ #elif defined(__V_rv64)
+ 	{ Array_fixed_u8_6 _t17 = {((u8)(0x53)), 0x05, 0x03, 0xE2, 0x67, 0x80, 0x00, 0x00}	;
+-	memcpy(&_t12, &_t17, sizeof(Array_fixed_u8_6));
++	memcpy(&_t12, &_t17, sizeof(_t12));
+ 	}
+ 	;
+ #elif defined(__V_rv32)
+ 	{ Array_fixed_u8_6 _t18 = {((u8)(0x53)), 0x05, 0x0B, 0xE0, 0x67, 0x80, 0x00, 0x00}	;
+-	memcpy(&_t12, &_t18, sizeof(Array_fixed_u8_6));
++	memcpy(&_t12, &_t18, sizeof(_t12));
+ 	}
+ 	;
+ #elif defined(__V_s390x)
+ 	{ Array_fixed_u8_6 _t19 = {((u8)(0xB3)), 0xCD, 0x00, 0x2F, 0x07, 0xFE}	;
+-	memcpy(&_t12, &_t19, sizeof(Array_fixed_u8_6));
++	memcpy(&_t12, &_t19, sizeof(_t12));
+ 	}
+ 	;
+ #elif defined(__V_ppc64le)
+ 	{ Array_fixed_u8_6 _t20 = {((u8)(0x66)), 0x00, 0xc3, 0x7d, 0x20, 0x00, 0x80, 0x4e}	;
+-	memcpy(&_t12, &_t20, sizeof(Array_fixed_u8_6));
++	memcpy(&_t12, &_t20, sizeof(_t12));
+ 	}
+ 	;
+ #elif defined(__V_loongarch64)
+ 	{ Array_fixed_u8_6 _t21 = {((u8)(0x04)), 0xB9, 0x14, 0x01, 0x20, 0x00, 0x00, 0x4C}	;
+-	memcpy(&_t12, &_t21, sizeof(Array_fixed_u8_6));
++	memcpy(&_t12, &_t21, sizeof(_t12));
+ 	}
+ 	;
+ #else
+ 	{ Array_fixed_u8_6 _t22 = {((u8)(0))}	;
+-	memcpy(&_t12, &_t22, sizeof(Array_fixed_u8_6));
++	memcpy(&_t12, &_t22, sizeof(_t12));
+ 	}
+ 	;
+ #endif
+-	memcpy(&_const_builtin__closure__closure_get_data_bytes, &_t12, sizeof(Array_fixed_u8_6));
++	memcpy(&_const_builtin__closure__closure_get_data_bytes, &_t12, sizeof(_const_builtin__closure__closure_get_data_bytes));
+ }
+ }
+ {
