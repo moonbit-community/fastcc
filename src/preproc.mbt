@@ -428,13 +428,13 @@ fn parse_include_path(
     return Some({ path: strip_quotes(args[0].lexeme), is_angle: false })
   }
   if args[0].kind == Lt {
-    let sb = StringBuilder::new()
+    let parts : Array[String] = []
     let mut i = 1
     while i < args.length() {
       if args[i].kind == Gt {
-        return Some({ path: sb.to_string(), is_angle: true })
+        return Some({ path: parts.join(""), is_angle: true })
       }
-      sb.write_string(args[i].lexeme)
+      parts.push(args[i].lexeme)
       i = i + 1
     }
     add_pp_error(pp, loc, "unterminated include path")
@@ -453,13 +453,13 @@ fn parse_has_include_path(args : Array[Token]) -> IncludeSpec? {
     return Some({ path: strip_quotes(args[0].lexeme), is_angle: false })
   }
   if args[0].kind == Lt {
-    let sb = StringBuilder::new()
+    let parts : Array[String] = []
     let mut i = 1
     while i < args.length() {
       if args[i].kind == Gt {
-        return Some({ path: sb.to_string(), is_angle: true })
+        return Some({ path: parts.join(""), is_angle: true })
       }
-      sb.write_string(args[i].lexeme)
+      parts.push(args[i].lexeme)
       i = i + 1
     }
   }
@@ -772,17 +772,8 @@ fn stringize_tokens(tokens : Array[Token]) -> String {
   if tokens.length() == 0 {
     return ""
   }
-  let sb = StringBuilder::new()
-  let mut first = true
-  for tok in tokens {
-    if first {
-      first = false
-    } else {
-      sb.write_char(' ')
-    }
-    sb.write_string(tok.lexeme)
-  }
-  sb.to_string()
+  let parts = tokens.map(tok => tok.lexeme)
+  parts.join(" ")
 }
 
 ///|
@@ -1128,23 +1119,15 @@ fn read_macro_args_from_tokens(
 
 ///|
 fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
-  let mut out_opt : Array[Token]? = None
+  let out : Array[Token] = []
   let mut changed = false
   let mut i = 0
   while i < tokens.length() {
     let tok = tokens[i]
     if is_macro_name_token(tok) {
       match builtin_macro_tokens(pp, tok) {
-        Some(replacement) => {
-          let out = match out_opt {
-            Some(arr) => arr
-            None => {
-              let arr = tokens[0:i].to_array()
-              out_opt = Some(arr)
-              arr
-            }
-          }
-          for t in replacement {
+        Some(tokens) => {
+          for t in tokens {
             out.push(t)
           }
           changed = true
@@ -1165,10 +1148,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
             if i + 1 < tokens.length() && tokens[i + 1].kind == LParen {
               match read_macro_args_from_tokens(pp, tokens, i + 2, tok.loc) {
                 None => {
-                  match out_opt {
-                    Some(arr) => arr.push(tok)
-                    None => ()
-                  }
+                  out.push(tok)
                   i = i + 1
                   continue
                 }
@@ -1176,10 +1156,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                   match normalize_macro_args(macro_def, raw_args, tok.loc) {
                     None => {
                       add_pp_error(pp, tok.loc, "macro argument count mismatch")
-                      match out_opt {
-                        Some(arr) => arr.push(tok)
-                        None => ()
-                      }
+                      out.push(tok)
                       i = next_i
                       continue
                     }
@@ -1200,14 +1177,6 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                           arg_tokens,
                           include_next~,
                         )
-                        let out = match out_opt {
-                          Some(arr) => arr
-                          None => {
-                            let arr = tokens[0:i].to_array()
-                            out_opt = Some(arr)
-                            arr
-                          }
-                        }
                         out.push(make_int_literal_token(value, tok.loc))
                         changed = true
                         i = next_i
@@ -1227,14 +1196,6 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                         add_hidden(t, tok.lexeme)
                       )
                       pop_expanding(pp)
-                      let out = match out_opt {
-                        Some(arr) => arr
-                        None => {
-                          let arr = tokens[0:i].to_array()
-                          out_opt = Some(arr)
-                          arr
-                        }
-                      }
                       for t in expanded {
                         out.push(t)
                       }
@@ -1245,10 +1206,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                   }
               }
             }
-            match out_opt {
-              Some(arr) => arr.push(tok)
-              None => ()
-            }
+            out.push(tok)
             i = i + 1
             continue
           } else {
@@ -1257,14 +1215,6 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
               add_hidden(t, tok.lexeme)
             )
             pop_expanding(pp)
-            let out = match out_opt {
-              Some(arr) => arr
-              None => {
-                let arr = tokens[0:i].to_array()
-                out_opt = Some(arr)
-                arr
-              }
-            }
             for t in expanded {
               out.push(t)
             }
@@ -1275,20 +1225,13 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
         }
       }
     }
-    match out_opt {
-      Some(arr) => arr.push(tok)
-      None => ()
-    }
+    out.push(tok)
     i = i + 1
   }
-  match out_opt {
-    None => tokens
-    Some(out) =>
-      if changed {
-        expand_tokens(pp, out)
-      } else {
-        out
-      }
+  if changed {
+    expand_tokens(pp, out)
+  } else {
+    out
   }
 }
 
@@ -1450,14 +1393,12 @@ fn add_hidden(tok : Token, name : String) -> Token {
   if tok.hidden.contains(name) {
     tok
   } else {
-    let hidden = tok.hidden.copy()
-    hidden.push(name)
     {
       kind: tok.kind,
       lexeme: tok.lexeme,
       loc: tok.loc,
       line_start: tok.line_start,
-      hidden,
+      hidden: merge_hidden(tok.hidden, [name]),
     }
   }
 }
