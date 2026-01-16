@@ -891,11 +891,8 @@ fn parse_attr_string(p : Parser, loc : SrcLoc) -> String? {
     return None
   }
   let tok = advance_token(p)
-  let (part, _len) = decode_string_literal(p, tok.lexeme, tok.loc)
-  if peek_token(p).kind != StrLit {
-    return Some(part)
-  }
   let sb = StringBuilder::new(size_hint=tok.lexeme.length())
+  let (part, _len) = decode_string_literal(p, tok.lexeme, tok.loc)
   sb.write_string(part)
   while peek_token(p).kind == StrLit {
     let next_tok = advance_token(p)
@@ -3063,13 +3060,11 @@ fn match_assign_op(p : Parser) -> (BinaryOp, Token)? {
 
 ///|
 fn parse_string_literal_expr(p : Parser, first : Token) -> Expr {
-  let (value, len) = decode_string_literal(p, first.lexeme, first.loc)
-  if peek_token(p).kind != StrLit {
-    return Expr::StringLit(value=value, length=len + 1, loc=first.loc)
-  }
   let sb = StringBuilder::new(size_hint=first.lexeme.length())
-  let mut byte_len = len
+  let mut byte_len = 0
+  let (value, len) = decode_string_literal(p, first.lexeme, first.loc)
   sb.write_string(value)
+  byte_len = byte_len + len
   while peek_token(p).kind == StrLit {
     let tok = advance_token(p)
     let (part, part_len) = decode_string_literal(p, tok.lexeme, tok.loc)

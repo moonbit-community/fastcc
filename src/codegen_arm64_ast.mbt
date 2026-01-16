@@ -10366,8 +10366,8 @@ fn collect_cstring_initializer(
 
 ///|
 fn ensure_bytes_len(buf : Array[Int], size : Int) -> Unit {
-  if buf.length() < size {
-    buf.resize(size, 0)
+  while buf.length() < size {
+    buf.push(0)
   }
 }
 
