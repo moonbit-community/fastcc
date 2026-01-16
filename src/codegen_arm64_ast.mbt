@@ -10311,39 +10311,50 @@ fn string_has_nul(value : String) -> Bool {
 }
 
 ///|
-fn collect_cstring_expr(order : Array[String], seen : Map[String, Bool], expr : Expr) -> Unit {
+fn collect_cstring_expr(
+  order : Array[String],
+  seen : Map[String, Bool],
+  func_name : String,
+  expr : Expr,
+) -> Unit {
   match expr {
     Expr::StringLit(value~, ..) => cstring_record(order, seen, value)
-    Expr::Unary(expr=inner, ..) => collect_cstring_expr(order, seen, inner)
-    Expr::Cast(expr=inner, ..) => collect_cstring_expr(order, seen, inner)
-    Expr::SizeofExpr(expr=inner, ..) => collect_cstring_expr(order, seen, inner)
-    Expr::AlignofExpr(expr=inner, ..) => collect_cstring_expr(order, seen, inner)
+    Expr::Ident(name~, ..) =>
+      if func_name != "" && is_func_name_ident(name) {
+        cstring_record(order, seen, func_name)
+      }
+    Expr::Unary(expr=inner, ..) => collect_cstring_expr(order, seen, func_name, inner)
+    Expr::Cast(expr=inner, ..) => collect_cstring_expr(order, seen, func_name, inner)
+    Expr::SizeofExpr(expr=inner, ..) =>
+      collect_cstring_expr(order, seen, func_name, inner)
+    Expr::AlignofExpr(expr=inner, ..) =>
+      collect_cstring_expr(order, seen, func_name, inner)
     Expr::Binary(left~, right~, ..) => {
-      collect_cstring_expr(order, seen, left)
-      collect_cstring_expr(order, seen, right)
+      collect_cstring_expr(order, seen, func_name, left)
+      collect_cstring_expr(order, seen, func_name, right)
     }
     Expr::Conditional(cond~, then_expr~, else_expr~, ..) => {
-      collect_cstring_expr(order, seen, cond)
-      collect_cstring_expr(order, seen, then_expr)
-      collect_cstring_expr(order, seen, else_expr)
+      collect_cstring_expr(order, seen, func_name, cond)
+      collect_cstring_expr(order, seen, func_name, then_expr)
+      collect_cstring_expr(order, seen, func_name, else_expr)
     }
     Expr::Call(callee~, args~, ..) => {
-      collect_cstring_expr(order, seen, callee)
+      collect_cstring_expr(order, seen, func_name, callee)
       for a in args {
-        collect_cstring_expr(order, seen, a)
+        collect_cstring_expr(order, seen, func_name, a)
       }
     }
     Expr::Index(base~, index~, ..) => {
-      collect_cstring_expr(order, seen, base)
-      collect_cstring_expr(order, seen, index)
+      collect_cstring_expr(order, seen, func_name, base)
+      collect_cstring_expr(order, seen, func_name, index)
     }
-    Expr::Member(base~, ..) => collect_cstring_expr(order, seen, base)
-    Expr::BuiltinVaArg(list~, ..) => collect_cstring_expr(order, seen, list)
+    Expr::Member(base~, ..) => collect_cstring_expr(order, seen, func_name, base)
+    Expr::BuiltinVaArg(list~, ..) => collect_cstring_expr(order, seen, func_name, list)
     Expr::CompoundLiteral(init~, ..) =>
-      collect_cstring_initializer(order, seen, init)
+      collect_cstring_initializer(order, seen, func_name, init)
     Expr::StmtExpr(stmts~, ..) =>
       for s in stmts {
-        collect_cstring_stmt(order, seen, s)
+        collect_cstring_stmt(order, seen, func_name, s)
       }
     _ => ()
   }
@@ -10353,13 +10364,15 @@ fn collect_cstring_expr(order : Array[String], seen : Map[String, Bool], expr : 
 fn collect_cstring_initializer(
   order : Array[String],
   seen : Map[String, Bool],
+  func_name : String,
   init : Initializer,
 ) -> Unit {
   match init {
-    Initializer::Expr(expr~, ..) => collect_cstring_expr(order, seen, expr)
+    Initializer::Expr(expr~, ..) =>
+      collect_cstring_expr(order, seen, func_name, expr)
     Initializer::List(items~, ..) =>
       for item in items {
-        collect_cstring_initializer(order, seen, item.value)
+        collect_cstring_initializer(order, seen, func_name, item.value)
       }
   }
 }
@@ -11099,70 +11112,75 @@ fn build_global_initializer_bytes(
 }
 
 ///|
-fn collect_cstring_stmt(order : Array[String], seen : Map[String, Bool], stmt : Stmt) -> Unit {
+fn collect_cstring_stmt(
+  order : Array[String],
+  seen : Map[String, Bool],
+  func_name : String,
+  stmt : Stmt,
+) -> Unit {
   match stmt {
     Stmt::Compound(stmts~, ..) =>
       for s in stmts {
-        collect_cstring_stmt(order, seen, s)
+        collect_cstring_stmt(order, seen, func_name, s)
       }
     Stmt::If(cond~, then_branch~, else_branch~, ..) => {
-      collect_cstring_expr(order, seen, cond)
-      collect_cstring_stmt(order, seen, then_branch)
+      collect_cstring_expr(order, seen, func_name, cond)
+      collect_cstring_stmt(order, seen, func_name, then_branch)
       match else_branch {
         None => ()
-        Some(s) => collect_cstring_stmt(order, seen, s)
+        Some(s) => collect_cstring_stmt(order, seen, func_name, s)
       }
     }
     Stmt::While(cond~, body~, ..) => {
-      collect_cstring_expr(order, seen, cond)
-      collect_cstring_stmt(order, seen, body)
+      collect_cstring_expr(order, seen, func_name, cond)
+      collect_cstring_stmt(order, seen, func_name, body)
     }
     Stmt::DoWhile(cond~, body~, ..) => {
-      collect_cstring_stmt(order, seen, body)
-      collect_cstring_expr(order, seen, cond)
+      collect_cstring_stmt(order, seen, func_name, body)
+      collect_cstring_expr(order, seen, func_name, cond)
     }
     Stmt::For(init~, cond~, step~, body~, ..) => {
       match init {
         None => ()
-        Some(s) => collect_cstring_stmt(order, seen, s)
+        Some(s) => collect_cstring_stmt(order, seen, func_name, s)
       }
       match cond {
         None => ()
-        Some(e) => collect_cstring_expr(order, seen, e)
+        Some(e) => collect_cstring_expr(order, seen, func_name, e)
       }
       match step {
         None => ()
-        Some(e) => collect_cstring_expr(order, seen, e)
+        Some(e) => collect_cstring_expr(order, seen, func_name, e)
       }
-      collect_cstring_stmt(order, seen, body)
+      collect_cstring_stmt(order, seen, func_name, body)
     }
     Stmt::Return(value~, ..) =>
       match value {
         None => ()
-        Some(e) => collect_cstring_expr(order, seen, e)
+        Some(e) => collect_cstring_expr(order, seen, func_name, e)
       }
-    Stmt::ExprStmt(expr~, ..) => collect_cstring_expr(order, seen, expr)
+    Stmt::ExprStmt(expr~, ..) => collect_cstring_expr(order, seen, func_name, expr)
     Stmt::DeclStmt(decls~, ..) =>
       for d in decls {
         match d.init {
           None => ()
-          Some(init) => collect_cstring_initializer(order, seen, init)
+          Some(init) => collect_cstring_initializer(order, seen, func_name, init)
         }
       }
     Stmt::Switch(cond~, body~, ..) => {
-      collect_cstring_expr(order, seen, cond)
-      collect_cstring_stmt(order, seen, body)
+      collect_cstring_expr(order, seen, func_name, cond)
+      collect_cstring_stmt(order, seen, func_name, body)
     }
     Stmt::Case(expr~, end_expr~, body~, ..) => {
-      collect_cstring_expr(order, seen, expr)
+      collect_cstring_expr(order, seen, func_name, expr)
       match end_expr {
         None => ()
-        Some(e) => collect_cstring_expr(order, seen, e)
+        Some(e) => collect_cstring_expr(order, seen, func_name, e)
       }
-      collect_cstring_stmt(order, seen, body)
+      collect_cstring_stmt(order, seen, func_name, body)
     }
-    Stmt::Default(body~, ..) => collect_cstring_stmt(order, seen, body)
-    Stmt::Label(body=body, ..) => collect_cstring_stmt(order, seen, body)
+    Stmt::Default(body~, ..) => collect_cstring_stmt(order, seen, func_name, body)
+    Stmt::Label(body=body, ..) => collect_cstring_stmt(order, seen, func_name, body)
     Stmt::Asm(_) |
     Stmt::Goto(name=_, loc=_) |
     Stmt::Break(_) |
@@ -11244,14 +11262,13 @@ fn codegen_arm64_object_bytes_with_sem(
   let cstring_seen : Map[String, Bool] = {}
   for decl in unit.decls {
     match decl {
-      Decl::FuncDef(func) => {
-        cstring_record(cstring_order, cstring_seen, func.name)
-        collect_cstring_stmt(cstring_order, cstring_seen, func.body)
-      }
+      Decl::FuncDef(func) =>
+        collect_cstring_stmt(cstring_order, cstring_seen, func.name, func.body)
       Decl::Var(var_decl) =>
         match var_decl.init {
           None => ()
-          Some(init) => collect_cstring_initializer(cstring_order, cstring_seen, init)
+          Some(init) =>
+            collect_cstring_initializer(cstring_order, cstring_seen, "", init)
         }
       _ => ()
     }
@@ -11486,11 +11503,42 @@ fn codegen_arm64_object_bytes_with_sem(
     }
   }
 
-  let symbols : Array[ObjSymbol] = Array::new(capacity=syms.names.length())
+  let ordered_names : Array[String] = Array::new(capacity=syms.names.length())
   let mut i = 0
   while i < syms.names.length() {
     let name = syms.names[i]
-    let id = i + 1
+    match def_symbols.get(name) {
+      Some(sym) =>
+        match sym.section {
+          Some(sec) => if sec == ".text" { ordered_names.push(name) }
+          None => ()
+        }
+      None => ()
+    }
+    i = i + 1
+  }
+  i = 0
+  while i < syms.names.length() {
+    let name = syms.names[i]
+    let mut is_text = false
+    match def_symbols.get(name) {
+      Some(sym) =>
+        match sym.section {
+          Some(sec) => if sec == ".text" { is_text = true }
+          None => ()
+        }
+      None => ()
+    }
+    if !is_text {
+      ordered_names.push(name)
+    }
+    i = i + 1
+  }
+  let symbols : Array[ObjSymbol] = Array::new(capacity=ordered_names.length())
+  i = 0
+  while i < ordered_names.length() {
+    let name = ordered_names[i]
+    let id = syms.name_to_id.get(name).unwrap_or(0)
     match def_symbols.get(name) {
       None =>
         symbols.push({
