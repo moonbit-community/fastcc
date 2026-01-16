@@ -23,8 +23,6 @@ struct SemContext {
   type_aliases : Map[String, CType]
   struct_defs : Map[String, RecordDef]
   union_defs : Map[String, RecordDef]
-  struct_size_cache : Map[String, (Int, Int)]
-  union_size_cache : Map[String, (Int, Int)]
   enum_defs : Map[String, Array[EnumItem]]
   enum_consts : Map[String, Int]
   enum_types : Map[String, CType]
@@ -62,8 +60,6 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     },
     struct_defs: {},
     union_defs: {},
-    struct_size_cache: {},
-    union_size_cache: {},
     enum_defs: {},
     enum_consts: {},
     enum_types: {},
@@ -75,27 +71,6 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     switch_depth: 0,
     current_func_name: None,
   }
-}
-
-///|
-fn attrs_is_empty(attrs : Attributes) -> Bool {
-  attrs.aligned is None &&
-  !attrs.packed &&
-  !attrs.weak &&
-  attrs.visibility is None &&
-  attrs.section is None &&
-  attrs.alias_name is None &&
-  attrs.asm_label is None &&
-  attrs.cleanup is None &&
-  !attrs.noreturn &&
-  !attrs.constructor_attr &&
-  !attrs.destructor &&
-  !attrs.always_inline &&
-  attrs.call_conv is None &&
-  !attrs.dll_import &&
-  !attrs.dll_export &&
-  !attrs.nodecorate &&
-  !attrs.nodebug
 }
 
 
@@ -600,18 +575,7 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
         None => None
         Some(def) => {
           let merged = merge_attrs(def.attrs, struct_attrs)
-          if tag != "" && attrs_is_empty(struct_attrs) {
-            match ctx.struct_size_cache.get(tag) {
-              Some(value) => Some(value)
-              None => {
-                let value = struct_size_align(ctx, def.fields, merged, loc)
-                ctx.struct_size_cache.set(tag, value)
-                Some(value)
-              }
-            }
-          } else {
-            Some(struct_size_align(ctx, def.fields, merged, loc))
-          }
+          Some(struct_size_align(ctx, def.fields, merged, loc))
         }
       }
     CType::Union(name=tag, fields=field_list, attrs=struct_attrs) =>
@@ -619,18 +583,7 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
         None => None
         Some(def) => {
           let merged = merge_attrs(def.attrs, struct_attrs)
-          if tag != "" && attrs_is_empty(struct_attrs) {
-            match ctx.union_size_cache.get(tag) {
-              Some(value) => Some(value)
-              None => {
-                let value = union_size_align(ctx, def.fields, merged, loc)
-                ctx.union_size_cache.set(tag, value)
-                Some(value)
-              }
-            }
-          } else {
-            Some(union_size_align(ctx, def.fields, merged, loc))
-          }
+          Some(union_size_align(ctx, def.fields, merged, loc))
         }
       }
     CType::Qualified(base~, ..) => type_size_align(ctx, base, loc)
