@@ -110,7 +110,7 @@ if not tests:
 
 def run_compile(label, compiler, extra_args, capture_phases):
     total = 0.0
-    phases = {"parse_us": 0, "sem_us": 0, "codegen_us": 0, "total_us": 0}
+    phases = {"parse": 0, "sem": 0, "codegen": 0, "total": 0}
     for rep in range(repeat + (1 if warmup else 0)):
         rep_dir = os.path.join(out_dir, label, f"rep-{rep}")
         wrap_dir = os.path.join(out_dir, "wrap")
@@ -145,22 +145,14 @@ def run_compile(label, compiler, extra_args, capture_phases):
                 sys.stderr.write("\n")
                 sys.exit(1)
             if capture_phases and not (warmup and rep == 0):
-                def get_us(parts, key):
-                    us_key = f"{key}_us"
-                    ms_key = f"{key}_ms"
-                    if us_key in parts:
-                        return int(parts[us_key])
-                    if ms_key in parts:
-                        return int(parts[ms_key]) * 1000
-                    return 0
                 for line in proc.stdout.decode("utf-8", "replace").splitlines():
                     if not line.startswith("bench: file="):
                         continue
                     parts = dict(item.split("=", 1) for item in line.split()[1:])
-                    phases["parse_us"] += get_us(parts, "parse")
-                    phases["sem_us"] += get_us(parts, "sem")
-                    phases["codegen_us"] += get_us(parts, "codegen")
-                    phases["total_us"] += get_us(parts, "total")
+                    phases["parse"] += int(parts.get("parse_ms", "0"))
+                    phases["sem"] += int(parts.get("sem_ms", "0"))
+                    phases["codegen"] += int(parts.get("codegen_ms", "0"))
+                    phases["total"] += int(parts.get("total_ms", "0"))
         end = time.perf_counter()
         if warmup and rep == 0:
             continue
@@ -178,9 +170,9 @@ print(f"tinycc.mbt total: {mbt_time:.3f}s")
 print(f"refs/tinycc total: {ref_time:.3f}s")
 print(f"ratio (mbt/ref): {ratio:.2f}x")
 if detail:
-    avg_parse = mbt_phases["parse_us"] / (1000.0 * repeat)
-    avg_sem = mbt_phases["sem_us"] / (1000.0 * repeat)
-    avg_codegen = mbt_phases["codegen_us"] / (1000.0 * repeat)
-    avg_total = mbt_phases["total_us"] / (1000.0 * repeat)
-    print(f"tinycc.mbt phases (avg ms): parse={avg_parse:.3f} sem={avg_sem:.3f} codegen={avg_codegen:.3f} total={avg_total:.3f}")
+    avg_parse = mbt_phases["parse"] / repeat
+    avg_sem = mbt_phases["sem"] / repeat
+    avg_codegen = mbt_phases["codegen"] / repeat
+    avg_total = mbt_phases["total"] / repeat
+    print(f"tinycc.mbt phases (avg ms): parse={avg_parse:.1f} sem={avg_sem:.1f} codegen={avg_codegen:.1f} total={avg_total:.1f}")
 PY
