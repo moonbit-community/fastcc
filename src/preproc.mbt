@@ -824,30 +824,18 @@ fn make_string_literal(text : String, loc : SrcLoc) -> Token {
 
 ///|
 fn escape_string(text : String) -> String {
-  let len = text.length()
-  let mut i = 0
-  while i < len {
-    let code = text[i]
-    if code == 92 || code == 34 {
-      break
-    }
-    i = i + 1
-  }
-  if i == len {
+  if !text.contains("\\") && !text.contains("\"") {
     return text
   }
-  let sb = StringBuilder::new(size_hint=len)
-  let mut j = 0
-  while j < len {
-    let code = text[j]
-    if code == 92 {
+  let sb = StringBuilder::new(size_hint=text.length())
+  for ch in text {
+    if ch == '\\' {
       sb.write_string("\\\\")
-    } else if code == 34 {
+    } else if ch == '"' {
       sb.write_string("\\\"")
     } else {
-      sb.write_char(code.unsafe_to_char())
+      sb.write_char(ch)
     }
-    j = j + 1
   }
   sb.to_string()
 }
