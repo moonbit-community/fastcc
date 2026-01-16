@@ -50,7 +50,6 @@ fn touch_unused_symbols() -> Unit {
 
   // object helpers
   let new_section_ref = new_section
-  let section_from_emitter_ref = section_from_emitter
   let reloc_addend_ref = reloc_addend
 
   // sem helper
@@ -89,7 +88,6 @@ fn touch_unused_symbols() -> Unit {
     layout_initprot,
     write_macho_object_ref,
     new_section_ref,
-    section_from_emitter_ref,
     reloc_addend_ref,
     type_contains_vla_ref,
   )

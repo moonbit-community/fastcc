@@ -145,37 +145,15 @@ fn align_log2(value : Int) -> Int {
 
 ///|
 fn write_padded_name(buf : @buffer.Buffer, name : String, len : Int) -> Unit {
-  let name_len = name.length()
-  let mut ascii = name_len <= len
-  if ascii {
-    let mut i = 0
-    while i < name_len && ascii {
-      if name[i] > 0x7f {
-        ascii = false
-      }
-      i = i + 1
-    }
-  }
-  if ascii {
-    let start = buf.length()
-    buf.write_string_utf8(name[:])
-    let written = buf.length() - start
-    let mut i = written
-    while i < len {
+  let bytes = @encoding/utf8.encode(name)
+  let mut i = 0
+  while i < len {
+    if i < bytes.length() {
+      buf.write_byte(bytes[i])
+    } else {
       buf.write_byte(0)
-      i = i + 1
     }
-  } else {
-    let bytes = @encoding/utf8.encode(name)
-    let mut i = 0
-    while i < len {
-      if i < bytes.length() {
-        buf.write_byte(bytes[i])
-      } else {
-        buf.write_byte(0)
-      }
-      i = i + 1
-    }
+    i = i + 1
   }
 }
 
@@ -235,14 +213,14 @@ fn macho_section_info(name : String) -> MachoSectionInfo {
 
 ///|
 fn build_strtab(symbols : Array[ObjSymbol]) -> (Bytes, Array[Int]) {
-  let buf = @buffer.new(size_hint=8 + symbols.length() * 8)
-  buf.write_string_utf8(" "[:])
+  let buf = @buffer.new()
+  buf.write_bytes(@encoding/utf8.encode(" "))
   buf.write_byte(0)
-  let offsets : Array[Int] = Array::new(capacity=symbols.length())
+  let offsets : Array[Int] = []
   for sym in symbols {
     let off = buf.length()
     offsets.push(off)
-    buf.write_string_utf8(sym.name[:])
+    buf.write_bytes(@encoding/utf8.encode(sym.name))
     buf.write_byte(0)
   }
   let pad = -buf.length() & 7
@@ -259,9 +237,10 @@ fn build_symtab(
   symbols : Array[ObjSymbol],
   offsets : Array[Int],
   section_index : Map[String, Int],
-) -> (Bytes, Map[Int, Int]) {
-  let buf = @buffer.new(size_hint=symbols.length() * 16)
+) -> (Bytes, Map[Int, Int], Map[Int, ObjSymbol]) {
+  let buf = @buffer.new()
   let id_to_index : Map[Int, Int] = {}
+  let id_to_symbol : Map[Int, ObjSymbol] = {}
   let mut idx = 0
   while idx < symbols.length() {
     let sym = symbols[idx]
@@ -287,9 +266,10 @@ fn build_symtab(
     buf.write_uint16_le((0 : Int).to_uint16())
     buf.write_uint64_le(n_value.to_uint64())
     id_to_index.set(sym.id, idx)
+    id_to_symbol.set(sym.id, sym)
     idx = idx + 1
   }
-  (buf.to_bytes(), id_to_index)
+  (buf.to_bytes(), id_to_index, id_to_symbol)
 }
 
 ///|
@@ -446,7 +426,7 @@ fn encode_macho_object(
   }
   let symoff = align_up(reloc_offset, 4)
   let section_index_map = collect_section_indices(layouts)
-  let (symtab, id_to_index) = build_symtab(
+  let (symtab, id_to_index, _id_to_symbol) = build_symtab(
     symbols, str_offsets, section_index_map,
   )
   let stroff = symoff + symtab.length()

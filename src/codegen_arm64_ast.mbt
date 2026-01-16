@@ -11252,8 +11252,8 @@ fn codegen_arm64_object_bytes_with_sem(
     }
   }
   let string_syms : Map[String, Sym] = {}
-  let cstring_entries : Array[StringEntry] = Array::new(capacity=cstring_order.length())
-  let rodata_entries : Array[StringEntry] = Array::new(capacity=cstring_order.length())
+  let cstring_entries : Array[StringEntry] = []
+  let rodata_entries : Array[StringEntry] = []
   let mut i = 0
   while i < cstring_order.length() {
     let value = cstring_order[i]
@@ -11481,7 +11481,7 @@ fn codegen_arm64_object_bytes_with_sem(
     }
   }
 
-  let symbols : Array[ObjSymbol] = Array::new(capacity=syms.names.length())
+  let symbols : Array[ObjSymbol] = []
   let mut i = 0
   while i < syms.names.length() {
     let name = syms.names[i]
@@ -11507,7 +11507,7 @@ fn codegen_arm64_object_bytes_with_sem(
     i = i + 1
   }
 
-  let text = section_from_emitter_take(".text", emitter)
+  let text = section_from_emitter(".text", emitter)
   let sections : Array[Section] = [text]
   match rodata_section {
     None => ()
