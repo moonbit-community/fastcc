@@ -775,14 +775,7 @@ fn stringize_tokens(tokens : Array[Token]) -> String {
   if tokens.length() == 0 {
     return ""
   }
-  let mut size_hint = 0
-  for tok in tokens {
-    size_hint = size_hint + tok.lexeme.length() + 1
-  }
-  if size_hint > 0 {
-    size_hint = size_hint - 1
-  }
-  let sb = StringBuilder::new(size_hint=size_hint)
+  let sb = StringBuilder::new()
   let mut first = true
   for tok in tokens {
     if first {
@@ -809,7 +802,7 @@ fn make_string_literal(text : String, loc : SrcLoc) -> Token {
 
 ///|
 fn escape_string(text : String) -> String {
-  let sb = StringBuilder::new(size_hint=text.length())
+  let sb = StringBuilder::new()
   for ch in text {
     if ch == '\\' {
       sb.write_string("\\\\")
@@ -1469,10 +1462,10 @@ fn release_expanding_guards(pp : Preprocessor) -> Unit {
 ///|
 fn merge_hidden(a : Array[String], b : Array[String]) -> Array[String] {
   if a.length() == 0 {
-    return b
+    return b.copy()
   }
   if b.length() == 0 {
-    return a
+    return a.copy()
   }
   let out = a.copy()
   for h in b {
@@ -1488,13 +1481,8 @@ fn add_hidden(tok : Token, name : String) -> Token {
   if tok.hidden.contains(name) {
     tok
   } else {
-    let hidden = if tok.hidden.length() == 0 {
-      [name]
-    } else {
-      let out = tok.hidden.copy()
-      out.push(name)
-      out
-    }
+    let hidden = tok.hidden.copy()
+    hidden.push(name)
     {
       kind: tok.kind,
       lexeme: tok.lexeme,

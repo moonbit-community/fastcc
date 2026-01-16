@@ -259,13 +259,13 @@ fn build_symtab(
   symbols : Array[ObjSymbol],
   offsets : Array[Int],
   section_index : Map[String, Int],
-) -> Bytes {
+) -> (Bytes, Map[Int, Int]) {
   let buf = @buffer.new(size_hint=symbols.length() * 16)
+  let id_to_index : Map[Int, Int] = {}
   let mut idx = 0
   while idx < symbols.length() {
     let sym = symbols[idx]
     let strx = offsets[idx]
-    let _sym_id = sym.id
     let mut n_type = if sym.is_external { N_EXT } else { 0 }
     let (n_sect, n_value) = match sym.section {
       None => (0, 0)
@@ -286,9 +286,10 @@ fn build_symtab(
     buf.write_byte(n_sect.to_byte())
     buf.write_uint16_le((0 : Int).to_uint16())
     buf.write_uint64_le(n_value.to_uint64())
+    id_to_index.set(sym.id, idx)
     idx = idx + 1
   }
-  buf.to_bytes()
+  (buf.to_bytes(), id_to_index)
 }
 
 ///|
@@ -445,7 +446,9 @@ fn encode_macho_object(
   }
   let symoff = align_up(reloc_offset, 4)
   let section_index_map = collect_section_indices(layouts)
-  let symtab = build_symtab(symbols, str_offsets, section_index_map)
+  let (symtab, id_to_index) = build_symtab(
+    symbols, str_offsets, section_index_map,
+  )
   let stroff = symoff + symtab.length()
   let ncmds = segment_order.length() + 3
   let out = @buffer.new(size_hint=stroff + strtab.length())
@@ -543,7 +546,10 @@ fn encode_macho_object(
           let layout = layouts[idx]
           for rel in layout.section.relocs {
             let (rtype, pcrel) = macho_reloc_type(rel.kind)
-            let symbolnum = if rel.sym.id > 0 { rel.sym.id - 1 } else { 0 }
+            let symbolnum = match id_to_index.get(rel.sym.id) {
+              None => 0
+              Some(idx_val) => idx_val
+            }
             let len = reloc_length(rel.kind)
             let info = pack_reloc_info(symbolnum, pcrel, len, true, rtype)
             out.write_uint_le(rel.offset.reinterpret_as_uint())
