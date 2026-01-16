@@ -14,7 +14,7 @@ issue-prefix: "tinyccmbt"
 # no-db: true
 
 # Disable daemon for RPC communication (forces direct database access)
-no-daemon: true
+no-daemon: false
 
 # Disable auto-flush of database to JSONL after mutations
 # no-auto-flush: false
