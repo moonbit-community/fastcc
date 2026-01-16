@@ -44,3 +44,14 @@ fn section_from_emitter(name : String, emitter : Arm64Emitter) -> Section {
     size_bytes: emitter.code.length() << 2,
   }
 }
+
+///|
+fn section_from_emitter_take(name : String, emitter : Arm64Emitter) -> Section {
+  {
+    name,
+    data: emitter.code,
+    relocs: emitter.relocs,
+    align: 4,
+    size_bytes: emitter.code.length() << 2,
+  }
+}
