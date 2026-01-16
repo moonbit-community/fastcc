@@ -22,38 +22,7 @@ fn collect_tokens(pp : Preprocessor) -> Array[Token] {
 
 ///|
 fn new_parser(tokens : Array[Token], diags : DiagBag) -> Parser {
-  let builtins : Map[String, CType] = {}
-  builtins.set("__builtin_va_list", CType::Pointer(CType::Void))
-  builtins.set(
-    "_Float16",
-    CType::Int(kind=CIntKind::Short, unsigned=true),
-  )
-  { tokens, index: 0, diags, type_scopes: [builtins], anon_tag_id: 0 }
-}
-
-///|
-fn special_ident_kind(name : String) -> TokenKind? {
-  match name {
-    "void" => Some(KwVoid)
-    "_Bool" => Some(KwBool)
-    "char" => Some(KwChar)
-    "short" => Some(KwShort)
-    "int" => Some(KwInt)
-    "long" => Some(KwLong)
-    "float" => Some(KwFloat)
-    "double" => Some(KwDouble)
-    "_Float16" => Some(KwFloat)
-    "signed" => Some(KwSigned)
-    "unsigned" => Some(KwUnsigned)
-    "__const" | "__const__" => Some(KwConst)
-    "__volatile" | "__volatile__" => Some(KwVolatile)
-    "__restrict" | "__restrict__" => Some(KwRestrict)
-    "__inline" | "__inline__" => Some(KwInline)
-    "__signed" | "__signed__" => Some(KwSigned)
-    "__unsigned" | "__unsigned__" => Some(KwUnsigned)
-    "_Noreturn" => Some(KwNoreturn)
-    _ => None
-  }
+  { tokens, index: 0, diags, type_scopes: [{}], anon_tag_id: 0 }
 }
 
 ///|
@@ -437,14 +406,7 @@ fn strip_type_qualifiers(ty : CType) -> CType {
 fn parse_type_qualifiers(p : Parser) -> TypeQual {
   let mut qual = empty_qual()
   while true {
-    let mut kind = peek_token(p).kind
-    if kind == Ident {
-      match special_ident_kind(peek_token(p).lexeme) {
-        Some(mapped) => kind = mapped
-        None => ()
-      }
-    }
-    match kind {
+    match peek_token(p).kind {
       KwConst => {
         qual = with_const(qual)
         ignore(advance_token(p))
@@ -502,14 +464,7 @@ fn parse_type_specifiers(
   let mut base : CType? = None
   while true {
     let tok = peek_token(p)
-    let mut kind = tok.kind
-    if kind == Ident {
-      match special_ident_kind(tok.lexeme) {
-        Some(mapped) => kind = mapped
-        None => ()
-      }
-    }
-    match kind {
+    match tok.kind {
       KwTypedef => {
         if allow_typedef {
           if is_typedef || storage != StorageClass::Default {
@@ -525,7 +480,7 @@ fn parse_type_specifiers(
       }
       KwExtern | KwStatic | KwAuto | KwRegister | KwInline =>
         if allow_storage {
-          match kind {
+          match tok.kind {
             KwInline => is_inline = true
             KwExtern => {
               if storage != StorageClass::Default || is_typedef {
@@ -562,12 +517,6 @@ fn parse_type_specifiers(
           saw_any = true
           continue
         }
-      KwNoreturn => {
-        attrs = merge_attrs(attrs, attrs_with(noreturn=true))
-        ignore(advance_token(p))
-        saw_any = true
-        continue
-      }
       KwConst => {
         qual = with_const(qual)
         ignore(advance_token(p))
@@ -824,14 +773,7 @@ fn parse_decl_specs(p : Parser, allow_storage? : Bool = true) -> DeclSpecs? {
 
 ///|
 fn is_type_spec_start(p : Parser) -> Bool {
-  let mut kind = peek_token(p).kind
-  if kind == Ident {
-    match special_ident_kind(peek_token(p).lexeme) {
-      Some(mapped) => kind = mapped
-      None => ()
-    }
-  }
-  match kind {
+  match peek_token(p).kind {
     KwVoid
     | KwBool
     | KwChar
@@ -1015,16 +957,6 @@ fn parse_asm_stmt(p : Parser, loc : SrcLoc) -> AsmStmt {
       is_volatile = true
       continue
     }
-    if peek_token(p).kind == Ident {
-      match special_ident_kind(peek_token(p).lexeme) {
-        Some(KwVolatile) => {
-          ignore(advance_token(p))
-          is_volatile = true
-          continue
-        }
-        _ => ()
-      }
-    }
     if match_token(p, KwGoto) is Some(_) {
       is_goto = true
       continue
@@ -1137,7 +1069,7 @@ fn parse_attribute_clause(p : Parser, loc : SrcLoc) -> Attributes {
         }
       }
       "constructor" => {
-        attrs = merge_attrs(attrs, attrs_with(constructor_attr=true))
+        attrs = merge_attrs(attrs, attrs_with(constructor=true))
         if has_args {
           skip_paren_group(p)
         }
@@ -1166,8 +1098,8 @@ fn parse_attribute_clause(p : Parser, loc : SrcLoc) -> Attributes {
         if !has_args {
           add_parse_error(p, name_tok.loc, "expected '(' after alias")
         } else {
-          let alias_name = parse_attr_string(p, name_tok.loc)
-          attrs = merge_attrs(attrs, attrs_with(alias_name~))
+          let alias = parse_attr_string(p, name_tok.loc)
+          attrs = merge_attrs(attrs, attrs_with(alias~))
           expect(p, RParen, "expected ')' after alias") |> ignore
         }
       "visibility" =>
@@ -1602,33 +1534,18 @@ fn parse_paren_pointer_declarator(p : Parser, base : CType) -> Declarator? {
   attrs = merge_attrs(attrs, parse_attributes(p))
   let name_tok = expect_ident(p, "expected identifier")
   let inner_array_sizes : Array[(Int?, Expr?)] = []
-  let mut inner_params : Array[Param]? = None
-  let mut inner_varargs = false
-  let mut inner_old_style = false
-  attrs = merge_attrs(attrs, parse_attributes(p))
   while match_token(p, LBracket) is Some(_) {
     let size = parse_array_size(p)
     expect(p, RBracket, "expected ']' after array size") |> ignore
     inner_array_sizes.push(size)
   }
-  if match_token(p, LParen) is Some(_) {
-    let (params, has_varargs, is_old_style) = parse_param_list(p)
-    inner_params = Some(params)
-    inner_varargs = has_varargs
-    inner_old_style = is_old_style
-  }
-  attrs = merge_attrs(attrs, parse_attributes(p))
   expect(p, RParen, "expected ')' in declarator") |> ignore
   match name_tok {
     None => None
     Some(tok) => {
-      let (
-        post_ty,
-        _outer_params,
-        _outer_varargs,
-        _outer_old_style,
-        suffix_attrs,
-      ) = parse_declarator_suffix(p, base)
+      let (ty, params, varargs, is_old_style, suffix_attrs) = parse_declarator_suffix(
+        p, base,
+      )
       attrs = merge_attrs(attrs, suffix_attrs)
       if match_token(p, KwAsm) is Some(asm_tok) {
         match parse_asm_label(p, asm_tok.loc) {
@@ -1638,7 +1555,7 @@ fn parse_paren_pointer_declarator(p : Parser, base : CType) -> Declarator? {
         }
         attrs = merge_attrs(attrs, parse_attributes(p))
       }
-      let mut wrapped = post_ty
+      let mut wrapped = ty
       for qual in quals {
         wrapped = CType::Pointer(wrapped)
         wrapped = apply_qualifiers(wrapped, qual)
@@ -1649,22 +1566,12 @@ fn parse_paren_pointer_declarator(p : Parser, base : CType) -> Declarator? {
         let (size, size_expr) = inner_array_sizes[i]
         wrapped = CType::Array(elem=wrapped, size~, size_expr~)
       }
-      if inner_params is Some(params) {
-        let param_types = params.map(param => param.ty)
-        wrapped = CType::Function(
-          return_type=wrapped,
-          params=param_types,
-          varargs=inner_varargs,
-          is_old_style=inner_old_style,
-          call_conv=CallConv::Default,
-        )
-      }
       Some({
         name: tok.lexeme,
         ty: wrapped,
-        params: inner_params,
-        varargs: inner_varargs,
-        is_old_style: inner_old_style,
+        params,
+        varargs,
+        is_old_style,
         attrs,
         loc: tok.loc,
       })
@@ -1967,13 +1874,7 @@ fn parse_param_list(p : Parser) -> (Array[Param], Bool, Bool) {
     return (params, true, false)
   }
   let first = peek_token(p)
-  let first_mapped = if first.kind == Ident {
-    special_ident_kind(first.lexeme)
-  } else {
-    None
-  }
-  if first.kind == Ident && first_mapped is None &&
-    !has_typedef(p, first.lexeme) {
+  if first.kind == Ident && !has_typedef(p, first.lexeme) {
     old_style = true
     while true {
       match expect_ident(p, "expected parameter name") {
@@ -2782,11 +2683,6 @@ fn parse_expr_unary(p : Parser) -> Expr {
       }
       Some(ty) => {
         expect(p, RParen, "expected ')' after cast type") |> ignore
-        if peek_kind(p, 0) == LBrace {
-          let init = parse_initializer(p)
-          let literal = Expr::CompoundLiteral(ty~, init~, loc=lparen.loc)
-          return parse_postfix_tail(p, literal)
-        }
         let expr = parse_expr_unary(p)
         return Expr::Cast(ty~, expr~, loc=lparen.loc)
       }
@@ -2853,13 +2749,7 @@ fn parse_expr_unary(p : Parser) -> Expr {
 
 ///|
 fn parse_expr_postfix(p : Parser) -> Expr {
-  let expr = parse_expr_primary(p)
-  parse_postfix_tail(p, expr)
-}
-
-///|
-fn parse_postfix_tail(p : Parser, base : Expr) -> Expr {
-  let mut expr = base
+  let mut expr = parse_expr_primary(p)
   while true {
     match match_token(p, LParen) {
       Some(tok) => {
@@ -3012,18 +2902,9 @@ fn parse_expr_primary(p : Parser) -> Expr {
         Expr::Ident(name=tok.lexeme, loc=tok.loc)
       }
     LParen => {
-      if match_token(p, LBrace) is Some(lbrace) {
-        let block = parse_compound_stmt(p, lbrace.loc)
-        expect(p, RParen, "expected ')' after statement expression") |> ignore
-        match block {
-          Stmt::Compound(stmts~, ..) => Expr::StmtExpr(stmts~, loc=tok.loc)
-          _ => Expr::StmtExpr(stmts=[], loc=tok.loc)
-        }
-      } else {
-        let expr = parse_expr(p)
-        expect(p, RParen, "expected ')'") |> ignore
-        expr
-      }
+      let expr = parse_expr(p)
+      expect(p, RParen, "expected ')'") |> ignore
+      expr
     }
     _ => {
       add_parse_error(p, tok.loc, "unexpected token in expression")
@@ -3281,8 +3162,6 @@ fn expr_loc(expr : Expr) -> SrcLoc {
     Expr::BuiltinVaArg(loc~, ..) => loc
     Expr::Unary(loc~, ..) => loc
     Expr::Cast(loc~, ..) => loc
-    Expr::CompoundLiteral(loc~, ..) => loc
-    Expr::StmtExpr(loc~, ..) => loc
     Expr::SizeofExpr(loc~, ..) => loc
     Expr::SizeofType(loc~, ..) => loc
     Expr::AlignofExpr(loc~, ..) => loc
