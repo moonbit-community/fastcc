@@ -123,58 +123,84 @@ fn parse_cli_args(
 
 ///|
 struct BenchStats {
-  mut parse_ms : Int
-  mut sem_ms : Int
-  mut codegen_ms : Int
-  mut total_ms : Int
+  mut parse_ns : UInt64
+  mut sem_ns : UInt64
+  mut codegen_ns : UInt64
+  mut total_ns : UInt64
   mut files : Int
 }
 
 ///|
 fn bench_stats_new() -> BenchStats {
   {
-    parse_ms: 0,
-    sem_ms: 0,
-    codegen_ms: 0,
-    total_ms: 0,
+    parse_ns: 0UL,
+    sem_ns: 0UL,
+    codegen_ns: 0UL,
+    total_ns: 0UL,
     files: 0,
   }
 }
 
 ///|
-fn bench_ms(start_ms : UInt64, end_ms : UInt64) -> Int {
-  (end_ms - start_ms).to_int()
+fn bench_delta_ns(start_ns : UInt64, end_ns : UInt64) -> UInt64 {
+  end_ns - start_ns
+}
+
+///|
+fn bench_ms(delta_ns : UInt64) -> Int {
+  (delta_ns / 1_000_000UL).to_int()
+}
+
+///|
+fn bench_us(delta_ns : UInt64) -> Int {
+  ((delta_ns + 999UL) / 1_000UL).to_int()
 }
 
 ///|
 fn bench_stats_add(
   stats : BenchStats,
-  parse_ms : Int,
-  sem_ms : Int,
-  codegen_ms : Int,
-  total_ms : Int,
+  parse_ns : UInt64,
+  sem_ns : UInt64,
+  codegen_ns : UInt64,
+  total_ns : UInt64,
 ) -> Unit {
-  stats.parse_ms = stats.parse_ms + parse_ms
-  stats.sem_ms = stats.sem_ms + sem_ms
-  stats.codegen_ms = stats.codegen_ms + codegen_ms
-  stats.total_ms = stats.total_ms + total_ms
+  stats.parse_ns = stats.parse_ns + parse_ns
+  stats.sem_ns = stats.sem_ns + sem_ns
+  stats.codegen_ns = stats.codegen_ns + codegen_ns
+  stats.total_ns = stats.total_ns + total_ns
   stats.files = stats.files + 1
 }
 
 ///|
 fn bench_file_line(
   path : String,
-  parse_ms : Int,
-  sem_ms : Int,
-  codegen_ms : Int,
-  total_ms : Int,
+  parse_ns : UInt64,
+  sem_ns : UInt64,
+  codegen_ns : UInt64,
+  total_ns : UInt64,
 ) -> String {
-  "bench: file=\{path} parse_ms=\{parse_ms} sem_ms=\{sem_ms} codegen_ms=\{codegen_ms} total_ms=\{total_ms}"
+  let parse_ms = bench_ms(parse_ns)
+  let sem_ms = bench_ms(sem_ns)
+  let codegen_ms = bench_ms(codegen_ns)
+  let total_ms = bench_ms(total_ns)
+  let parse_us = bench_us(parse_ns)
+  let sem_us = bench_us(sem_ns)
+  let codegen_us = bench_us(codegen_ns)
+  let total_us = bench_us(total_ns)
+  "bench: file=\{path} parse_ms=\{parse_ms} sem_ms=\{sem_ms} codegen_ms=\{codegen_ms} total_ms=\{total_ms} parse_us=\{parse_us} sem_us=\{sem_us} codegen_us=\{codegen_us} total_us=\{total_us}"
 }
 
 ///|
 fn bench_summary_line(stats : BenchStats) -> String {
-  "bench: files=\{stats.files} parse_ms=\{stats.parse_ms} sem_ms=\{stats.sem_ms} codegen_ms=\{stats.codegen_ms} total_ms=\{stats.total_ms}"
+  let parse_ms = bench_ms(stats.parse_ns)
+  let sem_ms = bench_ms(stats.sem_ns)
+  let codegen_ms = bench_ms(stats.codegen_ns)
+  let total_ms = bench_ms(stats.total_ns)
+  let parse_us = bench_us(stats.parse_ns)
+  let sem_us = bench_us(stats.sem_ns)
+  let codegen_us = bench_us(stats.codegen_ns)
+  let total_us = bench_us(stats.total_ns)
+  "bench: files=\{stats.files} parse_ms=\{parse_ms} sem_ms=\{sem_ms} codegen_ms=\{codegen_ms} total_ms=\{total_ms} parse_us=\{parse_us} sem_us=\{sem_us} codegen_us=\{codegen_us} total_us=\{total_us}"
 }
 
 ///|
@@ -245,29 +271,29 @@ fn main {
                 println(t.lexeme)
               }
             } else {
-              let mut parse_ms = 0
-              let mut sem_ms = 0
-              let mut codegen_ms = 0
-              let mut total_ms = 0
-              let total_start = if bench_enabled { @env.now() } else { 0UL }
+              let mut parse_ns = 0UL
+              let mut sem_ns = 0UL
+              let mut codegen_ns = 0UL
+              let mut total_ns = 0UL
+              let total_start = if bench_enabled { bench_now_ns() } else { 0UL }
               let parse_start = total_start
               let unit = parse_translation_unit(pp)
               if bench_enabled {
-                let parse_end = @env.now()
-                parse_ms = bench_ms(parse_start, parse_end)
+                let parse_end = bench_now_ns()
+                parse_ns = bench_delta_ns(parse_start, parse_end)
               }
               if !has_errors(bag) {
                 if bench_enabled {
-                  let sem_start = @env.now()
+                  let sem_start = bench_now_ns()
                   check_translation_unit(unit, bag) |> ignore
-                  let sem_end = @env.now()
-                  sem_ms = bench_ms(sem_start, sem_end)
+                  let sem_end = bench_now_ns()
+                  sem_ns = bench_delta_ns(sem_start, sem_end)
                 } else {
                   check_translation_unit(unit, bag) |> ignore
                 }
               }
               if !has_errors(bag) {
-                let codegen_start = if bench_enabled { @env.now() } else { 0UL }
+                let codegen_start = if bench_enabled { bench_now_ns() } else { 0UL }
                 match codegen_arm64_object_bytes(unit, bag) {
                   None => ()
                   Some(bytes) => {
@@ -281,15 +307,15 @@ fn main {
                   }
                 }
                 if bench_enabled {
-                  let codegen_end = @env.now()
-                  codegen_ms = bench_ms(codegen_start, codegen_end)
+                  let codegen_end = bench_now_ns()
+                  codegen_ns = bench_delta_ns(codegen_start, codegen_end)
                 }
               }
               if bench_enabled {
-                let total_end = @env.now()
-                total_ms = bench_ms(total_start, total_end)
-                bench_stats_add(bench_stats, parse_ms, sem_ms, codegen_ms, total_ms)
-                println(bench_file_line(path, parse_ms, sem_ms, codegen_ms, total_ms))
+                let total_end = bench_now_ns()
+                total_ns = bench_delta_ns(total_start, total_end)
+                bench_stats_add(bench_stats, parse_ns, sem_ns, codegen_ns, total_ns)
+                println(bench_file_line(path, parse_ns, sem_ns, codegen_ns, total_ns))
               }
             }
             if has_errors(bag) {

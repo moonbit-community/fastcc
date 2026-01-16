@@ -4,5 +4,8 @@
     "moonbitlang/x/fs",
     "moonbitlang/x/sys",
     "moonbitlang/x/time"
+  ],
+  "native-stub": [
+    "bench_timer.c"
   ]
 }
