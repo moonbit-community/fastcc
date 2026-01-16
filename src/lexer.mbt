@@ -61,7 +61,7 @@ fn make_token(
   loc : SrcLoc,
   line_start : Bool,
 ) -> Token {
-  { kind, lexeme, loc, line_start, hidden: [] }
+  { kind, lexeme, loc, line_start }
 }
 
 ///|
@@ -153,9 +153,8 @@ fn skip_ws(lex : Lexer) -> Unit {
           continue
         }
         if code == 92 && peek_char_offset(lex, 1) is Some(10) {
-          let _ = advance_comment(lex) // '\'
-          let _ = advance_comment(lex) // '\n'
-          lex.line_start = false
+          let _ = advance_comment(lex)
+          let _ = advance_comment(lex)
           continue
         }
         if code == 47 {
@@ -219,11 +218,7 @@ fn skip_block_comment(lex : Lexer, start_loc : SrcLoc) -> Unit {
 
 ///|
 fn is_ident_start(code : UInt16) -> Bool {
-  (code >= 65 && code <= 90) ||
-  (code >= 97 && code <= 122) ||
-  code == 95 ||
-  code == 36 ||
-  code == 64 // allow '@' so we can lex Objective-C tokens in skipped branches
+  (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code == 95
 }
 
 ///|
@@ -387,10 +382,9 @@ fn lex_number(
     if peek_char(lex) is Some(46) && dot_ok {
       is_float = true
       let _ = advance(lex)
-      let accept_digit = if is_hex { is_hex_digit } else { is_digit }
       while true {
         match peek_char(lex) {
-          Some(code) if accept_digit(code) => {
+          Some(code) if is_digit(code) => {
             let _ = advance(lex)
             continue
           }
