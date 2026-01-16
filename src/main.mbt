@@ -275,6 +275,7 @@ fn main {
               let mut sem_ns = 0UL
               let mut codegen_ns = 0UL
               let mut total_ns = 0UL
+              let mut sem_ctx : SemContext? = None
               let total_start = if bench_enabled { bench_now_ns() } else { 0UL }
               let parse_start = total_start
               let unit = parse_translation_unit(pp)
@@ -285,26 +286,30 @@ fn main {
               if !has_errors(bag) {
                 if bench_enabled {
                   let sem_start = bench_now_ns()
-                  check_translation_unit(unit, bag) |> ignore
+                  sem_ctx = Some(check_translation_unit(unit, bag))
                   let sem_end = bench_now_ns()
                   sem_ns = bench_delta_ns(sem_start, sem_end)
                 } else {
-                  check_translation_unit(unit, bag) |> ignore
+                  sem_ctx = Some(check_translation_unit(unit, bag))
                 }
               }
               if !has_errors(bag) {
                 let codegen_start = if bench_enabled { bench_now_ns() } else { 0UL }
-                match codegen_arm64_object_bytes(unit, bag) {
+                match sem_ctx {
                   None => ()
-                  Some(bytes) => {
-                    let out_path = match cfg.output {
-                      None => default_output_path(input_path)
-                      Some(v) => v
+                  Some(ctx) =>
+                    match codegen_arm64_object_bytes_with_sem(unit, ctx, bag) {
+                      None => ()
+                      Some(bytes) => {
+                        let out_path = match cfg.output {
+                          None => default_output_path(input_path)
+                          Some(v) => v
+                        }
+                        @fs.write_bytes_to_file(out_path, bytes) catch {
+                          err => add_error(bag, dummy_loc(0), err.to_string())
+                        }
+                      }
                     }
-                    @fs.write_bytes_to_file(out_path, bytes) catch {
-                      err => add_error(bag, dummy_loc(0), err.to_string())
-                    }
-                  }
                 }
                 if bench_enabled {
                   let codegen_end = bench_now_ns()
