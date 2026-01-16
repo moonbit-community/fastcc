@@ -25,7 +25,9 @@ struct Preprocessor {
   lexer_stack : Array[Lexer]
   held_stack : Array[Token?]
   path_stack : Array[String]
+  dir_stack : Array[String]
   mut current_path : String
+  mut current_dir : String
   mut logical_path : String
   logical_path_stack : Array[String]
   mut line_adjust : Int
@@ -199,7 +201,9 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
     lexer_stack: [],
     held_stack: [],
     path_stack: [],
+    dir_stack: [],
     current_path: file.path,
+    current_dir: dir_name(file.path),
     logical_path: file.path,
     logical_path_stack: [],
     line_adjust: 0,
@@ -273,6 +277,10 @@ fn next_input_token(pp : Preprocessor) -> Token {
           }
           match pp.path_stack.pop() {
             Some(prev_path) => pp.current_path = prev_path
+            None => ()
+          }
+          match pp.dir_stack.pop() {
+            Some(prev_dir) => pp.current_dir = prev_dir
             None => ()
           }
           match pp.logical_path_stack.pop() {
@@ -500,7 +508,7 @@ fn resolve_include_path(
     if skip_first {
       skip_first = false
     } else {
-      let candidate = join_path(dir_name(pp.current_path), path)
+      let candidate = join_path(pp.current_dir, path)
       if @fs.path_exists(candidate) {
         return Some(candidate)
       }
@@ -539,10 +547,12 @@ fn include_file(
           pp.held_stack.push(pp.held)
           pp.held = None
           pp.path_stack.push(pp.current_path)
+          pp.dir_stack.push(pp.current_dir)
           pp.logical_path_stack.push(pp.logical_path)
           pp.line_adjust_stack.push(pp.line_adjust)
           pp.lexer = new_lexer(file, pp.diags)
           pp.current_path = resolved
+          pp.current_dir = dir_name(resolved)
           pp.logical_path = resolved
           pp.line_adjust = 0
         }
