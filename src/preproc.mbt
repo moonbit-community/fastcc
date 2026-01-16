@@ -495,24 +495,26 @@ fn resolve_include_path(
   if path.has_prefix("/") {
     return Some(path)
   }
-  let dirs : Array[String] = []
+  let mut skip_first = include_next
   if !is_angle {
-    dirs.push(dir_name(pp.current_path))
+    if skip_first {
+      skip_first = false
+    } else {
+      let candidate = join_path(dir_name(pp.current_path), path)
+      if @fs.path_exists(candidate) {
+        return Some(candidate)
+      }
+    }
   }
   for p in pp.include_paths {
-    dirs.push(p)
-  }
-  let mut start = 0
-  if include_next && dirs.length() > 0 {
-    start = 1
-  }
-  let mut i = start
-  while i < dirs.length() {
-    let candidate = join_path(dirs[i], path)
+    if skip_first {
+      skip_first = false
+      continue
+    }
+    let candidate = join_path(p, path)
     if @fs.path_exists(candidate) {
       return Some(candidate)
     }
-    i = i + 1
   }
   None
 }
