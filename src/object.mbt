@@ -21,6 +21,11 @@ fn new_section(name : String) -> Section {
 }
 
 ///|
+fn reloc_addend(rel : Reloc) -> Int64 {
+  rel.addend
+}
+
+///|
 fn section_size_bytes(sec : Section) -> Int {
   if sec.size_bytes > 0 {
     sec.size_bytes
