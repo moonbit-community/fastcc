@@ -25,7 +25,9 @@ struct Preprocessor {
   lexer_stack : Array[Lexer]
   held_stack : Array[Token?]
   path_stack : Array[String]
+  dir_stack : Array[String]
   mut current_path : String
+  mut current_dir : String
   mut logical_path : String
   logical_path_stack : Array[String]
   mut line_adjust : Int
@@ -199,7 +201,9 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
     lexer_stack: [],
     held_stack: [],
     path_stack: [],
+    dir_stack: [],
     current_path: file.path,
+    current_dir: dir_name(file.path),
     logical_path: file.path,
     logical_path_stack: [],
     line_adjust: 0,
@@ -273,6 +277,10 @@ fn next_input_token(pp : Preprocessor) -> Token {
           }
           match pp.path_stack.pop() {
             Some(prev_path) => pp.current_path = prev_path
+            None => ()
+          }
+          match pp.dir_stack.pop() {
+            Some(prev_dir) => pp.current_dir = prev_dir
             None => ()
           }
           match pp.logical_path_stack.pop() {
@@ -495,24 +503,26 @@ fn resolve_include_path(
   if path.has_prefix("/") {
     return Some(path)
   }
-  let dirs : Array[String] = []
+  let mut skip_first = include_next
   if !is_angle {
-    dirs.push(dir_name(pp.current_path))
+    if skip_first {
+      skip_first = false
+    } else {
+      let candidate = join_path(pp.current_dir, path)
+      if @fs.path_exists(candidate) {
+        return Some(candidate)
+      }
+    }
   }
   for p in pp.include_paths {
-    dirs.push(p)
-  }
-  let mut start = 0
-  if include_next && dirs.length() > 0 {
-    start = 1
-  }
-  let mut i = start
-  while i < dirs.length() {
-    let candidate = join_path(dirs[i], path)
+    if skip_first {
+      skip_first = false
+      continue
+    }
+    let candidate = join_path(p, path)
     if @fs.path_exists(candidate) {
       return Some(candidate)
     }
-    i = i + 1
   }
   None
 }
@@ -537,10 +547,12 @@ fn include_file(
           pp.held_stack.push(pp.held)
           pp.held = None
           pp.path_stack.push(pp.current_path)
+          pp.dir_stack.push(pp.current_dir)
           pp.logical_path_stack.push(pp.logical_path)
           pp.line_adjust_stack.push(pp.line_adjust)
           pp.lexer = new_lexer(file, pp.diags)
           pp.current_path = resolved
+          pp.current_dir = dir_name(resolved)
           pp.logical_path = resolved
           pp.line_adjust = 0
         }
@@ -775,6 +787,9 @@ fn stringize_tokens(tokens : Array[Token]) -> String {
   if tokens.length() == 0 {
     return ""
   }
+  if tokens.length() == 1 {
+    return tokens[0].lexeme
+  }
   let mut size_hint = 0
   for tok in tokens {
     size_hint = size_hint + tok.lexeme.length() + 1
@@ -809,6 +824,9 @@ fn make_string_literal(text : String, loc : SrcLoc) -> Token {
 
 ///|
 fn escape_string(text : String) -> String {
+  if !text.contains("\\") && !text.contains("\"") {
+    return text
+  }
   let sb = StringBuilder::new(size_hint=text.length())
   for ch in text {
     if ch == '\\' {
@@ -1485,22 +1503,26 @@ fn merge_hidden(a : Array[String], b : Array[String]) -> Array[String] {
 
 ///|
 fn add_hidden(tok : Token, name : String) -> Token {
+  if tok.hidden.length() == 0 {
+    return {
+      kind: tok.kind,
+      lexeme: tok.lexeme,
+      loc: tok.loc,
+      line_start: tok.line_start,
+      hidden: [name],
+    }
+  }
   if tok.hidden.contains(name) {
     tok
   } else {
-    let hidden = if tok.hidden.length() == 0 {
-      [name]
-    } else {
-      let out = tok.hidden.copy()
-      out.push(name)
-      out
-    }
+    let out = tok.hidden.copy()
+    out.push(name)
     {
       kind: tok.kind,
       lexeme: tok.lexeme,
       loc: tok.loc,
       line_start: tok.line_start,
-      hidden,
+      hidden: out,
     }
   }
 }
