@@ -775,7 +775,14 @@ fn stringize_tokens(tokens : Array[Token]) -> String {
   if tokens.length() == 0 {
     return ""
   }
-  let sb = StringBuilder::new()
+  let mut size_hint = 0
+  for tok in tokens {
+    size_hint = size_hint + tok.lexeme.length() + 1
+  }
+  if size_hint > 0 {
+    size_hint = size_hint - 1
+  }
+  let sb = StringBuilder::new(size_hint=size_hint)
   let mut first = true
   for tok in tokens {
     if first {
@@ -802,7 +809,7 @@ fn make_string_literal(text : String, loc : SrcLoc) -> Token {
 
 ///|
 fn escape_string(text : String) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::new(size_hint=text.length())
   for ch in text {
     if ch == '\\' {
       sb.write_string("\\\\")
