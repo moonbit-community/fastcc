@@ -3,7 +3,7 @@ fn parse_text(text : String) -> (TranslationUnit, DiagBag) {
   let bag = new_diag_bag()
   let map = new_source_map()
   let file = add_file(map, "<test>", text)
-  let pp = new_preprocessor(file, bag)
+  let pp = new_preprocessor(map, file, bag)
   let unit = parse_translation_unit(pp)
   (unit, bag)
 }
@@ -51,6 +51,98 @@ test "sem accepts local declarations" {
   let (_, bag) = check_text("int main(){int x = 1; return x;}")
   assert_true(!has_errors(bag))
 }
+
+///|
+test "parse typedef struct local decl" {
+  let (unit, bag) = parse_text(
+    "typedef struct { int x; } T; int main(){ T r; r.x = 1; return r.x; }",
+  )
+  assert_true(!has_errors(bag))
+  assert_eq(unit.decls.length(), 2)
+  guard unit.decls.length() >= 2 else { fail("expected two declarations") }
+  match unit.decls[1] {
+    Decl::FuncDef(func) =>
+      match func.body {
+        Stmt::Compound(stmts~, ..) => {
+          let mut found = false
+          for stmt in stmts {
+            if stmt is Stmt::DeclStmt(..) {
+              found = true
+            }
+          }
+          assert_true(found)
+          assert_eq(stmts.length(), 3)
+        }
+        _ => fail("expected compound body")
+      }
+    _ => fail("expected function definition")
+  }
+}
+
+///|
+test "parse __builtin_expect call" {
+  let (unit, bag) = parse_text("int main(){return __builtin_expect(1, 0);}")
+  assert_true(!has_errors(bag))
+  match unit.decls[0] {
+    Decl::FuncDef(func) =>
+      match func.body {
+        Stmt::Compound(stmts~, ..) =>
+          match stmts[0] {
+            Stmt::Return(value=Some(expr), ..) =>
+              match expr {
+                Expr::Call(callee=Expr::Ident(name~, ..), args~, ..) => {
+                  assert_eq(name, "__builtin_expect")
+                  assert_eq(args.length(), 2)
+                }
+                _ => fail("expected call expression")
+              }
+            _ => fail("expected return statement")
+          }
+        _ => fail("expected compound body")
+      }
+    _ => fail("expected function definition")
+  }
+}
+
+///|
+test "parser tracks typedef struct name" {
+  let bag = new_diag_bag()
+  let map = new_source_map()
+  let file = add_file(
+    map,
+    "<test>",
+    "typedef struct { int x; } T; int main(){ T r; return r.x; }",
+  )
+  let pp = new_preprocessor(map, file, bag)
+  let tokens = collect_tokens(pp)
+  let parser = new_parser(tokens, bag)
+  ignore(parse_translation_unit_with(parser))
+  let scope0 = parser.type_scopes[0]
+  assert_true(scope0.contains("T"))
+}
+
+///|
+test "sem accepts typedef struct local decl" {
+  let (_, bag) = check_text(
+    "typedef struct { int x; } T; int main(){ T r; r.x = 1; return r.x; }",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts typedef struct local decl imaxdiv_t" {
+  let (_, bag) = check_text(
+    "typedef struct { int x; } imaxdiv_t; int main(){ imaxdiv_t r; r.x = 1; return r.x; }",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts __builtin_expect call" {
+  let (_, bag) = check_text("int main(){return __builtin_expect(1, 0);}")
+  assert_true(!has_errors(bag))
+}
+
 
 ///|
 test "sem rejects missing return value" {
@@ -782,9 +874,23 @@ test "sem accepts string and char literals" {
 }
 
 ///|
-test "sem rejects long string initializer" {
+test "sem accepts string initializer without terminator" {
   let (_, bag) = check_text("int main(){char s[2] = \"hi\"; return 0;}")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem rejects string initializer too long" {
+  let (_, bag) = check_text("int main(){char s[1] = \"hi\"; return 0;}")
   assert_true(has_errors(bag))
+}
+
+///|
+test "sem accepts sizeof on inferred array size" {
+  let (_, bag) = check_text(
+    "int f(){static const char *const debug[] = {\"a\", \"b\"}; return sizeof(debug)/sizeof(debug[0]);}",
+  )
+  assert_true(!has_errors(bag))
 }
 
 ///|
@@ -864,6 +970,17 @@ test "sem adjusts function parameters to pointers" {
 ///|
 test "sem accepts reversed array indexing" {
   let (_, bag) = check_text("int a[2]; int main(){return 1[a];}")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "parse _Float16 prototype" {
+  let (_, bag) = check_text("extern _Float16 foo(_Float16);")
+  if has_errors(bag) {
+    for d in bag.diags {
+      println("\{d.loc.line}:\{d.loc.col}: \{d.message}")
+    }
+  }
   assert_true(!has_errors(bag))
 }
 
