@@ -451,7 +451,7 @@ fn encode_macho_object(
   )
   let stroff = symoff + symtab.length()
   let ncmds = segment_order.length() + 3
-  let out = @buffer.new()
+  let out = @buffer.new(size_hint=stroff + strtab.length())
   out.write_uint_le(MH_MAGIC_64)
   out.write_int_le(CPU_TYPE_ARM64)
   out.write_int_le(CPU_SUBTYPE_ARM64_ALL)
