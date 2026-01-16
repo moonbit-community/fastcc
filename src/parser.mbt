@@ -3080,11 +3080,11 @@ fn decode_string_literal(
   lexeme : String,
   loc : SrcLoc,
 ) -> (String, Int) {
-  let size_hint = if lexeme.length() > 2 { lexeme.length() - 2 } else { 0 }
+  let len = lexeme.length()
+  let size_hint = if len > 2 { len - 2 } else { 0 }
   let sb = StringBuilder::new(size_hint=size_hint)
   let mut i = 1
   let mut count = 0
-  let len = lexeme.length()
   while i + 1 < len {
     let code = lexeme[i]
     if code == 92 {
