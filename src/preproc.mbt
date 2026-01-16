@@ -1503,22 +1503,26 @@ fn merge_hidden(a : Array[String], b : Array[String]) -> Array[String] {
 
 ///|
 fn add_hidden(tok : Token, name : String) -> Token {
+  if tok.hidden.length() == 0 {
+    return {
+      kind: tok.kind,
+      lexeme: tok.lexeme,
+      loc: tok.loc,
+      line_start: tok.line_start,
+      hidden: [name],
+    }
+  }
   if tok.hidden.contains(name) {
     tok
   } else {
-    let hidden = if tok.hidden.length() == 0 {
-      [name]
-    } else {
-      let out = tok.hidden.copy()
-      out.push(name)
-      out
-    }
+    let out = tok.hidden.copy()
+    out.push(name)
     {
       kind: tok.kind,
       lexeme: tok.lexeme,
       loc: tok.loc,
       line_start: tok.line_start,
-      hidden,
+      hidden: out,
     }
   }
 }
