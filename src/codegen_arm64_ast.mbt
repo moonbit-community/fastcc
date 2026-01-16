@@ -7,7 +7,8 @@ struct RegPool {
 fn new_reg_pool() -> RegPool {
   // Use callee-saved registers for temporaries so nested calls don't clobber
   // intermediate values (AArch64 ABI: x19-x28 are preserved by callees).
-  { free: [19, 20, 21, 22, 23, 24, 25, 26] }
+  // Spill into caller-saved regs only after exhausting callee-saved regs.
+  { free: [9, 10, 11, 12, 13, 14, 15, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28] }
 }
 
 ///|
@@ -179,6 +180,117 @@ fn parse_float_literal_bits(text : String, kind : CFloatKind) -> UInt64? {
       } else {
         Some(d.reinterpret_as_uint64())
       }
+  }
+}
+
+///|
+fn parse_float_literal_value(text : String) -> Double? {
+  let trimmed = strip_float_literal_suffix(text)
+  try @strconv.parse_double(trimmed) catch {
+    _ => None
+  } noraise {
+    v => Some(v)
+  }
+}
+
+///|
+fn float_bits_from_double(kind : CFloatKind, value : Double) -> UInt64? {
+  if !float_kind_supported(kind) {
+    return None
+  }
+  if kind == CFloatKind::Float {
+    let f = Float::from_double(value)
+    Some(f.reinterpret_as_uint().to_uint64())
+  } else {
+    Some(value.reinterpret_as_uint64())
+  }
+}
+
+///|
+fn cast_float_value(kind : CFloatKind, value : Double) -> Double {
+  if kind == CFloatKind::Float {
+    Float::from_double(value).to_double()
+  } else {
+    value
+  }
+}
+
+///|
+fn eval_float_const_value(
+  sem : SemContext,
+  expr : Expr,
+  loc : SrcLoc,
+) -> Double? {
+  match expr {
+    Expr::FloatLit(value~, ..) => parse_float_literal_value(value)
+    Expr::Unary(op=UnaryOp::Plus, expr=inner, ..) =>
+      eval_float_const_value(sem, inner, loc)
+    Expr::Unary(op=UnaryOp::Minus, expr=inner, ..) =>
+      match eval_float_const_value(sem, inner, loc) {
+        None => None
+        Some(v) => Some(0.0 - v)
+      }
+    Expr::Binary(op=BinaryOp::Comma, left=_, right~, ..) =>
+      eval_float_const_value(sem, right, loc)
+    Expr::Binary(op=BinaryOp::Add, left~, right~, ..) =>
+      match (eval_float_const_value(sem, left, loc), eval_float_const_value(sem, right, loc)) {
+        (Some(lv), Some(rv)) => Some(lv + rv)
+        _ => None
+      }
+    Expr::Binary(op=BinaryOp::Sub, left~, right~, ..) =>
+      match (eval_float_const_value(sem, left, loc), eval_float_const_value(sem, right, loc)) {
+        (Some(lv), Some(rv)) => Some(lv - rv)
+        _ => None
+      }
+    Expr::Binary(op=BinaryOp::Mul, left~, right~, ..) =>
+      match (eval_float_const_value(sem, left, loc), eval_float_const_value(sem, right, loc)) {
+        (Some(lv), Some(rv)) => Some(lv * rv)
+        _ => None
+      }
+    Expr::Binary(op=BinaryOp::Div, left~, right~, ..) =>
+      match (eval_float_const_value(sem, left, loc), eval_float_const_value(sem, right, loc)) {
+        (Some(lv), Some(rv)) => Some(lv / rv)
+        _ => None
+      }
+    Expr::Cast(ty~, expr=inner, ..) => {
+      let cast_ty = strip_qual_attrs(ty)
+      match float_kind_of_type(cast_ty) {
+        Some(k_raw) => {
+          let k = normalize_float_kind(k_raw)
+          match eval_float_const_value(sem, inner, loc) {
+            None => None
+            Some(v) => Some(cast_float_value(k, v))
+          }
+        }
+        None =>
+          if is_int_like(cast_ty) {
+            match eval_float_const_value(sem, inner, loc) {
+              None => None
+              Some(v) => Some(Double::from_int(v.to_int()))
+            }
+          } else {
+            eval_float_const_value(sem, inner, loc)
+          }
+      }
+    }
+    _ =>
+      match const_int_from_expr(sem, expr, loc) {
+        None => None
+        Some(v) => Some(Double::from_int(v))
+      }
+  }
+}
+
+///|
+fn const_float_bits_from_expr(
+  sem : SemContext,
+  expr : Expr,
+  kind : CFloatKind,
+  loc : SrcLoc,
+) -> UInt64? {
+  match eval_float_const_value(sem, expr, loc) {
+    None => None
+    Some(v) => float_bits_from_double(kind, v)
   }
 }
 
@@ -1518,6 +1630,14 @@ fn type_is_pointer_like(ty : CType) -> Bool {
 }
 
 ///|
+fn type_is_aggregate(ty : CType) -> Bool {
+  match strip_qual_attrs(ty) {
+    CType::Struct(..) | CType::Union(..) | CType::Array(..) => true
+    _ => false
+  }
+}
+
+///|
 fn scalar_size_signed_or_error(
   sem : SemContext,
   ty : CType,
@@ -1865,6 +1985,46 @@ fn gen_agg_expr_to_addr(
         emit_store_agg_return_gp_to_addr(emitter, size, dst_reg, dst_off, loc, bag)
       }
     }
+    Expr::Binary(op=BinaryOp::Assign, left~, right~, loc~) => {
+      let lhs_ty = type_of_expr(alloc.sem, left)
+      match strip_qual_attrs(lhs_ty) {
+        CType::Struct(..) | CType::Union(..) => {
+          let lhs_addr = take_reg(pool) catch {
+            err => {
+              add_error(bag, loc, err.to_string())
+              return
+            }
+          }
+          gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, left, lhs_addr, bag)
+          gen_agg_expr_to_addr(
+            emitter,
+            alloc,
+            syms,
+            pool,
+            cstrings,
+            right,
+            lhs_addr,
+            0,
+            lhs_ty,
+            loc,
+            bag,
+          )
+          emit_copy_bytes(
+            emitter,
+            pool,
+            lhs_addr,
+            0,
+            dst_reg,
+            dst_off,
+            size,
+            loc,
+            bag,
+          )
+          give_reg(pool, lhs_addr)
+        }
+        _ => add_error(bag, loc, "codegen: aggregate assignment expects record lhs")
+      }
+    }
     Expr::Cast(expr=inner, ..) =>
       gen_agg_expr_to_addr(
         emitter,
@@ -1890,7 +2050,7 @@ fn gen_agg_expr_to_addr(
         None => add_error(bag, loc, "codegen: invalid integer literal")
       }
     Expr::Binary(op=BinaryOp::Comma, left~, right~, ..) => {
-      gen_expr_any(emitter, alloc, syms, pool, cstrings, left, 0, bag)
+      gen_expr_discard(emitter, alloc, syms, pool, cstrings, left, bag)
       gen_agg_expr_to_addr(
         emitter,
         alloc,
@@ -2273,6 +2433,23 @@ fn gen_string_init_to_addr(
 }
 
 ///|
+fn array_len_from_type_for_init(
+  sem : SemContext,
+  ty : CType,
+  loc : SrcLoc,
+) -> Int? {
+  match strip_qual_attrs(ty) {
+    CType::Array(size=Some(n), ..) => Some(n)
+    CType::Array(size=None, size_expr=Some(expr), ..) =>
+      match const_int_from_expr(sem, expr, loc) {
+        Some(v) if v >= 0 => Some(v)
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
 fn gen_initializer_to_addr(
   emitter : Arm64Emitter,
   alloc : LocalAlloc,
@@ -2288,34 +2465,48 @@ fn gen_initializer_to_addr(
   match init {
     Initializer::Expr(expr~, loc~) =>
       match strip_qual_attrs(ty) {
-        CType::Array(elem~, size~, ..) =>
-          match expr {
-            Expr::StringLit(value=value, length=length, ..) =>
-              if is_char_type(elem) {
-                match size {
-                  None =>
-                    add_error(bag, loc, "codegen: incomplete array type")
-                  Some(n) => {
-                    let copy_len = if length > n { n } else { length }
-                    gen_string_init_to_addr(
-                      emitter,
-                      syms,
-                      pool,
-                      cstrings,
-                      value,
-                      copy_len,
-                      base_reg,
-                      base_off,
-                      bag,
-                      loc,
-                    )
-                  }
+        CType::Array(elem~, ..) =>
+          if try_eval_int_const(alloc.sem, expr) is Some(0) {
+            match array_len_from_type_for_init(alloc.sem, ty, loc) {
+              None => add_error(bag, loc, "codegen: incomplete array type")
+              Some(n) => {
+                let (elem_size, _) = match type_size_align_or_error(alloc.sem, elem, loc) {
+                  None => return
+                  Some(v) => v
                 }
-              } else {
-                add_error(bag, loc, "codegen: string initializer for non-char array")
+                if elem_size > 0 {
+                  emit_zero_bytes(emitter, base_reg, base_off, n * elem_size)
+                }
               }
-            _ =>
-              add_error(bag, loc, "codegen: scalar initializer for array not supported")
+            }
+          } else {
+            match expr {
+              Expr::StringLit(value=value, length=length, ..) =>
+                if is_char_type(elem) {
+                  match array_len_from_type_for_init(alloc.sem, ty, loc) {
+                    None => add_error(bag, loc, "codegen: incomplete array type")
+                    Some(n) => {
+                      let copy_len = if length > n { n } else { length }
+                      gen_string_init_to_addr(
+                        emitter,
+                        syms,
+                        pool,
+                        cstrings,
+                        value,
+                        copy_len,
+                        base_reg,
+                        base_off,
+                        bag,
+                        loc,
+                      )
+                    }
+                  }
+                } else {
+                  add_error(bag, loc, "codegen: string initializer for non-char array")
+                }
+              _ =>
+                add_error(bag, loc, "codegen: scalar initializer for array not supported")
+            }
           }
         CType::Struct(..) | CType::Union(..) => {
           let (size, _) = match type_size_align_or_error(alloc.sem, ty, loc) {
@@ -2374,8 +2565,8 @@ fn gen_initializer_to_addr(
       }
     Initializer::List(items~, loc~) =>
       match strip_qual_attrs(ty) {
-        CType::Array(elem=elem_ty, size=size_opt, ..) => {
-          let n = match size_opt {
+        CType::Array(elem=elem_ty, ..) => {
+          let n = match array_len_from_type_for_init(alloc.sem, ty, loc) {
             None => {
               add_error(bag, loc, "codegen: incomplete array type")
               return
@@ -3772,6 +3963,7 @@ fn gen_call_with_layout(
   let layout = arm64_pcs(alloc.sem, variadic_index, ret_ty, arg_tys, loc, bag)
   let arg_locs = layout.arg_locs
   let stack_args_size = align_up(layout.stack_size, 16)
+  let caller_saved_regs : Array[Int] = [9, 10, 11, 12, 13, 14, 15]
 
   let arg_sizes : Array[Int] = []
   let arg_aligns : Array[Int] = []
@@ -3881,6 +4073,8 @@ fn gen_call_with_layout(
     }
   }
 
+  let caller_save_off = align_up(scratch_off, 8)
+  scratch_off = caller_save_off + caller_saved_regs.length() * 8
   let total_stack = align_up(scratch_off, 16)
   if total_stack > 0 {
     let off = (0 : UInt64) - total_stack.to_uint64()
@@ -4067,7 +4261,39 @@ fn gen_call_with_layout(
     i = i + 1
   }
 
+  let used_caller_regs : Array[(Int, Int)] = []
+  i = 0
+  while i < caller_saved_regs.length() {
+    let reg = caller_saved_regs[i]
+    if !pool.free.contains(reg) {
+      let off = caller_save_off + i * 8
+      arm64_strx(
+        emitter,
+        3,
+        reg.reinterpret_as_uint(),
+        (31 : UInt),
+        off.to_int64().reinterpret_as_uint64(),
+      )
+      used_caller_regs.push((reg, off))
+    }
+    i = i + 1
+  }
+
   emit_call()
+
+  i = 0
+  while i < used_caller_regs.length() {
+    let (reg, off) = used_caller_regs[i]
+    arm64_ldrx(
+      emitter,
+      false,
+      3,
+      reg.reinterpret_as_uint(),
+      (31 : UInt),
+      off.to_int64().reinterpret_as_uint64(),
+    )
+    i = i + 1
+  }
 
   if total_stack > 0 {
     arm64_spoff(emitter, (31 : UInt), total_stack.to_uint64())
@@ -4120,7 +4346,7 @@ fn gen_call_expr_impl(
             gen_expr_int32(emitter, alloc, syms, pool, cstrings, args[0], tmp, bag)
           }
       }
-      gen_expr_any(emitter, alloc, syms, pool, cstrings, args[1], 0, bag)
+      gen_expr_discard(emitter, alloc, syms, pool, cstrings, args[1], bag)
       emit_mov(emitter, true, 0, tmp)
       give_reg(pool, tmp)
       return
@@ -5490,7 +5716,7 @@ fn gen_expr_floatbits(
       }
     }
     Expr::Binary(op=BinaryOp::Comma, left~, right~, ..) => {
-      gen_expr_any(emitter, alloc, syms, pool, cstrings, left, 0, bag)
+      gen_expr_discard(emitter, alloc, syms, pool, cstrings, left, bag)
       gen_expr_to_float_kind_bits(
         emitter,
         alloc,
@@ -5545,7 +5771,7 @@ fn gen_expr_floatbits(
     Expr::Binary(op~, left~, right~, loc~) =>
       match op {
         BinaryOp::Comma => {
-          gen_expr_any(emitter, alloc, syms, pool, cstrings, left, dst, bag)
+          gen_expr_discard(emitter, alloc, syms, pool, cstrings, left, bag)
           gen_expr_to_float_kind_bits(
             emitter,
             alloc,
@@ -6322,7 +6548,7 @@ fn gen_expr_int32(
     Expr::Binary(op~, left~, right~, loc~) =>
       match op {
         BinaryOp::Comma => {
-          gen_expr_int32(emitter, alloc, syms, pool, cstrings, left, dst, bag)
+          gen_expr_discard(emitter, alloc, syms, pool, cstrings, left, bag)
           gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, dst, bag)
         }
         BinaryOp::Assign => {
@@ -7948,7 +8174,7 @@ fn gen_expr_ptr(
     Expr::Binary(op~, left~, right~, loc~) =>
       match op {
         BinaryOp::Comma => {
-          gen_expr_any(emitter, alloc, syms, pool, cstrings, left, dst, bag)
+          gen_expr_discard(emitter, alloc, syms, pool, cstrings, left, bag)
           gen_expr_ptr(emitter, alloc, syms, pool, cstrings, right, dst, bag)
         }
         BinaryOp::AddAssign | BinaryOp::SubAssign => {
@@ -8191,6 +8417,105 @@ fn gen_expr_any(
         gen_expr_ptr(emitter, alloc, syms, pool, cstrings, expr, dst, bag)
       } else {
         gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, dst, bag)
+      }
+  }
+}
+
+///|
+fn gen_expr_discard(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : Map[String, Sym],
+  expr : Expr,
+  bag : DiagBag,
+) -> Unit {
+  let ty = type_of_expr(alloc.sem, expr)
+  match strip_qual_attrs(ty) {
+    CType::Void =>
+      match expr {
+        Expr::Cast(expr=inner, ..) =>
+          gen_expr_discard(emitter, alloc, syms, pool, cstrings, inner, bag)
+        Expr::Call(callee~, args~, loc~) =>
+          gen_call_expr(emitter, alloc, syms, pool, cstrings, callee, args, loc, bag)
+        Expr::Binary(op=BinaryOp::Comma, left~, right~, ..) => {
+          gen_expr_discard(emitter, alloc, syms, pool, cstrings, left, bag)
+          gen_expr_discard(emitter, alloc, syms, pool, cstrings, right, bag)
+        }
+        Expr::Conditional(cond~, then_expr~, else_expr~, loc~) => {
+          gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, cond, bag)
+          let br_else = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
+          gen_expr_discard(emitter, alloc, syms, pool, cstrings, then_expr, bag)
+          let br_end = gjmp(emitter, 0)
+          let else_pc = emitter_pc(emitter)
+          patch_b_cond(emitter, br_else, else_pc, ARM64_COND_EQ) catch {
+            err => add_error(bag, loc, err.to_string())
+          }
+          gen_expr_discard(emitter, alloc, syms, pool, cstrings, else_expr, bag)
+          let end_pc = emitter_pc(emitter)
+          gsym_addr(emitter, br_end, end_pc) catch {
+            err => add_error(bag, loc, err.to_string())
+          }
+        }
+        Expr::StmtExpr(stmts~, loc~) =>
+          gen_stmt_expr_with(
+            emitter,
+            alloc,
+            syms,
+            pool,
+            cstrings,
+            stmts,
+            0,
+            true,
+            loc,
+            bag,
+            (expr, _) => gen_expr_discard(
+              emitter,
+              alloc,
+              syms,
+              pool,
+              cstrings,
+              expr,
+              bag,
+            ),
+          )
+        _ => gen_expr_any(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
+      }
+    _ =>
+      if type_is_aggregate(ty) {
+        let loc = expr_loc(expr)
+        let (size, _) = match type_size_align_or_error(alloc.sem, ty, loc) {
+          None => return
+          Some(v) => v
+        }
+        if size <= 0 {
+          return
+        }
+        match alloc.agg_temp_offset {
+          None => add_error(bag, loc, "codegen: missing aggregate temp slot")
+          Some(tmp_off) => {
+            if size > alloc.agg_temp_size {
+              add_error(bag, loc, "codegen: aggregate temp too small")
+              return
+            }
+            gen_agg_expr_to_addr(
+              emitter,
+              alloc,
+              syms,
+              pool,
+              cstrings,
+              expr,
+              29,
+              tmp_off,
+              ty,
+              loc,
+              bag,
+            )
+          }
+        }
+      } else {
+        gen_expr_any(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
       }
   }
 }
@@ -8973,7 +9298,7 @@ fn gen_stmt(
       }
       match step {
         None => ()
-        Some(e) => gen_expr_any(emitter, alloc, syms, pool, cstrings, e, 0, bag)
+        Some(e) => gen_expr_discard(emitter, alloc, syms, pool, cstrings, e, bag)
       }
       gjmp_addr(emitter, cond_pc) catch {
         err => add_error(bag, loc, err.to_string())
@@ -9191,7 +9516,7 @@ fn gen_stmt(
 	      return_chain
 	    }
     Stmt::ExprStmt(expr~, ..) => {
-      gen_expr_any(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
+      gen_expr_discard(emitter, alloc, syms, pool, cstrings, expr, bag)
       return_chain
     }
     Stmt::Asm(stmt) => {
@@ -9923,35 +10248,63 @@ fn fill_global_initializer_bytes(
   match init {
     Initializer::Expr(expr~, loc~) => {
       match strip_qual_attrs(ty) {
-        CType::Array(elem=elem_ty, size=Some(n), ..) =>
-          match expr {
-            Expr::StringLit(value~, ..) =>
-              if is_char_type(elem_ty) {
+        CType::Array(elem=elem_ty, ..) =>
+          match array_len_from_type_for_init(sem, ty, loc) {
+            None => add_error(bag, loc, "codegen: incomplete array type")
+            Some(n) =>
+              if try_eval_int_const(sem, expr) is Some(0) {
                 let (elem_sz, _) = match type_size_align_or_error(sem, elem_ty, loc) {
                   None => return
                   Some(v) => v
                 }
-                if elem_sz != 1 {
-                  add_error(bag, loc, "codegen: string initializer for non-byte array")
-                  return
+                if elem_sz > 0 {
+                  ensure_bytes_len(bytes, base_off + n * elem_sz)
                 }
-                let mut idx = 0
-                for b in @encoding/utf8.encode(value) {
-                  if idx >= n - 1 {
-                    break
-                  }
-                  store_int_le(bytes, base_off + idx, 1, b.to_int())
-                  idx = idx + 1
-                }
-                store_int_le(bytes, base_off + idx, 1, 0)
               } else {
-                add_error(bag, loc, "codegen: string initializer for non-byte array")
+                match expr {
+                  Expr::StringLit(value~, ..) =>
+                    if is_char_type(elem_ty) {
+                      let (elem_sz, _) = match type_size_align_or_error(sem, elem_ty, loc) {
+                        None => return
+                        Some(v) => v
+                      }
+                      if elem_sz != 1 {
+                        add_error(bag, loc, "codegen: string initializer for non-byte array")
+                        return
+                      }
+                      let mut idx = 0
+                      for b in @encoding/utf8.encode(value) {
+                        if idx >= n - 1 {
+                          break
+                        }
+                        store_int_le(bytes, base_off + idx, 1, b.to_int())
+                        idx = idx + 1
+                      }
+                      store_int_le(bytes, base_off + idx, 1, 0)
+                    } else {
+                      add_error(bag, loc, "codegen: string initializer for non-byte array")
+                    }
+                  _ =>
+                    add_error(bag, loc, "codegen: scalar initializer for array not supported")
+                }
               }
-            _ =>
-              add_error(bag, loc, "codegen: scalar initializer for array not supported")
           }
         CType::Struct(..) | CType::Union(..) =>
-          add_error(bag, loc, "codegen: aggregate initializer must be a list")
+          match expr {
+            Expr::CompoundLiteral(ty=lit_ty, init=lit_init, ..) =>
+              fill_global_initializer_bytes(
+                sem,
+                syms,
+                cstrings,
+                lit_ty,
+                lit_init,
+                bytes,
+                relocs,
+                base_off,
+                bag,
+              )
+            _ => add_error(bag, loc, "codegen: aggregate initializer must be a list")
+          }
         _ => {
           let (size, _) = match type_size_align_or_error(sem, ty, loc) {
             None => return
@@ -9961,13 +10314,14 @@ fn fill_global_initializer_bytes(
           match float_kind_of_type(ty) {
             Some(k_raw) => {
               let k = normalize_float_kind(k_raw)
-              match expr {
-                Expr::FloatLit(value~, ..) =>
-                  match parse_float_literal_bits(value, k) {
-                    None => add_error(bag, loc, "codegen: invalid float initializer")
-                    Some(bits) => store_uint64_le(bytes, base_off, size, bits)
+              match const_float_bits_from_expr(sem, expr, k, loc) {
+                Some(bits) => store_uint64_le(bytes, base_off, size, bits)
+                None =>
+                  match expr {
+                    Expr::FloatLit(..) =>
+                      add_error(bag, loc, "codegen: invalid float initializer")
+                    _ => add_error(bag, loc, "codegen: non-constant float initializer")
                   }
-                _ => add_error(bag, loc, "codegen: non-constant float initializer")
               }
             }
             None =>
@@ -10010,7 +10364,14 @@ fn fill_global_initializer_bytes(
     }
     Initializer::List(items~, loc~) => {
       match strip_qual_attrs(ty) {
-        CType::Array(elem=elem_ty, size=Some(n), ..) => {
+        CType::Array(elem=elem_ty, ..) => {
+          let n = match array_len_from_type_for_init(sem, ty, loc) {
+            None => {
+              add_error(bag, loc, "codegen: incomplete array type")
+              return
+            }
+            Some(v) => v
+          }
           let (elem_size, _) = match type_size_align_or_error(sem, elem_ty, loc) {
             None => return
             Some(v) => v
