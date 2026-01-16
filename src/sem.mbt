@@ -2481,7 +2481,7 @@ fn check_initializer(
                   match size {
                     None => Some(length)
                     Some(n) => {
-                      if length > n {
+                      if length > n + 1 {
                         add_sem_error(ctx, loc, "string literal too long for array")
                       }
                       None

@@ -874,9 +874,23 @@ test "sem accepts string and char literals" {
 }
 
 ///|
-test "sem rejects long string initializer" {
+test "sem accepts string initializer without terminator" {
   let (_, bag) = check_text("int main(){char s[2] = \"hi\"; return 0;}")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem rejects string initializer too long" {
+  let (_, bag) = check_text("int main(){char s[1] = \"hi\"; return 0;}")
   assert_true(has_errors(bag))
+}
+
+///|
+test "sem accepts sizeof on inferred array size" {
+  let (_, bag) = check_text(
+    "int f(){static const char *const debug[] = {\"a\", \"b\"}; return sizeof(debug)/sizeof(debug[0]);}",
+  )
+  assert_true(!has_errors(bag))
 }
 
 ///|

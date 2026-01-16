@@ -1159,8 +1159,24 @@ fn reserve_agg_temp_decl(alloc : LocalAlloc, decl : VarDecl) -> Unit {
     CType::Function(..) => return
     _ => ()
   }
+  let mut decl_ty = decl.ty
+  match strip_qual_attrs(decl.ty) {
+    CType::Array(elem=elem_ty, size=None, size_expr=None) =>
+      match decl.init {
+        Some(Initializer::Expr(expr=Expr::StringLit(length~, ..), ..)) =>
+          if is_char_type(elem_ty) {
+            decl_ty = apply_inferred_array_size(decl.ty, length)
+          }
+        Some(Initializer::List(items~, ..)) => {
+          let len = infer_array_size_from_init_items(items)
+          decl_ty = apply_inferred_array_size(decl.ty, len)
+        }
+        _ => ()
+      }
+    _ => ()
+  }
   let sem_idx = alloc.sem.locals.length() - 1
-  alloc.sem.locals[sem_idx].set(decl.name, decl.ty)
+  alloc.sem.locals[sem_idx].set(decl.name, decl_ty)
 }
 
 ///|
@@ -8640,7 +8656,7 @@ fn gen_expr_discard(
 ) -> Unit {
   match expr {
     Expr::Binary(op=BinaryOp::Assign, ..) => {
-      gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
+      gen_expr_any(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
       return
     }
     _ => ()
@@ -9958,10 +9974,16 @@ fn compute_frame_size(sem : SemContext, func : FuncDef, bag : DiagBag) -> Int {
 }
 
 ///|
+fn callee_saved_regs() -> Array[Int] {
+  [19, 20, 21, 22, 23, 24, 25, 26, 27, 28]
+}
+
+///|
 fn emit_prologue(emitter : Arm64Emitter, frame_size : Int) -> Unit {
   emit32(emitter, (0xa9bf7bfd : UInt))
   emit32(emitter, (0x910003fd : UInt))
-  let callee_save_bytes = 64
+  let regs = callee_saved_regs()
+  let callee_save_bytes = regs.length() * 8
   let total_size = frame_size + callee_save_bytes
   if total_size > 0 {
     let off = (0 : UInt64) - total_size.to_uint64()
@@ -9970,7 +9992,6 @@ fn emit_prologue(emitter : Arm64Emitter, frame_size : Int) -> Unit {
   // Save callee-saved registers used for temporaries at the bottom of the frame
   // (below locals) so local slots (fp-relative negatives) remain unchanged.
   let base_off = -total_size
-  let regs : Array[Int] = [19, 20, 21, 22, 23, 24, 25, 26]
   let mut i = 0
   while i < regs.length() {
     let off = base_off + (i * 8)
@@ -9987,11 +10008,11 @@ fn emit_prologue(emitter : Arm64Emitter, frame_size : Int) -> Unit {
 
 ///|
 fn emit_epilogue(emitter : Arm64Emitter, frame_size : Int) -> Unit {
-  let callee_save_bytes = 64
+  let regs = callee_saved_regs()
+  let callee_save_bytes = regs.length() * 8
   let total_size = frame_size + callee_save_bytes
   // Restore callee-saved temporaries from the bottom of the frame.
   let base_off = -total_size
-  let regs : Array[Int] = [19, 20, 21, 22, 23, 24, 25, 26]
   let mut i = 0
   while i < regs.length() {
     let off = base_off + (i * 8)
@@ -10014,7 +10035,7 @@ fn emit_epilogue(emitter : Arm64Emitter, frame_size : Int) -> Unit {
 
 ///|
 fn emit_restore_sp_to_frame_base(emitter : Arm64Emitter, frame_size : Int) -> Unit {
-  let callee_save_bytes = 64
+  let callee_save_bytes = callee_saved_regs().length() * 8
   let total_size = frame_size + callee_save_bytes
   if total_size <= 0 {
     return
