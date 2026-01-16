@@ -53,7 +53,8 @@ fn parse_int64_literal(text : String) -> Int64? {
 
   let mut acc : UInt64 = 0
   let base_u64 = base.to_uint64()
-  let mut any_digit = false
+  // Leading zero already contributes a digit for octal/decimal zero forms like "0l".
+  let mut any_digit = start == 1
 
   let mut i = start
   while i < len {
@@ -76,7 +77,7 @@ fn parse_int64_literal(text : String) -> Int64? {
   if !any_digit {
     None
   } else {
-    Some(acc.to_int64())
+    Some(acc.reinterpret_as_int64())
   }
 }
 
@@ -89,19 +90,6 @@ fn const_i64_from_expr(expr : Expr) -> Int64? {
       match const_i64_from_expr(inner) {
         None => None
         Some(v) => Some(-v)
-      }
-    _ => None
-  }
-}
-
-///|
-fn const_u32_from_initializer(init : Initializer) -> UInt? {
-  match init {
-    Initializer::Expr(expr~, ..) =>
-      match const_i64_from_expr(expr) {
-        None => None
-        Some(value) =>
-          Some((value.to_uint64() & (0xffff_ffff : UInt64)).to_uint())
       }
     _ => None
   }
