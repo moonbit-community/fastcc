@@ -890,8 +890,8 @@ fn parse_attr_string(p : Parser, loc : SrcLoc) -> String? {
     add_parse_error(p, loc, "expected string literal in attribute")
     return None
   }
-  let sb = StringBuilder::new()
   let tok = advance_token(p)
+  let sb = StringBuilder::new(size_hint=tok.lexeme.length())
   let (part, _len) = decode_string_literal(p, tok.lexeme, tok.loc)
   sb.write_string(part)
   while peek_token(p).kind == StrLit {
@@ -3060,7 +3060,7 @@ fn match_assign_op(p : Parser) -> (BinaryOp, Token)? {
 
 ///|
 fn parse_string_literal_expr(p : Parser, first : Token) -> Expr {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::new(size_hint=first.lexeme.length())
   let mut byte_len = 0
   let (value, len) = decode_string_literal(p, first.lexeme, first.loc)
   sb.write_string(value)
@@ -3080,7 +3080,8 @@ fn decode_string_literal(
   lexeme : String,
   loc : SrcLoc,
 ) -> (String, Int) {
-  let sb = StringBuilder::new()
+  let size_hint = if lexeme.length() > 2 { lexeme.length() - 2 } else { 0 }
+  let sb = StringBuilder::new(size_hint=size_hint)
   let mut i = 1
   let mut count = 0
   let len = lexeme.length()
