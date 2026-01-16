@@ -11184,15 +11184,15 @@ fn build_string_section(
   for entry in entries {
     let off = buf.length()
     offsets.set(entry.value, off)
-    buf.write_bytes(@encoding/utf8.encode(entry.value))
+    buf.write_string_utf8(entry.value[:])
     buf.write_byte(0)
     while (buf.length() & 3) != 0 {
       buf.write_byte(0)
     }
   }
-  let bytes = buf.to_bytes()
-  let size_bytes = bytes.length()
-  let words : Array[UInt] = []
+  let size_bytes = buf.length()
+  let bytes = buf.view()
+  let words : Array[UInt] = Array::new(capacity=(size_bytes + 3) / 4)
   let mut pos = 0
   while pos + 3 < size_bytes {
     let b0 = bytes[pos].to_uint()
