@@ -14,9 +14,10 @@ MODE="${MODE:-both}" # ctest | ctest2 | both
 REPEAT="${REPEAT:-1}"
 WARMUP="${WARMUP:-0}"
 BUILD_MBT="${BUILD_MBT:-1}"
+DETAIL="${DETAIL:-0}"
 
 export ROOT_DIR CTEST_DIR CTEST2_DIR PATCH_DIR EXTRA_HDR OUT_DIR
-export TINYCC_MBT_BIN TINYCC_REF_BIN MODE REPEAT WARMUP
+export TINYCC_MBT_BIN TINYCC_REF_BIN MODE REPEAT WARMUP DETAIL
 
 usage() {
   cat <<'EOF'
@@ -28,6 +29,7 @@ Env vars:
   REPEAT=N          Repeat the full compile set N times (default: 1)
   WARMUP=0|1        Run a warmup compile pass (default: 0)
   BUILD_MBT=0|1     Build tinycc.mbt before benchmarking (default: 1)
+  DETAIL=0|1        Collect per-phase timings from tinycc.mbt -bench (default: 0)
   TINYCC_MBT_BIN=path
   TINYCC_REF_BIN=path
 EOF
@@ -73,6 +75,7 @@ out_dir = os.environ["OUT_DIR"]
 mode = os.environ["MODE"]
 repeat = int(os.environ["REPEAT"])
 warmup = os.environ["WARMUP"] == "1"
+detail = os.environ["DETAIL"] == "1"
 
 tinycc_mbt = os.environ["TINYCC_MBT_BIN"]
 tinycc_ref = os.environ["TINYCC_REF_BIN"]
@@ -105,8 +108,9 @@ if not tests:
     print("error: no tests selected", file=sys.stderr)
     sys.exit(1)
 
-def run_compile(label, compiler, extra_args):
+def run_compile(label, compiler, extra_args, capture_phases):
     total = 0.0
+    phases = {"parse": 0, "sem": 0, "codegen": 0, "total": 0}
     for rep in range(repeat + (1 if warmup else 0)):
         rep_dir = os.path.join(out_dir, label, f"rep-{rep}")
         wrap_dir = os.path.join(out_dir, "wrap")
@@ -131,25 +135,44 @@ def run_compile(label, compiler, extra_args):
                 source,
                 "-o", out_obj,
             ] + extra_args
-            proc = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            if capture_phases:
+                proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            else:
+                proc = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
             if proc.returncode != 0:
                 sys.stderr.write(f"compile failed: {label} {path}\n")
                 sys.stderr.write(proc.stderr.decode("utf-8", "replace")[:400])
                 sys.stderr.write("\n")
                 sys.exit(1)
+            if capture_phases and not (warmup and rep == 0):
+                for line in proc.stdout.decode("utf-8", "replace").splitlines():
+                    if not line.startswith("bench: file="):
+                        continue
+                    parts = dict(item.split("=", 1) for item in line.split()[1:])
+                    phases["parse"] += int(parts.get("parse_ms", "0"))
+                    phases["sem"] += int(parts.get("sem_ms", "0"))
+                    phases["codegen"] += int(parts.get("codegen_ms", "0"))
+                    phases["total"] += int(parts.get("total_ms", "0"))
         end = time.perf_counter()
         if warmup and rep == 0:
             continue
         total += (end - start)
-    return total / repeat
+    return total / repeat, phases
 
 print(f"Benchmarking {len(tests)} files (mode={mode}, repeat={repeat}, warmup={warmup})")
 
-mbt_time = run_compile("tinycc_mbt", tinycc_mbt, [])
-ref_time = run_compile("tinycc_ref", tinycc_ref, ["-B", os.path.join(root, "refs", "tinycc")])
+mbt_args = ["-bench"] if detail else []
+mbt_time, mbt_phases = run_compile("tinycc_mbt", tinycc_mbt, mbt_args, detail)
+ref_time, _ = run_compile("tinycc_ref", tinycc_ref, ["-B", os.path.join(root, "refs", "tinycc")], False)
 
 ratio = mbt_time / ref_time if ref_time > 0 else float("inf")
 print(f"tinycc.mbt total: {mbt_time:.3f}s")
 print(f"refs/tinycc total: {ref_time:.3f}s")
 print(f"ratio (mbt/ref): {ratio:.2f}x")
+if detail:
+    avg_parse = mbt_phases["parse"] / repeat
+    avg_sem = mbt_phases["sem"] / repeat
+    avg_codegen = mbt_phases["codegen"] / repeat
+    avg_total = mbt_phases["total"] / repeat
+    print(f"tinycc.mbt phases (avg ms): parse={avg_parse:.1f} sem={avg_sem:.1f} codegen={avg_codegen:.1f} total={avg_total:.1f}")
 PY

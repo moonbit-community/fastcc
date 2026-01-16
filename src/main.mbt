@@ -4,6 +4,7 @@ struct CliConfig {
   inputs : Array[String]
   output : String?
   compile_only : Bool
+  bench : Bool
 }
 
 ///|
@@ -15,7 +16,7 @@ enum CliParse {
 
 ///|
 fn print_usage() -> Unit {
-  println("usage: tinycc.mbt [-c] [-o OUT] [-I PATH]... [-isystem PATH]... FILE...")
+  println("usage: tinycc.mbt [-c] [-bench] [-o OUT] [-I PATH]... [-isystem PATH]... FILE...")
 }
 
 ///|
@@ -27,6 +28,7 @@ fn parse_cli_args(
   let inputs : Array[String] = []
   let mut output : String? = None
   let mut compile_only = false
+  let mut bench = false
 
   let mut i = 1
   while i < args.length() {
@@ -37,6 +39,11 @@ fn parse_cli_args(
     }
     if arg == "-c" {
       compile_only = true
+      i = i + 1
+      continue
+    }
+    if arg == "-bench" {
+      bench = true
       i = i + 1
       continue
     }
@@ -111,7 +118,63 @@ fn parse_cli_args(
     println("error: -o requires exactly one input file")
     return CliParse::Error
   }
-  CliParse::Run({ include_paths, inputs, output, compile_only })
+  CliParse::Run({ include_paths, inputs, output, compile_only, bench })
+}
+
+///|
+struct BenchStats {
+  mut parse_ms : Int
+  mut sem_ms : Int
+  mut codegen_ms : Int
+  mut total_ms : Int
+  mut files : Int
+}
+
+///|
+fn bench_stats_new() -> BenchStats {
+  {
+    parse_ms: 0,
+    sem_ms: 0,
+    codegen_ms: 0,
+    total_ms: 0,
+    files: 0,
+  }
+}
+
+///|
+fn bench_ms(start_ms : UInt64, end_ms : UInt64) -> Int {
+  (end_ms - start_ms).to_int()
+}
+
+///|
+fn bench_stats_add(
+  stats : BenchStats,
+  parse_ms : Int,
+  sem_ms : Int,
+  codegen_ms : Int,
+  total_ms : Int,
+) -> Unit {
+  stats.parse_ms = stats.parse_ms + parse_ms
+  stats.sem_ms = stats.sem_ms + sem_ms
+  stats.codegen_ms = stats.codegen_ms + codegen_ms
+  stats.total_ms = stats.total_ms + total_ms
+  stats.files = stats.files + 1
+}
+
+///|
+fn bench_file_line(
+  path : String,
+  parse_ms : Int,
+  sem_ms : Int,
+  codegen_ms : Int,
+  total_ms : Int,
+) -> String {
+  "bench: file=\{path} parse_ms=\{parse_ms} sem_ms=\{sem_ms} codegen_ms=\{codegen_ms} total_ms=\{total_ms}"
+}
+
+///|
+fn bench_summary_line(stats : BenchStats) -> String {
+  "bench: files=\{stats.files} parse_ms=\{stats.parse_ms} sem_ms=\{stats.sem_ms} codegen_ms=\{stats.codegen_ms} total_ms=\{stats.total_ms}"
 }
 
 ///|
@@ -160,6 +223,8 @@ fn main {
     CliParse::Error => @sys.exit(1)
     CliParse::Run(cfg) => {
       let mut any_errors = false
+      let bench_enabled = cfg.bench
+      let bench_stats = bench_stats_new()
       for input_path in cfg.inputs {
         match load_input(input_path) {
           None => {
@@ -180,11 +245,29 @@ fn main {
                 println(t.lexeme)
               }
             } else {
+              let mut parse_ms = 0
+              let mut sem_ms = 0
+              let mut codegen_ms = 0
+              let mut total_ms = 0
+              let total_start = if bench_enabled { @env.now() } else { 0UL }
+              let parse_start = total_start
               let unit = parse_translation_unit(pp)
-              if !has_errors(bag) {
-                check_translation_unit(unit, bag) |> ignore
+              if bench_enabled {
+                let parse_end = @env.now()
+                parse_ms = bench_ms(parse_start, parse_end)
               }
               if !has_errors(bag) {
+                if bench_enabled {
+                  let sem_start = @env.now()
+                  check_translation_unit(unit, bag) |> ignore
+                  let sem_end = @env.now()
+                  sem_ms = bench_ms(sem_start, sem_end)
+                } else {
+                  check_translation_unit(unit, bag) |> ignore
+                }
+              }
+              if !has_errors(bag) {
+                let codegen_start = if bench_enabled { @env.now() } else { 0UL }
                 match codegen_arm64_object_bytes(unit, bag) {
                   None => ()
                   Some(bytes) => {
@@ -197,6 +280,16 @@ fn main {
                     }
                   }
                 }
+                if bench_enabled {
+                  let codegen_end = @env.now()
+                  codegen_ms = bench_ms(codegen_start, codegen_end)
+                }
+              }
+              if bench_enabled {
+                let total_end = @env.now()
+                total_ms = bench_ms(total_start, total_end)
+                bench_stats_add(bench_stats, parse_ms, sem_ms, codegen_ms, total_ms)
+                println(bench_file_line(path, parse_ms, sem_ms, codegen_ms, total_ms))
               }
             }
             if has_errors(bag) {
@@ -207,6 +300,9 @@ fn main {
             }
           }
         }
+      }
+      if bench_enabled && cfg.compile_only {
+        println(bench_summary_line(bench_stats))
       }
       if any_errors {
         @sys.exit(1)
