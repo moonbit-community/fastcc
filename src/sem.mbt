@@ -873,7 +873,7 @@ fn type_for_sizeof(ctx : SemContext, expr : Expr) -> CType {
     Expr::StringLit(length~, ..) =>
       CType::Array(elem=char_type(), size=Some(length), size_expr=None)
     _ =>
-      match type_of_lvalue(ctx, expr) {
+      match type_of_lvalue_optional(ctx, expr) {
         Some(ty) => ty
         None => type_of_expr(ctx, expr)
       }
@@ -1766,7 +1766,7 @@ fn eval_builtin_offsetof(
 ) -> Int? {
   match eval_builtin_offsetof_and_type(ctx, ty, path, loc, false) {
     None => None
-    Some((off, _)) => Some(off)
+    Some((off, _, _)) => Some(off)
   }
 }
 
@@ -1777,7 +1777,7 @@ fn eval_builtin_offsetof_and_type(
   path : Array[String],
   loc : SrcLoc,
   suppress_error : Bool,
-) -> (Int, CType)? {
+) -> (Int, CType, Bool)? {
   if path.length() == 0 {
     add_sem_error(ctx, loc, "__builtin_offsetof expects member designator")
     return None
@@ -1798,7 +1798,13 @@ fn eval_builtin_offsetof_and_type(
                   add_sem_error(ctx, loc, "unknown field '\{name}' in __builtin_offsetof")
                   return None
                 }
-              Some((field_off, field_ty)) => {
+              Some((field_off, field_ty, is_bitfield)) => {
+                if is_bitfield {
+                  if !suppress_error {
+                    add_sem_error(ctx, loc, "__builtin_offsetof does not allow bitfields")
+                  }
+                  return None
+                }
                 offset = offset + field_off
                 current = resolve_type(ctx, field_ty, loc) |> strip_qual_attrs
               }
@@ -1816,7 +1822,13 @@ fn eval_builtin_offsetof_and_type(
                   add_sem_error(ctx, loc, "unknown field '\{name}' in __builtin_offsetof")
                   return None
                 }
-              Some((field_off, field_ty)) => {
+              Some((field_off, field_ty, is_bitfield)) => {
+                if is_bitfield {
+                  if !suppress_error {
+                    add_sem_error(ctx, loc, "__builtin_offsetof does not allow bitfields")
+                  }
+                  return None
+                }
                 offset = offset + field_off
                 current = resolve_type(ctx, field_ty, loc) |> strip_qual_attrs
               }
@@ -1830,7 +1842,7 @@ fn eval_builtin_offsetof_and_type(
       }
     }
   }
-  Some((offset, current))
+  Some((offset, current, false))
 }
 
 ///|
@@ -1840,7 +1852,7 @@ fn struct_field_offset_and_type(
   struct_attrs : Attributes,
   name : String,
   loc : SrcLoc,
-) -> (Int, CType)? {
+) -> (Int, CType, Bool)? {
   let fields = def.fields
   let attrs = merge_attrs(def.attrs, struct_attrs)
   let mut size = 0
@@ -1884,7 +1896,7 @@ fn struct_field_offset_and_type(
           bit_offset = 0
         }
         if field.name == name {
-          return Some((size, field.ty))
+          return Some((size, field.ty, true))
         }
         bit_offset = bit_offset + width
         if bit_offset == bit_unit_bits {
@@ -1937,12 +1949,12 @@ fn struct_field_offset_and_type(
           Some(value) => adjusted_align = value
         }
         size = align_to(size, adjusted_align)
-        if field.name == name { return Some((size, field.ty)) }
+        if field.name == name { return Some((size, field.ty, false)) }
         if field.name == "" {
           match strip_qual_attrs(field.ty) {
             CType::Struct(..) | CType::Union(..) =>
               match eval_builtin_offsetof_and_type(ctx, field.ty, [name], loc, true) {
-                Some((inner_off, inner_ty)) => return Some((size + inner_off, inner_ty))
+                Some((inner_off, inner_ty, _)) => return Some((size + inner_off, inner_ty, false))
                 None => ()
               }
             _ => ()
@@ -1962,23 +1974,23 @@ fn union_field_offset_and_type(
   union_attrs : Attributes,
   name : String,
   loc : SrcLoc,
-) -> (Int, CType)? {
+) -> (Int, CType, Bool)? {
   let fields = def.fields
   let _attrs = merge_attrs(def.attrs, union_attrs)
   for field in fields {
     if field.name == name {
       match field.bit_width {
-        Some(_) => return Some((0, field.ty))
+        Some(_) => return Some((0, field.ty, true))
         None => ()
       }
-      return Some((0, field.ty))
+      return Some((0, field.ty, false))
     }
     if field.name == "" {
       match strip_qual_attrs(field.ty) {
         CType::Struct(..) | CType::Union(..) =>
           match eval_builtin_offsetof_and_type(ctx, field.ty, [name], loc, true) {
-            Some((inner_off, inner_ty)) =>
-              return Some((inner_off, inner_ty))
+            Some((inner_off, inner_ty, _)) =>
+              return Some((inner_off, inner_ty, false))
             None => ()
           }
         _ => ()
@@ -2468,7 +2480,12 @@ fn check_initializer(
                 if elem_sz == 1 {
                   match size {
                     None => Some(length)
-                    Some(_n) => None
+                    Some(n) => {
+                      if length > n {
+                        add_sem_error(ctx, loc, "string literal too long for array")
+                      }
+                      None
+                    }
                   }
                 } else {
                   let init_ty = type_of_expr(ctx, expr)
@@ -3604,6 +3621,49 @@ fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
       add_sem_error(ctx, expr_loc(expr), "expression is not assignable")
       None
     }
+  }
+}
+
+///|
+fn type_of_lvalue_optional(ctx : SemContext, expr : Expr) -> CType? {
+  match expr {
+    Expr::Ident(name~, ..) =>
+      if ctx.enum_consts.contains(name) {
+        None
+      } else {
+        match lookup_value(ctx, name) {
+          Some(ty) => Some(ty)
+          None => None
+        }
+      }
+    Expr::Index(base~, index~, loc~) =>
+      match
+        index_access_type(
+          ctx,
+          type_of_expr(ctx, base),
+          type_of_expr(ctx, index),
+          loc,
+        ) {
+        Some(ty) => Some(ty)
+        None => None
+      }
+    Expr::Member(base~, name~, is_arrow~, loc~) =>
+      member_access_type(ctx, type_of_expr(ctx, base), name, is_arrow~, loc)
+    Expr::Unary(op=UnaryOp::Deref, expr=inner, loc~) => {
+      let inner_ty = type_of_expr(ctx, inner)
+      match strip_top_qualifiers(inner_ty) {
+        CType::Pointer(pointee) => Some(pointee)
+        _ => {
+          add_sem_error(ctx, loc, "cannot dereference non-pointer")
+          None
+        }
+      }
+    }
+    Expr::CompoundLiteral(ty~, init~, loc~) =>
+      Some(compound_literal_type(ctx, ty, init, loc))
+    Expr::StmtExpr(stmts~, loc~) =>
+      stmt_expr_lvalue_type(ctx, stmts, loc)
+    _ => None
   }
 }
 
