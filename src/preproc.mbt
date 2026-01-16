@@ -50,7 +50,7 @@ struct ExpandingGuard { restore_len : Int }
 
 ///|
 fn make_builtin_token(kind : TokenKind, lexeme : String) -> Token {
-  { kind, lexeme, loc: dummy_loc(0), line_start: false, hidden: [] }
+  { kind, lexeme, loc: dummy_loc(0), line_start: false, hidden: empty_hidden }
 }
 
 ///|
@@ -302,7 +302,7 @@ fn next_input_token(pp : Preprocessor) -> Token {
       lexeme: "",
       loc: lexer_loc(pp.lexer),
       line_start: false,
-      hidden: [],
+      hidden: empty_hidden,
     }
   }
 }
@@ -740,7 +740,13 @@ fn normalize_macro_args(
     for i = param_count - 1; i < args.length(); i = i + 1 {
       if var_tokens.length() > 0 {
         var_tokens.push(
-          { kind: Comma, lexeme: ",", loc, line_start: false, hidden: [] },
+          {
+            kind: Comma,
+            lexeme: ",",
+            loc,
+            line_start: false,
+            hidden: empty_hidden,
+          },
         )
       }
       for t in args[i] {
@@ -818,7 +824,7 @@ fn make_string_literal(text : String, loc : SrcLoc) -> Token {
     lexeme: "\"" + escaped + "\"",
     loc,
     line_start: false,
-    hidden: [],
+    hidden: empty_hidden,
   }
 }
 
@@ -864,7 +870,7 @@ fn make_int_literal_token(value : Int, loc : SrcLoc) -> Token {
     lexeme: value.to_string(),
     loc,
     line_start: false,
-    hidden: [],
+    hidden: empty_hidden,
   }
 }
 
@@ -2369,7 +2375,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
       lexeme: "",
       loc: lexer_loc(pp.lexer),
       line_start: false,
-      hidden: [],
+      hidden: empty_hidden,
     }
   }
 }

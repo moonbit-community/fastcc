@@ -108,6 +108,9 @@ struct Token {
 } derive(Show, Eq, ToJson)
 
 ///|
+let empty_hidden : Array[String] = []
+
+///|
 fn keyword_or_ident_view(name : StringView) -> (TokenKind, String?) {
   let len = name.length()
   if len == 2 {
