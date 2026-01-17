@@ -792,7 +792,8 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
     }
     Stmt::DeclStmt(decls~, ..) => {
       for d in decls {
-        match strip_qual_attrs(d.ty) {
+        let stripped = strip_qual_attrs(d.ty)
+        match stripped {
           CType::Function(..) => continue
           _ => ()
         }
@@ -800,7 +801,7 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
           continue
         }
         let mut decl_ty = d.ty
-        match strip_qual_attrs(d.ty) {
+        match stripped {
           CType::Array(elem=elem_ty, size=None, size_expr=None) =>
             match d.init {
               Some(Initializer::Expr(expr=Expr::StringLit(length~, ..), ..)) =>
