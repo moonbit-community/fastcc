@@ -377,46 +377,54 @@ fn lex_string_literal(
   quote : UInt16,
 ) -> Token {
   let start = lex.index
+  let text = lex.text
+  let len = lex.text_len
   let _ = advance(lex)
   while true {
-    match peek_char(lex) {
-      None => {
-        add_lex_error(lex, loc, "unterminated string or char literal")
+    let mut idx = lex.index
+    while idx < len {
+      let code = text[idx]
+      if code == quote || code == 10 || code == 92 {
         break
       }
-      Some(code) => {
-        if code == quote {
-          let _ = advance(lex)
+      idx = idx + 1
+    }
+    if idx > lex.index {
+      lex.col = lex.col + (idx - lex.index)
+      lex.index = idx
+    }
+    if lex.index >= len {
+      add_lex_error(lex, loc, "unterminated string or char literal")
+      break
+    }
+    let code = text[lex.index]
+    if code == quote {
+      let _ = advance(lex)
+      break
+    }
+    if code == 10 {
+      add_lex_error(lex, loc, "unterminated string or char literal")
+      break
+    }
+    if code == 92 {
+      let _ = advance(lex)
+      match peek_char(lex) {
+        None => {
+          add_lex_error(lex, loc, "unterminated escape sequence")
           break
         }
-        if code == 10 {
-          add_lex_error(lex, loc, "unterminated string or char literal")
-          break
+        Some(10) => {
+          let _ = advance(lex)
+          continue
         }
-        if code == 92 {
+        Some(_) => {
           let _ = advance(lex)
-          match peek_char(lex) {
-            None => {
-              add_lex_error(lex, loc, "unterminated escape sequence")
-              break
-            }
-            Some(10) => {
-              let _ = advance(lex)
-              continue
-            }
-            Some(_) => {
-              let _ = advance(lex)
-              continue
-            }
-          }
-        } else {
-          let _ = advance(lex)
-
+          continue
         }
       }
     }
   }
-  let lit = slice_to_string(lex.text, start, lex.index)
+  let lit = slice_to_string(text, start, lex.index)
   let kind = if quote == 34 { StrLit } else { CharLit }
   make_token(kind, lit, loc, line_start)
 }
