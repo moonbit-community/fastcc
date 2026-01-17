@@ -55,6 +55,8 @@ fn touch_unused_symbols() -> Unit {
 
   // sem helper
   let type_contains_vla_ref = type_contains_vla
+  let strip_qualifiers_ref = strip_qualifiers
+  let strip_qual_attrs_ref = strip_qual_attrs
 
   // Touch refs to avoid unused warnings
   let _ = (
@@ -92,5 +94,7 @@ fn touch_unused_symbols() -> Unit {
     section_from_emitter_ref,
     reloc_addend_ref,
     type_contains_vla_ref,
+    strip_qualifiers_ref,
+    strip_qual_attrs_ref,
   )
 }

@@ -1615,7 +1615,7 @@ fn scalar_size_signed_or_error(
   ty : CType,
   loc : SrcLoc,
 ) -> (Int, Bool)? {
-  match strip_qualifiers(ty) {
+  match strip_top_qualifiers_keep_attrs(ty) {
     CType::Float(kind=CFloatKind::LongDouble) => return Some((8, false))
     _ => ()
   }
@@ -1623,7 +1623,7 @@ fn scalar_size_signed_or_error(
     None => return None
     Some(v) => v
   }
-  let signed = match strip_qualifiers(ty) {
+  let signed = match strip_top_qualifiers_keep_attrs(ty) {
     CType::Int(unsigned~, ..) => !unsigned
     _ => false
   }
@@ -4627,7 +4627,7 @@ fn gen_call_expr_with_sret(
 
 ///|
 fn element_type_for_pointer_arith(ty : CType) -> CType? {
-  match strip_qualifiers(ty) {
+  match strip_top_qualifiers_keep_attrs(ty) {
     CType::Pointer(inner) => Some(inner)
     CType::Array(elem~, ..) => Some(elem)
     _ => None
@@ -4995,7 +4995,7 @@ fn struct_field_access_info(
           Some(v) => v
           None => 0
         }
-        let base = strip_qualifiers(field.ty)
+        let base = strip_top_qualifiers_keep_attrs(field.ty)
         let (base_size, base_align) = match type_size_align(ctx, base, loc) {
           None => (0, 1)
           Some(v) => v
@@ -5044,7 +5044,7 @@ fn struct_field_access_info(
           bit_unit_size = 0
           bit_offset = 0
         }
-        let (field_size, field_align) = match strip_qualifiers(field.ty) {
+        let (field_size, field_align) = match strip_top_qualifiers_keep_attrs(field.ty) {
           CType::Array(elem~, size=None, size_expr=size_expr, ..) =>
             match size_expr {
               None => {
@@ -5202,7 +5202,7 @@ fn collect_struct_field_access_cache(
           Some(v) => v
           None => 0
         }
-        let base = strip_qualifiers(field.ty)
+        let base = strip_top_qualifiers_keep_attrs(field.ty)
         let (base_size, base_align) = match type_size_align(ctx, base, loc) {
           None => (0, 1)
           Some(v) => v
@@ -5249,7 +5249,7 @@ fn collect_struct_field_access_cache(
           bit_unit_size = 0
           bit_offset = 0
         }
-        let (field_size, field_align) = match strip_qualifiers(field.ty) {
+        let (field_size, field_align) = match strip_top_qualifiers_keep_attrs(field.ty) {
           CType::Array(elem~, size=None, size_expr=size_expr, ..) =>
             match size_expr {
               None => {
@@ -5953,7 +5953,7 @@ fn gen_expr_to_float_kind_bits(
     None => {
       // int -> float/double
       gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, dst, bag)
-      let is_unsigned = match strip_qualifiers(src_ty) {
+      let is_unsigned = match strip_top_qualifiers_keep_attrs(src_ty) {
         CType::Int(unsigned~, ..) => unsigned
         _ => false
       }
@@ -8063,7 +8063,7 @@ fn gen_expr_int32(
 	      }
     Expr::Cast(ty=to_ty, expr=inner, loc=cast_loc) => {
       let from_ty = type_of_expr(alloc.sem, inner)
-      match (strip_qualifiers(to_ty), strip_qualifiers(from_ty)) {
+      match (strip_top_qualifiers_keep_attrs(to_ty), strip_top_qualifiers_keep_attrs(from_ty)) {
         (CType::Int(kind=to_kind, unsigned=to_unsigned), CType::Float(kind=from_kind)) => {
           if !float_kind_supported(from_kind) {
             add_error(bag, cast_loc, "codegen: unsupported float type")

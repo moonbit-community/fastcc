@@ -259,6 +259,14 @@ fn strip_top_qualifiers(ty : CType) -> CType {
 }
 
 ///|
+fn strip_top_qualifiers_keep_attrs(ty : CType) -> CType {
+  match ty {
+    CType::Qualified(base~, ..) => strip_top_qualifiers_keep_attrs(base)
+    _ => ty
+  }
+}
+
+///|
 fn split_top_qual(ty : CType) -> (TypeQual, CType) {
   match ty {
     CType::Qualified(qual~, base~) => (qual, base)
@@ -529,7 +537,7 @@ fn check_storage_class(
 ///|
 fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
   let resolved = resolve_type(ctx, ty, loc)
-  match strip_qualifiers(resolved) {
+  match strip_top_qualifiers_keep_attrs(resolved) {
     CType::TypeofExpr(expr~) =>
       type_size_align(ctx, type_for_typeof(ctx, expr), loc)
     CType::Attributed(attrs~, base~) =>
@@ -805,7 +813,7 @@ fn struct_size_align(
           Some(v) => v
           None => 0
         }
-        let base = strip_qualifiers(field.ty)
+        let base = strip_top_qualifiers_keep_attrs(field.ty)
         let (base_size, base_align) = match type_size_align(ctx, base, loc) {
           None => (0, 1)
           Some(v) => v
@@ -847,7 +855,7 @@ fn struct_size_align(
           bit_unit_size = 0
           bit_offset = 0
         }
-        let (field_size, field_align) = match strip_qualifiers(field.ty) {
+        let (field_size, field_align) = match strip_top_qualifiers_keep_attrs(field.ty) {
           CType::Array(elem~, size=None, size_expr=size_expr, ..) =>
             match size_expr {
               None => {
@@ -919,7 +927,7 @@ fn union_size_align(
   for field in fields {
     let packed = attrs.packed || field.attrs.packed
     let field_align_override = attr_align_value(ctx, field.attrs, field.loc)
-    let base = strip_qualifiers(field.ty)
+    let base = strip_top_qualifiers_keep_attrs(field.ty)
     let (field_size, field_align) = match field.bit_width {
       Some(_) =>
         match type_size_align(ctx, base, loc) {
@@ -927,7 +935,7 @@ fn union_size_align(
           Some(v) => v
         }
       None =>
-        match strip_qualifiers(field.ty) {
+        match strip_top_qualifiers_keep_attrs(field.ty) {
           CType::Array(elem~, size=None, size_expr=size_expr, ..) =>
             match size_expr {
               None =>
@@ -1903,10 +1911,10 @@ fn eval_builtin_offsetof_and_type(
     add_sem_error(ctx, loc, "__builtin_offsetof expects member designator")
     return None
   }
-  let mut current = resolve_type(ctx, ty, loc) |> strip_qual_attrs
+  let mut current = resolve_type(ctx, ty, loc) |> strip_top_qualifiers
   let mut offset = 0
   for name in path {
-    match strip_qual_attrs(current) {
+    match strip_top_qualifiers(current) {
       CType::Struct(name=tag, fields=field_list, attrs=attrs) =>
         match ensure_struct_fields(ctx, tag, field_list, is_union=false, loc) {
           None => return None
@@ -1927,7 +1935,7 @@ fn eval_builtin_offsetof_and_type(
                   return None
                 }
                 offset = offset + field_off
-                current = resolve_type(ctx, field_ty, loc) |> strip_qual_attrs
+                current = resolve_type(ctx, field_ty, loc) |> strip_top_qualifiers
               }
             }
         }
@@ -1951,7 +1959,7 @@ fn eval_builtin_offsetof_and_type(
                   return None
                 }
                 offset = offset + field_off
-                current = resolve_type(ctx, field_ty, loc) |> strip_qual_attrs
+                current = resolve_type(ctx, field_ty, loc) |> strip_top_qualifiers
               }
             }
         }
@@ -1990,7 +1998,7 @@ fn struct_field_offset_and_type(
           Some(v) => v
           None => 0
         }
-        let base = strip_qualifiers(field.ty)
+        let base = strip_top_qualifiers_keep_attrs(field.ty)
         let (base_size, base_align) = match type_size_align(ctx, base, loc) {
           None => (0, 1)
           Some(v) => v
@@ -2034,7 +2042,7 @@ fn struct_field_offset_and_type(
           bit_unit_size = 0
           bit_offset = 0
         }
-        let (field_size, field_align) = match strip_qualifiers(field.ty) {
+        let (field_size, field_align) = match strip_top_qualifiers_keep_attrs(field.ty) {
           CType::Array(elem~, size=None, size_expr=size_expr, ..) =>
             match size_expr {
               None => {
