@@ -9,7 +9,11 @@ struct Parser {
 
 ///|
 fn collect_tokens(pp : Preprocessor) -> Array[Token] {
-  let out : Array[Token] = []
+  let mut cap = pp.lexer.text.length() / 4
+  if cap < 64 {
+    cap = 64
+  }
+  let out : Array[Token] = Array::new(capacity=cap)
   while true {
     let tok = next_pp_token(pp)
     out.push(tok)
@@ -3355,8 +3359,9 @@ fn lookup_typedef(p : Parser, name : String) -> CType? {
   while i > 0 {
     i = i - 1
     let scope = p.type_scopes[i]
-    if scope.contains(name) {
-      return scope.get(name)
+    match scope.get(name) {
+      None => ()
+      Some(ty) => return Some(ty)
     }
   }
   None

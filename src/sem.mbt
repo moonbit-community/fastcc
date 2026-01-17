@@ -130,8 +130,9 @@ fn lookup_local_only(ctx : SemContext, name : String) -> CType? {
   while i > 0 {
     i = i - 1
     let scope = ctx.locals[i]
-    if scope.contains(name) {
-      return scope.get(name)
+    match scope.get(name) {
+      None => ()
+      Some(ty) => return Some(ty)
     }
   }
   None
