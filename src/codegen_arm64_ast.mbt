@@ -53,6 +53,8 @@ struct LocalAlloc {
   mut used_bytes : Int
   scopes : Array[FastMap[String, LocalSlot]]
   vla_scopes : Array[VlaScopeInfo]
+  local_values : FastMap[String, LocalSlot]
+  local_overrides : Array[Array[(String, LocalSlot?)]]
   func_name : String
   compound_literal_slots : FastMap[String, Int]
   mut agg_temp_offset : Int?
@@ -77,6 +79,8 @@ fn new_local_alloc(sem : SemContext, ret_ty : CType, func_name : String) ->
     used_bytes: 0,
     scopes: [],
     vla_scopes: [],
+    local_values: fast_map_new(),
+    local_overrides: [],
     func_name,
     compound_literal_slots: fast_map_new(),
     agg_temp_offset: None,
@@ -99,6 +103,8 @@ fn new_local_alloc_with_compound_slots(
     used_bytes: 0,
     scopes: [],
     vla_scopes: [],
+    local_values: fast_map_new(),
+    local_overrides: [],
     func_name,
     compound_literal_slots,
     agg_temp_offset: None,
@@ -112,6 +118,7 @@ fn new_local_alloc_with_compound_slots(
 fn cg_push_scope(alloc : LocalAlloc) -> Unit {
   alloc.scopes.push(fast_map_new())
   alloc.vla_scopes.push({ num: 0, loc: 0, locorig: 0 })
+  alloc.local_overrides.push([])
   push_scope(alloc.sem)
 }
 
@@ -119,21 +126,39 @@ fn cg_push_scope(alloc : LocalAlloc) -> Unit {
 fn cg_pop_scope(alloc : LocalAlloc) -> Unit {
   alloc.scopes.pop() |> ignore
   alloc.vla_scopes.pop() |> ignore
+  match alloc.local_overrides.pop() {
+    None => ()
+    Some(overrides) => {
+      let mut i = overrides.length()
+      while i > 0 {
+        i = i - 1
+        let (name, prev) = overrides[i]
+        match prev {
+          Some(slot) => alloc.local_values.set(name, slot)
+          None => alloc.local_values.remove(name)
+        }
+      }
+    }
+  }
   pop_scope(alloc.sem)
 }
 
 ///|
 fn lookup_local(alloc : LocalAlloc, name : String) -> LocalSlot? {
-  let mut i = alloc.scopes.length()
-  while i > 0 {
-    i = i - 1
-    let scope = alloc.scopes[i]
-    match scope.get(name) {
-      None => ()
-      Some(slot) => return Some(slot)
-    }
+  alloc.local_values.get(name)
+}
+
+///|
+fn record_local_slot(alloc : LocalAlloc, name : String, slot : LocalSlot) -> Unit {
+  if alloc.local_overrides.length() == 0 {
+    alloc.local_values.set(name, slot)
+    return
   }
-  None
+  let idx = alloc.local_overrides.length() - 1
+  let overrides = alloc.local_overrides[idx]
+  overrides.push((name, alloc.local_values.get(name)))
+  alloc.local_overrides[idx] = overrides
+  alloc.local_values.set(name, slot)
 }
 
 ///|
@@ -427,7 +452,14 @@ fn alloc_local(
   let offset = -(aligned + size)
   let slot = { offset, ty, vla_size_offset: None, byref: false }
   let idx = alloc.scopes.length() - 1
-  alloc.scopes[idx].set(name, slot)
+  let scope = alloc.scopes[idx]
+  let already = scope.contains(name)
+  scope.set(name, slot)
+  if !already {
+    record_local_slot(alloc, name, slot)
+  } else {
+    alloc.local_values.set(name, slot)
+  }
   let sem_idx = alloc.sem.locals.length() - 1
   alloc.sem.locals[sem_idx].set(name, ty)
   record_local_binding(alloc.sem, name, ty)
@@ -447,7 +479,14 @@ fn alloc_local_byref(
   let offset = -(aligned + size)
   let slot = { offset, ty, vla_size_offset: None, byref: true }
   let idx = alloc.scopes.length() - 1
-  alloc.scopes[idx].set(name, slot)
+  let scope = alloc.scopes[idx]
+  let already = scope.contains(name)
+  scope.set(name, slot)
+  if !already {
+    record_local_slot(alloc, name, slot)
+  } else {
+    alloc.local_values.set(name, slot)
+  }
   let sem_idx = alloc.sem.locals.length() - 1
   alloc.sem.locals[sem_idx].set(name, ty)
   record_local_binding(alloc.sem, name, ty)
@@ -854,6 +893,7 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
                 }
                 let scope_idx = alloc.scopes.length() - 1
                 alloc.scopes[scope_idx].set(d.name, updated)
+                alloc.local_values.set(d.name, updated)
                 vla_record_decl(alloc, slot.offset) |> ignore
               }
               _ => ()
@@ -9419,6 +9459,7 @@ fn gen_stmt(
                 }
                 let scope_idx = alloc.scopes.length() - 1
                 alloc.scopes[scope_idx].set(d.name, updated)
+                alloc.local_values.set(d.name, updated)
                 slot0 = updated
                 match vla_record_decl(alloc, slot0.offset) {
                   None => ()
