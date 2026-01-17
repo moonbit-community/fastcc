@@ -143,40 +143,44 @@ fn is_ws_no_newline(code : UInt16) -> Bool {
 ///|
 fn skip_ws(lex : Lexer) -> Unit {
   while true {
-    match peek_char(lex) {
-      None => return
-      Some(code) => {
-        if is_ws(code) {
-          let _ = advance(lex)
-          continue
-        }
-        if code == 92 && peek_char_offset(lex, 1) is Some(10) {
-          let _ = advance_comment(lex) // '\'
-          let _ = advance_comment(lex) // '\n'
-          lex.line_start = false
-          continue
-        }
-        if code == 47 {
-          match peek_char_offset(lex, 1) {
-            Some(47) => {
-              let _ = advance_comment(lex)
-              let _ = advance_comment(lex)
-              skip_line_comment(lex)
-              continue
-            }
-            Some(42) => {
-              let start_loc = lexer_loc(lex)
-              let _ = advance_comment(lex)
-              let _ = advance_comment(lex)
-              skip_block_comment(lex, start_loc)
-              continue
-            }
-            _ => ()
-          }
-        }
-        return
+    let idx = lex.index
+    if idx >= lex.text_len {
+      return
+    }
+    let code = lex.text[idx]
+    if is_ws(code) {
+      let _ = advance(lex)
+      continue
+    }
+    if code == 92 {
+      let next = idx + 1
+      if next < lex.text_len && lex.text[next] == 10 {
+        let _ = advance_comment(lex) // '\'
+        let _ = advance_comment(lex) // '\n'
+        lex.line_start = false
+        continue
       }
     }
+    if code == 47 {
+      let next = idx + 1
+      if next < lex.text_len {
+        let next_code = lex.text[next]
+        if next_code == 47 {
+          let _ = advance_comment(lex)
+          let _ = advance_comment(lex)
+          skip_line_comment(lex)
+          continue
+        }
+        if next_code == 42 {
+          let start_loc = lexer_loc(lex)
+          let _ = advance_comment(lex)
+          let _ = advance_comment(lex)
+          skip_block_comment(lex, start_loc)
+          continue
+        }
+      }
+    }
+    return
   }
 }
 
