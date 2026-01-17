@@ -1,8 +1,8 @@
 ///|
 struct Parser {
-  tokens : Array[Token]
-  tokens_len : Int
-  mut index : Int
+  pp : Preprocessor
+  mut current : Token
+  mut lookahead : Token
   diags : DiagBag
   type_scopes : Array[Map[String, CType]]
   typedef_counts : Map[String, Int]
@@ -10,24 +10,7 @@ struct Parser {
 }
 
 ///|
-fn collect_tokens(pp : Preprocessor) -> Array[Token] {
-  let mut cap = pp.lexer.text.length() / 4
-  if cap < 64 {
-    cap = 64
-  }
-  let out : Array[Token] = Array::new(capacity=cap)
-  while true {
-    let tok = next_pp_token(pp)
-    out.push(tok)
-    if tok.kind == Eof {
-      break
-    }
-  }
-  out
-}
-
-///|
-fn new_parser(tokens : Array[Token], diags : DiagBag) -> Parser {
+fn new_parser(pp : Preprocessor) -> Parser {
   let builtins : Map[String, CType] = {}
   builtins.set("__builtin_va_list", CType::Pointer(CType::Void))
   builtins.set(
@@ -38,11 +21,13 @@ fn new_parser(tokens : Array[Token], diags : DiagBag) -> Parser {
   for name, _ in builtins {
     typedef_counts.set(name, 1)
   }
+  let current = next_pp_token(pp)
+  let lookahead = next_pp_token(pp)
   {
-    tokens,
-    tokens_len: tokens.length(),
-    index: 0,
-    diags,
+    pp,
+    current,
+    lookahead,
+    diags: pp.diags,
     type_scopes: [builtins],
     typedef_counts,
     anon_tag_id: 0,
@@ -76,8 +61,7 @@ fn special_ident_kind(name : String) -> TokenKind? {
 
 ///|
 fn parse_translation_unit(pp : Preprocessor) -> TranslationUnit {
-  let tokens = collect_tokens(pp)
-  let parser = new_parser(tokens, pp.diags)
+  let parser = new_parser(pp)
   parse_translation_unit_with(parser)
 }
 
@@ -3424,19 +3408,12 @@ fn add_parse_error(p : Parser, loc : SrcLoc, message : String) -> Unit {
 
 ///|
 fn peek_token(p : Parser) -> Token {
-  if p.index < p.tokens_len {
-    return p.tokens[p.index]
-  }
-  p.tokens[p.tokens_len - 1]
+  p.current
 }
 
 ///|
 fn peek_token_at(p : Parser, offset : Int) -> Token {
-  let idx = p.index + offset
-  if idx >= 0 && idx < p.tokens_len {
-    return p.tokens[idx]
-  }
-  p.tokens[p.tokens_len - 1]
+  if offset <= 0 { p.current } else { p.lookahead }
 }
 
 ///|
@@ -3446,29 +3423,26 @@ fn peek_kind(p : Parser, offset : Int) -> TokenKind {
 
 ///|
 fn advance_token(p : Parser) -> Token {
-  let tok = peek_token(p)
-  if p.index < p.tokens_len {
-    p.index = p.index + 1
-  }
+  let tok = p.current
+  p.current = p.lookahead
+  p.lookahead = next_pp_token(p.pp)
   tok
 }
 
 ///|
 fn match_token(p : Parser, kind : TokenKind) -> Token? {
-  let tok = peek_token(p)
-  if tok.kind == kind {
-    p.index = p.index + 1
-    return Some(tok)
+  if p.current.kind == kind {
+    Some(advance_token(p))
+  } else {
+    None
   }
-  None
 }
 
 ///|
 fn expect(p : Parser, kind : TokenKind, message : String) -> Token {
-  let tok = peek_token(p)
+  let tok = p.current
   if tok.kind == kind {
-    p.index = p.index + 1
-    return tok
+    return advance_token(p)
   }
   add_parse_error(p, tok.loc, message)
   tok
@@ -3476,10 +3450,9 @@ fn expect(p : Parser, kind : TokenKind, message : String) -> Token {
 
 ///|
 fn expect_ident(p : Parser, message : String) -> Token? {
-  let tok = peek_token(p)
+  let tok = p.current
   if tok.kind == Ident {
-    p.index = p.index + 1
-    return Some(tok)
+    return Some(advance_token(p))
   }
   add_parse_error(p, tok.loc, message)
   None

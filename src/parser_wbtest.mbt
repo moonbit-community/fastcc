@@ -114,8 +114,7 @@ test "parser tracks typedef struct name" {
     "typedef struct { int x; } T; int main(){ T r; return r.x; }",
   )
   let pp = new_preprocessor(map, file, bag)
-  let tokens = collect_tokens(pp)
-  let parser = new_parser(tokens, bag)
+  let parser = new_parser(pp)
   ignore(parse_translation_unit_with(parser))
   let scope0 = parser.type_scopes[0]
   assert_true(scope0.contains("T"))
