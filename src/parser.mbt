@@ -2538,7 +2538,7 @@ fn parse_expr_eq(p : Parser) -> Expr {
 
 ///|
 fn parse_expr_cond(p : Parser) -> Expr {
-  let cond = parse_expr_lor(p)
+  let cond = parse_expr_binary(p, 1)
   if p.current.kind != Question {
     return cond
   }
@@ -2550,188 +2550,46 @@ fn parse_expr_cond(p : Parser) -> Expr {
 }
 
 ///|
-fn parse_expr_lor(p : Parser) -> Expr {
-  let mut expr = parse_expr_land(p)
-  while p.current.kind == PipePipe {
-    let tok = advance_token(p)
-    let right = parse_expr_land(p)
-    expr = Expr::Binary(op=BinaryOp::LogOr, left=expr, right~, loc=tok.loc)
+fn binary_op_info(kind : TokenKind) -> (BinaryOp, Int)? {
+  match kind {
+    PipePipe => Some((BinaryOp::LogOr, 1))
+    AmpAmp => Some((BinaryOp::LogAnd, 2))
+    Pipe => Some((BinaryOp::BitOr, 3))
+    Caret => Some((BinaryOp::BitXor, 4))
+    Amp => Some((BinaryOp::BitAnd, 5))
+    Eq => Some((BinaryOp::Eq, 6))
+    Ne => Some((BinaryOp::Ne, 6))
+    Lt => Some((BinaryOp::Lt, 7))
+    Le => Some((BinaryOp::Le, 7))
+    Gt => Some((BinaryOp::Gt, 7))
+    Ge => Some((BinaryOp::Ge, 7))
+    ShiftLeft => Some((BinaryOp::Shl, 8))
+    ShiftRight => Some((BinaryOp::Shr, 8))
+    Plus => Some((BinaryOp::Add, 9))
+    Minus => Some((BinaryOp::Sub, 9))
+    Star => Some((BinaryOp::Mul, 10))
+    Slash => Some((BinaryOp::Div, 10))
+    Percent => Some((BinaryOp::Mod, 10))
+    _ => None
   }
-  expr
 }
 
 ///|
-fn parse_expr_land(p : Parser) -> Expr {
-  let mut expr = parse_expr_or(p)
-  while p.current.kind == AmpAmp {
-    let tok = advance_token(p)
-    let right = parse_expr_or(p)
-    expr = Expr::Binary(op=BinaryOp::LogAnd, left=expr, right~, loc=tok.loc)
-  }
-  expr
-}
-
-///|
-fn parse_expr_or(p : Parser) -> Expr {
-  let mut expr = parse_expr_xor(p)
-  while p.current.kind == Pipe {
-    let tok = advance_token(p)
-    let right = parse_expr_xor(p)
-    expr = Expr::Binary(op=BinaryOp::BitOr, left=expr, right~, loc=tok.loc)
-  }
-  expr
-}
-
-///|
-fn parse_expr_xor(p : Parser) -> Expr {
-  let mut expr = parse_expr_and(p)
-  while p.current.kind == Caret {
-    let tok = advance_token(p)
-    let right = parse_expr_and(p)
-    expr = Expr::Binary(op=BinaryOp::BitXor, left=expr, right~, loc=tok.loc)
-  }
-  expr
-}
-
-///|
-fn parse_expr_and(p : Parser) -> Expr {
-  let mut expr = parse_expr_cmpeq(p)
-  while p.current.kind == Amp {
-    let tok = advance_token(p)
-    let right = parse_expr_cmpeq(p)
-    expr = Expr::Binary(op=BinaryOp::BitAnd, left=expr, right~, loc=tok.loc)
-  }
-  expr
-}
-
-///|
-fn parse_expr_cmpeq(p : Parser) -> Expr {
-  let mut expr = parse_expr_cmp(p)
-  while true {
-    match p.current.kind {
-      Eq => {
-        let tok = advance_token(p)
-        let right = parse_expr_cmp(p)
-        expr = Expr::Binary(op=BinaryOp::Eq, left=expr, right~, loc=tok.loc)
-        continue
-      }
-      Ne => {
-        let tok = advance_token(p)
-        let right = parse_expr_cmp(p)
-        expr = Expr::Binary(op=BinaryOp::Ne, left=expr, right~, loc=tok.loc)
-        continue
-      }
-      _ => break
-    }
-  }
-  expr
-}
-
-///|
-fn parse_expr_cmp(p : Parser) -> Expr {
-  let mut expr = parse_expr_shift(p)
-  while true {
-    match p.current.kind {
-      Lt => {
-        let tok = advance_token(p)
-        let right = parse_expr_shift(p)
-        expr = Expr::Binary(op=BinaryOp::Lt, left=expr, right~, loc=tok.loc)
-        continue
-      }
-      Le => {
-        let tok = advance_token(p)
-        let right = parse_expr_shift(p)
-        expr = Expr::Binary(op=BinaryOp::Le, left=expr, right~, loc=tok.loc)
-        continue
-      }
-      Gt => {
-        let tok = advance_token(p)
-        let right = parse_expr_shift(p)
-        expr = Expr::Binary(op=BinaryOp::Gt, left=expr, right~, loc=tok.loc)
-        continue
-      }
-      Ge => {
-        let tok = advance_token(p)
-        let right = parse_expr_shift(p)
-        expr = Expr::Binary(op=BinaryOp::Ge, left=expr, right~, loc=tok.loc)
-        continue
-      }
-      _ => break
-    }
-  }
-  expr
-}
-
-///|
-fn parse_expr_shift(p : Parser) -> Expr {
-  let mut expr = parse_expr_sum(p)
-  while true {
-    match p.current.kind {
-      ShiftLeft => {
-        let tok = advance_token(p)
-        let right = parse_expr_sum(p)
-        expr = Expr::Binary(op=BinaryOp::Shl, left=expr, right~, loc=tok.loc)
-        continue
-      }
-      ShiftRight => {
-        let tok = advance_token(p)
-        let right = parse_expr_sum(p)
-        expr = Expr::Binary(op=BinaryOp::Shr, left=expr, right~, loc=tok.loc)
-        continue
-      }
-      _ => break
-    }
-  }
-  expr
-}
-
-///|
-fn parse_expr_sum(p : Parser) -> Expr {
-  let mut expr = parse_expr_prod(p)
-  while true {
-    match p.current.kind {
-      Plus => {
-        let tok = advance_token(p)
-        let right = parse_expr_prod(p)
-        expr = Expr::Binary(op=BinaryOp::Add, left=expr, right~, loc=tok.loc)
-        continue
-      }
-      Minus => {
-        let tok = advance_token(p)
-        let right = parse_expr_prod(p)
-        expr = Expr::Binary(op=BinaryOp::Sub, left=expr, right~, loc=tok.loc)
-        continue
-      }
-      _ => break
-    }
-  }
-  expr
-}
-
-///|
-fn parse_expr_prod(p : Parser) -> Expr {
+fn parse_expr_binary(p : Parser, min_prec : Int) -> Expr {
   let mut expr = parse_expr_unary(p)
   while true {
-    match p.current.kind {
-      Star => {
-        let tok = advance_token(p)
-        let right = parse_expr_unary(p)
-        expr = Expr::Binary(op=BinaryOp::Mul, left=expr, right~, loc=tok.loc)
-        continue
-      }
-      Slash => {
-        let tok = advance_token(p)
-        let right = parse_expr_unary(p)
-        expr = Expr::Binary(op=BinaryOp::Div, left=expr, right~, loc=tok.loc)
-        continue
-      }
-      Percent => {
-        let tok = advance_token(p)
-        let right = parse_expr_unary(p)
-        expr = Expr::Binary(op=BinaryOp::Mod, left=expr, right~, loc=tok.loc)
-        continue
-      }
-      _ => break
+    let info = binary_op_info(p.current.kind)
+    match info {
+      None => break
+      Some((op, prec)) =>
+        if prec < min_prec {
+          break
+        } else {
+          let tok = advance_token(p)
+          let right = parse_expr_binary(p, prec + 1)
+          expr = Expr::Binary(op~, left=expr, right~, loc=tok.loc)
+          continue
+        }
     }
   }
   expr
