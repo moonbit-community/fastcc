@@ -1188,7 +1188,10 @@ fn reserve_agg_temp_expr(alloc : LocalAlloc, expr : Expr) -> Unit {
       }
       reserve_agg_temp_expr(alloc, base)
     }
-    Expr::CompoundLiteral(init~, ..) => reserve_agg_temp_initializer(alloc, init)
+    Expr::CompoundLiteral(ty~, init~, loc~) => {
+      reserve_compound_literal_slot(alloc, ty, init, loc)
+      reserve_agg_temp_initializer(alloc, init)
+    }
     Expr::Unary(expr=inner, ..) => reserve_agg_temp_expr(alloc, inner)
     Expr::Cast(expr=inner, ..) => reserve_agg_temp_expr(alloc, inner)
     Expr::SizeofExpr(..) | Expr::AlignofExpr(..) => ()
@@ -1341,15 +1344,19 @@ fn reserve_agg_temp_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
         None => ()
         Some(e) => reserve_agg_temp_expr(alloc, e)
       }
-    Stmt::Asm(stmt) =>
+    Stmt::Asm(stmt) => {
       for op in stmt.outputs {
         reserve_agg_temp_expr(alloc, op.expr)
       }
+      for op in stmt.inputs {
+        reserve_compound_literals_expr(alloc, op.expr)
+      }
+    }
+    Stmt::Default(body~, ..) => reserve_compound_literals_stmt(alloc, body)
     Stmt::TagDef(..)
     | Stmt::Break(..)
     | Stmt::Continue(..)
     | Stmt::Goto(..)
-    | Stmt::Default(..)
     | Stmt::StaticAssert(_)
     | Stmt::Empty(..) => ()
   }
@@ -10073,7 +10080,6 @@ fn compute_frame_size(sem : SemContext, func : FuncDef, bag : DiagBag) -> Int {
     }
     i = i + 1
   }
-  reserve_compound_literals_stmt(alloc, func.body)
   reserve_agg_temp_slots_stmt(alloc, func.body)
   layout_stmt(alloc, func.body)
   let size = align_up(alloc.used_bytes, 16)
@@ -10357,7 +10363,6 @@ fn gen_func_def(
     i = i + 1
   }
 
-  reserve_compound_literals_stmt(alloc, func.body)
   reserve_agg_temp_slots_stmt(alloc, func.body)
 
   let loops : Array[LoopChains] = []
