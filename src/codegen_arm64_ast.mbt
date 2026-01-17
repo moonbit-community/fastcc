@@ -87,6 +87,28 @@ fn new_local_alloc(sem : SemContext, ret_ty : CType, func_name : String) ->
 }
 
 ///|
+fn new_local_alloc_with_compound_slots(
+  sem : SemContext,
+  ret_ty : CType,
+  func_name : String,
+  compound_literal_slots : Map[String, Int],
+) -> LocalAlloc {
+  {
+    sem,
+    ret_ty,
+    used_bytes: 0,
+    scopes: [],
+    vla_scopes: [],
+    func_name,
+    compound_literal_slots,
+    agg_temp_offset: None,
+    agg_temp_size: 0,
+    agg_temp_align: 1,
+    sret_offset: None,
+  }
+}
+
+///|
 fn cg_push_scope(alloc : LocalAlloc) -> Unit {
   alloc.scopes.push({})
   alloc.vla_scopes.push({ num: 0, loc: 0, locorig: 0 })
@@ -10058,7 +10080,17 @@ fn gen_stmt(
 }
 
 ///|
-fn compute_frame_size(sem : SemContext, func : FuncDef, bag : DiagBag) -> Int {
+struct FramePlan {
+  frame_size : Int
+  used_bytes_after_hidden : Int
+  agg_temp_size : Int
+  agg_temp_align : Int
+  agg_temp_offset : Int?
+  compound_literal_slots : Map[String, Int]
+}
+
+///|
+fn compute_frame_plan(sem : SemContext, func : FuncDef, bag : DiagBag) -> FramePlan {
   let alloc = new_local_alloc(sem, func.return_type, func.name)
   cg_push_scope(alloc)
   reserve_sret_slot(alloc, func.loc, bag)
@@ -10081,10 +10113,22 @@ fn compute_frame_size(sem : SemContext, func : FuncDef, bag : DiagBag) -> Int {
     i = i + 1
   }
   reserve_agg_temp_slots_stmt(alloc, func.body)
+  let used_bytes_after_hidden = alloc.used_bytes
+  let agg_temp_size = alloc.agg_temp_size
+  let agg_temp_align = alloc.agg_temp_align
+  let agg_temp_offset = alloc.agg_temp_offset
+  let compound_literal_slots = alloc.compound_literal_slots
   layout_stmt(alloc, func.body)
-  let size = align_up(alloc.used_bytes, 16)
+  let frame_size = align_up(alloc.used_bytes, 16)
   cg_pop_scope(alloc)
-  size
+  {
+    frame_size,
+    used_bytes_after_hidden,
+    agg_temp_size,
+    agg_temp_align,
+    agg_temp_offset,
+    compound_literal_slots,
+  }
 }
 
 ///|
@@ -10175,8 +10219,15 @@ fn gen_func_def(
   let start = emitter_pc(emitter)
   func_offsets.set(link, start)
 
-  let frame_size = compute_frame_size(sem, func, bag)
-  let alloc = new_local_alloc(sem, func.return_type, func.name)
+  let plan = compute_frame_plan(sem, func, bag)
+  let frame_size = plan.frame_size
+  let alloc =
+    new_local_alloc_with_compound_slots(
+      sem,
+      func.return_type,
+      func.name,
+      plan.compound_literal_slots,
+    )
   cg_push_scope(alloc)
   reserve_sret_slot(alloc, func.loc, bag)
   emit_prologue(emitter, frame_size)
@@ -10362,8 +10413,12 @@ fn gen_func_def(
     }
     i = i + 1
   }
-
-  reserve_agg_temp_slots_stmt(alloc, func.body)
+  alloc.agg_temp_size = plan.agg_temp_size
+  alloc.agg_temp_align = plan.agg_temp_align
+  alloc.agg_temp_offset = plan.agg_temp_offset
+  if plan.used_bytes_after_hidden > alloc.used_bytes {
+    alloc.used_bytes = plan.used_bytes_after_hidden
+  }
 
   let loops : Array[LoopChains] = []
   let switches : Array[SwitchChains] = []
