@@ -383,20 +383,6 @@ fn slice_tokens(tokens : Array[Token], start : Int) -> Array[Token] {
 }
 
 ///|
-fn prefix_tokens(tokens : Array[Token], end : Int) -> Array[Token] {
-  if end <= 0 {
-    return []
-  }
-  let out : Array[Token] = Array::new(capacity=end)
-  let mut i = 0
-  while i < end {
-    out.push(tokens[i])
-    i = i + 1
-  }
-  out
-}
-
-///|
 fn slice_string(text : String, start : Int, end : Int) -> String {
   text.view(start_offset=start, end_offset=end).to_string()
 }
@@ -1196,7 +1182,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
           let out = match out_opt {
             Some(arr) => arr
             None => {
-              let arr = prefix_tokens(tokens, i)
+              let arr = tokens[0:i].to_array()
               out_opt = Some(arr)
               arr
             }
@@ -1266,7 +1252,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                         let out = match out_opt {
                           Some(arr) => arr
                           None => {
-                            let arr = prefix_tokens(tokens, i)
+                            let arr = tokens[0:i].to_array()
                             out_opt = Some(arr)
                             arr
                           }
@@ -1293,7 +1279,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                       let out = match out_opt {
                         Some(arr) => arr
                         None => {
-                          let arr = prefix_tokens(tokens, i)
+                          let arr = tokens[0:i].to_array()
                           out_opt = Some(arr)
                           arr
                         }
@@ -1323,7 +1309,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
             let out = match out_opt {
               Some(arr) => arr
               None => {
-                let arr = prefix_tokens(tokens, i)
+                let arr = tokens[0:i].to_array()
                 out_opt = Some(arr)
                 arr
               }
@@ -1444,7 +1430,7 @@ fn expand_if_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
   if !has_defined {
     return expand_tokens(pp, tokens)
   }
-  let out : Array[Token] = Array::new(capacity=tokens.length())
+  let out : Array[Token] = []
   let mut segment : Array[Token] = []
   let mut i = 0
   while i < tokens.length() {
