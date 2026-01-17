@@ -3,5 +3,6 @@
   "deps": {
     "moonbitlang/x": "0.4.38"
   },
-  "source": "src"
+  "source": "src",
+  "preferred-target": "native"
 }
