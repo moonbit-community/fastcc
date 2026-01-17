@@ -1723,8 +1723,8 @@ fn eval_const_expr_value(
     Expr::BuiltinTypesCompatibleP(a~, b~, loc=type_loc) => {
       register_type_defs(ctx, a, type_loc)
       register_type_defs(ctx, b, type_loc)
-      let lhs = strip_qual_attrs(resolve_type(ctx, a, type_loc))
-      let rhs = strip_qual_attrs(resolve_type(ctx, b, type_loc))
+      let lhs = resolve_type(ctx, a, type_loc)
+      let rhs = resolve_type(ctx, b, type_loc)
       (if types_compatible_for_decl(lhs, rhs) { 1 } else { 0 }, true)
     }
     Expr::BuiltinOffsetof(ty~, path~, loc=type_loc) => {
@@ -2072,7 +2072,7 @@ fn struct_field_offset_and_type(
         size = align_to(size, adjusted_align)
         if field.name == name { return Some((size, field.ty, false)) }
         if field.name == "" {
-          match strip_qual_attrs(field.ty) {
+          match strip_top_qualifiers(field.ty) {
             CType::Struct(..) | CType::Union(..) =>
               match eval_builtin_offsetof_and_type(ctx, field.ty, [name], loc, true) {
                 Some((inner_off, inner_ty, _)) => return Some((size + inner_off, inner_ty, false))
@@ -2107,7 +2107,7 @@ fn union_field_offset_and_type(
       return Some((0, field.ty, false))
     }
     if field.name == "" {
-      match strip_qual_attrs(field.ty) {
+      match strip_top_qualifiers(field.ty) {
         CType::Struct(..) | CType::Union(..) =>
           match eval_builtin_offsetof_and_type(ctx, field.ty, [name], loc, true) {
             Some((inner_off, inner_ty, _)) =>
@@ -2615,7 +2615,7 @@ fn check_initializer(
       } else {
         match expr {
           Expr::StringLit(length~, ..) =>
-            match strip_qual_attrs(ty) {
+            match strip_top_qualifiers(ty) {
               CType::Array(elem~, size~, ..) => {
                 let elem_sz = match type_size_align(ctx, elem, loc) {
                   Some((sz, _)) => sz
@@ -2694,7 +2694,7 @@ fn check_initializer_list(
   items : Array[InitItem],
   loc : SrcLoc,
 ) -> Int? {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Array(elem~, size~, ..) => {
       let mut next_index = 0
       let mut max_index = -1
@@ -2826,7 +2826,7 @@ fn check_struct_initializer(
         Some((field, next_index)) => {
           let mut consumed = 1
           let mut used_elision = false
-          match (strip_qual_attrs(field.ty), item.value) {
+          match (strip_top_qualifiers(field.ty), item.value) {
             (CType::Array(size=size, ..), Initializer::Expr(expr~, ..)) =>
               match expr {
                 Expr::StringLit(..) => ()
@@ -2906,7 +2906,7 @@ fn collect_elided_array_items(
 
 ///|
 fn has_single_init_field(ctx : SemContext, ty : CType) -> Bool {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Struct(name=tag, fields=field_list, attrs=_) => {
       let fields = resolve_struct_fields(
         ctx,
@@ -2974,11 +2974,11 @@ fn resolve_designator_type(
   designators : Array[InitDesignator],
   loc : SrcLoc,
 ) -> CType? {
-  let mut current = strip_qual_attrs(ty)
+  let mut current = strip_top_qualifiers(ty)
   for des in designators {
     match des {
       InitDesignator::Index(expr~, loc=des_loc) =>
-        match strip_qual_attrs(current) {
+        match strip_top_qualifiers(current) {
           CType::Array(elem~, size~, ..) => {
             match size {
               None => ()
@@ -2999,7 +2999,7 @@ fn resolve_designator_type(
           }
         }
       InitDesignator::Field(name~, ..) =>
-        match strip_qual_attrs(current) {
+        match strip_top_qualifiers(current) {
           CType::Struct(name=tag, fields=field_list, attrs=_) => {
             let fields = resolve_struct_fields(
               ctx,
@@ -3571,7 +3571,7 @@ fn find_field(ctx : SemContext, fields : Array[Field], name : String) -> Field? 
       return Some(field)
     }
     if field.name == "" {
-      match strip_qual_attrs(field.ty) {
+      match strip_top_qualifiers(field.ty) {
         CType::Struct(name=tag, fields=field_list, attrs=_) => {
           let nested = resolve_struct_fields(
             ctx,
@@ -3622,7 +3622,7 @@ fn find_field_index(
       return Some(i)
     }
     if fields[i].name == "" {
-      match strip_qual_attrs(fields[i].ty) {
+      match strip_top_qualifiers(fields[i].ty) {
         CType::Struct(name=tag, fields=field_list, attrs=_) => {
           let nested = resolve_struct_fields(
             ctx,
@@ -4129,7 +4129,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
           }
         UnaryOp::Deref => {
           let inner = type_of_expr(ctx, expr)
-          match strip_qual_attrs(inner) {
+          match strip_top_qualifiers(inner) {
             CType::Pointer(pointee) => pointee
             _ => {
               add_sem_error(ctx, loc, "cannot dereference non-pointer")
@@ -4271,7 +4271,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
         BinaryOp::Add => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
-          match strip_qual_attrs(lhs_ty) {
+          match strip_top_qualifiers(lhs_ty) {
             CType::Pointer(pointee) =>
               if is_int_like(rhs_ty) {
                 return CType::Pointer(pointee)
@@ -4281,7 +4281,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
               }
             _ => ()
           }
-          match strip_qual_attrs(rhs_ty) {
+          match strip_top_qualifiers(rhs_ty) {
             CType::Pointer(pointee) =>
               if is_int_like(lhs_ty) {
                 return CType::Pointer(pointee)
@@ -4576,11 +4576,12 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
           }
         _ => type_of_expr(ctx, callee)
       }
-      let fn_ty = match strip_qual_attrs(callee_ty) {
-        CType::Function(..) => Some(strip_qual_attrs(callee_ty))
+      let callee_unqual = strip_top_qualifiers(callee_ty)
+      let fn_ty = match callee_unqual {
+        CType::Function(..) => Some(callee_unqual)
         CType::Pointer(inner) =>
-          match strip_qual_attrs(inner) {
-            CType::Function(..) => Some(strip_qual_attrs(inner))
+          match strip_top_qualifiers(inner) {
+            CType::Function(..) => Some(strip_top_qualifiers(inner))
             _ => None
           }
         _ => None
@@ -4849,7 +4850,7 @@ fn atomic_builtin_return_type(
     match spec {
       'a' | 'A' => {
         let ptr_ty = type_of_expr(ctx, args[i])
-        match strip_qual_attrs(ptr_ty) {
+        match strip_top_qualifiers(ptr_ty) {
           CType::Pointer(pointee) => {
             atom_type = Some(pointee)
             match type_size_align(ctx, pointee, loc) {
@@ -4866,7 +4867,7 @@ fn atomic_builtin_return_type(
               }
             }
             if !allow_pointer_target {
-              match strip_qual_attrs(pointee) {
+              match strip_top_qualifiers(pointee) {
                 CType::Pointer(_) =>
                   add_sem_error(
                     ctx,
@@ -4889,7 +4890,7 @@ fn atomic_builtin_return_type(
       }
       'p' | 'l' | 's' => {
         let ptr_ty = type_of_expr(ctx, args[i])
-        match strip_qual_attrs(ptr_ty) {
+        match strip_top_qualifiers(ptr_ty) {
           CType::Pointer(pointee) => {
             if atom_size > 0 {
               match type_size_align(ctx, pointee, loc) {
@@ -4976,7 +4977,7 @@ fn type_of_compound_assign(
     None => return default_int_type()
     Some(ty) => ty
   }
-  match strip_qual_attrs(lhs_ty) {
+  match strip_top_qualifiers(lhs_ty) {
     CType::Array(..) | CType::Function(..) => {
       add_sem_error(ctx, loc, "assignment to non-modifiable lvalue")
       return default_int_type()
@@ -4986,7 +4987,7 @@ fn type_of_compound_assign(
   let rhs_ty = type_of_expr(ctx, right)
   let result_ty = match op {
     BinaryOp::AddAssign =>
-      match strip_qual_attrs(lhs_ty) {
+      match strip_top_qualifiers(lhs_ty) {
         CType::Pointer(pointee) =>
           if is_int_like(rhs_ty) {
             CType::Pointer(pointee)
@@ -5003,7 +5004,7 @@ fn type_of_compound_assign(
           }
       }
     BinaryOp::SubAssign =>
-      match strip_qual_attrs(lhs_ty) {
+      match strip_top_qualifiers(lhs_ty) {
         CType::Pointer(pointee) =>
           if is_int_like(rhs_ty) {
             CType::Pointer(pointee)
