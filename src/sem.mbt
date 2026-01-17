@@ -16,26 +16,26 @@ struct RecordDef {
 ///|
 struct SemContext {
   diags : DiagBag
-  globals : Map[String, CType]
-  functions : Map[String, FuncSig]
-  function_defs : Map[String, Bool]
-  locals : Array[Map[String, CType]]
-  local_values : Map[String, CType]
+  globals : FastMap[String, CType]
+  functions : FastMap[String, FuncSig]
+  function_defs : FastMap[String, Bool]
+  locals : Array[FastMap[String, CType]]
+  local_values : FastMap[String, CType]
   local_overrides : Array[Array[(String, CType?)]]
-  type_aliases : Map[String, CType]
-  struct_defs : Map[String, RecordDef]
-  union_defs : Map[String, RecordDef]
-  struct_member_cache : Map[String, Map[String, CType]]
-  union_member_cache : Map[String, Map[String, CType]]
-  struct_size_cache : Map[String, (Int, Int)]
-  union_size_cache : Map[String, (Int, Int)]
-  enum_defs : Map[String, Array[EnumItem]]
-  enum_consts : Map[String, Int]
-  enum_types : Map[String, CType]
-  compound_literal_types : Map[String, CType]
-  func_agg_temps : Map[String, (Int, Int)]
+  type_aliases : FastMap[String, CType]
+  struct_defs : FastMap[String, RecordDef]
+  union_defs : FastMap[String, RecordDef]
+  struct_member_cache : FastMap[String, FastMap[String, CType]]
+  union_member_cache : FastMap[String, FastMap[String, CType]]
+  struct_size_cache : FastMap[String, (Int, Int)]
+  union_size_cache : FastMap[String, (Int, Int)]
+  enum_defs : FastMap[String, Array[EnumItem]]
+  enum_consts : FastMap[String, Int]
+  enum_types : FastMap[String, CType]
+  compound_literal_types : FastMap[String, CType]
+  func_agg_temps : FastMap[String, (Int, Int)]
   switch_stack : Array[SwitchInfo]
-  mut labels_defined : Map[String, Bool]
+  mut labels_defined : FastMap[String, Bool]
   mut labels_used : Array[(String, SrcLoc)]
   mut loop_depth : Int
   mut switch_depth : Int
@@ -52,37 +52,46 @@ struct SwitchInfo {
 }
 
 ///|
+fn default_type_aliases() -> FastMap[String, CType] {
+  let aliases : FastMap[String, CType] = fast_map_new()
+  aliases.set("__builtin_va_list", CType::Pointer(CType::Void))
+  aliases.set(
+    "jmp_buf",
+    CType::Array(
+      elem=default_int_type(),
+      size=Some(1),
+      size_expr=None,
+    ),
+  )
+  aliases.set("FILE", CType::Pointer(CType::Void))
+  aliases
+}
+
+///|
 fn new_sem_context(diags : DiagBag) -> SemContext {
+  let type_aliases = default_type_aliases()
   {
     diags,
-    globals: {},
-    functions: {},
-    function_defs: {},
+    globals: fast_map_new(),
+    functions: fast_map_new(),
+    function_defs: fast_map_new(),
     locals: [],
-    local_values: {},
+    local_values: fast_map_new(),
     local_overrides: [],
-    type_aliases: {
-      "__builtin_va_list": CType::Pointer(CType::Void),
-      "jmp_buf": CType::Array(
-        elem=default_int_type(),
-        size=Some(1),
-        size_expr=None,
-      ),
-      "FILE": CType::Pointer(CType::Void),
-    },
-    struct_defs: {},
-    union_defs: {},
-    struct_member_cache: {},
-    union_member_cache: {},
-    struct_size_cache: {},
-    union_size_cache: {},
-    enum_defs: {},
-    enum_consts: {},
-    enum_types: {},
-    compound_literal_types: {},
-    func_agg_temps: {},
+    type_aliases,
+    struct_defs: fast_map_new(),
+    union_defs: fast_map_new(),
+    struct_member_cache: fast_map_new(),
+    union_member_cache: fast_map_new(),
+    struct_size_cache: fast_map_new(),
+    union_size_cache: fast_map_new(),
+    enum_defs: fast_map_new(),
+    enum_consts: fast_map_new(),
+    enum_types: fast_map_new(),
+    compound_literal_types: fast_map_new(),
+    func_agg_temps: fast_map_new(),
     switch_stack: [],
-    labels_defined: {},
+    labels_defined: fast_map_new(),
     labels_used: [],
     loop_depth: 0,
     switch_depth: 0,
@@ -2280,7 +2289,7 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
   ctx.current_func_name = Some(func_def.name)
   ctx.current_agg_temp_size = 0
   ctx.current_agg_temp_align = 1
-  ctx.labels_defined = {}
+  ctx.labels_defined = fast_map_new()
   ctx.labels_used = []
   ctx.loop_depth = 0
   ctx.switch_depth = 0
@@ -3627,7 +3636,7 @@ fn collect_member_cache_from_fields(
   fields : Array[Field],
   qual : TypeQual,
   loc : SrcLoc,
-  cache : Map[String, CType],
+  cache : FastMap[String, CType],
 ) -> Unit {
   for field in fields {
     let (field_qual, _) = split_top_qual(field.ty)
@@ -3677,8 +3686,8 @@ fn build_member_cache(
   ctx : SemContext,
   fields : Array[Field],
   loc : SrcLoc,
-) -> Map[String, CType] {
-  let cache : Map[String, CType] = {}
+) -> FastMap[String, CType] {
+  let cache : FastMap[String, CType] = fast_map_new()
   collect_member_cache_from_fields(ctx, fields, empty_qual(), loc, cache)
   cache
 }
@@ -5184,7 +5193,7 @@ fn lookup_value(ctx : SemContext, name : String) -> CType? {
 
 ///|
 fn push_scope(ctx : SemContext) -> Unit {
-  ctx.locals.push({})
+  ctx.locals.push(fast_map_new())
   ctx.local_overrides.push([])
 }
 

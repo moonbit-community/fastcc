@@ -35,7 +35,7 @@ struct Preprocessor {
   include_paths : Array[String]
   diags : DiagBag
   map : SourceMap
-  macros : Map[String, Macro]
+  macros : FastMap[String, Macro]
   pending : Array[Token]
   mut held : Token?
   cond_stack : Array[CondState]
@@ -211,7 +211,7 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
     include_paths: [],
     diags,
     map,
-    macros: {},
+    macros: fast_map_new(),
     pending: [],
     held: None,
     cond_stack: [],

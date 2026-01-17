@@ -4,20 +4,20 @@ struct Parser {
   mut current : Token
   mut lookahead : Token
   diags : DiagBag
-  type_scopes : Array[Map[String, CType]]
-  typedef_counts : Map[String, Int]
+  type_scopes : Array[FastMap[String, CType]]
+  typedef_counts : FastMap[String, Int]
   mut anon_tag_id : Int
 }
 
 ///|
 fn new_parser(pp : Preprocessor) -> Parser {
-  let builtins : Map[String, CType] = {}
+  let builtins : FastMap[String, CType] = fast_map_new()
   builtins.set("__builtin_va_list", CType::Pointer(CType::Void))
   builtins.set(
     "_Float16",
     CType::Int(kind=CIntKind::Short, unsigned=true),
   )
-  let typedef_counts : Map[String, Int] = {}
+  let typedef_counts : FastMap[String, Int] = fast_map_new()
   for name, _ in builtins {
     typedef_counts.set(name, 1)
   }
@@ -295,7 +295,7 @@ fn parse_old_style_param_decls(
   params : Array[Param],
 ) -> Array[Param] {
   let updated = params
-  let param_map : Map[String, Int] = {}
+  let param_map : FastMap[String, Int] = fast_map_new()
   for i = 0; i < params.length(); i = i + 1 {
     let name = params[i].name
     if name == "" {
@@ -307,7 +307,7 @@ fn parse_old_style_param_decls(
       param_map.set(name, i)
     }
   }
-  let seen : Map[String, Bool] = {}
+  let seen : FastMap[String, Bool] = fast_map_new()
   while is_type_start(p, peek_token(p)) {
     match parse_decl_specs(p) {
       None => break
@@ -3305,7 +3305,7 @@ fn expr_loc(expr : Expr) -> SrcLoc {
 
 ///|
 fn push_typedef_scope(p : Parser) -> Unit {
-  p.type_scopes.push({})
+  p.type_scopes.push(fast_map_new())
 }
 
 ///|
@@ -3370,7 +3370,7 @@ fn typedef_ref_type(ty : CType) -> CType {
 ///|
 fn define_typedef(p : Parser, name : String, ty : CType) -> Unit {
   if p.type_scopes.length() == 0 {
-    p.type_scopes.push({})
+    p.type_scopes.push(fast_map_new())
   }
   let idx = p.type_scopes.length() - 1
   let scope = p.type_scopes[idx]

@@ -258,7 +258,7 @@ fn build_strtab(symbols : Array[ObjSymbol]) -> (Bytes, Array[Int]) {
 fn build_symtab(
   symbols : Array[ObjSymbol],
   offsets : Array[Int],
-  section_index : Map[String, Int],
+  section_index : FastMap[String, Int],
 ) -> Bytes {
   let buf = @buffer.new(size_hint=symbols.length() * 16)
   let mut idx = 0
@@ -343,7 +343,7 @@ fn encode_macho_object(
   let (strtab, str_offsets) = build_strtab(symbols)
   let header_size = 32
   let segment_order : Array[String] = []
-  let segment_sections : Map[String, Array[Int]] = {}
+  let segment_sections : FastMap[String, Array[Int]] = fast_map_new()
   let layouts : Array[MachoSectionLayout] = []
   for sec in sections {
     let info = macho_section_info(sec.name)
@@ -446,7 +446,7 @@ fn encode_macho_object(
   let symoff = align_up(reloc_offset, 4)
   let section_index_map = collect_section_indices(layouts)
   let symtab = build_symtab(symbols, str_offsets, section_index_map)
-  let id_to_index : Map[Int, Int] = {}
+  let id_to_index : FastMap[Int, Int] = fast_map_new()
   let mut i = 0
   while i < symbols.length() {
     id_to_index.set(symbols[i].id, i)
@@ -576,8 +576,8 @@ fn encode_macho_object(
 ///|
 fn collect_section_indices(
   layouts : Array[MachoSectionLayout],
-) -> Map[String, Int] {
-  let map : Map[String, Int] = {}
+) -> FastMap[String, Int] {
+  let map : FastMap[String, Int] = fast_map_new()
   for layout in layouts {
     map.set(layout.section.name, layout.index)
   }
