@@ -1,6 +1,7 @@
 ///|
 struct Parser {
   tokens : Array[Token]
+  tokens_len : Int
   mut index : Int
   diags : DiagBag
   type_scopes : Array[Map[String, CType]]
@@ -32,7 +33,14 @@ fn new_parser(tokens : Array[Token], diags : DiagBag) -> Parser {
     "_Float16",
     CType::Int(kind=CIntKind::Short, unsigned=true),
   )
-  { tokens, index: 0, diags, type_scopes: [builtins], anon_tag_id: 0 }
+  {
+    tokens,
+    tokens_len: tokens.length(),
+    index: 0,
+    diags,
+    type_scopes: [builtins],
+    anon_tag_id: 0,
+  }
 }
 
 ///|
@@ -3379,19 +3387,19 @@ fn add_parse_error(p : Parser, loc : SrcLoc, message : String) -> Unit {
 
 ///|
 fn peek_token(p : Parser) -> Token {
-  if p.index < p.tokens.length() {
+  if p.index < p.tokens_len {
     return p.tokens[p.index]
   }
-  p.tokens[p.tokens.length() - 1]
+  p.tokens[p.tokens_len - 1]
 }
 
 ///|
 fn peek_token_at(p : Parser, offset : Int) -> Token {
   let idx = p.index + offset
-  if idx >= 0 && idx < p.tokens.length() {
+  if idx >= 0 && idx < p.tokens_len {
     return p.tokens[idx]
   }
-  p.tokens[p.tokens.length() - 1]
+  p.tokens[p.tokens_len - 1]
 }
 
 ///|
@@ -3402,7 +3410,7 @@ fn peek_kind(p : Parser, offset : Int) -> TokenKind {
 ///|
 fn advance_token(p : Parser) -> Token {
   let tok = peek_token(p)
-  if p.index < p.tokens.length() {
+  if p.index < p.tokens_len {
     p.index = p.index + 1
   }
   tok
