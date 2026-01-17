@@ -4,6 +4,12 @@ struct RegPool {
 }
 
 ///|
+let caller_saved_regs_list : Array[Int] = [9, 10, 11, 12, 13, 14, 15]
+
+///|
+let callee_saved_regs_list : Array[Int] = [19, 20, 21, 22, 23, 24, 25, 26, 27, 28]
+
+///|
 fn new_reg_pool() -> RegPool {
   // Use callee-saved registers for temporaries so nested calls don't clobber
   // intermediate values (AArch64 ABI: x19-x28 are preserved by callees).
@@ -4190,7 +4196,7 @@ fn gen_call_with_layout(
   let layout = arm64_pcs(alloc.sem, variadic_index, ret_ty, arg_tys, loc, bag)
   let arg_locs = layout.arg_locs
   let stack_args_size = align_up(layout.stack_size, 16)
-  let caller_saved_regs : Array[Int] = [9, 10, 11, 12, 13, 14, 15]
+  let caller_saved_regs = caller_saved_regs_list
 
   let arg_sizes : Array[Int] = Array::new(capacity=arg_tys.length())
   let arg_aligns : Array[Int] = Array::new(capacity=arg_tys.length())
@@ -9981,7 +9987,7 @@ fn compute_frame_size(sem : SemContext, func : FuncDef, bag : DiagBag) -> Int {
 
 ///|
 fn callee_saved_regs() -> Array[Int] {
-  [19, 20, 21, 22, 23, 24, 25, 26, 27, 28]
+  callee_saved_regs_list
 }
 
 ///|
