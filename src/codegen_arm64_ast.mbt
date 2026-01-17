@@ -3218,24 +3218,6 @@ fn sym_is_external(syms : SymTable, sym : Sym) -> Bool {
 }
 
 ///|
-fn collect_external_globals(unit : TranslationUnit, syms : SymTable) -> Unit {
-  for decl in unit.decls {
-    match decl {
-      Decl::Var(var_decl) => {
-        let sym = sym_for_name(syms, link_name(var_decl.name))
-        let is_ext = var_decl.storage == StorageClass::Extern
-        syms.externals.set(sym.id, is_ext)
-      }
-      Decl::FuncDecl(func_decl) => {
-        let sym = sym_for_name(syms, link_name(func_decl.name))
-        syms.externals.set(sym.id, true)
-      }
-      _ => ()
-    }
-  }
-}
-
-///|
 fn emit_load_local_int32(
   emitter : Arm64Emitter,
   dst : Int,
@@ -11263,6 +11245,9 @@ fn codegen_arm64_object_bytes_with_sem(
   let mut main_found = false
   let cstring_order : Array[String] = Array::new(capacity=decl_count)
   let cstring_seen : Map[String, Bool] = Map::new(capacity=decl_count)
+  let func_defs : Array[FuncDef] = Array::new(capacity=decl_count)
+  let var_decls : Array[VarDecl] = Array::new(capacity=decl_count)
+  let external_symbols : Array[(String, Bool)] = Array::new(capacity=decl_count)
   for decl in unit.decls {
     match decl {
       Decl::FuncDef(func) => {
@@ -11270,20 +11255,34 @@ fn codegen_arm64_object_bytes_with_sem(
         if func.name == "main" {
           main_found = true
         }
+        func_defs.push(func)
         collect_cstring_stmt(cstring_order, cstring_seen, func.name, func.body)
       }
       Decl::Var(var_decl) =>
-        match var_decl.init {
-          None => ()
-          Some(init) =>
-            collect_cstring_initializer(cstring_order, cstring_seen, "", init)
+        {
+          var_decls.push(var_decl)
+          let link = link_name(var_decl.name)
+          external_symbols.push((link, var_decl.storage == StorageClass::Extern))
+          match var_decl.init {
+            None => ()
+            Some(init) =>
+              collect_cstring_initializer(cstring_order, cstring_seen, "", init)
+          }
         }
+      Decl::FuncDecl(func_decl) => {
+        let link = link_name(func_decl.name)
+        external_symbols.push((link, true))
+      }
       _ => ()
     }
   }
   let sym_capacity = decl_count + cstring_order.length()
   let syms = new_symtab_with_capacity(sym_capacity)
-  collect_external_globals(unit, syms)
+  for pair in external_symbols {
+    let (name, is_ext) = pair
+    let sym = sym_for_name(syms, name)
+    syms.externals.set(sym.id, is_ext)
+  }
   let emitter = new_arm64_emitter_with_capacity(
     func_count * 256,
     func_count * 16,
@@ -11319,39 +11318,31 @@ fn codegen_arm64_object_bytes_with_sem(
 
   // Generate `main` first when present for stable layout, but allow objects without `main`.
   if main_found {
-    for decl in unit.decls {
-      match decl {
-        Decl::FuncDef(func) =>
-          if func.name == "main" {
-            gen_func_def(
-              emitter,
-              sem,
-              syms,
-              func_offsets,
-              string_syms,
-              func,
-              bag,
-            )
-          }
-        _ => ()
+    for func in func_defs {
+      if func.name == "main" {
+        gen_func_def(
+          emitter,
+          sem,
+          syms,
+          func_offsets,
+          string_syms,
+          func,
+          bag,
+        )
       }
     }
   }
-  for decl in unit.decls {
-    match decl {
-      Decl::FuncDef(func) =>
-        if !main_found || func.name != "main" {
-          gen_func_def(
-            emitter,
-            sem,
-            syms,
-            func_offsets,
-            string_syms,
-            func,
-            bag,
-          )
-        }
-      _ => ()
+  for func in func_defs {
+    if !main_found || func.name != "main" {
+      gen_func_def(
+        emitter,
+        sem,
+        syms,
+        func_offsets,
+        string_syms,
+        func,
+        bag,
+      )
     }
   }
   if has_errors(bag) {
@@ -11363,7 +11354,7 @@ fn codegen_arm64_object_bytes_with_sem(
   let mut data_align = 4
   let mut bss_size = 0
   let mut bss_align = 4
-  let def_capacity = unit.decls.length() +
+  let def_capacity = var_decls.length() +
     cstring_entries.length() +
     rodata_entries.length()
   let def_symbols : Map[String, ObjSymbol] = Map::new(capacity=def_capacity)
@@ -11395,102 +11386,97 @@ fn codegen_arm64_object_bytes_with_sem(
     syms.externals.set(id, false)
   }
 
-  for decl in unit.decls {
-    match decl {
-      Decl::Var(var_decl) => {
-        let link = link_name(var_decl.name)
-        sym_for_name(syms, link) |> ignore
-        if var_decl.storage == StorageClass::Extern {
+  for var_decl in var_decls {
+    let link = link_name(var_decl.name)
+    sym_for_name(syms, link) |> ignore
+    if var_decl.storage == StorageClass::Extern {
+      let id = syms.name_to_id.get(link).unwrap_or(0)
+      def_symbols.set(link, {
+        id,
+        name: link,
+        section: None,
+        value: 0,
+        is_external: true,
+      })
+      syms.externals.set(id, true)
+    } else {
+      let var_ty = match sem.globals.get(var_decl.name) {
+        Some(t) => t
+        None => var_decl.ty
+      }
+      let (size, align) = match type_size_align_or_error(sem, var_ty, var_decl.loc) {
+        None => continue
+        Some(v) => v
+      }
+      match var_decl.init {
+        None => {
+          let aligned = align_up(bss_size, align)
+          bss_size = aligned + size
+          if align > bss_align {
+            bss_align = align
+          }
           let id = syms.name_to_id.get(link).unwrap_or(0)
           def_symbols.set(link, {
-            id,
+            id: syms.name_to_id.get(link).unwrap_or(0),
             name: link,
-            section: None,
-            value: 0,
-            is_external: true,
+            section: Some(".bss"),
+            value: aligned,
+            is_external: var_decl.storage != StorageClass::Static,
           })
-          syms.externals.set(id, true)
-        } else {
-          let var_ty = match sem.globals.get(var_decl.name) {
-            Some(t) => t
-            None => var_decl.ty
-          }
-          let (size, align) = match type_size_align_or_error(sem, var_ty, var_decl.loc) {
-            None => continue
-            Some(v) => v
-          }
-          match var_decl.init {
-            None => {
-              let aligned = align_up(bss_size, align)
-              bss_size = aligned + size
-              if align > bss_align {
-                bss_align = align
+          syms.externals.set(id, false)
+        }
+        Some(init) => {
+          let data_off = align_up(data_words.length() << 2, align)
+          match build_global_initializer_bytes(
+            sem,
+            syms,
+            string_syms,
+            var_ty,
+            init,
+            bag,
+          ) {
+            None => ()
+            Some((bytes, rels)) => {
+              while (data_words.length() << 2) < data_off {
+                data_words.push(0)
+              }
+              let mut i = 0
+              while i < bytes.length() {
+                let mut word : UInt = 0
+                let mut j = 0
+                while j < 4 && i + j < bytes.length() {
+                  word = word.lor(
+                    (bytes[i + j].to_uint() & 0xff) << ((j & 3) << 3),
+                  )
+                  j = j + 1
+                }
+                data_words.push(word)
+                i = i + 4
+              }
+              for rel in rels {
+                data_relocs.push({
+                  offset: data_off + rel.offset,
+                  kind: rel.kind,
+                  sym: rel.sym,
+                  addend: rel.addend,
+                })
               }
               let id = syms.name_to_id.get(link).unwrap_or(0)
               def_symbols.set(link, {
-                id: syms.name_to_id.get(link).unwrap_or(0),
+                id,
                 name: link,
-                section: Some(".bss"),
-                value: aligned,
+                section: Some(".data"),
+                value: data_off,
                 is_external: var_decl.storage != StorageClass::Static,
               })
               syms.externals.set(id, false)
-            }
-            Some(init) => {
-              let data_off = align_up(data_words.length() << 2, align)
-              match build_global_initializer_bytes(
-                sem,
-                syms,
-                string_syms,
-                var_ty,
-                init,
-                bag,
-              ) {
-                None => ()
-                Some((bytes, rels)) => {
-                  while (data_words.length() << 2) < data_off {
-                    data_words.push(0)
-                  }
-                  let mut i = 0
-                  while i < bytes.length() {
-                    let mut word : UInt = 0
-                    let mut j = 0
-                    while j < 4 && i + j < bytes.length() {
-                      word = word.lor(
-                        (bytes[i + j].to_uint() & 0xff) << ((j & 3) << 3),
-                      )
-                      j = j + 1
-                    }
-                    data_words.push(word)
-                    i = i + 4
-                  }
-                  for rel in rels {
-                    data_relocs.push({
-                      offset: data_off + rel.offset,
-                      kind: rel.kind,
-                      sym: rel.sym,
-                      addend: rel.addend,
-                    })
-                  }
-                  let id = syms.name_to_id.get(link).unwrap_or(0)
-                  def_symbols.set(link, {
-                    id,
-                    name: link,
-                    section: Some(".data"),
-                    value: data_off,
-                    is_external: var_decl.storage != StorageClass::Static,
-                  })
-                  syms.externals.set(id, false)
-                  if align > data_align {
-                    data_align = align
-                  }
-                }
+              if align > data_align {
+                data_align = align
               }
             }
           }
         }
       }
-      _ => ()
     }
   }
 
