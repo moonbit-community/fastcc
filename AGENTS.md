@@ -27,7 +27,6 @@ bd sync               # Sync with git
    ```bash
    git pull --rebase
    bd sync
-   # IMPORTANT! commit your changes after bd sync
    git push
    git status  # MUST show "up to date with origin"
    ```
