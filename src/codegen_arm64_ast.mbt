@@ -1227,12 +1227,13 @@ fn reserve_agg_temp_decl(alloc : LocalAlloc, decl : VarDecl) -> Unit {
   if decl.storage == StorageClass::Extern {
     return
   }
-  match strip_qual_attrs(decl.ty) {
+  let stripped = strip_qual_attrs(decl.ty)
+  match stripped {
     CType::Function(..) => return
     _ => ()
   }
   let mut decl_ty = decl.ty
-  match strip_qual_attrs(decl.ty) {
+  match stripped {
     CType::Array(elem=elem_ty, size=None, size_expr=None) =>
       match decl.init {
         Some(Initializer::Expr(expr=Expr::StringLit(length~, ..), ..)) =>
@@ -9324,7 +9325,8 @@ fn gen_stmt(
 	    }
     Stmt::DeclStmt(decls~, ..) => {
       for d in decls {
-        match strip_qual_attrs(d.ty) {
+        let stripped = strip_qual_attrs(d.ty)
+        match stripped {
           CType::Function(..) => continue
           _ => ()
         }
@@ -9332,7 +9334,7 @@ fn gen_stmt(
           continue
         }
         let mut decl_ty = d.ty
-        match strip_qual_attrs(d.ty) {
+        match stripped {
           CType::Array(elem=elem_ty, size=None, size_expr=None) =>
             match d.init {
               Some(Initializer::Expr(expr=Expr::StringLit(length~, ..), ..)) =>
