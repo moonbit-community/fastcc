@@ -2,6 +2,7 @@
 struct Lexer {
   file_id : Int
   text : String
+  text_len : Int
   mut index : Int
   mut line : Int
   mut col : Int
@@ -14,6 +15,7 @@ fn new_lexer(file : SourceFile, diags : DiagBag) -> Lexer {
   {
     file_id: file.id,
     text: file.text,
+    text_len: file.text.length(),
     index: 0,
     line: 1,
     col: 1,
@@ -66,7 +68,7 @@ fn make_token(
 
 ///|
 fn peek_char(lex : Lexer) -> UInt16? {
-  if lex.index >= lex.text.length() {
+  if lex.index >= lex.text_len {
     return None
   }
   Some(lex.text[lex.index])
@@ -75,7 +77,7 @@ fn peek_char(lex : Lexer) -> UInt16? {
 ///|
 fn peek_char_offset(lex : Lexer, offset : Int) -> UInt16? {
   let idx = lex.index + offset
-  if idx >= lex.text.length() {
+  if idx >= lex.text_len {
     return None
   }
   Some(lex.text[idx])
@@ -83,43 +85,39 @@ fn peek_char_offset(lex : Lexer, offset : Int) -> UInt16? {
 
 ///|
 fn advance(lex : Lexer) -> UInt16? {
-  let c = peek_char(lex)
-  match c {
-    None => None
-    Some(code) => {
-      lex.index = lex.index + 1
-      if code == 10 {
-        lex.line = lex.line + 1
-        lex.col = 1
-        lex.line_start = true
-      } else {
-        lex.col = lex.col + 1
-        if !is_ws_no_newline(code) {
-          lex.line_start = false
-        }
-      }
-      Some(code)
+  if lex.index >= lex.text_len {
+    return None
+  }
+  let code = lex.text[lex.index]
+  lex.index = lex.index + 1
+  if code == 10 {
+    lex.line = lex.line + 1
+    lex.col = 1
+    lex.line_start = true
+  } else {
+    lex.col = lex.col + 1
+    if !is_ws_no_newline(code) {
+      lex.line_start = false
     }
   }
+  Some(code)
 }
 
 ///|
 fn advance_comment(lex : Lexer) -> UInt16? {
-  let c = peek_char(lex)
-  match c {
-    None => None
-    Some(code) => {
-      lex.index = lex.index + 1
-      if code == 10 {
-        lex.line = lex.line + 1
-        lex.col = 1
-        lex.line_start = true
-      } else {
-        lex.col = lex.col + 1
-      }
-      Some(code)
-    }
+  if lex.index >= lex.text_len {
+    return None
   }
+  let code = lex.text[lex.index]
+  lex.index = lex.index + 1
+  if code == 10 {
+    lex.line = lex.line + 1
+    lex.col = 1
+    lex.line_start = true
+  } else {
+    lex.col = lex.col + 1
+  }
+  Some(code)
 }
 
 ///|
