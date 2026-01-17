@@ -3667,6 +3667,22 @@ struct Arm64PcsLayout {
   ret_loc : Int
   arg_locs : Array[Int]
   stack_size : Int
+  arg_sizes : Array[Int]
+  arg_aligns : Array[Int]
+  arg_hfa_counts : Array[Int]
+  arg_hfa_sizes : Array[Int]
+  arg_is_agg : Array[Bool]
+}
+
+///|
+struct Arm64PcsAuxInfo {
+  locs : Array[Int]
+  stack_size : Int
+  sizes : Array[Int]
+  aligns : Array[Int]
+  hfa_counts : Array[Int]
+  hfa_sizes : Array[Int]
+  is_agg : Array[Bool]
 }
 
 ///|
@@ -3837,15 +3853,20 @@ fn arm64_pcs_aux(
   types : Array[CType],
   loc : SrcLoc,
   bag : DiagBag,
-) -> (Array[Int], Int) {
+) -> Arm64PcsAuxInfo {
   let mut nx = 0
   let mut nv = 0
   let mut ns = 32
   let locs : Array[Int] = Array::new(capacity=types.length())
+  let sizes : Array[Int] = Array::new(capacity=types.length())
+  let aligns : Array[Int] = Array::new(capacity=types.length())
+  let hfa_counts : Array[Int] = Array::new(capacity=types.length())
+  let hfa_sizes : Array[Int] = Array::new(capacity=types.length())
+  let is_agg_list : Array[Bool] = Array::new(capacity=types.length())
   let is_macho = true
   for i = 0; i < types.length(); i = i + 1 {
     let ty = types[i]
-    let (hfa_count, _hfa_size) = match arm64_hfa(sem, ty, loc, bag) {
+    let (hfa_count, hfa_size) = match arm64_hfa(sem, ty, loc, bag) {
       None => (0, 0)
       Some(v) => v
     }
@@ -3853,10 +3874,15 @@ fn arm64_pcs_aux(
       None => (0, 1)
       Some(v) => v
     }
-    let is_struct = match strip_qual_attrs(ty) {
+    let is_agg = match strip_qual_attrs(ty) {
       CType::Struct(..) | CType::Union(..) => true
       _ => false
     }
+    sizes.push(size0)
+    aligns.push(align0)
+    hfa_counts.push(hfa_count)
+    hfa_sizes.push(hfa_size)
+    is_agg_list.push(is_agg)
     let is_float = float_kind_of_type(ty) is Some(_)
     let is_long_double = match strip_qual_attrs(ty) {
       CType::Float(kind=CFloatKind::LongDouble) => true
@@ -3880,7 +3906,7 @@ fn arm64_pcs_aux(
         ns = ns + 8
       }
       continue
-    } else if is_struct {
+    } else if is_agg {
       size = align_up(size, 8)
     }
 
@@ -3916,7 +3942,7 @@ fn arm64_pcs_aux(
       continue
     }
 
-    if !is_struct && size <= 8 && nx < 8 {
+    if !is_agg && size <= 8 && nx < 8 {
       locs.push(nx << 1)
       nx = nx + 1
       continue
@@ -3926,13 +3952,13 @@ fn arm64_pcs_aux(
       nx = (nx + 1) & (0xfffffffe : Int)
     }
 
-    if !is_struct && size == 16 && nx < 7 {
+    if !is_agg && size == 16 && nx < 7 {
       locs.push(nx << 1)
       nx = nx + 2
       continue
     }
 
-    if is_struct && size <= (8 - nx) * 8 {
+    if is_agg && size <= (8 - nx) * 8 {
       locs.push(nx << 1)
       nx = nx + ((size + 7) >> 3)
       continue
@@ -3943,7 +3969,7 @@ fn arm64_pcs_aux(
     ns = align_up(ns, 8)
     ns = align_up(ns, align)
 
-    if is_struct {
+    if is_agg {
       locs.push(ns)
       ns = ns + size
       continue
@@ -3955,7 +3981,15 @@ fn arm64_pcs_aux(
     locs.push(ns)
     ns = ns + size
   }
-  (locs, ns - 32)
+  {
+    locs,
+    stack_size: ns - 32,
+    sizes,
+    aligns,
+    hfa_counts,
+    hfa_sizes,
+    is_agg: is_agg_list,
+  }
 }
 
 ///|
@@ -3970,15 +4004,24 @@ fn arm64_pcs(
   let ret_loc = match strip_qual_attrs(ret_ty) {
     CType::Void => -1
     _ => {
-      let (locs, _) = arm64_pcs_aux(sem, 0, [ret_ty], loc, bag)
-      match locs.get(0) {
+      let ret_info = arm64_pcs_aux(sem, 0, [ret_ty], loc, bag)
+      match ret_info.locs.get(0) {
         None => -1
         Some(v) => v
       }
     }
   }
-  let (arg_locs, stack_size) = arm64_pcs_aux(sem, variadic_index, arg_tys, loc, bag)
-  { ret_loc, arg_locs, stack_size }
+  let arg_info = arm64_pcs_aux(sem, variadic_index, arg_tys, loc, bag)
+  {
+    ret_loc,
+    arg_locs: arg_info.locs,
+    stack_size: arg_info.stack_size,
+    arg_sizes: arg_info.sizes,
+    arg_aligns: arg_info.aligns,
+    arg_hfa_counts: arg_info.hfa_counts,
+    arg_hfa_sizes: arg_info.hfa_sizes,
+    arg_is_agg: arg_info.is_agg,
+  }
 }
 
 ///|
@@ -4195,55 +4238,19 @@ fn gen_call_with_layout(
 ) -> Unit {
   let layout = arm64_pcs(alloc.sem, variadic_index, ret_ty, arg_tys, loc, bag)
   let arg_locs = layout.arg_locs
+  let arg_sizes = layout.arg_sizes
+  let arg_aligns = layout.arg_aligns
+  let arg_hfa_counts = layout.arg_hfa_counts
+  let arg_hfa_sizes = layout.arg_hfa_sizes
+  let arg_is_agg = layout.arg_is_agg
   let stack_args_size = align_up(layout.stack_size, 16)
   let caller_saved_regs = caller_saved_regs_list
-
-  let arg_sizes : Array[Int] = Array::new(capacity=arg_tys.length())
-  let arg_aligns : Array[Int] = Array::new(capacity=arg_tys.length())
-  let arg_hfa_counts : Array[Int] = Array::new(capacity=arg_tys.length())
-  let arg_hfa_sizes : Array[Int] = Array::new(capacity=arg_tys.length())
-  let arg_is_agg : Array[Bool] = Array::new(capacity=arg_tys.length())
-
-  let mut i = 0
-  while i < arg_tys.length() {
-    let ty = arg_tys[i]
-    let is_agg = match strip_qual_attrs(ty) {
-      CType::Struct(..) | CType::Union(..) => true
-      _ => false
-    }
-    let (size, align) =
-      if is_agg {
-        match type_size_align_or_error(alloc.sem, ty, loc) {
-          None => (0, 1)
-          Some(v) => v
-        }
-      } else {
-        match arm64_pcs_size_align(alloc.sem, ty, loc, bag) {
-          None => (0, 1)
-          Some(v) => v
-        }
-      }
-    arg_sizes.push(size)
-    arg_aligns.push(align)
-    arg_is_agg.push(is_agg)
-    match arm64_hfa(alloc.sem, ty, loc, bag) {
-      None => {
-        arg_hfa_counts.push(0)
-        arg_hfa_sizes.push(0)
-      }
-      Some((count, fsize)) => {
-        arg_hfa_counts.push(count)
-        arg_hfa_sizes.push(fsize)
-      }
-    }
-    i = i + 1
-  }
 
   let spill_offs : Array[Int?] = Array::new(capacity=args.length())
   let copy_offs : Array[Int?] = Array::new(capacity=args.length())
   let mut scratch_off = stack_args_size
 
-  i = 0
+  let mut i = 0
   while i < args.length() {
     let loc_i = arg_locs.get(i).unwrap_or(0)
     let byref = (loc_i & 1) != 0
