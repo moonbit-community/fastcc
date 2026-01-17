@@ -132,30 +132,50 @@ fn attrs_layout_empty(attrs : Attributes) -> Bool {
   attrs.aligned is None && !attrs.packed
 }
 
+///|
+let default_int_type_value : CType =
+  CType::Int(kind=CIntKind::Int, unsigned=false)
+
+///|
+let size_t_type_value : CType =
+  CType::Int(kind=CIntKind::Long, unsigned=true)
+
+///|
+let char_type_value : CType =
+  CType::Int(kind=CIntKind::Char, unsigned=false)
+
+///|
+let void_pointer_type_value : CType =
+  CType::Pointer(CType::Void)
+
+///|
+let char_pointer_type_value : CType =
+  CType::Pointer(char_type_value)
+
 
 ///|
 fn default_int_type() -> CType {
-  CType::Int(kind=CIntKind::Int, unsigned=false)
+  default_int_type_value
 }
 
 ///|
 fn size_t_type() -> CType {
-  CType::Int(kind=CIntKind::Long, unsigned=true)
+  size_t_type_value
 }
 
 ///|
 fn char_type() -> CType {
-  CType::Int(kind=CIntKind::Char, unsigned=false)
+  char_type_value
 }
 
 ///|
 fn void_pointer_type() -> CType {
-  CType::Pointer(CType::Void)
+  void_pointer_type_value
 }
 
 ///|
 fn char_pointer_type() -> CType {
-  CType::Pointer(char_type())
+  char_pointer_type_value
 }
 
 ///|
