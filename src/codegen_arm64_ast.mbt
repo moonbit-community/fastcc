@@ -3181,8 +3181,13 @@ struct SymTable {
 }
 
 ///|
-fn new_symtab() -> SymTable {
-  { names: [], name_to_id: {}, externals: {} }
+fn new_symtab_with_capacity(capacity : Int) -> SymTable {
+  let cap = if capacity > 0 { capacity } else { 0 }
+  {
+    names: Array::new(capacity=cap),
+    name_to_id: Map::new(capacity=cap),
+    externals: Map::new(capacity=cap),
+  }
 }
 
 ///|
@@ -11254,8 +11259,6 @@ fn codegen_arm64_object_bytes_with_sem(
     return None
   }
   let emitter = new_arm64_emitter()
-  let syms = new_symtab()
-  collect_external_globals(unit, syms)
   let decl_count = unit.decls.length()
   let mut func_count = 0
   let mut main_found = false
@@ -11279,6 +11282,9 @@ fn codegen_arm64_object_bytes_with_sem(
       _ => ()
     }
   }
+  let sym_capacity = decl_count + cstring_order.length()
+  let syms = new_symtab_with_capacity(sym_capacity)
+  collect_external_globals(unit, syms)
   let func_offsets : Map[String, Int] = Map::new(capacity=func_count)
   let string_syms : Map[String, Sym] = Map::new(capacity=cstring_order.length())
   let cstring_entries : Array[StringEntry] = Array::new(capacity=cstring_order.length())
