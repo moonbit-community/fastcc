@@ -1078,6 +1078,49 @@ fn expr_is_lvalue_simple(expr : Expr) -> Bool {
 }
 
 ///|
+fn expr_may_be_aggregate(expr : Expr) -> Bool {
+  match expr {
+    Expr::IntLit(..)
+    | Expr::FloatLit(..)
+    | Expr::CharLit(..)
+    | Expr::StringLit(..)
+    | Expr::BuiltinTypesCompatibleP(..)
+    | Expr::BuiltinOffsetof(..)
+    | Expr::SizeofExpr(..)
+    | Expr::SizeofType(..)
+    | Expr::AlignofExpr(..)
+    | Expr::AlignofType(..) => false
+    Expr::Unary(op~, ..) =>
+      match op {
+        UnaryOp::Not
+        | UnaryOp::Plus
+        | UnaryOp::Minus
+        | UnaryOp::BitNot
+        | UnaryOp::Addr
+        | UnaryOp::PreInc
+        | UnaryOp::PreDec
+        | UnaryOp::PostInc
+        | UnaryOp::PostDec => false
+        UnaryOp::Deref => true
+      }
+    Expr::Binary(op~, ..) =>
+      match op {
+        BinaryOp::Assign | BinaryOp::Comma => true
+        _ => false
+      }
+    Expr::Conditional(..)
+    | Expr::Call(..)
+    | Expr::Cast(..)
+    | Expr::CompoundLiteral(..)
+    | Expr::StmtExpr(..)
+    | Expr::BuiltinVaArg(..)
+    | Expr::Member(..)
+    | Expr::Index(..)
+    | Expr::Ident(..) => true
+  }
+}
+
+///|
 fn reserve_agg_temp_for_type(
   alloc : LocalAlloc,
   ty : CType,
@@ -1153,7 +1196,7 @@ fn reserve_agg_temp_expr(alloc : LocalAlloc, expr : Expr) -> Unit {
     Expr::BuiltinVaArg(list~, ..) => reserve_agg_temp_expr(alloc, list)
     _ => ()
   }
-  if !expr_is_lvalue_simple(expr) {
+  if !expr_is_lvalue_simple(expr) && expr_may_be_aggregate(expr) {
     reserve_agg_temp_for_type(alloc, type_of_expr(alloc.sem, expr), expr_loc(expr))
   }
 }
