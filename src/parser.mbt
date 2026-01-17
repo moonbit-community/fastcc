@@ -6,6 +6,8 @@ struct Parser {
   diags : DiagBag
   type_scopes : Array[FastMap[String, CType]]
   typedef_counts : FastMap[String, Int]
+  typedef_values : FastMap[String, CType]
+  typedef_overrides : Array[Array[(String, CType?)]]
   mut anon_tag_id : Int
 }
 
@@ -18,8 +20,10 @@ fn new_parser(pp : Preprocessor) -> Parser {
     CType::Int(kind=CIntKind::Short, unsigned=true),
   )
   let typedef_counts : FastMap[String, Int] = fast_map_new()
-  for name, _ in builtins {
+  let typedef_values : FastMap[String, CType] = fast_map_new()
+  for name, ty in builtins {
     typedef_counts.set(name, 1)
+    typedef_values.set(name, ty)
   }
   let current = next_pp_token(pp)
   let lookahead = next_pp_token(pp)
@@ -30,6 +34,8 @@ fn new_parser(pp : Preprocessor) -> Parser {
     diags: pp.diags,
     type_scopes: [builtins],
     typedef_counts,
+    typedef_values,
+    typedef_overrides: [[]],
     anon_tag_id: 0,
   }
 }
@@ -3306,10 +3312,25 @@ fn expr_loc(expr : Expr) -> SrcLoc {
 ///|
 fn push_typedef_scope(p : Parser) -> Unit {
   p.type_scopes.push(fast_map_new())
+  p.typedef_overrides.push([])
 }
 
 ///|
 fn pop_typedef_scope(p : Parser) -> Unit {
+  match p.typedef_overrides.pop() {
+    None => ()
+    Some(overrides) => {
+      let mut i = overrides.length()
+      while i > 0 {
+        i = i - 1
+        let (name, prev) = overrides[i]
+        match prev {
+          Some(ty) => p.typedef_values.set(name, ty)
+          None => p.typedef_values.remove(name)
+        }
+      }
+    }
+  }
   match p.type_scopes.pop() {
     None => ()
     Some(scope) =>
@@ -3371,29 +3392,28 @@ fn typedef_ref_type(ty : CType) -> CType {
 fn define_typedef(p : Parser, name : String, ty : CType) -> Unit {
   if p.type_scopes.length() == 0 {
     p.type_scopes.push(fast_map_new())
+    p.typedef_overrides.push([])
   }
   let idx = p.type_scopes.length() - 1
   let scope = p.type_scopes[idx]
   let already = scope.get(name) is Some(_)
-  scope.set(name, typedef_ref_type(ty))
+  let resolved = typedef_ref_type(ty)
+  scope.set(name, resolved)
   p.type_scopes[idx] = scope
   if !already {
+    let overrides = p.typedef_overrides[idx]
+    overrides.push((name, p.typedef_values.get(name)))
+    p.typedef_overrides[idx] = overrides
+    p.typedef_values.set(name, resolved)
     inc_typedef_count(p, name)
+  } else {
+    p.typedef_values.set(name, resolved)
   }
 }
 
 ///|
 fn lookup_typedef(p : Parser, name : String) -> CType? {
-  let mut i = p.type_scopes.length()
-  while i > 0 {
-    i = i - 1
-    let scope = p.type_scopes[i]
-    match scope.get(name) {
-      None => ()
-      Some(ty) => return Some(ty)
-    }
-  }
-  None
+  p.typedef_values.get(name)
 }
 
 ///|
