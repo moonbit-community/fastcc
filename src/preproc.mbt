@@ -384,11 +384,7 @@ fn slice_tokens(tokens : Array[Token], start : Int) -> Array[Token] {
 
 ///|
 fn slice_string(text : String, start : Int, end : Int) -> String {
-  try text[start:end] catch {
-    _ => ""
-  } noraise {
-    view => view.to_string()
-  }
+  text.view(start_offset=start, end_offset=end).to_string()
 }
 
 ///|
