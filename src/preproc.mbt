@@ -1262,9 +1262,10 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                     Some(norm_raw) => {
                       if tok.lexeme == "__has_include" ||
                         tok.lexeme == "__has_include_next" {
+                        let expanded_args = expand_macro_args(pp, norm_raw)
                         let include_next = tok.lexeme == "__has_include_next"
-                        let arg_tokens = if norm_raw.length() > 0 {
-                          expand_tokens(pp, norm_raw[0])
+                        let arg_tokens = if expanded_args.length() > 0 {
+                          expanded_args[0]
                         } else {
                           []
                         }
