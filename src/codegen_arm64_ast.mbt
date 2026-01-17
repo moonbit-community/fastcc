@@ -766,14 +766,29 @@ fn infer_array_size_from_init_items(items : Array[InitItem]) -> Int {
 }
 
 ///|
+fn stmt_list_needs_scope(stmts : Array[Stmt]) -> Bool {
+  for s in stmts {
+    if s is Stmt::DeclStmt(..) {
+      return true
+    }
+  }
+  false
+}
+
+///|
 fn layout_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
   match stmt {
     Stmt::Compound(stmts~, ..) => {
-      cg_push_scope(alloc)
+      let needs_scope = stmt_list_needs_scope(stmts)
+      if needs_scope {
+        cg_push_scope(alloc)
+      }
       for s in stmts {
         layout_stmt(alloc, s)
       }
-      cg_pop_scope(alloc)
+      if needs_scope {
+        cg_pop_scope(alloc)
+      }
     }
     Stmt::DeclStmt(decls~, ..) => {
       for d in decls {
@@ -842,7 +857,13 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
       layout_expr(alloc, cond)
     }
     Stmt::For(init~, cond~, step~, body~, ..) => {
-      cg_push_scope(alloc)
+      let needs_scope = match init {
+        Some(Stmt::DeclStmt(..)) => true
+        _ => false
+      }
+      if needs_scope {
+        cg_push_scope(alloc)
+      }
       match init {
         None => ()
         Some(s) => layout_stmt(alloc, s)
@@ -856,7 +877,9 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
         Some(e) => layout_expr(alloc, e)
       }
       layout_stmt(alloc, body)
-      cg_pop_scope(alloc)
+      if needs_scope {
+        cg_pop_scope(alloc)
+      }
     }
     Stmt::Switch(cond~, body~, ..) => {
       layout_expr(alloc, cond)
@@ -1363,11 +1386,16 @@ fn layout_expr(alloc : LocalAlloc, expr : Expr) -> Unit {
       }
     }
     Expr::StmtExpr(stmts~, ..) => {
-      cg_push_scope(alloc)
+      let needs_scope = stmt_list_needs_scope(stmts)
+      if needs_scope {
+        cg_push_scope(alloc)
+      }
       for s in stmts {
         layout_stmt(alloc, s)
       }
-      cg_pop_scope(alloc)
+      if needs_scope {
+        cg_pop_scope(alloc)
+      }
     }
     Expr::Index(base~, index~, ..) => {
       layout_expr(alloc, base)
