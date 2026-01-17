@@ -20,6 +20,8 @@ struct SemContext {
   functions : Map[String, FuncSig]
   function_defs : Map[String, Bool]
   locals : Array[Map[String, CType]]
+  local_values : Map[String, CType]
+  local_overrides : Array[Array[(String, CType?)]]
   type_aliases : Map[String, CType]
   struct_defs : Map[String, RecordDef]
   union_defs : Map[String, RecordDef]
@@ -57,6 +59,8 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     functions: {},
     function_defs: {},
     locals: [],
+    local_values: {},
+    local_overrides: [],
     type_aliases: {
       "__builtin_va_list": CType::Pointer(CType::Void),
       "jmp_buf": CType::Array(
@@ -138,6 +142,10 @@ fn char_pointer_type() -> CType {
 
 ///|
 fn lookup_local_only(ctx : SemContext, name : String) -> CType? {
+  let found = ctx.local_values.get(name)
+  if found is Some(_) {
+    return found
+  }
   let mut i = ctx.locals.length()
   while i > 0 {
     i = i - 1
@@ -2456,6 +2464,7 @@ fn update_decl_type(
     if scope.contains(name) {
       scope.set(name, ty)
       ctx.locals[idx] = scope
+      ctx.local_values.set(name, ty)
     }
   } else if ctx.globals.contains(name) {
     ctx.globals.set(name, ty)
@@ -5048,8 +5057,12 @@ fn declare_local(
   if scope.contains(name) {
     add_sem_error(ctx, loc, "redefinition of '\{name}'")
   } else {
+    let overrides = ctx.local_overrides[idx]
+    overrides.push((name, ctx.local_values.get(name)))
+    ctx.local_overrides[idx] = overrides
     scope.set(name, ty)
     ctx.locals[idx] = scope
+    ctx.local_values.set(name, ty)
   }
 }
 
@@ -5132,17 +5145,19 @@ fn merge_global_decl_type(existing : CType, incoming : CType) -> CType {
 
 ///|
 fn lookup_value(ctx : SemContext, name : String) -> CType? {
-  let mut found : CType? = None
-  let mut i = ctx.locals.length()
-  while i > 0 {
-    i = i - 1
-    let scope = ctx.locals[i]
-    match scope.get(name) {
-      Some(ty) => {
-        found = Some(ty)
-        break
+  let mut found = ctx.local_values.get(name)
+  if found is None {
+    let mut i = ctx.locals.length()
+    while i > 0 {
+      i = i - 1
+      let scope = ctx.locals[i]
+      match scope.get(name) {
+        Some(ty) => {
+          found = Some(ty)
+          break
+        }
+        None => ()
       }
-      None => ()
     }
   }
   if found is None {
@@ -5188,11 +5203,28 @@ fn lookup_value(ctx : SemContext, name : String) -> CType? {
 ///|
 fn push_scope(ctx : SemContext) -> Unit {
   ctx.locals.push({})
+  ctx.local_overrides.push([])
 }
 
 ///|
 fn pop_scope(ctx : SemContext) -> Unit {
   ignore(ctx.locals.pop())
+  match ctx.local_overrides.pop() {
+    None => ()
+    Some(overrides) => {
+      let mut i = overrides.length()
+      while i > 0 {
+        i = i - 1
+        let (name, prev) = overrides[i]
+        match prev {
+          Some(ty) => ctx.local_values.set(name, ty)
+          None => {
+            ctx.local_values.remove(name)
+          }
+        }
+      }
+    }
+  }
 }
 
 ///|
