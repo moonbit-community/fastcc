@@ -945,8 +945,7 @@ fn reserve_compound_literals_expr(alloc : LocalAlloc, expr : Expr) -> Unit {
     }
     Expr::Unary(expr=inner, ..) => reserve_compound_literals_expr(alloc, inner)
     Expr::Cast(expr=inner, ..) => reserve_compound_literals_expr(alloc, inner)
-    Expr::SizeofExpr(expr=inner, ..) => reserve_compound_literals_expr(alloc, inner)
-    Expr::AlignofExpr(expr=inner, ..) => reserve_compound_literals_expr(alloc, inner)
+    Expr::SizeofExpr(..) | Expr::AlignofExpr(..) => ()
     Expr::Binary(left~, right~, ..) => {
       reserve_compound_literals_expr(alloc, left)
       reserve_compound_literals_expr(alloc, right)
@@ -1168,8 +1167,7 @@ fn reserve_agg_temp_expr(alloc : LocalAlloc, expr : Expr) -> Unit {
     Expr::CompoundLiteral(init~, ..) => reserve_agg_temp_initializer(alloc, init)
     Expr::Unary(expr=inner, ..) => reserve_agg_temp_expr(alloc, inner)
     Expr::Cast(expr=inner, ..) => reserve_agg_temp_expr(alloc, inner)
-    Expr::SizeofExpr(expr=inner, ..) => reserve_agg_temp_expr(alloc, inner)
-    Expr::AlignofExpr(expr=inner, ..) => reserve_agg_temp_expr(alloc, inner)
+    Expr::SizeofExpr(..) | Expr::AlignofExpr(..) => ()
     Expr::Binary(left~, right~, ..) => {
       reserve_agg_temp_expr(alloc, left)
       reserve_agg_temp_expr(alloc, right)
@@ -1348,8 +1346,7 @@ fn layout_expr(alloc : LocalAlloc, expr : Expr) -> Unit {
     Expr::Unary(expr=inner, ..) => layout_expr(alloc, inner)
     Expr::Cast(expr=inner, ..) => layout_expr(alloc, inner)
     Expr::CompoundLiteral(init~, ..) => layout_initializer(alloc, init)
-    Expr::SizeofExpr(expr=inner, ..) => layout_expr(alloc, inner)
-    Expr::AlignofExpr(expr=inner, ..) => layout_expr(alloc, inner)
+    Expr::SizeofExpr(..) | Expr::AlignofExpr(..) => ()
     Expr::Binary(left~, right~, ..) => {
       layout_expr(alloc, left)
       layout_expr(alloc, right)
