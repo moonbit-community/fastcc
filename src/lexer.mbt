@@ -248,18 +248,12 @@ fn is_bin_digit(code : UInt16) -> Bool {
 
 ///|
 fn slice_to_string(text : String, start : Int, end : Int) -> String {
-  try text[start:end] catch {
-    _ => ""
-  } noraise {
-    view => view.to_string()
-  }
+  text.view(start_offset=start, end_offset=end).to_string()
 }
 
 ///|
 fn slice_to_view(text : String, start : Int, end : Int) -> StringView {
-  try text[start:end] catch {
-    _ => ""[:]
-  }
+  text.view(start_offset=start, end_offset=end)
 }
 
 ///|
