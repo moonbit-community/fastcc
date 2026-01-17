@@ -11258,7 +11258,6 @@ fn codegen_arm64_object_bytes_with_sem(
   if has_errors(bag) {
     return None
   }
-  let emitter = new_arm64_emitter()
   let decl_count = unit.decls.length()
   let mut func_count = 0
   let mut main_found = false
@@ -11285,6 +11284,10 @@ fn codegen_arm64_object_bytes_with_sem(
   let sym_capacity = decl_count + cstring_order.length()
   let syms = new_symtab_with_capacity(sym_capacity)
   collect_external_globals(unit, syms)
+  let emitter = new_arm64_emitter_with_capacity(
+    func_count * 256,
+    func_count * 16,
+  )
   let func_offsets : Map[String, Int] = Map::new(capacity=func_count)
   let string_syms : Map[String, Sym] = Map::new(capacity=cstring_order.length())
   let cstring_entries : Array[StringEntry] = Array::new(capacity=cstring_order.length())

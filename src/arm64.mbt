@@ -101,6 +101,22 @@ fn new_arm64_emitter() -> Arm64Emitter {
 }
 
 ///|
+fn new_arm64_emitter_with_capacity(
+  code_capacity : Int,
+  reloc_capacity : Int,
+) -> Arm64Emitter {
+  if code_capacity <= 0 && reloc_capacity <= 0 {
+    return new_arm64_emitter()
+  }
+  let code_cap = if code_capacity > 0 { code_capacity } else { 0 }
+  let reloc_cap = if reloc_capacity > 0 { reloc_capacity } else { 0 }
+  {
+    code: Array::new(capacity=code_cap),
+    relocs: Array::new(capacity=reloc_cap),
+  }
+}
+
+///|
 fn emit32(emitter : Arm64Emitter, insn : UInt) -> Unit {
   emitter.code.push(insn)
 }
