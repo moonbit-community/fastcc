@@ -901,8 +901,9 @@ fn reserve_compound_literal_slot(
   loc : SrcLoc,
 ) -> Unit {
   let key = compound_literal_key(loc)
-  if alloc.compound_literal_slots.contains(key) {
-    return
+  match alloc.compound_literal_slots.get(key) {
+    Some(_) => return
+    None => ()
   }
   let resolved = compound_literal_type(alloc.sem, ty, init, loc)
   match type_size_align_or_error(alloc.sem, resolved, loc) {
@@ -9112,8 +9113,9 @@ fn gen_switch_body(
     }
     Stmt::Label(name~, body~, loc~) => {
       let addr = emitter_pc(emitter)
-      if labels.addrs.contains(name) {
-        add_error(bag, loc, "codegen: duplicate label")
+      match labels.addrs.get(name) {
+        Some(_) => add_error(bag, loc, "codegen: duplicate label")
+        None => ()
       }
       match labels.chains.get(name) {
         None => ()
@@ -9671,8 +9673,9 @@ fn gen_stmt(
     }
     Stmt::Label(name~, body~, loc~) => {
       let addr = emitter_pc(emitter)
-      if labels.addrs.contains(name) {
-        add_error(bag, loc, "codegen: duplicate label")
+      match labels.addrs.get(name) {
+        Some(_) => add_error(bag, loc, "codegen: duplicate label")
+        None => ()
       }
       match labels.chains.get(name) {
         None => ()

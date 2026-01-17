@@ -4804,23 +4804,22 @@ fn declare_global(
   ty : CType,
   loc : SrcLoc,
 ) -> Unit {
-  if ctx.enum_consts.contains(name) || ctx.globals.contains(name) {
-    if ctx.enum_consts.contains(name) {
+  match ctx.enum_consts.get(name) {
+    Some(_) => {
       add_sem_error(ctx, loc, "redefinition of global '\{name}'")
       return
     }
-    match ctx.globals.get(name) {
-      None => ctx.globals.set(name, ty)
-      Some(existing) =>
-        if !types_compatible_for_decl(existing, ty) {
-          add_sem_error(ctx, loc, "redefinition of global '\{name}'")
-        } else {
-          let merged = merge_global_decl_type(existing, ty)
-          ctx.globals.set(name, merged)
-        }
-    }
-  } else {
-    ctx.globals.set(name, ty)
+    None => ()
+  }
+  match ctx.globals.get(name) {
+    None => ctx.globals.set(name, ty)
+    Some(existing) =>
+      if !types_compatible_for_decl(existing, ty) {
+        add_sem_error(ctx, loc, "redefinition of global '\{name}'")
+      } else {
+        let merged = merge_global_decl_type(existing, ty)
+        ctx.globals.set(name, merged)
+      }
   }
 }
 
