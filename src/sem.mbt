@@ -278,7 +278,7 @@ fn is_const_qualified(ty : CType) -> Bool {
 
 ///|
 fn is_void_type(ty : CType) -> Bool {
-  strip_qual_attrs(ty) is CType::Void
+  strip_top_qualifiers(ty) is CType::Void
 }
 
 ///|
@@ -377,7 +377,7 @@ fn attr_align_value(ctx : SemContext, attrs : Attributes, loc : SrcLoc) -> Int? 
 
 ///|
 fn is_float_type(ty : CType) -> Bool {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Float(..) => true
     _ => false
   }
@@ -385,7 +385,7 @@ fn is_float_type(ty : CType) -> Bool {
 
 ///|
 fn enum_type_for_arith(ctx : SemContext, ty : CType) -> CType {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Enum(name~, ..) =>
       match ctx.enum_types.get(name) {
         Some(base) => base
@@ -397,7 +397,7 @@ fn enum_type_for_arith(ctx : SemContext, ty : CType) -> CType {
 
 ///|
 fn promote_int_type(ctx : SemContext, ty : CType) -> CType {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Int(kind~, unsigned~) =>
       if int_rank(kind) < int_rank(CIntKind::Int) {
         default_int_type()
@@ -449,8 +449,8 @@ fn common_int_type(ctx : SemContext, lhs : CType, rhs : CType) -> CType {
 
 ///|
 fn arithmetic_result_type(ctx : SemContext, lhs : CType, rhs : CType) -> CType {
-  let left = strip_qual_attrs(lhs)
-  let right = strip_qual_attrs(rhs)
+  let left = strip_top_qualifiers(lhs)
+  let right = strip_top_qualifiers(rhs)
   match (left, right) {
     (CType::Float(kind=l_kind), CType::Float(kind=r_kind)) =>
       if float_rank(l_kind) >= float_rank(r_kind) {
@@ -471,8 +471,8 @@ fn is_arithmetic(ty : CType) -> Bool {
 
 ///|
 fn can_assign(dst : CType, src : CType) -> Bool {
-  let dst_ty = strip_qual_attrs(dst)
-  let src_ty = strip_qual_attrs(src)
+  let dst_ty = strip_top_qualifiers(dst)
+  let src_ty = strip_top_qualifiers(src)
   if is_arithmetic(dst_ty) && is_arithmetic(src_ty) {
     return true
   }
@@ -489,7 +489,7 @@ fn pointer_compatible(a : CType, b : CType) -> Bool {
     return true
   }
   // Match tcc leniency: same-size integer pointer types are compatible.
-  match (strip_qual_attrs(a), strip_qual_attrs(b)) {
+  match (strip_top_qualifiers(a), strip_top_qualifiers(b)) {
     (CType::Int(kind=a_kind, unsigned=a_unsigned),
      CType::Int(kind=b_kind, unsigned=b_unsigned)) =>
       a_unsigned == b_unsigned && int_size(a_kind) == int_size(b_kind)
@@ -665,7 +665,7 @@ fn record_agg_temp_for_type(ctx : SemContext, ty : CType, loc : SrcLoc) -> Unit 
   if !ctx.record_agg_temps {
     return
   }
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Struct(..) | CType::Union(..) =>
       match type_size_align(ctx, ty, loc) {
         None => ()
@@ -1151,7 +1151,7 @@ fn resolve_array_sizes_for_decl(
 
 ///|
 fn type_contains_vla(ty : CType) -> Bool {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Array(size=None, size_expr=Some(_), ..) => true
     CType::Array(elem~, ..) => type_contains_vla(elem)
     CType::Pointer(inner) => type_contains_vla(inner)
@@ -1165,7 +1165,7 @@ fn type_contains_vla(ty : CType) -> Bool {
 
 ///|
 fn type_has_vla_object_size(ty : CType) -> Bool {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Array(size=None, size_expr=Some(_), ..) => true
     CType::Array(elem~, ..) => type_has_vla_object_size(elem)
     CType::Qualified(base~, ..) => type_has_vla_object_size(base)
@@ -1812,7 +1812,7 @@ fn eval_const_expr_value(
     Expr::Cast(expr~, ..) => eval_const_expr_value(ctx, expr, loc)
     Expr::SizeofExpr(expr~, loc~) => {
       let ty = type_for_sizeof(ctx, expr)
-      match strip_qual_attrs(ty) {
+      match strip_top_qualifiers(ty) {
         CType::Array(size=None, size_expr=Some(_), ..) => (0, false)
         _ =>
       match type_size_align(ctx, ty, loc) {
@@ -1823,7 +1823,7 @@ fn eval_const_expr_value(
     }
     Expr::SizeofType(ty~, loc~) => {
       register_type_defs(ctx, ty, loc)
-      match strip_qual_attrs(resolve_type(ctx, ty, loc)) {
+      match strip_top_qualifiers(resolve_type(ctx, ty, loc)) {
         CType::Array(size=None, size_expr=Some(_), ..) => (0, false)
         _ =>
       match type_size_align(ctx, ty, loc) {
@@ -2158,12 +2158,12 @@ fn is_constant_expr_for_builtin(ctx : SemContext, expr : Expr) -> Bool {
       }
     Expr::Cast(expr=inner, ..) => is_constant_expr_for_builtin(ctx, inner)
     Expr::SizeofExpr(expr=inner, loc~) =>
-      match strip_qual_attrs(type_for_sizeof(ctx, inner)) {
+      match strip_top_qualifiers(type_for_sizeof(ctx, inner)) {
         CType::Array(size=None, size_expr=Some(_), ..) => false
         _ => type_size_align(ctx, type_for_sizeof(ctx, inner), loc) is Some(_)
       }
     Expr::SizeofType(ty~, loc~) =>
-      match strip_qual_attrs(resolve_type(ctx, ty, loc)) {
+      match strip_top_qualifiers(resolve_type(ctx, ty, loc)) {
         CType::Array(size=None, size_expr=Some(_), ..) => false
         _ => type_size_align(ctx, ty, loc) is Some(_)
       }
@@ -2495,7 +2495,7 @@ fn require_complete_object_type(
   loc : SrcLoc,
   allow_incomplete_array? : Bool = false,
 ) -> Unit {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Array(elem~, size~, size_expr~) => {
       if size is None && size_expr is None && !allow_incomplete_array {
         add_sem_error(ctx, loc, "incomplete array type")
@@ -2543,7 +2543,7 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
     decl.loc,
   )
   let mut final_ty = resolved_with_sizes
-  match strip_qual_attrs(resolved) {
+  match strip_top_qualifiers(resolved) {
     CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) => {
       check_storage_class(
         ctx,
@@ -2679,7 +2679,7 @@ fn check_initializer(
 fn is_zero_aggregate_init(ctx : SemContext, ty : CType, expr : Expr) -> Bool {
   match try_eval_int_const(ctx, expr) {
     Some(v) if v == 0 =>
-      match strip_qual_attrs(ty) {
+      match strip_top_qualifiers(ty) {
         CType::Struct(..) | CType::Union(..) | CType::Array(..) => true
         _ => false
       }
@@ -3291,9 +3291,11 @@ fn check_asm_stmt(ctx : SemContext, asm_stmt : AsmStmt) -> Unit {
 
 ///|
 fn type_eq(a : CType, b : CType) -> Bool {
-  let lhs = strip_qual_attrs(a)
-  let rhs = strip_qual_attrs(b)
-  match (lhs, rhs) {
+  match (a, b) {
+    (CType::Qualified(base~, ..), _) => type_eq(base, b)
+    (CType::Attributed(base~, ..), _) => type_eq(base, b)
+    (_, CType::Qualified(base~, ..)) => type_eq(a, base)
+    (_, CType::Attributed(base~, ..)) => type_eq(a, base)
     (CType::Void, CType::Void) => true
     (CType::Bool, CType::Bool) => true
     (
@@ -3361,9 +3363,11 @@ fn type_eq(a : CType, b : CType) -> Bool {
 
 ///|
 fn types_compatible_for_decl(a : CType, b : CType) -> Bool {
-  let lhs = strip_qual_attrs(a)
-  let rhs = strip_qual_attrs(b)
-  match (lhs, rhs) {
+  match (a, b) {
+    (CType::Qualified(base~, ..), _) => types_compatible_for_decl(base, b)
+    (CType::Attributed(base~, ..), _) => types_compatible_for_decl(base, b)
+    (_, CType::Qualified(base~, ..)) => types_compatible_for_decl(a, base)
+    (_, CType::Attributed(base~, ..)) => types_compatible_for_decl(a, base)
     (
       CType::Array(elem=elem_a, size=size_a, ..),
       CType::Array(elem=elem_b, size=size_b, ..),
@@ -3413,13 +3417,13 @@ fn types_compatible_for_decl(a : CType, b : CType) -> Bool {
       }
       true
     }
-    _ => type_eq(lhs, rhs)
+    _ => type_eq(a, b)
   }
 }
 
 ///|
 fn is_int_like(ty : CType) -> Bool {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Int(..) => true
     CType::Bool => true
     CType::Enum(..) => true
@@ -3429,7 +3433,7 @@ fn is_int_like(ty : CType) -> Bool {
 
 ///|
 fn is_char_type(ty : CType) -> Bool {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Int(kind=CIntKind::Char, ..) => true
     _ => false
   }
@@ -3440,7 +3444,7 @@ fn is_scalar(ty : CType) -> Bool {
   if is_int_like(ty) || is_float_type(ty) {
     return true
   }
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Pointer(_) => true
     _ => false
   }
@@ -3448,7 +3452,7 @@ fn is_scalar(ty : CType) -> Bool {
 
 ///|
 fn is_pointer_type(ty : CType) -> Bool {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Pointer(_) => true
     _ => false
   }
@@ -3456,7 +3460,7 @@ fn is_pointer_type(ty : CType) -> Bool {
 
 ///|
 fn is_void_pointer_type(ty : CType) -> Bool {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Pointer(inner) => is_void_type(inner)
     _ => false
   }
@@ -3464,7 +3468,7 @@ fn is_void_pointer_type(ty : CType) -> Bool {
 
 ///|
 fn decay_type(ty : CType) -> CType {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Array(elem~, ..) => CType::Pointer(elem)
     CType::Function(..) => CType::Pointer(ty)
     _ => ty
@@ -4146,7 +4150,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
             add_sem_error(ctx, loc, "unary operator expects arithmetic")
           }
           if is_float_type(inner) {
-            strip_qual_attrs(inner)
+            strip_top_qualifiers(inner)
           } else {
             common_int_type(ctx, inner, inner)
           }
@@ -4169,7 +4173,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
                 add_sem_error(ctx, loc, "increment of read-only location")
                 return default_int_type()
               }
-              match strip_qual_attrs(ty) {
+              match strip_top_qualifiers(ty) {
                 CType::Array(..) | CType::Function(..) => {
                   add_sem_error(ctx, loc, "invalid operand to increment")
                   return default_int_type()
@@ -4177,7 +4181,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
                 _ => ()
               }
               if !is_arithmetic(ty) {
-                match strip_qual_attrs(ty) {
+                match strip_top_qualifiers(ty) {
                   CType::Pointer(_) => ()
                   _ => add_sem_error(ctx, loc, "invalid operand to increment")
                 }
@@ -4194,7 +4198,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
     }
     Expr::SizeofExpr(expr~, ..) => {
       let ty = type_for_sizeof(ctx, expr)
-      match strip_qual_attrs(ty) {
+      match strip_top_qualifiers(ty) {
         CType::Array(size=None, size_expr=Some(_), ..) => ()
         _ => type_size_align(ctx, ty, expr_loc(expr)) |> ignore
       }
@@ -4203,7 +4207,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
     Expr::SizeofType(ty~, loc~) => {
       register_type_defs(ctx, ty, loc)
       let resolved = resolve_type(ctx, ty, loc)
-      match strip_qual_attrs(resolved) {
+      match strip_top_qualifiers(resolved) {
         CType::Array(size=None, size_expr=Some(_), ..) => ()
         _ => type_size_align(ctx, resolved, loc) |> ignore
       }
@@ -4229,7 +4233,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
                 add_sem_error(ctx, loc, "assignment to read-only location")
                 return default_int_type()
               }
-              match strip_qual_attrs(lhs_ty) {
+              match strip_top_qualifiers(lhs_ty) {
                 CType::Array(..) | CType::Function(..) => {
                   add_sem_error(ctx, loc, "assignment to non-modifiable lvalue")
                   return default_int_type()
@@ -4297,9 +4301,9 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
         BinaryOp::Sub => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
-          match strip_qual_attrs(lhs_ty) {
+          match strip_top_qualifiers(lhs_ty) {
             CType::Pointer(pointee) =>
-              match strip_qual_attrs(rhs_ty) {
+              match strip_top_qualifiers(rhs_ty) {
                 CType::Pointer(other) => {
                   if !pointer_compatible(pointee, other) {
                     add_sem_error(ctx, loc, "pointer subtraction type mismatch")
@@ -4331,9 +4335,9 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
         | BinaryOp::Ge => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
-          match strip_qual_attrs(lhs_ty) {
+          match strip_top_qualifiers(lhs_ty) {
             CType::Pointer(pointee) =>
-              match strip_qual_attrs(rhs_ty) {
+              match strip_top_qualifiers(rhs_ty) {
                 CType::Pointer(other) => {
                   if !pointer_compatible(pointee, other) {
                     add_sem_error(ctx, loc, "pointer comparison type mismatch")
@@ -4347,7 +4351,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
               }
             _ => ()
           }
-          match strip_qual_attrs(rhs_ty) {
+          match strip_top_qualifiers(rhs_ty) {
             CType::Pointer(_) =>
               if is_int_like(lhs_ty) && is_null_pointer_expr(ctx, left) {
                 return default_int_type()
@@ -4397,7 +4401,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
       check_cond_expr(ctx, cond)
       let then_ty = type_of_expr(ctx, then_expr)
       let else_ty = type_of_expr(ctx, else_expr)
-      match (strip_qual_attrs(then_ty), strip_qual_attrs(else_ty)) {
+      match (strip_top_qualifiers(then_ty), strip_top_qualifiers(else_ty)) {
         (CType::Pointer(a), CType::Pointer(b)) => {
           if !pointer_compatible(a, b) {
             add_sem_error(ctx, loc, "conditional operator type mismatch")
