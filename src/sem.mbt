@@ -3058,11 +3058,22 @@ fn resolve_designator_type(
 fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
   match stmt {
     Stmt::Compound(stmts~, ..) => {
-      push_scope(ctx)
+      let mut scope_open = false
       for item in stmts {
+        if !scope_open {
+          match item {
+            Stmt::DeclStmt(..) => {
+              push_scope(ctx)
+              scope_open = true
+            }
+            _ => ()
+          }
+        }
         check_stmt(ctx, item, return_type)
       }
-      pop_scope(ctx)
+      if scope_open {
+        pop_scope(ctx)
+      }
     }
     Stmt::If(cond~, then_branch~, else_branch~, ..) => {
       check_cond_expr(ctx, cond)
@@ -3081,7 +3092,13 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
       check_cond_expr(ctx, cond)
     }
     Stmt::For(init~, cond~, step~, body~, ..) => {
-      push_scope(ctx)
+      let needs_scope = match init {
+        Some(Stmt::DeclStmt(..)) => true
+        _ => false
+      }
+      if needs_scope {
+        push_scope(ctx)
+      }
       match init {
         None => ()
         Some(stmt) => check_stmt(ctx, stmt, return_type)
@@ -3095,7 +3112,9 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
         Some(expr) => type_of_expr(ctx, expr) |> ignore
       }
       with_loop(ctx, () => check_stmt(ctx, body, return_type))
-      pop_scope(ctx)
+      if needs_scope {
+        pop_scope(ctx)
+      }
     }
     Stmt::Switch(cond~, body~, loc~) => {
       let cond_ty = type_of_expr(ctx, cond)

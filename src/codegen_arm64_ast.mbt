@@ -9351,9 +9351,12 @@ fn gen_stmt(
   return_chain : Int,
 ) -> Int {
   match stmt {
-	    Stmt::Compound(stmts~, ..) => {
-	      cg_push_scope(alloc)
-	      let mut chain = return_chain
+    Stmt::Compound(stmts~, ..) => {
+      let needs_scope = stmt_list_needs_scope(stmts)
+      if needs_scope {
+        cg_push_scope(alloc)
+      }
+      let mut chain = return_chain
       for s in stmts {
         chain = gen_stmt(
           emitter,
@@ -9370,9 +9373,11 @@ fn gen_stmt(
           chain,
         )
       }
-	      cg_pop_scope_codegen(emitter, alloc)
-	      chain
-	    }
+      if needs_scope {
+        cg_pop_scope_codegen(emitter, alloc)
+      }
+      chain
+    }
     Stmt::DeclStmt(decls~, ..) => {
       for d in decls {
         let stripped = strip_qual_attrs(d.ty)

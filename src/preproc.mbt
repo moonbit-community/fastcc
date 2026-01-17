@@ -786,7 +786,7 @@ fn is_adjacent(left : Token, right : Token) -> Bool {
 ///|
 fn is_expanding(pp : Preprocessor, name : String) -> Bool {
   for n in pp.expanding {
-    if n == name {
+    if physical_equal(n, name) || n == name {
       return true
     }
   }
@@ -1535,6 +1535,16 @@ fn merge_hidden(a : Array[String], b : Array[String]) -> Array[String] {
     return b
   }
   if b.length() == 0 {
+    return a
+  }
+  let mut all_in = true
+  for h in b {
+    if !hidden_contains(a, h) {
+      all_in = false
+      break
+    }
+  }
+  if all_in {
     return a
   }
   let out = a.copy()
