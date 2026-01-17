@@ -434,6 +434,8 @@ fn lex_punct(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
   match advance(lex) {
     None => make_token(Eof, "", loc, line_start)
     Some(code) => {
+      let text = lex.text
+      let len = lex.text_len
       if code == 40 {
         return make_token(LParen, "(", loc, line_start)
       }
@@ -465,14 +467,16 @@ fn lex_punct(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
         return make_token(Question, "?", loc, line_start)
       }
       if code == 35 {
-        if peek_char(lex) is Some(35) {
+        if lex.index < len && text[lex.index] == 35 {
           let _ = advance(lex)
           return make_token(HashHash, "##", loc, line_start)
         }
         return make_token(Hash, "#", loc, line_start)
       }
       if code == 46 {
-        if peek_char(lex) is Some(46) && peek_char_offset(lex, 1) is Some(46) {
+        if lex.index + 1 < len &&
+          text[lex.index] == 46 &&
+          text[lex.index + 1] == 46 {
           let _ = advance(lex)
           let _ = advance(lex)
           return make_token(Ellipsis, "...", loc, line_start)
@@ -480,120 +484,132 @@ fn lex_punct(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
         return make_token(Dot, ".", loc, line_start)
       }
       if code == 45 {
-        if peek_char(lex) is Some(62) {
-          let _ = advance(lex)
-          return make_token(Arrow, "->", loc, line_start)
-        }
-        if peek_char(lex) is Some(45) {
-          let _ = advance(lex)
-          return make_token(MinusMinus, "--", loc, line_start)
-        }
-        if peek_char(lex) is Some(61) {
-          let _ = advance(lex)
-          return make_token(MinusAssign, "-=", loc, line_start)
+        if lex.index < len {
+          let next = text[lex.index]
+          if next == 62 {
+            let _ = advance(lex)
+            return make_token(Arrow, "->", loc, line_start)
+          }
+          if next == 45 {
+            let _ = advance(lex)
+            return make_token(MinusMinus, "--", loc, line_start)
+          }
+          if next == 61 {
+            let _ = advance(lex)
+            return make_token(MinusAssign, "-=", loc, line_start)
+          }
         }
         return make_token(Minus, "-", loc, line_start)
       }
       if code == 43 {
-        if peek_char(lex) is Some(43) {
-          let _ = advance(lex)
-          return make_token(PlusPlus, "++", loc, line_start)
-        }
-        if peek_char(lex) is Some(61) {
-          let _ = advance(lex)
-          return make_token(PlusAssign, "+=", loc, line_start)
+        if lex.index < len {
+          let next = text[lex.index]
+          if next == 43 {
+            let _ = advance(lex)
+            return make_token(PlusPlus, "++", loc, line_start)
+          }
+          if next == 61 {
+            let _ = advance(lex)
+            return make_token(PlusAssign, "+=", loc, line_start)
+          }
         }
         return make_token(Plus, "+", loc, line_start)
       }
       if code == 42 {
-        if peek_char(lex) is Some(61) {
+        if lex.index < len && text[lex.index] == 61 {
           let _ = advance(lex)
           return make_token(StarAssign, "*=", loc, line_start)
         }
         return make_token(Star, "*", loc, line_start)
       }
       if code == 47 {
-        if peek_char(lex) is Some(61) {
+        if lex.index < len && text[lex.index] == 61 {
           let _ = advance(lex)
           return make_token(SlashAssign, "/=", loc, line_start)
         }
         return make_token(Slash, "/", loc, line_start)
       }
       if code == 37 {
-        if peek_char(lex) is Some(61) {
+        if lex.index < len && text[lex.index] == 61 {
           let _ = advance(lex)
           return make_token(PercentAssign, "%=", loc, line_start)
         }
         return make_token(Percent, "%", loc, line_start)
       }
       if code == 61 {
-        if peek_char(lex) is Some(61) {
+        if lex.index < len && text[lex.index] == 61 {
           let _ = advance(lex)
           return make_token(Eq, "==", loc, line_start)
         }
         return make_token(Assign, "=", loc, line_start)
       }
       if code == 33 {
-        if peek_char(lex) is Some(61) {
+        if lex.index < len && text[lex.index] == 61 {
           let _ = advance(lex)
           return make_token(Ne, "!=", loc, line_start)
         }
         return make_token(Bang, "!", loc, line_start)
       }
       if code == 60 {
-        if peek_char(lex) is Some(60) {
+        if lex.index < len && text[lex.index] == 60 {
           let _ = advance(lex)
-          if peek_char(lex) is Some(61) {
+          if lex.index < len && text[lex.index] == 61 {
             let _ = advance(lex)
             return make_token(ShiftLeftAssign, "<<=", loc, line_start)
           }
           return make_token(ShiftLeft, "<<", loc, line_start)
         }
-        if peek_char(lex) is Some(61) {
+        if lex.index < len && text[lex.index] == 61 {
           let _ = advance(lex)
           return make_token(Le, "<=", loc, line_start)
         }
         return make_token(Lt, "<", loc, line_start)
       }
       if code == 62 {
-        if peek_char(lex) is Some(62) {
+        if lex.index < len && text[lex.index] == 62 {
           let _ = advance(lex)
-          if peek_char(lex) is Some(61) {
+          if lex.index < len && text[lex.index] == 61 {
             let _ = advance(lex)
             return make_token(ShiftRightAssign, ">>=", loc, line_start)
           }
           return make_token(ShiftRight, ">>", loc, line_start)
         }
-        if peek_char(lex) is Some(61) {
+        if lex.index < len && text[lex.index] == 61 {
           let _ = advance(lex)
           return make_token(Ge, ">=", loc, line_start)
         }
         return make_token(Gt, ">", loc, line_start)
       }
       if code == 38 {
-        if peek_char(lex) is Some(38) {
-          let _ = advance(lex)
-          return make_token(AmpAmp, "&&", loc, line_start)
-        }
-        if peek_char(lex) is Some(61) {
-          let _ = advance(lex)
-          return make_token(AmpAssign, "&=", loc, line_start)
+        if lex.index < len {
+          let next = text[lex.index]
+          if next == 38 {
+            let _ = advance(lex)
+            return make_token(AmpAmp, "&&", loc, line_start)
+          }
+          if next == 61 {
+            let _ = advance(lex)
+            return make_token(AmpAssign, "&=", loc, line_start)
+          }
         }
         return make_token(Amp, "&", loc, line_start)
       }
       if code == 124 {
-        if peek_char(lex) is Some(124) {
-          let _ = advance(lex)
-          return make_token(PipePipe, "||", loc, line_start)
-        }
-        if peek_char(lex) is Some(61) {
-          let _ = advance(lex)
-          return make_token(PipeAssign, "|=", loc, line_start)
+        if lex.index < len {
+          let next = text[lex.index]
+          if next == 124 {
+            let _ = advance(lex)
+            return make_token(PipePipe, "||", loc, line_start)
+          }
+          if next == 61 {
+            let _ = advance(lex)
+            return make_token(PipeAssign, "|=", loc, line_start)
+          }
         }
         return make_token(Pipe, "|", loc, line_start)
       }
       if code == 94 {
-        if peek_char(lex) is Some(61) {
+        if lex.index < len && text[lex.index] == 61 {
           let _ = advance(lex)
           return make_token(CaretAssign, "^=", loc, line_start)
         }
