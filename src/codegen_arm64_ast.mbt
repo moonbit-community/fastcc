@@ -11258,16 +11258,12 @@ fn codegen_arm64_object_bytes_with_sem(
   collect_external_globals(unit, syms)
   let decl_count = unit.decls.length()
   let mut func_count = 0
-  let mut main_found = false
   let cstring_order : Array[String] = Array::new(capacity=decl_count)
   let cstring_seen : Map[String, Bool] = Map::new(capacity=decl_count)
   for decl in unit.decls {
     match decl {
       Decl::FuncDef(func) => {
         func_count = func_count + 1
-        if func.name == "main" {
-          main_found = true
-        }
         collect_cstring_stmt(cstring_order, cstring_seen, func.name, func.body)
       }
       Decl::Var(var_decl) =>
@@ -11307,6 +11303,14 @@ fn codegen_arm64_object_bytes_with_sem(
     ".rodata",
     4,
   )
+
+  let mut main_found = false
+  for decl in unit.decls {
+    match decl {
+      Decl::FuncDef(func) => if func.name == "main" { main_found = true }
+      _ => ()
+    }
+  }
 
   // Generate `main` first when present for stable layout, but allow objects without `main`.
   if main_found {

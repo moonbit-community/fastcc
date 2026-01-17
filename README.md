@@ -18,6 +18,6 @@ Results (3 runs):
 
 - tinycc.mbt total: 1.613s
 - refs/tinycc total: 0.114s
-- ratio (mbt/ref): 14.16x
-- phases avg ms: parse=502.259 sem=133.822 codegen=936.516 total=1572.597
+- ratio (mbt/ref): 14.18x
+- phases avg ms: parse=506.926 sem=133.936 codegen=931.390 total=1572.252
 - notes: arm64 benchmark applies `refs/vc_patches/arm64_closure_bytes.patch` to `refs/vc/v.c`; numbers vary by run
