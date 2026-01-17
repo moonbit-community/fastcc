@@ -1959,7 +1959,7 @@ fn gen_agg_expr_to_addr(
     }
     Expr::Binary(op=BinaryOp::Assign, left~, right~, loc~) => {
       let lhs_ty = type_of_expr(alloc.sem, left)
-      match strip_qual_attrs(lhs_ty) {
+      match strip_top_qualifiers(lhs_ty) {
         CType::Struct(..) | CType::Union(..) => {
           let lhs_addr = take_reg(pool) catch {
             err => {
@@ -2166,12 +2166,12 @@ fn resolve_init_designator_offset_type(
   _loc : SrcLoc,
   bag : DiagBag,
 ) -> (CType, Int)? {
-  let mut current = strip_qual_attrs(ty)
+  let mut current = strip_top_qualifiers(ty)
   let mut off = 0
   for des in designators {
     match des {
       InitDesignator::Index(expr~, loc=des_loc) =>
-        match strip_qual_attrs(current) {
+        match strip_top_qualifiers(current) {
           CType::Array(elem~, size~, ..) => {
             let idx = match const_int_from_expr(sem, expr, des_loc) {
               None => {
@@ -2192,7 +2192,7 @@ fn resolve_init_designator_offset_type(
               Some(v) => v
             }
             off = off + (idx * elem_size)
-            current = strip_qual_attrs(elem)
+            current = strip_top_qualifiers(elem)
           }
           _ => {
             add_error(bag, des_loc, "codegen: array designator on non-array")
@@ -2200,7 +2200,7 @@ fn resolve_init_designator_offset_type(
           }
         }
       InitDesignator::Field(name~, loc=des_loc) =>
-        match strip_qual_attrs(current) {
+        match strip_top_qualifiers(current) {
           CType::Struct(name=tag, fields=field_list, attrs=_) => {
             let fields = resolve_struct_fields(
               sem,
@@ -2225,7 +2225,7 @@ fn resolve_init_designator_offset_type(
                       Some(v) => v
                     }
                     off = off + field_off
-                    current = strip_qual_attrs(field.ty)
+                    current = strip_top_qualifiers(field.ty)
                   }
                 }
             }
@@ -2250,7 +2250,7 @@ fn resolve_init_designator_offset_type(
                   }
                   Some(field) => {
                     // Union fields always start at offset 0.
-                    current = strip_qual_attrs(field.ty)
+                    current = strip_top_qualifiers(field.ty)
                   }
                 }
             }
@@ -2277,7 +2277,7 @@ fn resolve_init_designator_access_info(
     add_error(bag, loc, "codegen: missing designator")
     return None
   }
-  let mut current = strip_qual_attrs(ty)
+  let mut current = strip_top_qualifiers(ty)
   let mut off = 0
   let mut result_ty = ty
   let mut bit_off : Int? = None
@@ -2287,7 +2287,7 @@ fn resolve_init_designator_access_info(
     let is_last = i == designators.length() - 1
     match des {
       InitDesignator::Index(expr~, loc=des_loc) =>
-        match strip_qual_attrs(current) {
+        match strip_top_qualifiers(current) {
           CType::Array(elem~, size~, ..) => {
             let idx = match const_int_from_expr(sem, expr, des_loc) {
               None => {
@@ -2308,7 +2308,7 @@ fn resolve_init_designator_access_info(
               Some(v) => v
             }
             off = off + (idx * elem_size)
-            current = strip_qual_attrs(elem)
+            current = strip_top_qualifiers(elem)
             result_ty = elem
             bit_off = None
             bit_width = None
@@ -2319,7 +2319,7 @@ fn resolve_init_designator_access_info(
           }
         }
       InitDesignator::Field(name~, loc=des_loc) =>
-        match strip_qual_attrs(current) {
+        match strip_top_qualifiers(current) {
           CType::Struct(..) | CType::Union(..) => {
             match record_field_access_info(sem, current, name, des_loc) {
               None => {
@@ -2340,7 +2340,7 @@ fn resolve_init_designator_access_info(
                   bit_off = None
                   bit_width = None
                 }
-                current = strip_qual_attrs(info.ty)
+                current = strip_top_qualifiers(info.ty)
               }
             }
           }
@@ -2414,7 +2414,7 @@ fn array_len_from_type_for_init(
   ty : CType,
   loc : SrcLoc,
 ) -> Int? {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Array(size=Some(n), ..) => Some(n)
     CType::Array(size=None, size_expr=Some(expr), ..) =>
       match const_int_from_expr(sem, expr, loc) {
@@ -2455,7 +2455,7 @@ fn collect_elided_array_items_codegen(
 
 ///|
 fn has_single_init_field_codegen(sem : SemContext, ty : CType) -> Bool {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Struct(name=tag, fields=field_list, attrs=_) => {
       let fields = resolve_struct_fields(
         sem,
@@ -2507,7 +2507,7 @@ fn gen_initializer_to_addr(
 ) -> Unit {
   match init {
     Initializer::Expr(expr~, loc~) =>
-      match strip_qual_attrs(ty) {
+      match strip_top_qualifiers(ty) {
         CType::Array(elem~, ..) =>
           if try_eval_int_const(alloc.sem, expr) is Some(0) {
             match array_len_from_type_for_init(alloc.sem, ty, loc) {
@@ -2607,7 +2607,7 @@ fn gen_initializer_to_addr(
         }
       }
     Initializer::List(items~, loc~) =>
-      match strip_qual_attrs(ty) {
+      match strip_top_qualifiers(ty) {
         CType::Array(elem=elem_ty, ..) => {
           let n = match array_len_from_type_for_init(alloc.sem, ty, loc) {
             None => {
@@ -2787,7 +2787,7 @@ fn gen_initializer_to_addr(
                   }
                   let mut consumed = 1
                   let mut used_elision = false
-                  match (strip_qual_attrs(field.ty), item.value) {
+                  match (strip_top_qualifiers(field.ty), item.value) {
                     (CType::Array(..), Initializer::Expr(expr~, ..)) =>
                       match expr {
                         Expr::StringLit(..) => ()
@@ -3955,7 +3955,7 @@ fn store_call_arg_to_slot(
       give_reg(pool, tmp)
     }
     None =>
-      match strip_qual_attrs(ty) {
+      match strip_top_qualifiers(ty) {
         CType::Struct(..) | CType::Union(..) =>
           match type_size_align_or_error(alloc.sem, ty, loc) {
             None => ()
@@ -4001,7 +4001,7 @@ fn store_call_arg_to_slot(
 
 ///|
 fn promote_vararg_type(ty : CType) -> CType {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Float(kind~) =>
       if kind == CFloatKind::Float {
         CType::Float(kind=CFloatKind::Double)
@@ -4802,7 +4802,7 @@ fn gen_lvalue_addr(
       }
       let mut elem_size_reg : Int? = None
       let mut elem_size_const : Int? = None
-      match strip_qual_attrs(elem_ty) {
+      match strip_top_qualifiers(elem_ty) {
         CType::Array(size=None, size_expr=Some(_), ..) => {
           let scale = take_reg(pool) catch {
             err => {
@@ -4889,7 +4889,7 @@ fn gen_lvalue_addr(
       if is_arrow {
         gen_expr_ptr(emitter, alloc, syms, pool, cstrings, base, dst, bag)
       } else if !expr_is_lvalue_simple(base) {
-        match strip_qual_attrs(base_ty) {
+        match strip_top_qualifiers(base_ty) {
           CType::Struct(..) | CType::Union(..) =>
             match type_size_align_or_error(alloc.sem, base_ty, loc) {
               None => ()
@@ -4925,7 +4925,7 @@ fn gen_lvalue_addr(
       }
 
       let record_ty = if is_arrow {
-        match strip_qual_attrs(base_ty) {
+        match strip_top_qualifiers(base_ty) {
           CType::Pointer(pointee) => pointee
           _ => base_ty
         }
@@ -5089,7 +5089,7 @@ fn struct_field_access_info(
           })
         }
         if field.name == "" {
-          match strip_qual_attrs(field.ty) {
+          match strip_top_qualifiers(field.ty) {
             CType::Struct(..) | CType::Union(..) =>
               match record_field_access_info(ctx, field.ty, name, loc) {
                 None => ()
@@ -5150,7 +5150,7 @@ fn union_field_access_info(
       })
     }
     if field.name == "" {
-      match strip_qual_attrs(field.ty) {
+      match strip_top_qualifiers(field.ty) {
         CType::Struct(..) | CType::Union(..) =>
           match record_field_access_info(ctx, field.ty, name, loc) {
             None => ()
@@ -5292,7 +5292,7 @@ fn collect_struct_field_access_cache(
           bit_width: None,
         })
         if field.name == "" {
-          match strip_qual_attrs(field.ty) {
+          match strip_top_qualifiers(field.ty) {
             CType::Struct(..) | CType::Union(..) => {
               let nested = build_record_field_access_cache(ctx, field.ty, loc)
               for nested_name, info in nested {
@@ -5346,7 +5346,7 @@ fn collect_union_field_access_cache(
       bit_width: None,
     })
     if field.name == "" {
-      match strip_qual_attrs(field.ty) {
+      match strip_top_qualifiers(field.ty) {
         CType::Struct(..) | CType::Union(..) => {
           let nested = build_record_field_access_cache(ctx, field.ty, loc)
           for nested_name, info in nested {
@@ -5397,7 +5397,7 @@ fn record_field_access_info(
   name : String,
   loc : SrcLoc,
 ) -> FieldAccessInfo? {
-  let resolved = resolve_type(ctx, record_ty, loc) |> strip_qual_attrs
+  let resolved = resolve_type(ctx, record_ty, loc) |> strip_top_qualifiers
   match resolved {
     CType::Struct(name=tag, fields=field_list, attrs=struct_attrs) =>
       match ensure_struct_fields(ctx, tag, field_list, is_union=false, loc) {
@@ -5449,7 +5449,7 @@ fn build_record_field_access_cache(
   record_ty : CType,
   loc : SrcLoc,
 ) -> FastMap[String, FieldAccessInfo] {
-  let resolved = resolve_type(ctx, record_ty, loc) |> strip_qual_attrs
+  let resolved = resolve_type(ctx, record_ty, loc) |> strip_top_qualifiers
   match resolved {
     CType::Struct(name=tag, fields=field_list, attrs=struct_attrs) =>
       match ensure_struct_fields(ctx, tag, field_list, is_union=false, loc) {
@@ -5503,7 +5503,7 @@ fn member_access_info(
 ) -> FieldAccessInfo? {
   let base_ty = type_of_expr(sem, base)
   let record_ty = if is_arrow {
-    match strip_qual_attrs(base_ty) {
+    match strip_top_qualifiers(base_ty) {
       CType::Pointer(pointee) => pointee
       _ => base_ty
     }
@@ -6970,7 +6970,7 @@ fn gen_expr_int32(
         }
         BinaryOp::Assign => {
           let lhs_ty = type_of_expr(alloc.sem, left)
-          match strip_qual_attrs(lhs_ty) {
+          match strip_top_qualifiers(lhs_ty) {
             CType::Struct(..) | CType::Union(..) => {
               match type_size_align_or_error(alloc.sem, lhs_ty, loc) {
                 None => ()
@@ -8412,7 +8412,7 @@ fn gen_expr_ptr(
             }
             Some(t) => t
           }
-          let elem_size = match strip_qual_attrs(elem_ty) {
+          let elem_size = match strip_top_qualifiers(elem_ty) {
             CType::Void | CType::Function(..) => 1
             _ =>
               match type_size_align_or_error(alloc.sem, elem_ty, loc) {
@@ -8608,7 +8608,7 @@ fn gen_expr_ptr(
             }
             Some(t) => t
           }
-          let elem_size = match strip_qual_attrs(elem_ty) {
+          let elem_size = match strip_top_qualifiers(elem_ty) {
             CType::Void | CType::Function(..) => 1
             _ =>
               match type_size_align_or_error(alloc.sem, elem_ty, loc) {
@@ -8856,7 +8856,7 @@ fn gen_expr_discard(
     _ => ()
   }
   let ty = type_of_expr(alloc.sem, expr)
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Void =>
       match expr {
         Expr::Cast(expr=inner, ..) =>
@@ -10792,7 +10792,7 @@ fn const_pointer_from_expr(
     Expr::Member(..) | Expr::Index(..) =>
       match type_of_lvalue(sem, expr) {
         Some(ty) =>
-          match strip_qual_attrs(ty) {
+          match strip_top_qualifiers(ty) {
             CType::Array(..) =>
               const_pointer_from_lvalue(sem, syms, cstrings, expr)
             _ => None
@@ -10823,7 +10823,7 @@ fn fill_global_initializer_bytes(
 ) -> Unit {
   match init {
     Initializer::Expr(expr~, loc~) => {
-      match strip_qual_attrs(ty) {
+      match strip_top_qualifiers(ty) {
         CType::Array(elem=elem_ty, ..) =>
           match array_len_from_type_for_init(sem, ty, loc) {
             None => add_error(bag, loc, "codegen: incomplete array type")
@@ -10939,7 +10939,7 @@ fn fill_global_initializer_bytes(
       }
     }
     Initializer::List(items~, loc~) => {
-      match strip_qual_attrs(ty) {
+      match strip_top_qualifiers(ty) {
         CType::Array(elem=elem_ty, ..) => {
           let n = match array_len_from_type_for_init(sem, ty, loc) {
             None => {
@@ -11109,7 +11109,7 @@ fn fill_global_initializer_bytes(
                   }
                   let mut consumed = 1
                   let mut used_elision = false
-                  match (strip_qual_attrs(field.ty), item.value) {
+                  match (strip_top_qualifiers(field.ty), item.value) {
                     (CType::Array(..), Initializer::Expr(expr~, ..)) =>
                       match expr {
                         Expr::StringLit(..) => ()
