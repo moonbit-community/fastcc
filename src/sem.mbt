@@ -251,19 +251,27 @@ fn strip_qual_attrs(ty : CType) -> CType {
 
 ///|
 fn strip_top_qualifiers(ty : CType) -> CType {
-  match ty {
-    CType::Qualified(base~, ..) => strip_top_qualifiers(base)
-    CType::Attributed(base~, ..) => strip_top_qualifiers(base)
-    _ => ty
+  let mut current = ty
+  while true {
+    match current {
+      CType::Qualified(base~, ..) => current = base
+      CType::Attributed(base~, ..) => current = base
+      _ => break
+    }
   }
+  current
 }
 
 ///|
 fn strip_top_qualifiers_keep_attrs(ty : CType) -> CType {
-  match ty {
-    CType::Qualified(base~, ..) => strip_top_qualifiers_keep_attrs(base)
-    _ => ty
+  let mut current = ty
+  while true {
+    match current {
+      CType::Qualified(base~, ..) => current = base
+      _ => break
+    }
   }
+  current
 }
 
 ///|
