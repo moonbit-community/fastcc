@@ -1183,11 +1183,24 @@ fn read_macro_args_from_tokens(
 }
 
 ///|
+fn expand_macro_args(
+  pp : Preprocessor,
+  args : Array[Array[Token]],
+) -> Array[Array[Token]] {
+  let out : Array[Array[Token]] = Array::new(capacity=args.length())
+  for arg in args {
+    out.push(expand_tokens(pp, arg))
+  }
+  out
+}
+
+///|
 fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
   let mut out_opt : Array[Token]? = None
   let mut changed = false
+  let len = tokens.length()
   let mut i = 0
-  while i < tokens.length() {
+  while i < len {
     let tok = tokens[i]
     let is_macro_name = is_macro_name_token(tok)
     if is_macro_name {
@@ -1225,7 +1238,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
             continue
           }
           if macro_def.is_function {
-            if i + 1 < tokens.length() && tokens[i + 1].kind == LParen {
+            if i + 1 < len && tokens[i + 1].kind == LParen {
               match read_macro_args_from_tokens(pp, tokens, i + 2, tok.loc) {
                 None => {
                   match out_opt {
@@ -1249,9 +1262,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                     Some(norm_raw) => {
                       if tok.lexeme == "__has_include" ||
                         tok.lexeme == "__has_include_next" {
-                        let expanded_args = norm_raw.map(arg => expand_tokens(
-                          pp, arg,
-                        ))
+                        let expanded_args = expand_macro_args(pp, norm_raw)
                         let include_next = tok.lexeme == "__has_include_next"
                         let arg_tokens = if expanded_args.length() > 0 {
                           expanded_args[0]
@@ -1276,9 +1287,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                         i = next_i
                         continue
                       }
-                      let expanded_args = norm_raw.map(arg => expand_tokens(
-                        pp, arg,
-                      ))
+                      let expanded_args = expand_macro_args(pp, norm_raw)
                       push_expanding(pp, tok.lexeme)
                       let replaced = substitute_macro(
                         macro_def,
@@ -1286,8 +1295,9 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                         expanded_args,
                         tok.loc,
                       )
-                      let expanded = expand_tokens(pp, replaced).map(t =>
-                        add_hidden(t, tok.lexeme)
+                      let expanded = add_hidden_tokens(
+                        expand_tokens(pp, replaced),
+                        tok.lexeme,
                       )
                       pop_expanding(pp)
                       let out = match out_opt {
@@ -1316,8 +1326,9 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
             continue
           } else {
             push_expanding(pp, tok.lexeme)
-            let expanded = expand_tokens(pp, macro_def.replacement).map(t =>
-              add_hidden(t, tok.lexeme)
+            let expanded = add_hidden_tokens(
+              expand_tokens(pp, macro_def.replacement),
+              tok.lexeme,
             )
             pop_expanding(pp)
             let out = match out_opt {
@@ -1423,13 +1434,17 @@ fn normalize_macro_tokens(tokens : Array[Token]) -> Array[Token] {
   if !needs_copy {
     return tokens
   }
-  tokens.map(tok => {
-    kind: tok.kind,
-    lexeme: tok.lexeme,
-    loc: tok.loc,
-    line_start: false,
-    hidden: tok.hidden,
-  })
+  let out : Array[Token] = Array::new(capacity=tokens.length())
+  for tok in tokens {
+    out.push({
+      kind: tok.kind,
+      lexeme: tok.lexeme,
+      loc: tok.loc,
+      line_start: false,
+      hidden: tok.hidden,
+    })
+  }
+  out
 }
 
 ///|
@@ -1444,10 +1459,11 @@ fn expand_if_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
   if !has_defined {
     return expand_tokens(pp, tokens)
   }
-  let out : Array[Token] = Array::new(capacity=tokens.length())
-  let mut segment : Array[Token] = []
+  let len = tokens.length()
+  let out : Array[Token] = Array::new(capacity=len)
+  let segment : Array[Token] = []
   let mut i = 0
-  while i < tokens.length() {
+  while i < len {
     let tok = tokens[i]
     if tok.kind == Ident && tok.lexeme == "defined" {
       if segment.length() > 0 {
@@ -1455,22 +1471,22 @@ fn expand_if_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
         for t in expanded {
           out.push(t)
         }
-        segment = []
+        segment.clear()
       }
       out.push(tok)
       i = i + 1
-      if i < tokens.length() && tokens[i].kind == LParen {
+      if i < len && tokens[i].kind == LParen {
         out.push(tokens[i])
         i = i + 1
-        if i < tokens.length() {
+        if i < len {
           out.push(tokens[i])
           i = i + 1
         }
-        if i < tokens.length() && tokens[i].kind == RParen {
+        if i < len && tokens[i].kind == RParen {
           out.push(tokens[i])
           i = i + 1
         }
-      } else if i < tokens.length() {
+      } else if i < len {
         out.push(tokens[i])
         i = i + 1
       }
@@ -1553,6 +1569,15 @@ fn add_hidden(tok : Token, name : String) -> Token {
       hidden: out,
     }
   }
+}
+
+///|
+fn add_hidden_tokens(tokens : Array[Token], name : String) -> Array[Token] {
+  let out : Array[Token] = Array::new(capacity=tokens.length())
+  for tok in tokens {
+    out.push(add_hidden(tok, name))
+  }
+  out
 }
 
 ///|
