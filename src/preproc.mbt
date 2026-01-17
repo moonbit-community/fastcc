@@ -44,6 +44,7 @@ struct Preprocessor {
   date_literal : String
   time_literal : String
   interner : StringInterner
+  hidden_singletons : FastMap[String, Array[String]]
 }
 
 ///|
@@ -222,6 +223,7 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
     date_literal,
     time_literal,
     interner,
+    hidden_singletons: fast_map_new(),
   }
   init_builtin_macros(pp)
   pp
@@ -1228,7 +1230,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
         None => ()
       }
     }
-    let hidden_ok = tok.hidden.length() == 0 || !tok.hidden.contains(tok.lexeme)
+    let hidden_ok = tok.hidden.length() == 0 || !hidden_contains(tok.hidden, tok.lexeme)
     if is_macro_name && hidden_ok {
       match pp.macros.get(tok.lexeme) {
         None => ()
@@ -1298,10 +1300,8 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                         expanded_args,
                         tok.loc,
                       )
-                      let expanded = add_hidden_tokens(
-                        expand_tokens(pp, replaced),
-                        tok.lexeme,
-                      )
+                      let expanded =
+                        add_hidden_tokens(pp, expand_tokens(pp, replaced), tok.lexeme)
                       pop_expanding(pp)
                       let out = match out_opt {
                         Some(arr) => arr
@@ -1329,10 +1329,8 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
             continue
           } else {
             push_expanding(pp, tok.lexeme)
-            let expanded = add_hidden_tokens(
-              expand_tokens(pp, macro_def.replacement),
-              tok.lexeme,
-            )
+            let expanded =
+              add_hidden_tokens(pp, expand_tokens(pp, macro_def.replacement), tok.lexeme)
             pop_expanding(pp)
             let out = match out_opt {
               Some(arr) => arr
@@ -1541,7 +1539,7 @@ fn merge_hidden(a : Array[String], b : Array[String]) -> Array[String] {
   }
   let out = a.copy()
   for h in b {
-    if !out.contains(h) {
+    if !hidden_contains(out, h) {
       out.push(h)
     }
   }
@@ -1549,17 +1547,40 @@ fn merge_hidden(a : Array[String], b : Array[String]) -> Array[String] {
 }
 
 ///|
-fn add_hidden(tok : Token, name : String) -> Token {
+fn hidden_contains(hidden : Array[String], name : String) -> Bool {
+  for h in hidden {
+    if physical_equal(h, name) || h == name {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn add_hidden(pp : Preprocessor, tok : Token, name : String) -> Token {
   if tok.hidden.length() == 0 {
+    match pp.hidden_singletons.get(name) {
+      Some(hidden) =>
+        return {
+          kind: tok.kind,
+          lexeme: tok.lexeme,
+          loc: tok.loc,
+          line_start: tok.line_start,
+          hidden,
+        }
+      None => ()
+    }
+    let hidden = [name]
+    pp.hidden_singletons.set(name, hidden)
     return {
       kind: tok.kind,
       lexeme: tok.lexeme,
       loc: tok.loc,
       line_start: tok.line_start,
-      hidden: [name],
+      hidden,
     }
   }
-  if tok.hidden.contains(name) {
+  if hidden_contains(tok.hidden, name) {
     tok
   } else {
     let out = tok.hidden.copy()
@@ -1575,10 +1596,14 @@ fn add_hidden(tok : Token, name : String) -> Token {
 }
 
 ///|
-fn add_hidden_tokens(tokens : Array[Token], name : String) -> Array[Token] {
+fn add_hidden_tokens(
+  pp : Preprocessor,
+  tokens : Array[Token],
+  name : String,
+) -> Array[Token] {
   let out : Array[Token] = Array::new(capacity=tokens.length())
   for tok in tokens {
-    out.push(add_hidden(tok, name))
+    out.push(add_hidden(pp, tok, name))
   }
   out
 }
@@ -2340,7 +2365,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
         None => ()
       }
     }
-    let hidden_ok = tok.hidden.length() == 0 || !tok.hidden.contains(tok.lexeme)
+    let hidden_ok = tok.hidden.length() == 0 || !hidden_contains(tok.hidden, tok.lexeme)
     if is_macro_name && hidden_ok {
       match pp.macros.get(tok.lexeme) {
         None => ()
@@ -2372,10 +2397,8 @@ fn next_pp_token(pp : Preprocessor) -> Token {
                       expanded_args,
                       tok.loc,
                     )
-                    let expanded = add_hidden_tokens(
-                      expand_tokens(pp, replaced),
-                      tok.lexeme,
-                    )
+                    let expanded =
+                      add_hidden_tokens(pp, expand_tokens(pp, replaced), tok.lexeme)
                     if expanded.length() > 0 {
                       pp.expanding_guards.push({ restore_len, })
                       push_tokens(pp, expanded)
@@ -2390,10 +2413,8 @@ fn next_pp_token(pp : Preprocessor) -> Token {
           } else {
             let restore_len = pp.pending.length()
             push_expanding(pp, tok.lexeme)
-            let expanded = add_hidden_tokens(
-              expand_tokens(pp, macro_def.replacement),
-              tok.lexeme,
-            )
+            let expanded =
+              add_hidden_tokens(pp, expand_tokens(pp, macro_def.replacement), tok.lexeme)
             if expanded.length() > 0 {
               pp.expanding_guards.push({ restore_len, })
               push_tokens(pp, expanded)
