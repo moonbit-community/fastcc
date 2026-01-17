@@ -1465,7 +1465,11 @@ fn scan_digits(text : String, start : Int, accept : (UInt16) -> Bool) -> Int {
 
 ///|
 fn slice_string_sem(text : String, start : Int, end : Int) -> String {
-  text.view(start_offset=start, end_offset=end).to_string()
+  try text[start:end] catch {
+    _ => ""
+  } noraise {
+    view => view.to_string()
+  }
 }
 
 ///|
