@@ -8,10 +8,11 @@ struct Lexer {
   mut col : Int
   mut line_start : Bool
   diags : DiagBag
+  interner : StringInterner
 }
 
 ///|
-fn new_lexer(file : SourceFile, diags : DiagBag) -> Lexer {
+fn new_lexer(file : SourceFile, diags : DiagBag, interner : StringInterner) -> Lexer {
   {
     file_id: file.id,
     text: file.text,
@@ -21,6 +22,7 @@ fn new_lexer(file : SourceFile, diags : DiagBag) -> Lexer {
     col: 1,
     line_start: true,
     diags,
+    interner,
   }
 }
 
@@ -272,7 +274,7 @@ fn lex_ident(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
   match keyword_lexeme {
     Some(lexeme) => make_token(kind, lexeme, loc, line_start)
     None => {
-      let name = name_view.to_string()
+      let name = lex.interner.intern_view(name_view)
       make_token(kind, name, loc, line_start)
     }
   }

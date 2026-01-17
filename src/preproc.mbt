@@ -43,6 +43,7 @@ struct Preprocessor {
   expanding_guards : Array[ExpandingGuard]
   date_literal : String
   time_literal : String
+  interner : StringInterner
 }
 
 ///|
@@ -196,8 +197,9 @@ fn init_builtin_macros(pp : Preprocessor) -> Unit {
 fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
   Preprocessor {
   let (date_literal, time_literal) = init_datetime_literals()
+  let interner = new_string_interner()
   let pp = {
-    lexer: new_lexer(file, diags),
+    lexer: new_lexer(file, diags, interner),
     lexer_stack: [],
     held_stack: [],
     path_stack: [],
@@ -219,6 +221,7 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
     expanding_guards: [],
     date_literal,
     time_literal,
+    interner,
   }
   init_builtin_macros(pp)
   pp
@@ -560,7 +563,7 @@ fn include_file(
           pp.dir_stack.push(pp.current_dir)
           pp.logical_path_stack.push(pp.logical_path)
           pp.line_adjust_stack.push(pp.line_adjust)
-          pp.lexer = new_lexer(file, pp.diags)
+          pp.lexer = new_lexer(file, pp.diags, pp.interner)
           pp.current_path = resolved
           pp.current_dir = dir_name(resolved)
           pp.logical_path = resolved
