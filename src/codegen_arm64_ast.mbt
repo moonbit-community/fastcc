@@ -2557,12 +2557,13 @@ fn collect_elided_array_items_codegen(
   start : Int,
   max_count : Int?,
 ) -> (Array[InitItem], Int) {
-  let collected : Array[InitItem] = []
-  let mut idx = start
   let limit = match max_count {
     None => items.length()
     Some(n) => if n < 0 { 0 } else { start + n }
   }
+  let max_items = if limit <= start { 0 } else { limit - start }
+  let collected : Array[InitItem] = Array::new(capacity=max_items)
+  let mut idx = start
   while idx < items.length() && idx < limit {
     let item = items[idx]
     if item.designators.length() > 0 {
@@ -3834,7 +3835,7 @@ fn arm64_pcs_aux(
   let mut nx = 0
   let mut nv = 0
   let mut ns = 32
-  let locs : Array[Int] = []
+  let locs : Array[Int] = Array::new(capacity=types.length())
   let is_macho = true
   for i = 0; i < types.length(); i = i + 1 {
     let ty = types[i]
@@ -4118,7 +4119,7 @@ fn gen_call_direct(
   let is_varargs_call = is_varargs && args.length() > fixed_count
   let variadic_index = if is_varargs_call { fixed_count } else { 0 }
 
-  let arg_tys : Array[CType] = []
+  let arg_tys : Array[CType] = Array::new(capacity=args.length())
   let mut i = 0
   while i < args.length() {
     let arg = args[i]
@@ -4191,11 +4192,11 @@ fn gen_call_with_layout(
   let stack_args_size = align_up(layout.stack_size, 16)
   let caller_saved_regs : Array[Int] = [9, 10, 11, 12, 13, 14, 15]
 
-  let arg_sizes : Array[Int] = []
-  let arg_aligns : Array[Int] = []
-  let arg_hfa_counts : Array[Int] = []
-  let arg_hfa_sizes : Array[Int] = []
-  let arg_is_agg : Array[Bool] = []
+  let arg_sizes : Array[Int] = Array::new(capacity=arg_tys.length())
+  let arg_aligns : Array[Int] = Array::new(capacity=arg_tys.length())
+  let arg_hfa_counts : Array[Int] = Array::new(capacity=arg_tys.length())
+  let arg_hfa_sizes : Array[Int] = Array::new(capacity=arg_tys.length())
+  let arg_is_agg : Array[Bool] = Array::new(capacity=arg_tys.length())
 
   let mut i = 0
   while i < arg_tys.length() {
@@ -4232,8 +4233,8 @@ fn gen_call_with_layout(
     i = i + 1
   }
 
-  let spill_offs : Array[Int?] = []
-  let copy_offs : Array[Int?] = []
+  let spill_offs : Array[Int?] = Array::new(capacity=args.length())
+  let copy_offs : Array[Int?] = Array::new(capacity=args.length())
   let mut scratch_off = stack_args_size
 
   i = 0
@@ -4487,7 +4488,7 @@ fn gen_call_with_layout(
     i = i + 1
   }
 
-  let used_caller_regs : Array[(Int, Int)] = []
+  let used_caller_regs : Array[(Int, Int)] = Array::new(capacity=caller_saved_regs.length())
   i = 0
   while i < caller_saved_regs.length() {
     let reg = caller_saved_regs[i]
@@ -4625,7 +4626,7 @@ fn gen_call_expr_impl(
     _ => ()
   }
 
-  let arg_tys : Array[CType] = []
+  let arg_tys : Array[CType] = Array::new(capacity=args.length())
   let mut i = 0
   while i < args.length() {
     let param_ty =
@@ -9952,7 +9953,7 @@ fn compute_frame_size(sem : SemContext, func : FuncDef, bag : DiagBag) -> Int {
   let alloc = new_local_alloc(sem, func.return_type, func.name)
   cg_push_scope(alloc)
   reserve_sret_slot(alloc, func.loc, bag)
-  let param_tys : Array[CType] = []
+  let param_tys : Array[CType] = Array::new(capacity=func.params.length())
   for p in func.params {
     param_tys.push(adjust_param_type_for_local(p.ty))
   }
@@ -10085,7 +10086,7 @@ fn gen_func_def(
       )
   }
 
-  let param_tys : Array[CType] = []
+  let param_tys : Array[CType] = Array::new(capacity=func.params.length())
   for p in func.params {
     param_tys.push(adjust_param_type_for_local(p.ty))
   }
