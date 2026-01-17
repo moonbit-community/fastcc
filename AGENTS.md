@@ -27,6 +27,7 @@ bd sync               # Sync with git
    ```bash
    git pull --rebase
    bd sync
+   # IMPORTANT! bd sync will move all changes commited  to stage area, otherwise all changes commited before will be revert by `bd sync` commit
    git push
    git status  # MUST show "up to date with origin"
    ```
