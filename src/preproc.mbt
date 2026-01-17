@@ -1112,13 +1112,14 @@ fn read_macro_args_from_tokens(
   start : Int,
   loc : SrcLoc,
 ) -> (Array[Array[Token]], Int)? {
+  let len = tokens.length()
   let args : Array[Array[Token]] = []
   let mut current : Array[Token] = []
   let mut depth_paren = 0
   let mut depth_brace = 0
   let mut depth_bracket = 0
   let mut i = start
-  while i < tokens.length() {
+  while i < len {
     let tok = tokens[i]
     if tok.kind == LParen {
       depth_paren = depth_paren + 1

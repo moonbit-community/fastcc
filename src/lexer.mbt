@@ -258,20 +258,16 @@ fn slice_to_view(text : String, start : Int, end : Int) -> StringView {
 ///|
 fn lex_ident(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
   let start = lex.index
-  let _ = advance(lex)
-  while true {
-    match peek_char(lex) {
-      Some(code) => {
-        if is_ident_continue(code) {
-          let _ = advance(lex)
-          continue
-        }
-        break
-      }
-      None => break
-    }
+  let mut idx = start + 1
+  let text = lex.text
+  let len = lex.text_len
+  while idx < len && is_ident_continue(text[idx]) {
+    idx = idx + 1
   }
-  let name_view = slice_to_view(lex.text, start, lex.index)
+  lex.index = idx
+  lex.col = lex.col + (idx - start)
+  lex.line_start = false
+  let name_view = slice_to_view(text, start, idx)
   let (kind, keyword_lexeme) = keyword_or_ident_view(name_view)
   match keyword_lexeme {
     Some(lexeme) => make_token(kind, lexeme, loc, line_start)
