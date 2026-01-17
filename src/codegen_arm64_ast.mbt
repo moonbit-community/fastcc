@@ -1191,11 +1191,21 @@ fn reserve_agg_temp_decl(alloc : LocalAlloc, decl : VarDecl) -> Unit {
 fn reserve_agg_temp_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
   match stmt {
     Stmt::Compound(stmts~, ..) => {
-      cg_push_scope(alloc)
+      let mut needs_scope = false
+      for s in stmts {
+        if s is Stmt::DeclStmt(..) {
+          needs_scope = true
+        }
+      }
+      if needs_scope {
+        cg_push_scope(alloc)
+      }
       for s in stmts {
         reserve_agg_temp_stmt(alloc, s)
       }
-      cg_pop_scope(alloc)
+      if needs_scope {
+        cg_pop_scope(alloc)
+      }
     }
     Stmt::DeclStmt(decls~, ..) =>
       for d in decls {
@@ -1222,7 +1232,13 @@ fn reserve_agg_temp_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
       reserve_agg_temp_expr(alloc, cond)
     }
     Stmt::For(init~, cond~, step~, body~, ..) => {
-      cg_push_scope(alloc)
+      let needs_scope = match init {
+        Some(Stmt::DeclStmt(..)) => true
+        _ => false
+      }
+      if needs_scope {
+        cg_push_scope(alloc)
+      }
       match init {
         None => ()
         Some(s) => reserve_agg_temp_stmt(alloc, s)
@@ -1236,7 +1252,9 @@ fn reserve_agg_temp_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
         Some(e) => reserve_agg_temp_expr(alloc, e)
       }
       reserve_agg_temp_stmt(alloc, body)
-      cg_pop_scope(alloc)
+      if needs_scope {
+        cg_pop_scope(alloc)
+      }
     }
     Stmt::Switch(cond~, body~, ..) => {
       reserve_agg_temp_expr(alloc, cond)
