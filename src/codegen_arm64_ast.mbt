@@ -430,6 +430,7 @@ fn alloc_local(
   alloc.scopes[idx].set(name, slot)
   let sem_idx = alloc.sem.locals.length() - 1
   alloc.sem.locals[sem_idx].set(name, ty)
+  record_local_binding(alloc.sem, name, ty)
   Some(slot)
 }
 
@@ -449,6 +450,7 @@ fn alloc_local_byref(
   alloc.scopes[idx].set(name, slot)
   let sem_idx = alloc.sem.locals.length() - 1
   alloc.sem.locals[sem_idx].set(name, ty)
+  record_local_binding(alloc.sem, name, ty)
   slot
 }
 

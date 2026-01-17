@@ -142,20 +142,7 @@ fn char_pointer_type() -> CType {
 
 ///|
 fn lookup_local_only(ctx : SemContext, name : String) -> CType? {
-  let found = ctx.local_values.get(name)
-  if found is Some(_) {
-    return found
-  }
-  let mut i = ctx.locals.length()
-  while i > 0 {
-    i = i - 1
-    let scope = ctx.locals[i]
-    match scope.get(name) {
-      None => ()
-      Some(ty) => return Some(ty)
-    }
-  }
-  None
+  ctx.local_values.get(name)
 }
 
 ///|
@@ -2469,6 +2456,18 @@ fn update_decl_type(
   } else if ctx.globals.contains(name) {
     ctx.globals.set(name, ty)
   }
+}
+
+///|
+fn record_local_binding(ctx : SemContext, name : String, ty : CType) -> Unit {
+  if ctx.locals.length() == 0 {
+    return
+  }
+  let idx = ctx.locals.length() - 1
+  let overrides = ctx.local_overrides[idx]
+  overrides.push((name, ctx.local_values.get(name)))
+  ctx.local_overrides[idx] = overrides
+  ctx.local_values.set(name, ty)
 }
 
 ///|
@@ -5057,12 +5056,9 @@ fn declare_local(
   if scope.contains(name) {
     add_sem_error(ctx, loc, "redefinition of '\{name}'")
   } else {
-    let overrides = ctx.local_overrides[idx]
-    overrides.push((name, ctx.local_values.get(name)))
-    ctx.local_overrides[idx] = overrides
     scope.set(name, ty)
     ctx.locals[idx] = scope
-    ctx.local_values.set(name, ty)
+    record_local_binding(ctx, name, ty)
   }
 }
 
@@ -5146,20 +5142,6 @@ fn merge_global_decl_type(existing : CType, incoming : CType) -> CType {
 ///|
 fn lookup_value(ctx : SemContext, name : String) -> CType? {
   let mut found = ctx.local_values.get(name)
-  if found is None {
-    let mut i = ctx.locals.length()
-    while i > 0 {
-      i = i - 1
-      let scope = ctx.locals[i]
-      match scope.get(name) {
-        Some(ty) => {
-          found = Some(ty)
-          break
-        }
-        None => ()
-      }
-    }
-  }
   if found is None {
     found = ctx.globals.get(name)
   }
