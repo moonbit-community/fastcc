@@ -29,12 +29,16 @@ struct SemContext {
   enum_consts : Map[String, Int]
   enum_types : Map[String, CType]
   compound_literal_types : Map[String, CType]
+  func_agg_temps : Map[String, (Int, Int)]
   switch_stack : Array[SwitchInfo]
   mut labels_defined : Map[String, Bool]
   mut labels_used : Array[(String, SrcLoc)]
   mut loop_depth : Int
   mut switch_depth : Int
   mut current_func_name : String?
+  mut current_agg_temp_size : Int
+  mut current_agg_temp_align : Int
+  mut record_agg_temps : Bool
 }
 
 ///|
@@ -68,12 +72,16 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     enum_consts: {},
     enum_types: {},
     compound_literal_types: {},
+    func_agg_temps: {},
     switch_stack: [],
     labels_defined: {},
     labels_used: [],
     loop_depth: 0,
     switch_depth: 0,
     current_func_name: None,
+    current_agg_temp_size: 0,
+    current_agg_temp_align: 1,
+    record_agg_temps: true,
   }
 }
 
@@ -205,29 +213,23 @@ fn strip_qualifiers(ty : CType) -> CType {
 }
 
 ///|
-fn strip_attrs(ty : CType) -> CType {
+fn strip_qual_attrs(ty : CType) -> CType {
   match ty {
-    CType::Attributed(base~, ..) => strip_attrs(base)
-    CType::Qualified(qual~, base~) =>
-      CType::Qualified(qual~, base=strip_attrs(base))
-    CType::Pointer(inner) => CType::Pointer(strip_attrs(inner))
+    CType::Qualified(base~, ..) => strip_qual_attrs(base)
+    CType::Attributed(base~, ..) => strip_qual_attrs(base)
+    CType::Pointer(inner) => CType::Pointer(strip_qual_attrs(inner))
     CType::Array(elem~, size~, size_expr~) =>
-      CType::Array(elem=strip_attrs(elem), size~, size_expr~)
+      CType::Array(elem=strip_qual_attrs(elem), size~, size_expr~)
     CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) =>
       CType::Function(
-        return_type=strip_attrs(return_type),
-        params=params.map(strip_attrs),
+        return_type=strip_qual_attrs(return_type),
+        params=params.map(strip_qual_attrs),
         varargs~,
         is_old_style~,
         call_conv~,
       )
     _ => ty
   }
-}
-
-///|
-fn strip_qual_attrs(ty : CType) -> CType {
-  strip_attrs(strip_qualifiers(ty))
 }
 
 ///|
@@ -639,6 +641,49 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
 }
 
 ///|
+fn record_agg_temp_for_type(ctx : SemContext, ty : CType, loc : SrcLoc) -> Unit {
+  if ctx.current_func_name is None {
+    return
+  }
+  if !ctx.record_agg_temps {
+    return
+  }
+  match strip_qual_attrs(ty) {
+    CType::Struct(..) | CType::Union(..) =>
+      match type_size_align(ctx, ty, loc) {
+        None => ()
+        Some((size, align)) =>
+          if size > 0 {
+            if size > ctx.current_agg_temp_size {
+              ctx.current_agg_temp_size = size
+            }
+            if align > ctx.current_agg_temp_align {
+              ctx.current_agg_temp_align = align
+            }
+          }
+      }
+    _ => ()
+  }
+}
+
+///|
+fn maybe_record_agg_temp_for_expr(
+  ctx : SemContext,
+  expr : Expr,
+  ty : CType,
+) -> Unit {
+  if ctx.current_func_name is None {
+    return
+  }
+  if !ctx.record_agg_temps {
+    return
+  }
+  if !expr_is_lvalue_simple(expr) && expr_may_be_aggregate(expr) {
+    record_agg_temp_for_type(ctx, ty, expr_loc(expr))
+  }
+}
+
+///|
 fn ensure_struct_fields(
   ctx : SemContext,
   tag : String,
@@ -909,7 +954,9 @@ fn union_size_align(
 
 ///|
 fn type_for_sizeof(ctx : SemContext, expr : Expr) -> CType {
-  match expr {
+  let prev = ctx.record_agg_temps
+  ctx.record_agg_temps = false
+  let ty = match expr {
     Expr::Ident(name~, loc~) =>
       match lookup_value(ctx, name) {
         Some(ty) => ty
@@ -923,14 +970,18 @@ fn type_for_sizeof(ctx : SemContext, expr : Expr) -> CType {
     _ =>
       match type_of_lvalue_optional(ctx, expr) {
         Some(ty) => ty
-        None => type_of_expr(ctx, expr)
+        None => type_of_expr_impl(ctx, expr)
       }
   }
+  ctx.record_agg_temps = prev
+  ty
 }
 
 ///|
 fn type_for_typeof(ctx : SemContext, expr : Expr) -> CType {
-  match expr {
+  let prev = ctx.record_agg_temps
+  ctx.record_agg_temps = false
+  let ty = match expr {
     Expr::Ident(name~, loc~) =>
       match lookup_value(ctx, name) {
         Some(ty) => ty
@@ -941,8 +992,10 @@ fn type_for_typeof(ctx : SemContext, expr : Expr) -> CType {
       }
     Expr::StringLit(length~, ..) =>
       CType::Array(elem=char_type(), size=Some(length), size_expr=None)
-    _ => type_of_expr(ctx, expr)
+    _ => type_of_expr_impl(ctx, expr)
   }
+  ctx.record_agg_temps = prev
+  ty
 }
 
 ///|
@@ -2216,7 +2269,11 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
   )
   add_function_sig(ctx, func_def.name, sig, func_def.loc, is_def=true)
   let prev_func = ctx.current_func_name
+  let prev_agg_size = ctx.current_agg_temp_size
+  let prev_agg_align = ctx.current_agg_temp_align
   ctx.current_func_name = Some(func_def.name)
+  ctx.current_agg_temp_size = 0
+  ctx.current_agg_temp_align = 1
   ctx.labels_defined = {}
   ctx.labels_used = []
   ctx.loop_depth = 0
@@ -2242,6 +2299,12 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
   }
   check_stmt(ctx, func_def.body, resolved_return)
   check_label_uses(ctx)
+  ctx.func_agg_temps.set(
+    func_def.name,
+    (ctx.current_agg_temp_size, ctx.current_agg_temp_align),
+  )
+  ctx.current_agg_temp_size = prev_agg_size
+  ctx.current_agg_temp_align = prev_agg_align
   ctx.current_func_name = prev_func
   pop_scope(ctx)
 }
@@ -3684,17 +3747,17 @@ fn type_of_lvalue_optional(ctx : SemContext, expr : Expr) -> CType? {
       match
         index_access_type(
           ctx,
-          type_of_expr(ctx, base),
-          type_of_expr(ctx, index),
+          type_of_expr_impl(ctx, base),
+          type_of_expr_impl(ctx, index),
           loc,
         ) {
         Some(ty) => Some(ty)
         None => None
       }
     Expr::Member(base~, name~, is_arrow~, loc~) =>
-      member_access_type(ctx, type_of_expr(ctx, base), name, is_arrow~, loc)
+      member_access_type(ctx, type_of_expr_impl(ctx, base), name, is_arrow~, loc)
     Expr::Unary(op=UnaryOp::Deref, expr=inner, loc~) => {
-      let inner_ty = type_of_expr(ctx, inner)
+      let inner_ty = type_of_expr_impl(ctx, inner)
       match strip_top_qualifiers(inner_ty) {
         CType::Pointer(pointee) => Some(pointee)
         _ => {
@@ -3790,6 +3853,13 @@ fn stmt_expr_lvalue_type(
 
 ///|
 fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
+  let ty = type_of_expr_impl(ctx, expr)
+  maybe_record_agg_temp_for_expr(ctx, expr, ty)
+  ty
+}
+
+///|
+fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
   match expr {
     Expr::IntLit(value~, ..) => int_literal_type(value)
     Expr::FloatLit(value~, ..) => float_type_from_literal(value)
@@ -4146,12 +4216,16 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
         Some(ty) => decay_type(ty)
         None => default_int_type()
       }
-    Expr::Member(base~, name~, is_arrow~, loc~) =>
-      match
-        member_access_type(ctx, type_of_expr(ctx, base), name, is_arrow~, loc) {
+    Expr::Member(base~, name~, is_arrow~, loc~) => {
+      let base_ty = type_of_expr(ctx, base)
+      if !is_arrow && !expr_is_lvalue_simple(base) {
+        record_agg_temp_for_type(ctx, base_ty, loc)
+      }
+      match member_access_type(ctx, base_ty, name, is_arrow~, loc) {
         Some(ty) => decay_type(ty)
         None => default_int_type()
       }
+    }
     Expr::Call(callee~, args~, loc~) => {
       if callee is Expr::Ident(name~, ..) {
         if name == "__builtin_choose_expr" {
@@ -4161,9 +4235,13 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
           }
           let cond = eval_const_expr(ctx, args[0], loc)
           if cond != 0 {
-            return type_of_expr(ctx, args[1])
+            let chosen = type_of_expr(ctx, args[1])
+            ignore(type_of_expr(ctx, args[2]))
+            return chosen
           } else {
-            return type_of_expr(ctx, args[2])
+            let chosen = type_of_expr(ctx, args[2])
+            ignore(type_of_expr(ctx, args[1]))
+            return chosen
           }
         }
         if name == "__builtin_expect" {
