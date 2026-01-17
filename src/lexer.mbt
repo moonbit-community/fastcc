@@ -286,159 +286,85 @@ fn lex_number(
   started_with_dot : Bool,
 ) -> Token {
   let start = lex.index
+  let text = lex.text
+  let len = lex.text_len
+  let mut idx = start
   let mut is_float = started_with_dot
   let mut is_hex = false
   if started_with_dot {
-    let _ = advance(lex)
-    while true {
-      match peek_char(lex) {
-        Some(code) if is_digit(code) => {
-          let _ = advance(lex)
-          continue
-        }
-        _ => break
-      }
+    idx = start + 1
+    while idx < len && is_digit(text[idx]) {
+      idx = idx + 1
     }
   } else {
-    match peek_char(lex) {
-      Some(48) =>
-        match peek_char_offset(lex, 1) {
-          Some(88) => {
-            is_hex = true
-            let _ = advance(lex)
-            let _ = advance(lex)
-            while true {
-              match peek_char(lex) {
-                Some(code) if is_hex_digit(code) => {
-                  let _ = advance(lex)
-                  continue
-                }
-                _ => break
-              }
-            }
+    if idx < len && text[idx] == 48 {
+      let next = idx + 1
+      if next < len {
+        let next_code = text[next]
+        if next_code == 88 || next_code == 120 {
+          is_hex = true
+          idx = idx + 2
+          while idx < len && is_hex_digit(text[idx]) {
+            idx = idx + 1
           }
-          Some(120) => {
-            is_hex = true
-            let _ = advance(lex)
-            let _ = advance(lex)
-            while true {
-              match peek_char(lex) {
-                Some(code) if is_hex_digit(code) => {
-                  let _ = advance(lex)
-                  continue
-                }
-                _ => break
-              }
-            }
+        } else if next_code == 66 || next_code == 98 {
+          idx = idx + 2
+          while idx < len && is_bin_digit(text[idx]) {
+            idx = idx + 1
           }
-          Some(66) => {
-            let _ = advance(lex)
-            let _ = advance(lex)
-            while true {
-              match peek_char(lex) {
-                Some(code) if is_bin_digit(code) => {
-                  let _ = advance(lex)
-                  continue
-                }
-                _ => break
-              }
-            }
-          }
-          Some(98) => {
-            let _ = advance(lex)
-            let _ = advance(lex)
-            while true {
-              match peek_char(lex) {
-                Some(code) if is_bin_digit(code) => {
-                  let _ = advance(lex)
-                  continue
-                }
-                _ => break
-              }
-            }
-          }
-          _ => {
-            let _ = advance(lex)
-            while true {
-              match peek_char(lex) {
-                Some(code) if is_digit(code) => {
-                  let _ = advance(lex)
-                  continue
-                }
-                _ => break
-              }
-            }
+        } else {
+          idx = idx + 1
+          while idx < len && is_digit(text[idx]) {
+            idx = idx + 1
           }
         }
-      _ => {
-        let _ = advance(lex)
-        while true {
-          match peek_char(lex) {
-            Some(code) if is_digit(code) => {
-              let _ = advance(lex)
-              continue
-            }
-            _ => break
-          }
-        }
+      } else {
+        idx = idx + 1
+      }
+    } else {
+      idx = idx + 1
+      while idx < len && is_digit(text[idx]) {
+        idx = idx + 1
       }
     }
     let mut dot_ok = true
-    if peek_char_offset(lex, 1) is Some(46) {
+    if idx + 1 < len && text[idx + 1] == 46 {
       dot_ok = false
     }
-    if peek_char(lex) is Some(46) && dot_ok {
+    if idx < len && text[idx] == 46 && dot_ok {
       is_float = true
-      let _ = advance(lex)
+      idx = idx + 1
       let accept_digit = if is_hex { is_hex_digit } else { is_digit }
-      while true {
-        match peek_char(lex) {
-          Some(code) if accept_digit(code) => {
-            let _ = advance(lex)
-            continue
-          }
-          _ => break
-        }
+      while idx < len && accept_digit(text[idx]) {
+        idx = idx + 1
       }
     }
   }
   let exp_char : UInt16 = if is_hex { 112 } else { 101 }
   let exp_char_upper : UInt16 = if is_hex { 80 } else { 69 }
-  if peek_char(lex) is Some(code) &&
-    (code == exp_char || code == exp_char_upper) {
-    is_float = true
-    let _ = advance(lex)
-    match peek_char(lex) {
-      Some(43) => {
-        let _ = advance(lex)
-
-      }
-      Some(45) => {
-        let _ = advance(lex)
-
-      }
-      _ => ()
-    }
-    while true {
-      match peek_char(lex) {
-        Some(code) if is_digit(code) => {
-          let _ = advance(lex)
-          continue
+  if idx < len {
+    let code = text[idx]
+    if code == exp_char || code == exp_char_upper {
+      is_float = true
+      idx = idx + 1
+      if idx < len {
+        let sign = text[idx]
+        if sign == 43 || sign == 45 {
+          idx = idx + 1
         }
-        _ => break
+      }
+      while idx < len && is_digit(text[idx]) {
+        idx = idx + 1
       }
     }
   }
-  while true {
-    match peek_char(lex) {
-      Some(code) if is_ident_continue(code) => {
-        let _ = advance(lex)
-        continue
-      }
-      _ => break
-    }
+  while idx < len && is_ident_continue(text[idx]) {
+    idx = idx + 1
   }
-  let lit = slice_to_string(lex.text, start, lex.index)
+  lex.index = idx
+  lex.col = lex.col + (idx - start)
+  lex.line_start = false
+  let lit = slice_to_string(text, start, idx)
   let kind = if is_float { TokenKind::FloatLit } else { TokenKind::IntLit }
   make_token(kind, lit, loc, line_start)
 }
