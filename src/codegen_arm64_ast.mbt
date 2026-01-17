@@ -2160,10 +2160,12 @@ fn resolve_init_designator_offset_type(
       InitDesignator::Field(name~, loc=des_loc) =>
         match strip_qual_attrs(current) {
           CType::Struct(name=tag, fields=field_list, attrs=_) => {
-            let fields = match field_list {
-              Some(list) => Some(record_items_to_fields(list))
-              None => lookup_struct_fields(sem, tag, is_union=false)
-            }
+            let fields = resolve_struct_fields(
+              sem,
+              tag,
+              field_list,
+              is_union=false,
+            )
             match fields {
               None => {
                 add_error(bag, des_loc, "codegen: incomplete struct '\{tag}'")
@@ -2187,10 +2189,12 @@ fn resolve_init_designator_offset_type(
             }
           }
           CType::Union(name=tag, fields=field_list, attrs=_) => {
-            let fields = match field_list {
-              Some(list) => Some(record_items_to_fields(list))
-              None => lookup_struct_fields(sem, tag, is_union=true)
-            }
+            let fields = resolve_struct_fields(
+              sem,
+              tag,
+              field_list,
+              is_union=true,
+            )
             match fields {
               None => {
                 add_error(bag, des_loc, "codegen: incomplete union '\{tag}'")
@@ -2411,10 +2415,12 @@ fn collect_elided_array_items_codegen(
 fn has_single_init_field_codegen(sem : SemContext, ty : CType) -> Bool {
   match strip_qual_attrs(ty) {
     CType::Struct(name=tag, fields=field_list, attrs=_) => {
-      let fields = match field_list {
-        Some(list) => Some(record_items_to_fields(list))
-        None => lookup_struct_fields(sem, tag, is_union=false)
-      }
+      let fields = resolve_struct_fields(
+        sem,
+        tag,
+        field_list,
+        is_union=false,
+      )
       match fields {
         None => false
         Some(list) =>
@@ -2425,10 +2431,12 @@ fn has_single_init_field_codegen(sem : SemContext, ty : CType) -> Bool {
       }
     }
     CType::Union(name=tag, fields=field_list, attrs=_) => {
-      let fields = match field_list {
-        Some(list) => Some(record_items_to_fields(list))
-        None => lookup_struct_fields(sem, tag, is_union=true)
-      }
+      let fields = resolve_struct_fields(
+        sem,
+        tag,
+        field_list,
+        is_union=true,
+      )
       match fields {
         None => false
         Some(list) =>
@@ -2632,10 +2640,12 @@ fn gen_initializer_to_addr(
           }
         }
         CType::Struct(name=tag, fields=field_list, attrs=_) => {
-          let fields = match field_list {
-            Some(list) => Some(record_items_to_fields(list))
-            None => lookup_struct_fields(alloc.sem, tag, is_union=false)
-          }
+          let fields = resolve_struct_fields(
+            alloc.sem,
+            tag,
+            field_list,
+            is_union=false,
+          )
           let list = match fields {
             None => {
               add_error(bag, loc, "codegen: incomplete struct '\{tag}'")
@@ -2854,10 +2864,12 @@ fn gen_initializer_to_addr(
           }
         }
         CType::Union(name=tag, fields=field_list, attrs=_) => {
-          let fields = match field_list {
-            Some(list) => Some(record_items_to_fields(list))
-            None => lookup_struct_fields(alloc.sem, tag, is_union=true)
-          }
+          let fields = resolve_struct_fields(
+            alloc.sem,
+            tag,
+            field_list,
+            is_union=true,
+          )
           let list = match fields {
             None => {
               add_error(bag, loc, "codegen: incomplete union '\{tag}'")
@@ -10652,10 +10664,12 @@ fn fill_global_initializer_bytes(
           }
         }
         CType::Struct(name=tag, fields=field_list, attrs=_) => {
-          let fields = match field_list {
-            Some(list) => Some(record_items_to_fields(list))
-            None => lookup_struct_fields(sem, tag, is_union=false)
-          }
+          let fields = resolve_struct_fields(
+            sem,
+            tag,
+            field_list,
+            is_union=false,
+          )
           let list = match fields {
             None => {
               add_error(bag, loc, "codegen: incomplete struct '\{tag}'")
@@ -10853,10 +10867,12 @@ fn fill_global_initializer_bytes(
           }
         }
         CType::Union(name=tag, fields=field_list, attrs=_) => {
-          let fields = match field_list {
-            Some(list) => Some(record_items_to_fields(list))
-            None => lookup_struct_fields(sem, tag, is_union=true)
-          }
+          let fields = resolve_struct_fields(
+            sem,
+            tag,
+            field_list,
+            is_union=true,
+          )
           let list = match fields {
             None => {
               add_error(bag, loc, "codegen: incomplete union '\{tag}'")

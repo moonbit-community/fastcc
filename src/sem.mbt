@@ -693,7 +693,14 @@ fn ensure_struct_fields(
 ) -> RecordDef? {
   match fields {
     Some(list) =>
-      Some({ fields: record_items_to_fields(list), attrs: empty_attrs() })
+      if tag != "" {
+        match lookup_struct_def(ctx, tag, is_union=is_union) {
+          Some(def) => Some(def)
+          None => Some({ fields: record_items_to_fields(list), attrs: empty_attrs() })
+        }
+      } else {
+        Some({ fields: record_items_to_fields(list), attrs: empty_attrs() })
+      }
     None =>
       if is_union {
         match ctx.union_defs.get(tag) {
@@ -2716,10 +2723,12 @@ fn check_initializer_list(
       }
     }
     CType::Struct(name=tag, fields=field_list, attrs=_) => {
-      let fields = match field_list {
-        Some(list) => Some(record_items_to_fields(list))
-        None => lookup_struct_fields(ctx, tag, is_union=false)
-      }
+      let fields = resolve_struct_fields(
+        ctx,
+        tag,
+        field_list,
+        is_union=false,
+      )
       match fields {
         None => add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
         Some(list) =>
@@ -2728,10 +2737,7 @@ fn check_initializer_list(
       None
     }
     CType::Union(name=tag, fields=field_list, attrs=_) => {
-      let fields = match field_list {
-        Some(list) => Some(record_items_to_fields(list))
-        None => lookup_struct_fields(ctx, tag, is_union=true)
-      }
+      let fields = resolve_struct_fields(ctx, tag, field_list, is_union=true)
       match fields {
         None => add_sem_error(ctx, loc, "incomplete union '\{tag}'")
         Some(list) =>
@@ -2872,10 +2878,12 @@ fn collect_elided_array_items(
 fn has_single_init_field(ctx : SemContext, ty : CType) -> Bool {
   match strip_qual_attrs(ty) {
     CType::Struct(name=tag, fields=field_list, attrs=_) => {
-      let fields = match field_list {
-        Some(list) => Some(record_items_to_fields(list))
-        None => lookup_struct_fields(ctx, tag, is_union=false)
-      }
+      let fields = resolve_struct_fields(
+        ctx,
+        tag,
+        field_list,
+        is_union=false,
+      )
       match fields {
         None => false
         Some(list) =>
@@ -2886,10 +2894,12 @@ fn has_single_init_field(ctx : SemContext, ty : CType) -> Bool {
       }
     }
     CType::Union(name=tag, fields=field_list, attrs=_) => {
-      let fields = match field_list {
-        Some(list) => Some(record_items_to_fields(list))
-        None => lookup_struct_fields(ctx, tag, is_union=true)
-      }
+      let fields = resolve_struct_fields(
+        ctx,
+        tag,
+        field_list,
+        is_union=true,
+      )
       match fields {
         None => false
         Some(list) =>
@@ -2961,10 +2971,12 @@ fn resolve_designator_type(
       InitDesignator::Field(name~, ..) =>
         match strip_qual_attrs(current) {
           CType::Struct(name=tag, fields=field_list, attrs=_) => {
-            let fields = match field_list {
-              Some(list) => Some(record_items_to_fields(list))
-              None => lookup_struct_fields(ctx, tag, is_union=false)
-            }
+            let fields = resolve_struct_fields(
+              ctx,
+              tag,
+              field_list,
+              is_union=false,
+            )
             match fields {
               None => {
                 add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
@@ -2981,10 +2993,12 @@ fn resolve_designator_type(
             }
           }
           CType::Union(name=tag, fields=field_list, attrs=_) => {
-            let fields = match field_list {
-              Some(list) => Some(record_items_to_fields(list))
-              None => lookup_struct_fields(ctx, tag, is_union=true)
-            }
+            let fields = resolve_struct_fields(
+              ctx,
+              tag,
+              field_list,
+              is_union=true,
+            )
             match fields {
               None => {
                 add_sem_error(ctx, loc, "incomplete union '\{tag}'")
@@ -3459,10 +3473,41 @@ fn lookup_struct_fields(
   name : String,
   is_union~ : Bool,
 ) -> Array[Field]? {
+  match lookup_struct_def(ctx, name, is_union=is_union) {
+    Some(def) => Some(def.fields)
+    None => None
+  }
+}
+
+///|
+fn lookup_struct_def(
+  ctx : SemContext,
+  name : String,
+  is_union~ : Bool,
+) -> RecordDef? {
   let defs = if is_union { ctx.union_defs } else { ctx.struct_defs }
   match defs.get(name) {
     None => None
-    Some(def) => if def.fields.length() == 0 { None } else { Some(def.fields) }
+    Some(def) => if def.fields.length() == 0 { None } else { Some(def) }
+  }
+}
+
+///|
+fn resolve_struct_fields(
+  ctx : SemContext,
+  tag : String,
+  fields : Array[RecordItem]?,
+  is_union~ : Bool,
+) -> Array[Field]? {
+  if tag != "" {
+    match lookup_struct_fields(ctx, tag, is_union=is_union) {
+      Some(list) => return Some(list)
+      None => ()
+    }
+  }
+  match fields {
+    Some(list) => Some(record_items_to_fields(list))
+    None => None
   }
 }
 
@@ -3475,10 +3520,12 @@ fn find_field(ctx : SemContext, fields : Array[Field], name : String) -> Field? 
     if field.name == "" {
       match strip_qual_attrs(field.ty) {
         CType::Struct(name=tag, fields=field_list, attrs=_) => {
-          let nested = match field_list {
-            Some(list) => Some(record_items_to_fields(list))
-            None => lookup_struct_fields(ctx, tag, is_union=false)
-          }
+          let nested = resolve_struct_fields(
+            ctx,
+            tag,
+            field_list,
+            is_union=false,
+          )
           match nested {
             None => ()
             Some(list) =>
@@ -3489,10 +3536,12 @@ fn find_field(ctx : SemContext, fields : Array[Field], name : String) -> Field? 
           }
         }
         CType::Union(name=tag, fields=field_list, attrs=_) => {
-          let nested = match field_list {
-            Some(list) => Some(record_items_to_fields(list))
-            None => lookup_struct_fields(ctx, tag, is_union=true)
-          }
+          let nested = resolve_struct_fields(
+            ctx,
+            tag,
+            field_list,
+            is_union=true,
+          )
           match nested {
             None => ()
             Some(list) =>
@@ -3522,10 +3571,12 @@ fn find_field_index(
     if fields[i].name == "" {
       match strip_qual_attrs(fields[i].ty) {
         CType::Struct(name=tag, fields=field_list, attrs=_) => {
-          let nested = match field_list {
-            Some(list) => Some(record_items_to_fields(list))
-            None => lookup_struct_fields(ctx, tag, is_union=false)
-          }
+          let nested = resolve_struct_fields(
+            ctx,
+            tag,
+            field_list,
+            is_union=false,
+          )
           match nested {
             None => ()
             Some(list) =>
@@ -3536,10 +3587,12 @@ fn find_field_index(
           }
         }
         CType::Union(name=tag, fields=field_list, attrs=_) => {
-          let nested = match field_list {
-            Some(list) => Some(record_items_to_fields(list))
-            None => lookup_struct_fields(ctx, tag, is_union=true)
-          }
+          let nested = resolve_struct_fields(
+            ctx,
+            tag,
+            field_list,
+            is_union=true,
+          )
           match nested {
             None => ()
             Some(list) =>
