@@ -23,6 +23,8 @@ struct SemContext {
   type_aliases : Map[String, CType]
   struct_defs : Map[String, RecordDef]
   union_defs : Map[String, RecordDef]
+  struct_member_cache : Map[String, Map[String, CType]]
+  union_member_cache : Map[String, Map[String, CType]]
   struct_size_cache : Map[String, (Int, Int)]
   union_size_cache : Map[String, (Int, Int)]
   enum_defs : Map[String, Array[EnumItem]]
@@ -66,6 +68,8 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     },
     struct_defs: {},
     union_defs: {},
+    struct_member_cache: {},
+    union_member_cache: {},
     struct_size_cache: {},
     union_size_cache: {},
     enum_defs: {},
@@ -3610,6 +3614,68 @@ fn find_field_index(
 }
 
 ///|
+fn collect_member_cache_from_fields(
+  ctx : SemContext,
+  fields : Array[Field],
+  qual : TypeQual,
+  loc : SrcLoc,
+  cache : Map[String, CType],
+) -> Unit {
+  for field in fields {
+    let (field_qual, _) = split_top_qual(field.ty)
+    let combined = merge_qual(qual, field_qual)
+    if field.name != "" {
+      if !cache.contains(field.name) {
+        cache.set(field.name, apply_qualifiers(field.ty, qual))
+      }
+      continue
+    }
+    match strip_top_qualifiers(field.ty) {
+      CType::Struct(name=tag, fields=field_list, attrs=_) => {
+        let def = ensure_struct_fields(ctx, tag, field_list, is_union=false, loc)
+        match def {
+          None => ()
+          Some(def_val) =>
+            collect_member_cache_from_fields(
+              ctx,
+              def_val.fields,
+              combined,
+              loc,
+              cache,
+            )
+        }
+      }
+      CType::Union(name=tag, fields=field_list, attrs=_) => {
+        let def = ensure_struct_fields(ctx, tag, field_list, is_union=true, loc)
+        match def {
+          None => ()
+          Some(def_val) =>
+            collect_member_cache_from_fields(
+              ctx,
+              def_val.fields,
+              combined,
+              loc,
+              cache,
+            )
+        }
+      }
+      _ => ()
+    }
+  }
+}
+
+///|
+fn build_member_cache(
+  ctx : SemContext,
+  fields : Array[Field],
+  loc : SrcLoc,
+) -> Map[String, CType] {
+  let cache : Map[String, CType] = {}
+  collect_member_cache_from_fields(ctx, fields, empty_qual(), loc, cache)
+  cache
+}
+
+///|
 fn member_access_search(
   ctx : SemContext,
   ty : CType,
@@ -3687,17 +3753,76 @@ fn member_access_type(
   }
   let (obj_qual, obj_base) = split_top_qual(obj_ty)
   match strip_top_qualifiers(obj_base) {
-    CType::Struct(..) | CType::Union(..) => ()
+    CType::Struct(name=tag, fields=field_list, attrs=_) => {
+      let def = ensure_struct_fields(ctx, tag, field_list, is_union=false, loc)
+      match def {
+        None => None
+        Some(def_val) =>
+          if tag != "" {
+            let cache = match ctx.struct_member_cache.get(tag) {
+              Some(existing) => existing
+              None => {
+                let built = build_member_cache(ctx, def_val.fields, loc)
+                ctx.struct_member_cache.set(tag, built)
+                built
+              }
+            }
+            match cache.get(name) {
+              Some(ty) => Some(apply_qualifiers(ty, obj_qual))
+              None => {
+                let msg = "unknown field '\{name}' in \{type_to_string(obj_base)}"
+                add_sem_error(ctx, loc, msg)
+                None
+              }
+            }
+          } else {
+            match member_access_search(ctx, obj_base, obj_qual, name, loc) {
+              Some(ty) => Some(ty)
+              None => {
+                let msg = "unknown field '\{name}' in \{type_to_string(obj_base)}"
+                add_sem_error(ctx, loc, msg)
+                None
+              }
+            }
+          }
+      }
+    }
+    CType::Union(name=tag, fields=field_list, attrs=_) => {
+      let def = ensure_struct_fields(ctx, tag, field_list, is_union=true, loc)
+      match def {
+        None => None
+        Some(def_val) =>
+          if tag != "" {
+            let cache = match ctx.union_member_cache.get(tag) {
+              Some(existing) => existing
+              None => {
+                let built = build_member_cache(ctx, def_val.fields, loc)
+                ctx.union_member_cache.set(tag, built)
+                built
+              }
+            }
+            match cache.get(name) {
+              Some(ty) => Some(apply_qualifiers(ty, obj_qual))
+              None => {
+                let msg = "unknown field '\{name}' in \{type_to_string(obj_base)}"
+                add_sem_error(ctx, loc, msg)
+                None
+              }
+            }
+          } else {
+            match member_access_search(ctx, obj_base, obj_qual, name, loc) {
+              Some(ty) => Some(ty)
+              None => {
+                let msg = "unknown field '\{name}' in \{type_to_string(obj_base)}"
+                add_sem_error(ctx, loc, msg)
+                None
+              }
+            }
+          }
+      }
+    }
     _ => {
       add_sem_error(ctx, loc, "member access on non-aggregate")
-      return None
-    }
-  }
-  match member_access_search(ctx, obj_base, obj_qual, name, loc) {
-    Some(ty) => Some(ty)
-    None => {
-      let msg = "unknown field '\{name}' in \{type_to_string(obj_base)}"
-      add_sem_error(ctx, loc, msg)
       None
     }
   }
