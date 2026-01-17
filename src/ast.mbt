@@ -141,6 +141,12 @@ fn attrs_with(
 
 ///|
 fn merge_attrs(base : Attributes, incoming : Attributes) -> Attributes {
+  if attrs_is_empty(incoming) {
+    return base
+  }
+  if attrs_is_empty(base) {
+    return incoming
+  }
   let visibility = match base.visibility {
     Some(val) => Some(val)
     None => incoming.visibility
