@@ -183,15 +183,12 @@ fn skip_ws(lex : Lexer) -> Unit {
 ///|
 fn skip_line_comment(lex : Lexer) -> Unit {
   while true {
-    match peek_char(lex) {
+    match advance_comment(lex) {
       None => return
-      Some(code) => {
+      Some(code) =>
         if code == 10 {
           return
         }
-        let _ = advance_comment(lex)
-
-      }
     }
   }
 }
