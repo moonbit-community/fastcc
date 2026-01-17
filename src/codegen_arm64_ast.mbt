@@ -391,7 +391,7 @@ fn eval_float_const_value(
         _ => None
       }
     Expr::Cast(ty~, expr=inner, ..) => {
-      let cast_ty = strip_qual_attrs(ty)
+      let cast_ty = strip_top_qualifiers(ty)
       match float_kind_of_type(cast_ty) {
         Some(k_raw) => {
           let k = normalize_float_kind(k_raw)
@@ -439,7 +439,7 @@ fn alloc_local(
   ty : CType,
   loc : SrcLoc,
 ) -> LocalSlot? {
-  let (size, align) = match strip_qual_attrs(ty) {
+  let (size, align) = match strip_top_qualifiers(ty) {
     CType::Array(size=None, size_expr=Some(_), ..) => (8, 8)
     _ =>
       match type_size_align_or_error(alloc.sem, ty, loc) {
@@ -608,7 +608,7 @@ fn gen_type_size_bytes_to_reg(
   loc : SrcLoc,
   bag : DiagBag,
 ) -> Unit {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Array(elem=elem_ty, size=None, size_expr=Some(len_expr)) => {
       gen_expr_int32(emitter, alloc, syms, pool, cstrings, len_expr, dst, bag)
       emit_sxtw(emitter, dst, dst)
@@ -651,7 +651,7 @@ fn gen_type_size_bytes_to_reg(
     None => ()
   }
 
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Array(elem=elem_ty, size=Some(n), ..) => {
       gen_type_size_bytes_to_reg(
         emitter,
@@ -855,7 +855,7 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
     }
     Stmt::DeclStmt(decls~, ..) => {
       for d in decls {
-        let stripped = strip_qual_attrs(d.ty)
+        let stripped = strip_top_qualifiers(d.ty)
         match stripped {
           CType::Function(..) => continue
           _ => ()
@@ -882,7 +882,7 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
         match alloc_local(alloc, d.name, decl_ty, d.loc) {
           None => ()
           Some(slot) =>
-            match strip_qual_attrs(slot.ty) {
+            match strip_top_qualifiers(slot.ty) {
               CType::Array(size=None, size_expr=Some(_), ..) => {
                 let size_off = alloc_hidden_slot(alloc, 8, 8)
                 let updated = {
@@ -1523,7 +1523,7 @@ fn emit_cset_from_fp_tok(emitter : Arm64Emitter, tok : Int, dst : Int) -> Unit r
 ///|
 ///|
 fn float_kind_of_type(ty : CType) -> CFloatKind? {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Float(kind~) => Some(kind)
     _ => None
   }
@@ -1594,7 +1594,7 @@ fn normalize_float_kind(kind : CFloatKind) -> CFloatKind {
 
 ///|
 fn type_is_pointer_like(ty : CType) -> Bool {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Pointer(_) => true
     CType::Array(..) => true
     _ => false
@@ -1603,7 +1603,7 @@ fn type_is_pointer_like(ty : CType) -> Bool {
 
 ///|
 fn type_is_aggregate(ty : CType) -> Bool {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Struct(..) | CType::Union(..) | CType::Array(..) => true
     _ => false
   }
@@ -3487,7 +3487,7 @@ fn gen_builtin_va_arg_load(
     0,
   )
 
-  let base_ty = strip_qual_attrs(ty)
+  let base_ty = strip_top_qualifiers(ty)
   let (size, signed) = match float_kind_of_type(base_ty) {
     Some(k) => {
       let sz = if k == CFloatKind::Double { 8 } else { 4 }
@@ -3590,7 +3590,7 @@ fn arm64_hfa_aux(
       }
     None => ()
   }
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Struct(name=tag, fields=field_list, attrs=struct_attrs) =>
       match ensure_struct_fields(sem, tag, field_list, is_union=false, loc) {
         None => None
@@ -3716,7 +3716,7 @@ fn arm64_pcs_size_align(
   loc : SrcLoc,
   _bag : DiagBag,
 ) -> (Int, Int)? {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Array(..) | CType::Function(..) => Some((8, 8))
     _ => type_size_align_or_error(sem, ty, loc)
   }
@@ -3750,7 +3750,7 @@ fn arm64_pcs_aux(
       None => (0, 1)
       Some(v) => v
     }
-    let is_agg = match strip_qual_attrs(ty) {
+    let is_agg = match strip_top_qualifiers(ty) {
       CType::Struct(..) | CType::Union(..) => true
       _ => false
     }
@@ -3760,7 +3760,7 @@ fn arm64_pcs_aux(
     hfa_sizes.push(hfa_size)
     is_agg_list.push(is_agg)
     let is_float = float_kind_of_type(ty) is Some(_)
-    let is_long_double = match strip_qual_attrs(ty) {
+    let is_long_double = match strip_top_qualifiers(ty) {
       CType::Float(kind=CFloatKind::LongDouble) => true
       _ => false
     }
@@ -3877,7 +3877,7 @@ fn arm64_pcs(
   loc : SrcLoc,
   bag : DiagBag,
 ) -> Arm64PcsLayout {
-  let ret_loc = match strip_qual_attrs(ret_ty) {
+  let ret_loc = match strip_top_qualifiers(ret_ty) {
     CType::Void => -1
     _ => {
       let ret_info = arm64_pcs_aux(sem, 0, [ret_ty], loc, bag)
@@ -3907,7 +3907,7 @@ fn call_arg_slot_count(
   loc : SrcLoc,
   bag : DiagBag,
 ) -> Int? {
-  match strip_qual_attrs(ty) {
+  match strip_top_qualifiers(ty) {
     CType::Struct(..) | CType::Union(..) =>
       match type_size_align_or_error(alloc.sem, ty, loc) {
         None => None
@@ -4499,9 +4499,9 @@ fn gen_call_expr_impl(
   let callee_ty = type_of_expr(alloc.sem, callee)
   let mut param_tys : Array[CType] = []
   let mut is_varargs = false
-  match strip_qual_attrs(callee_ty) {
+  match strip_top_qualifiers(callee_ty) {
     CType::Pointer(inner) =>
-      match strip_qual_attrs(inner) {
+      match strip_top_qualifiers(inner) {
         CType::Function(return_type=_, params~, varargs~, ..) => {
           param_tys = params
           is_varargs = varargs
@@ -4701,7 +4701,7 @@ fn gen_lvalue_addr(
               slot.offset.to_int64().reinterpret_as_uint64(),
             )
           } else {
-            match strip_qual_attrs(slot.ty) {
+            match strip_top_qualifiers(slot.ty) {
               CType::Array(size=None, size_expr=Some(_), ..) =>
                 arm64_ldrx(
                   emitter,
@@ -6028,7 +6028,7 @@ fn gen_expr_floatbits(
           gen_expr_floatbits(emitter, alloc, syms, pool, cstrings, expr, dst, bag),
       )
     Expr::BuiltinVaArg(list~, ty~, loc~) => {
-      match float_kind_of_type(strip_qual_attrs(ty)) {
+      match float_kind_of_type(strip_top_qualifiers(ty)) {
         Some(_) =>
           ignore(gen_builtin_va_arg_load(
             emitter,
@@ -6601,7 +6601,7 @@ fn gen_expr_int32(
       give_reg(pool, addr)
     }
     Expr::BuiltinVaArg(list~, ty~, loc~) => {
-      match float_kind_of_type(strip_qual_attrs(ty)) {
+      match float_kind_of_type(strip_top_qualifiers(ty)) {
         Some(_) => add_error(bag, loc, "codegen: va_arg for float handled elsewhere")
         None =>
           if !gen_builtin_va_arg_load(
@@ -7987,7 +7987,7 @@ fn gen_expr_int32(
 	          match lookup_local(alloc, name) {
 	            None => ()
 	            Some(slot) =>
-	              match strip_qual_attrs(slot.ty) {
+	              match strip_top_qualifiers(slot.ty) {
 	                CType::Array(size=None, size_expr=Some(_), ..) =>
 	                  match slot.vla_size_offset {
 	                    None => add_error(bag, loc, "codegen: missing VLA byte size slot")
@@ -8009,7 +8009,7 @@ fn gen_expr_int32(
 	        _ => ()
 	      }
 	      let ty = type_for_sizeof(alloc.sem, inner)
-	      match strip_qual_attrs(ty) {
+	      match strip_top_qualifiers(ty) {
 	        CType::Array(elem=elem_ty, size=None, size_expr=Some(expr)) =>
 	          gen_vla_size_bytes_to_reg(
 	            emitter,
@@ -8036,7 +8036,7 @@ fn gen_expr_int32(
 	      }
 	    }
 	    Expr::SizeofType(ty~, loc~) =>
-	      match strip_qual_attrs(ty) {
+	      match strip_top_qualifiers(ty) {
 	        CType::Array(elem=elem_ty, size=None, size_expr=Some(expr)) =>
 	          gen_vla_size_bytes_to_reg(
 	            emitter,
@@ -8206,7 +8206,7 @@ fn gen_expr_ptr(
       }
       match lookup_local(alloc, name) {
         Some(slot) =>
-          match strip_qual_attrs(slot.ty) {
+          match strip_top_qualifiers(slot.ty) {
             CType::Array(size=None, size_expr=Some(_), ..) =>
               arm64_ldrx(
                 emitter,
@@ -8236,7 +8236,7 @@ fn gen_expr_ptr(
           }
           match alloc.sem.globals.get(name) {
             Some(gty) =>
-              match strip_qual_attrs(gty) {
+              match strip_top_qualifiers(gty) {
                 CType::Array(..) => return
                 _ => ()
               }
@@ -8264,7 +8264,7 @@ fn gen_expr_ptr(
       match type_of_lvalue(alloc.sem, expr) {
         None => ()
         Some(lty) =>
-          match strip_qual_attrs(lty) {
+          match strip_top_qualifiers(lty) {
             CType::Array(..) | CType::Function(..) =>
               if dst != addr {
                 emit_mov(emitter, true, dst, addr)
@@ -8293,7 +8293,7 @@ fn gen_expr_ptr(
       match type_of_lvalue(alloc.sem, expr) {
         None => ()
         Some(lty) =>
-          match strip_qual_attrs(lty) {
+          match strip_top_qualifiers(lty) {
             CType::Array(..) | CType::Function(..) =>
               if dst != addr {
                 emit_mov(emitter, true, dst, addr)
@@ -8322,7 +8322,7 @@ fn gen_expr_ptr(
       match type_of_lvalue(alloc.sem, expr) {
         None => ()
         Some(lty) =>
-          match strip_qual_attrs(lty) {
+          match strip_top_qualifiers(lty) {
             CType::Array(..) | CType::Function(..) =>
               if dst != addr {
                 emit_mov(emitter, true, dst, addr)
@@ -8383,7 +8383,7 @@ fn gen_expr_ptr(
           )
     }
     Expr::BuiltinVaArg(list~, ty~, loc~) => {
-      if !type_is_pointer_like(strip_qual_attrs(ty)) {
+      if !type_is_pointer_like(ty) {
         add_error(bag, loc, "codegen: expected pointer type for va_arg")
         return
       }
@@ -9420,7 +9420,7 @@ fn gen_stmt(
     }
     Stmt::DeclStmt(decls~, ..) => {
       for d in decls {
-        let stripped = strip_qual_attrs(d.ty)
+        let stripped = strip_top_qualifiers(d.ty)
         match stripped {
           CType::Function(..) => continue
           _ => ()
@@ -9448,7 +9448,7 @@ fn gen_stmt(
           None => ()
           Some(slot) => {
             let mut slot0 = slot
-            match strip_qual_attrs(slot0.ty) {
+            match strip_top_qualifiers(slot0.ty) {
               CType::Array(size=None, size_expr=Some(_), ..) => {
                 let size_off = alloc_hidden_slot(alloc, 8, 8)
                 let updated = {
@@ -9468,7 +9468,7 @@ fn gen_stmt(
               }
               _ => ()
             }
-            match strip_qual_attrs(slot0.ty) {
+            match strip_top_qualifiers(slot0.ty) {
               CType::Array(elem=_elem_ty, size=None, size_expr=Some(_expr)) =>
                 gen_vla_alloc_to_local_slot(
                   emitter,
@@ -9960,7 +9960,7 @@ fn gen_stmt(
       return_chain
     }
     Stmt::Return(value~, loc~) => {
-      let rt = strip_qual_attrs(alloc.ret_ty)
+      let rt = strip_top_qualifiers(alloc.ret_ty)
       match value {
         None =>
           match float_kind_of_type(rt) {
@@ -10383,7 +10383,7 @@ fn gen_func_def(
           }
         } else if loc_i < 16 {
           let reg = loc_i >> 1
-          match strip_qual_attrs(slot.ty) {
+          match strip_top_qualifiers(slot.ty) {
             CType::Struct(..) | CType::Union(..) =>
               match type_size_align_or_error(alloc.sem, slot.ty, p.loc) {
                 None => ()
