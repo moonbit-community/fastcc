@@ -536,8 +536,7 @@ fn check_storage_class(
 
 ///|
 fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
-  let resolved = resolve_type(ctx, ty, loc)
-  match strip_top_qualifiers_keep_attrs(resolved) {
+  match strip_top_qualifiers_keep_attrs(ty) {
     CType::TypeofExpr(expr~) =>
       type_size_align(ctx, type_for_typeof(ctx, expr), loc)
     CType::Attributed(attrs~, base~) =>
