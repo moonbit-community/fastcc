@@ -2360,7 +2360,9 @@ fn next_pp_token(pp : Preprocessor) -> Token {
                   }
                   Some(norm_args) => {
                     let restore_len = pp.pending.length()
-                    let expanded_args = expand_macro_args(pp, norm_args)
+                    let expanded_args = norm_args.map(arg => expand_tokens(
+                      pp, arg,
+                    ))
                     push_expanding(pp, tok.lexeme)
                     let replaced = substitute_macro(
                       macro_def,
@@ -2368,9 +2370,8 @@ fn next_pp_token(pp : Preprocessor) -> Token {
                       expanded_args,
                       tok.loc,
                     )
-                    let expanded = add_hidden_tokens(
-                      expand_tokens(pp, replaced),
-                      tok.lexeme,
+                    let expanded = expand_tokens(pp, replaced).map(t =>
+                      add_hidden(t, tok.lexeme)
                     )
                     if expanded.length() > 0 {
                       pp.expanding_guards.push({ restore_len, })
@@ -2386,9 +2387,8 @@ fn next_pp_token(pp : Preprocessor) -> Token {
           } else {
             let restore_len = pp.pending.length()
             push_expanding(pp, tok.lexeme)
-            let expanded = add_hidden_tokens(
-              expand_tokens(pp, macro_def.replacement),
-              tok.lexeme,
+            let expanded = expand_tokens(pp, macro_def.replacement).map(t =>
+              add_hidden(t, tok.lexeme)
             )
             if expanded.length() > 0 {
               pp.expanding_guards.push({ restore_len, })
