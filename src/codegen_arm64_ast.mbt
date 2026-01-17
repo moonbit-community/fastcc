@@ -3180,6 +3180,7 @@ struct SymTable {
   names : Array[String]
   name_to_id : Map[String, Int]
   externals : Map[Int, Bool]
+  link_cache : Map[String, String]
 }
 
 ///|
@@ -3189,6 +3190,7 @@ fn new_symtab_with_capacity(capacity : Int) -> SymTable {
     names: Array::new(capacity=cap),
     name_to_id: Map::new(capacity=cap),
     externals: Map::new(capacity=cap),
+    link_cache: Map::new(capacity=cap),
   }
 }
 
@@ -3209,6 +3211,18 @@ fn sym_for_name(tab : SymTable, name : String) -> Sym {
 ///|
 fn link_name(name : String) -> String {
   "_\{name}"
+}
+
+///|
+fn sym_for_ident(tab : SymTable, name : String) -> Sym {
+  match tab.link_cache.get(name) {
+    Some(link) => sym_for_name(tab, link)
+    None => {
+      let link = link_name(name)
+      tab.link_cache.set(name, link)
+      sym_for_name(tab, link)
+    }
+  }
 }
 
 ///|
@@ -4127,7 +4141,7 @@ fn gen_call_direct(
     i = i + 1
   }
 
-  let sym = sym_for_name(syms, link_name(name))
+  let sym = sym_for_ident(syms, name)
   let emit_call_fn = fn() { emit_call(emitter, sym) }
   gen_call_with_layout(
     emitter,
@@ -4811,7 +4825,7 @@ fn gen_lvalue_addr(
             }
           }
         None => {
-          let sym = sym_for_name(syms, link_name(name))
+          let sym = sym_for_ident(syms, name)
           emit_addr_global(emitter, syms, sym, dst)
         }
       }
@@ -5648,7 +5662,7 @@ fn store_lvalue_scalar(
             bag,
           )
         None => {
-          let sym = sym_for_name(syms, link_name(name))
+          let sym = sym_for_ident(syms, name)
           let addr_reg : Int = 16
           emit_addr_global(emitter, syms, sym, addr_reg)
           let (size, _) = match scalar_size_signed_or_error(alloc.sem, value_ty, loc) {
@@ -5844,7 +5858,7 @@ fn gen_expr_floatbits(
         Some(slot) =>
           emit_load_local_scalar(emitter, alloc.sem, slot.ty, dst, slot.offset, loc, bag)
         None => {
-          let sym = sym_for_name(syms, link_name(name))
+          let sym = sym_for_ident(syms, name)
           let addr_reg : Int = 16
           emit_addr_global(emitter, syms, sym, addr_reg)
           let size = if is_double { 8 } else { 4 }
@@ -6239,7 +6253,7 @@ fn gen_expr_int32(
         Some(slot) =>
           emit_load_local_scalar(emitter, alloc.sem, slot.ty, dst, slot.offset, loc, bag)
         None => {
-          let sym = sym_for_name(syms, link_name(name))
+          let sym = sym_for_ident(syms, name)
           let ty = type_of_expr(alloc.sem, expr)
           emit_addr_global(emitter, syms, sym, dst)
           let (size, signed) = match scalar_size_signed_or_error(alloc.sem, ty, loc) {
@@ -8024,7 +8038,7 @@ fn gen_expr_ptr(
               )
           }
         None => {
-          let sym = sym_for_name(syms, link_name(name))
+          let sym = sym_for_ident(syms, name)
           emit_addr_global(emitter, syms, sym, dst)
           if alloc.sem.functions.contains(name) {
             return
@@ -10465,7 +10479,7 @@ fn const_pointer_from_lvalue(
   expr : Expr,
 ) -> (Sym, Int)? {
   match expr {
-    Expr::Ident(name~, ..) => Some((sym_for_name(syms, link_name(name)), 0))
+    Expr::Ident(name~, ..) => Some((sym_for_ident(syms, name), 0))
     Expr::StringLit(value~, ..) =>
       match cstrings.get(value) {
         Some(sym) => Some((sym, 0))
@@ -10533,7 +10547,7 @@ fn const_pointer_from_expr(
         None => None
       }
     Expr::Ident(name~, ..) =>
-      Some((sym_for_name(syms, link_name(name)), 0))
+      Some((sym_for_ident(syms, name), 0))
     Expr::Member(..) | Expr::Index(..) =>
       match type_of_lvalue(sem, expr) {
         Some(ty) =>
