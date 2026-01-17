@@ -5,6 +5,7 @@ struct Parser {
   mut index : Int
   diags : DiagBag
   type_scopes : Array[Map[String, CType]]
+  typedef_counts : Map[String, Int]
   mut anon_tag_id : Int
 }
 
@@ -33,12 +34,17 @@ fn new_parser(tokens : Array[Token], diags : DiagBag) -> Parser {
     "_Float16",
     CType::Int(kind=CIntKind::Short, unsigned=true),
   )
+  let typedef_counts : Map[String, Int] = {}
+  for name, _ in builtins {
+    typedef_counts.set(name, 1)
+  }
   {
     tokens,
     tokens_len: tokens.length(),
     index: 0,
     diags,
     type_scopes: [builtins],
+    typedef_counts,
     anon_tag_id: 0,
   }
 }
@@ -3320,7 +3326,34 @@ fn push_typedef_scope(p : Parser) -> Unit {
 
 ///|
 fn pop_typedef_scope(p : Parser) -> Unit {
-  ignore(p.type_scopes.pop())
+  match p.type_scopes.pop() {
+    None => ()
+    Some(scope) =>
+      for name, _ in scope {
+        dec_typedef_count(p, name)
+      }
+  }
+}
+
+///|
+fn inc_typedef_count(p : Parser, name : String) -> Unit {
+  match p.typedef_counts.get(name) {
+    None => p.typedef_counts.set(name, 1)
+    Some(count) => p.typedef_counts.set(name, count + 1)
+  }
+}
+
+///|
+fn dec_typedef_count(p : Parser, name : String) -> Unit {
+  match p.typedef_counts.get(name) {
+    None => ()
+    Some(count) =>
+      if count <= 1 {
+        p.typedef_counts.remove(name)
+      } else {
+        p.typedef_counts.set(name, count - 1)
+      }
+  }
 }
 
 ///|
@@ -3357,8 +3390,12 @@ fn define_typedef(p : Parser, name : String, ty : CType) -> Unit {
   }
   let idx = p.type_scopes.length() - 1
   let scope = p.type_scopes[idx]
+  let already = scope.get(name) is Some(_)
   scope.set(name, typedef_ref_type(ty))
   p.type_scopes[idx] = scope
+  if !already {
+    inc_typedef_count(p, name)
+  }
 }
 
 ///|
@@ -3377,7 +3414,7 @@ fn lookup_typedef(p : Parser, name : String) -> CType? {
 
 ///|
 fn has_typedef(p : Parser, name : String) -> Bool {
-  lookup_typedef(p, name) is Some(_)
+  p.typedef_counts.get(name) is Some(_)
 }
 
 ///|
