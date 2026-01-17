@@ -11205,7 +11205,7 @@ fn build_string_section(
     size_hint = size_hint + entry.value.length() + 1
     size_hint = (size_hint + 3) & -4
   }
-  let offsets : Map[String, Int] = {}
+  let offsets : Map[String, Int] = Map::new(capacity=entries.length())
   let buf = @buffer.new(size_hint=size_hint)
   for entry in entries {
     let off = buf.length()
@@ -11256,14 +11256,16 @@ fn codegen_arm64_object_bytes_with_sem(
   let emitter = new_arm64_emitter()
   let syms = new_symtab()
   collect_external_globals(unit, syms)
-  let func_offsets : Map[String, Int] = {}
-
-  let cstring_order : Array[String] = []
-  let cstring_seen : Map[String, Bool] = {}
+  let decl_count = unit.decls.length()
+  let mut func_count = 0
+  let cstring_order : Array[String] = Array::new(capacity=decl_count)
+  let cstring_seen : Map[String, Bool] = Map::new(capacity=decl_count)
   for decl in unit.decls {
     match decl {
-      Decl::FuncDef(func) =>
+      Decl::FuncDef(func) => {
+        func_count = func_count + 1
         collect_cstring_stmt(cstring_order, cstring_seen, func.name, func.body)
+      }
       Decl::Var(var_decl) =>
         match var_decl.init {
           None => ()
@@ -11273,7 +11275,8 @@ fn codegen_arm64_object_bytes_with_sem(
       _ => ()
     }
   }
-  let string_syms : Map[String, Sym] = {}
+  let func_offsets : Map[String, Int] = Map::new(capacity=func_count)
+  let string_syms : Map[String, Sym] = Map::new(capacity=cstring_order.length())
   let cstring_entries : Array[StringEntry] = Array::new(capacity=cstring_order.length())
   let rodata_entries : Array[StringEntry] = Array::new(capacity=cstring_order.length())
   let mut i = 0
@@ -11355,7 +11358,10 @@ fn codegen_arm64_object_bytes_with_sem(
   let mut data_align = 4
   let mut bss_size = 0
   let mut bss_align = 4
-  let def_symbols : Map[String, ObjSymbol] = {}
+  let def_capacity = unit.decls.length() +
+    cstring_entries.length() +
+    rodata_entries.length()
+  let def_symbols : Map[String, ObjSymbol] = Map::new(capacity=def_capacity)
 
   for entry in cstring_entries {
     let name = "_L_.str.\{entry.index}"
