@@ -27,6 +27,8 @@ struct SemContext {
   union_defs : FastMap[String, RecordDef]
   struct_member_cache : FastMap[String, FastMap[String, CType]]
   union_member_cache : FastMap[String, FastMap[String, CType]]
+  struct_field_access_cache : FastMap[String, FastMap[String, FieldAccessInfo]]
+  union_field_access_cache : FastMap[String, FastMap[String, FieldAccessInfo]]
   struct_size_cache : FastMap[String, (Int, Int)]
   union_size_cache : FastMap[String, (Int, Int)]
   enum_defs : FastMap[String, Array[EnumItem]]
@@ -83,6 +85,8 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     union_defs: fast_map_new(),
     struct_member_cache: fast_map_new(),
     union_member_cache: fast_map_new(),
+    struct_field_access_cache: fast_map_new(),
+    union_field_access_cache: fast_map_new(),
     struct_size_cache: fast_map_new(),
     union_size_cache: fast_map_new(),
     enum_defs: fast_map_new(),
@@ -121,6 +125,11 @@ fn attrs_is_empty(attrs : Attributes) -> Bool {
   !attrs.dll_export &&
   !attrs.nodecorate &&
   !attrs.nodebug
+}
+
+///|
+fn attrs_layout_empty(attrs : Attributes) -> Bool {
+  attrs.aligned is None && !attrs.packed
 }
 
 

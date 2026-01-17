@@ -5130,6 +5130,227 @@ fn union_field_access_info(
 }
 
 ///|
+fn add_field_access_entry(
+  cache : FastMap[String, FieldAccessInfo],
+  name : String,
+  info : FieldAccessInfo,
+) -> Unit {
+  if name == "" || cache.contains(name) {
+    return
+  }
+  cache.set(name, info)
+}
+
+///|
+fn collect_struct_field_access_cache(
+  ctx : SemContext,
+  fields : Array[Field],
+  attrs : Attributes,
+  loc : SrcLoc,
+  cache : FastMap[String, FieldAccessInfo],
+) -> Unit {
+  let mut size = 0
+  let mut bit_unit_bits = 0
+  let mut bit_offset = 0
+  let mut bit_unit_size = 0
+  for field in fields {
+    let packed = attrs.packed || field.attrs.packed
+    let field_align_override = attr_align_value(ctx, field.attrs, field.loc)
+    match field.bit_width {
+      Some(expr) => {
+        let width = match const_int_from_expr(ctx, expr, field.loc) {
+          Some(v) => v
+          None => 0
+        }
+        let base = strip_qualifiers(field.ty)
+        let (base_size, base_align) = match type_size_align(ctx, base, loc) {
+          None => (0, 1)
+          Some(v) => v
+        }
+        let unit_bits = base_size * 8
+        let mut field_align = if packed { 1 } else { base_align }
+        match field_align_override {
+          None => ()
+          Some(value) => field_align = value
+        }
+        if width == 0 {
+          size = align_to(size, field_align)
+          bit_unit_bits = 0
+          bit_offset = 0
+          bit_unit_size = 0
+          continue
+        }
+        if bit_unit_bits == 0 ||
+          bit_unit_bits != unit_bits ||
+          width > unit_bits - bit_offset {
+          size = align_to(size, field_align)
+          bit_unit_bits = unit_bits
+          bit_unit_size = base_size
+          bit_offset = 0
+        }
+        add_field_access_entry(cache, field.name, {
+          offset: size,
+          ty: field.ty,
+          bit_offset: Some(bit_offset),
+          bit_width: Some(width),
+        })
+        bit_offset = bit_offset + width
+        if bit_offset == bit_unit_bits {
+          size = size + bit_unit_size
+          bit_unit_bits = 0
+          bit_unit_size = 0
+          bit_offset = 0
+        }
+      }
+      None => {
+        if bit_unit_bits != 0 {
+          size = size + bit_unit_size
+          bit_unit_bits = 0
+          bit_unit_size = 0
+          bit_offset = 0
+        }
+        let (field_size, field_align) = match strip_qualifiers(field.ty) {
+          CType::Array(elem~, size=None, size_expr=size_expr, ..) =>
+            match size_expr {
+              None => {
+                let (_elem_size, elem_align) = match
+                  type_size_align(ctx, elem, field.loc) {
+                  None => (0, 1)
+                  Some(v) => v
+                }
+                (0, elem_align)
+              }
+              Some(_) =>
+                match type_size_align(ctx, field.ty, field.loc) {
+                  None => {
+                    add_sem_error(
+                      ctx,
+                      field.loc,
+                      "variable length array not allowed in struct",
+                    )
+                    (0, 1)
+                  }
+                  Some(v) => v
+                }
+            }
+          _ =>
+            match type_size_align(ctx, field.ty, loc) {
+              None => (0, 1)
+              Some(v) => v
+            }
+        }
+        let mut adjusted_align = if packed { 1 } else { field_align }
+        match field_align_override {
+          None => ()
+          Some(value) => adjusted_align = value
+        }
+        size = align_to(size, adjusted_align)
+        add_field_access_entry(cache, field.name, {
+          offset: size,
+          ty: field.ty,
+          bit_offset: None,
+          bit_width: None,
+        })
+        if field.name == "" {
+          match strip_qual_attrs(field.ty) {
+            CType::Struct(..) | CType::Union(..) => {
+              let nested = build_record_field_access_cache(ctx, field.ty, loc)
+              for nested_name, info in nested {
+                add_field_access_entry(cache, nested_name, {
+                  offset: size + info.offset,
+                  ty: info.ty,
+                  bit_offset: info.bit_offset,
+                  bit_width: info.bit_width,
+                })
+              }
+            }
+            _ => ()
+          }
+        }
+        size = size + field_size
+      }
+    }
+  }
+}
+
+///|
+fn collect_union_field_access_cache(
+  ctx : SemContext,
+  fields : Array[Field],
+  loc : SrcLoc,
+  cache : FastMap[String, FieldAccessInfo],
+) -> Unit {
+  for field in fields {
+    match field.bit_width {
+      Some(expr) => {
+        let width = match const_int_from_expr(ctx, expr, field.loc) {
+          Some(v) => v
+          None => 0
+        }
+        if width > 0 {
+          add_field_access_entry(cache, field.name, {
+            offset: 0,
+            ty: field.ty,
+            bit_offset: Some(0),
+            bit_width: Some(width),
+          })
+        }
+        continue
+      }
+      None => ()
+    }
+    add_field_access_entry(cache, field.name, {
+      offset: 0,
+      ty: field.ty,
+      bit_offset: None,
+      bit_width: None,
+    })
+    if field.name == "" {
+      match strip_qual_attrs(field.ty) {
+        CType::Struct(..) | CType::Union(..) => {
+          let nested = build_record_field_access_cache(ctx, field.ty, loc)
+          for nested_name, info in nested {
+            add_field_access_entry(cache, nested_name, {
+              offset: info.offset,
+              ty: info.ty,
+              bit_offset: info.bit_offset,
+              bit_width: info.bit_width,
+            })
+          }
+        }
+        _ => ()
+      }
+    }
+  }
+}
+
+///|
+fn build_struct_field_access_cache(
+  ctx : SemContext,
+  def : RecordDef,
+  struct_attrs : Attributes,
+  loc : SrcLoc,
+) -> FastMap[String, FieldAccessInfo] {
+  let cache : FastMap[String, FieldAccessInfo] = fast_map_new()
+  let attrs = merge_attrs(def.attrs, struct_attrs)
+  collect_struct_field_access_cache(ctx, def.fields, attrs, loc, cache)
+  cache
+}
+
+///|
+fn build_union_field_access_cache(
+  ctx : SemContext,
+  def : RecordDef,
+  union_attrs : Attributes,
+  loc : SrcLoc,
+) -> FastMap[String, FieldAccessInfo] {
+  let cache : FastMap[String, FieldAccessInfo] = fast_map_new()
+  let _attrs = merge_attrs(def.attrs, union_attrs)
+  collect_union_field_access_cache(ctx, def.fields, loc, cache)
+  cache
+}
+
+///|
 fn record_field_access_info(
   ctx : SemContext,
   record_ty : CType,
@@ -5141,14 +5362,94 @@ fn record_field_access_info(
     CType::Struct(name=tag, fields=field_list, attrs=struct_attrs) =>
       match ensure_struct_fields(ctx, tag, field_list, is_union=false, loc) {
         None => None
-        Some(def) => struct_field_access_info(ctx, def, struct_attrs, name, loc)
+        Some(def) =>
+          if tag != "" &&
+            attrs_layout_empty(struct_attrs) &&
+            ctx.struct_defs.contains(tag) {
+            let cache = match ctx.struct_field_access_cache.get(tag) {
+              Some(existing) => existing
+              None => {
+                let built = build_struct_field_access_cache(ctx, def, struct_attrs, loc)
+                ctx.struct_field_access_cache.set(tag, built)
+                built
+              }
+            }
+            cache.get(name)
+          } else {
+            struct_field_access_info(ctx, def, struct_attrs, name, loc)
+          }
       }
     CType::Union(name=tag, fields=field_list, attrs=union_attrs) =>
       match ensure_struct_fields(ctx, tag, field_list, is_union=true, loc) {
         None => None
-        Some(def) => union_field_access_info(ctx, def, union_attrs, name, loc)
+        Some(def) =>
+          if tag != "" &&
+            attrs_layout_empty(union_attrs) &&
+            ctx.union_defs.contains(tag) {
+            let cache = match ctx.union_field_access_cache.get(tag) {
+              Some(existing) => existing
+              None => {
+                let built = build_union_field_access_cache(ctx, def, union_attrs, loc)
+                ctx.union_field_access_cache.set(tag, built)
+                built
+              }
+            }
+            cache.get(name)
+          } else {
+            union_field_access_info(ctx, def, union_attrs, name, loc)
+          }
       }
     _ => None
+  }
+}
+
+///|
+fn build_record_field_access_cache(
+  ctx : SemContext,
+  record_ty : CType,
+  loc : SrcLoc,
+) -> FastMap[String, FieldAccessInfo] {
+  let resolved = resolve_type(ctx, record_ty, loc) |> strip_qual_attrs
+  match resolved {
+    CType::Struct(name=tag, fields=field_list, attrs=struct_attrs) =>
+      match ensure_struct_fields(ctx, tag, field_list, is_union=false, loc) {
+        None => fast_map_new()
+        Some(def) =>
+          if tag != "" &&
+            attrs_layout_empty(struct_attrs) &&
+            ctx.struct_defs.contains(tag) {
+            match ctx.struct_field_access_cache.get(tag) {
+              Some(existing) => existing
+              None => {
+                let built = build_struct_field_access_cache(ctx, def, struct_attrs, loc)
+                ctx.struct_field_access_cache.set(tag, built)
+                built
+              }
+            }
+          } else {
+            build_struct_field_access_cache(ctx, def, struct_attrs, loc)
+          }
+      }
+    CType::Union(name=tag, fields=field_list, attrs=union_attrs) =>
+      match ensure_struct_fields(ctx, tag, field_list, is_union=true, loc) {
+        None => fast_map_new()
+        Some(def) =>
+          if tag != "" &&
+            attrs_layout_empty(union_attrs) &&
+            ctx.union_defs.contains(tag) {
+            match ctx.union_field_access_cache.get(tag) {
+              Some(existing) => existing
+              None => {
+                let built = build_union_field_access_cache(ctx, def, union_attrs, loc)
+                ctx.union_field_access_cache.set(tag, built)
+                built
+              }
+            }
+          } else {
+            build_union_field_access_cache(ctx, def, union_attrs, loc)
+          }
+      }
+    _ => fast_map_new()
   }
 }
 
