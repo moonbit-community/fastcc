@@ -2539,15 +2539,14 @@ fn parse_expr_eq(p : Parser) -> Expr {
 ///|
 fn parse_expr_cond(p : Parser) -> Expr {
   let cond = parse_expr_lor(p)
-  match match_token(p, Question) {
-    None => cond
-    Some(tok) => {
-      let then_expr = parse_expr(p)
-      expect(p, Colon, "expected ':' in conditional expression") |> ignore
-      let else_expr = parse_expr_cond(p)
-      Expr::Conditional(cond~, then_expr~, else_expr~, loc=tok.loc)
-    }
+  if p.current.kind != Question {
+    return cond
   }
+  let tok = advance_token(p)
+  let then_expr = parse_expr(p)
+  expect(p, Colon, "expected ':' in conditional expression") |> ignore
+  let else_expr = parse_expr_cond(p)
+  Expr::Conditional(cond~, then_expr~, else_expr~, loc=tok.loc)
 }
 
 ///|
@@ -2740,7 +2739,8 @@ fn parse_expr_prod(p : Parser) -> Expr {
 
 ///|
 fn parse_expr_unary(p : Parser) -> Expr {
-  if match_token(p, KwSizeof) is Some(tok) {
+  if p.current.kind == KwSizeof {
+    let tok = advance_token(p)
     if peek_kind(p, 0) == LParen && is_type_start(p, peek_token_at(p, 1)) {
       expect(p, LParen, "expected '(' after sizeof") |> ignore
       match parse_type_name(p) {
@@ -2757,7 +2757,8 @@ fn parse_expr_unary(p : Parser) -> Expr {
     let expr = parse_expr_unary(p)
     return Expr::SizeofExpr(expr~, loc=tok.loc)
   }
-  if match_token(p, KwAlignof) is Some(tok) {
+  if p.current.kind == KwAlignof {
+    let tok = advance_token(p)
     if peek_kind(p, 0) == LParen && is_type_start(p, peek_token_at(p, 1)) {
       expect(p, LParen, "expected '(' after alignof") |> ignore
       match parse_type_name(p) {
@@ -2793,63 +2794,49 @@ fn parse_expr_unary(p : Parser) -> Expr {
       }
     }
   }
-  match match_token(p, PlusPlus) {
-    Some(tok) => {
+  match p.current.kind {
+    PlusPlus => {
+      let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      return Expr::Unary(op=UnaryOp::PreInc, expr~, loc=tok.loc)
+      Expr::Unary(op=UnaryOp::PreInc, expr~, loc=tok.loc)
     }
-    None => ()
-  }
-  match match_token(p, MinusMinus) {
-    Some(tok) => {
+    MinusMinus => {
+      let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      return Expr::Unary(op=UnaryOp::PreDec, expr~, loc=tok.loc)
+      Expr::Unary(op=UnaryOp::PreDec, expr~, loc=tok.loc)
     }
-    None => ()
-  }
-  match match_token(p, Plus) {
-    Some(tok) => {
+    Plus => {
+      let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      return Expr::Unary(op=UnaryOp::Plus, expr~, loc=tok.loc)
+      Expr::Unary(op=UnaryOp::Plus, expr~, loc=tok.loc)
     }
-    None => ()
-  }
-  match match_token(p, Minus) {
-    Some(tok) => {
+    Minus => {
+      let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      return Expr::Unary(op=UnaryOp::Minus, expr~, loc=tok.loc)
+      Expr::Unary(op=UnaryOp::Minus, expr~, loc=tok.loc)
     }
-    None => ()
-  }
-  match match_token(p, Bang) {
-    Some(tok) => {
+    Bang => {
+      let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      return Expr::Unary(op=UnaryOp::Not, expr~, loc=tok.loc)
+      Expr::Unary(op=UnaryOp::Not, expr~, loc=tok.loc)
     }
-    None => ()
-  }
-  match match_token(p, Tilde) {
-    Some(tok) => {
+    Tilde => {
+      let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      return Expr::Unary(op=UnaryOp::BitNot, expr~, loc=tok.loc)
+      Expr::Unary(op=UnaryOp::BitNot, expr~, loc=tok.loc)
     }
-    None => ()
-  }
-  match match_token(p, Amp) {
-    Some(tok) => {
+    Amp => {
+      let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      return Expr::Unary(op=UnaryOp::Addr, expr~, loc=tok.loc)
+      Expr::Unary(op=UnaryOp::Addr, expr~, loc=tok.loc)
     }
-    None => ()
-  }
-  match match_token(p, Star) {
-    Some(tok) => {
+    Star => {
+      let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      return Expr::Unary(op=UnaryOp::Deref, expr~, loc=tok.loc)
+      Expr::Unary(op=UnaryOp::Deref, expr~, loc=tok.loc)
     }
-    None => ()
+    _ => parse_expr_postfix(p)
   }
-  parse_expr_postfix(p)
 }
 
 ///|
@@ -2862,25 +2849,22 @@ fn parse_expr_postfix(p : Parser) -> Expr {
 fn parse_postfix_tail(p : Parser, base : Expr) -> Expr {
   let mut expr = base
   while true {
-    match match_token(p, LParen) {
-      Some(tok) => {
+    match p.current.kind {
+      LParen => {
+        let tok = advance_token(p)
         let args = parse_call_args(p)
         expr = Expr::Call(callee=expr, args~, loc=tok.loc)
         continue
       }
-      None => ()
-    }
-    match match_token(p, LBracket) {
-      Some(tok) => {
+      LBracket => {
+        let tok = advance_token(p)
         let index = parse_expr(p)
         expect(p, RBracket, "expected ']' after index") |> ignore
         expr = Expr::Index(base=expr, index~, loc=tok.loc)
         continue
       }
-      None => ()
-    }
-    match match_token(p, Dot) {
-      Some(tok) => {
+      Dot => {
+        let tok = advance_token(p)
         let name = match expect_ident(p, "expected field name") {
           None => ""
           Some(id) => id.lexeme
@@ -2888,10 +2872,8 @@ fn parse_postfix_tail(p : Parser, base : Expr) -> Expr {
         expr = Expr::Member(base=expr, name~, is_arrow=false, loc=tok.loc)
         continue
       }
-      None => ()
-    }
-    match match_token(p, Arrow) {
-      Some(tok) => {
+      Arrow => {
+        let tok = advance_token(p)
         let name = match expect_ident(p, "expected field name") {
           None => ""
           Some(id) => id.lexeme
@@ -2899,23 +2881,18 @@ fn parse_postfix_tail(p : Parser, base : Expr) -> Expr {
         expr = Expr::Member(base=expr, name~, is_arrow=true, loc=tok.loc)
         continue
       }
-      None => ()
-    }
-    match match_token(p, PlusPlus) {
-      Some(tok) => {
+      PlusPlus => {
+        let tok = advance_token(p)
         expr = Expr::Unary(op=UnaryOp::PostInc, expr~, loc=tok.loc)
         continue
       }
-      None => ()
-    }
-    match match_token(p, MinusMinus) {
-      Some(tok) => {
+      MinusMinus => {
+        let tok = advance_token(p)
         expr = Expr::Unary(op=UnaryOp::PostDec, expr~, loc=tok.loc)
         continue
       }
-      None => ()
+      _ => break
     }
-    break
   }
   expr
 }
@@ -2923,12 +2900,14 @@ fn parse_postfix_tail(p : Parser, base : Expr) -> Expr {
 ///|
 fn parse_call_args(p : Parser) -> Array[Expr] {
   let args : Array[Expr] = []
-  if match_token(p, RParen) is Some(_) {
+  if p.current.kind == RParen {
+    advance_token(p) |> ignore
     return args
   }
   while true {
     args.push(parse_expr_eq(p))
-    if match_token(p, Comma) is Some(_) {
+    if p.current.kind == Comma {
+      advance_token(p) |> ignore
       continue
     }
     expect(p, RParen, "expected ')' after arguments") |> ignore
@@ -2987,7 +2966,8 @@ fn parse_expr_primary(p : Parser) -> Expr {
           None => ()
           Some(id) => path.push(id.lexeme)
         }
-        while match_token(p, Dot) is Some(_) {
+        while p.current.kind == Dot {
+          advance_token(p) |> ignore
           match expect_ident(p, "expected member name in __builtin_offsetof") {
             None => break
             Some(id) => path.push(id.lexeme)
@@ -3012,8 +2992,9 @@ fn parse_expr_primary(p : Parser) -> Expr {
       } else {
         Expr::Ident(name=tok.lexeme, loc=tok.loc)
       }
-    LParen => {
-      if match_token(p, LBrace) is Some(lbrace) {
+    LParen =>
+      if p.current.kind == LBrace {
+        let lbrace = advance_token(p)
         let block = parse_compound_stmt(p, lbrace.loc)
         expect(p, RParen, "expected ')' after statement expression") |> ignore
         match block {
@@ -3025,7 +3006,6 @@ fn parse_expr_primary(p : Parser) -> Expr {
         expect(p, RParen, "expected ')'") |> ignore
         expr
       }
-    }
     _ => {
       add_parse_error(p, tok.loc, "unexpected token in expression")
       Expr::IntLit(value="0", loc=tok.loc)
