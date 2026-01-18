@@ -20,8 +20,8 @@ struct SemContext {
   functions : FastMap[String, FuncSig]
   function_defs : FastMap[String, Bool]
   locals : Array[FastMap[String, CType]]
-  local_values : FastMap[String, CType]
-  local_overrides : Array[Array[(String, CType?)]]
+  local_values : FastMap[Int, CType]
+  local_overrides : Array[Array[(Int, CType?)]]
   type_aliases : FastMap[String, CType]
   struct_defs : FastMap[String, RecordDef]
   union_defs : FastMap[String, RecordDef]
@@ -187,8 +187,11 @@ fn char_pointer_type() -> CType {
 }
 
 ///|
-fn lookup_local_only(ctx : SemContext, name : String) -> CType? {
-  ctx.local_values.get(name)
+fn lookup_local_only(ctx : SemContext, id : Int) -> CType? {
+  if id <= 0 {
+    return None
+  }
+  ctx.local_values.get(id)
 }
 
 ///|
@@ -1028,8 +1031,8 @@ fn type_for_sizeof(ctx : SemContext, expr : Expr) -> CType {
   let prev = ctx.record_agg_temps
   ctx.record_agg_temps = false
   let ty = match expr {
-    Expr::Ident(name~, loc~) =>
-      match lookup_value(ctx, name) {
+    Expr::Ident(name~, id~, loc~) =>
+      match lookup_value(ctx, name, id) {
         Some(ty) => ty
         None => {
           add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
@@ -1053,8 +1056,8 @@ fn type_for_typeof(ctx : SemContext, expr : Expr) -> CType {
   let prev = ctx.record_agg_temps
   ctx.record_agg_temps = false
   let ty = match expr {
-    Expr::Ident(name~, loc~) =>
-      match lookup_value(ctx, name) {
+    Expr::Ident(name~, id~, loc~) =>
+      match lookup_value(ctx, name, id) {
         Some(ty) => ty
         None => {
           add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
@@ -2292,6 +2295,7 @@ fn check_func_decl(ctx : SemContext, func_decl : FuncDecl) -> Unit {
   let resolved_return = resolve_type(ctx, func_decl.return_type, func_decl.loc)
   let params = func_decl.params.map(param => {
     name: param.name,
+    id: param.id,
     ty: resolve_type(ctx, param.ty, param.loc),
     loc: param.loc,
   })
@@ -2323,6 +2327,7 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
   let resolved_return = resolve_type(ctx, func_def.return_type, func_def.loc)
   let resolved_params = func_def.params.map(param => {
     name: param.name,
+    id: param.id,
     ty: resolve_type(ctx, param.ty, param.loc),
     loc: param.loc,
   })
@@ -2355,9 +2360,9 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
     size=Some(func_def.name.length() + 1),
     size_expr=None,
   )
-  declare_local(ctx, "__func__", func_name_ty, func_def.loc)
-  declare_local(ctx, "__FUNCTION__", func_name_ty, func_def.loc)
-  declare_local(ctx, "__PRETTY_FUNCTION__", func_name_ty, func_def.loc)
+  declare_local(ctx, "__func__", 0, func_name_ty, func_def.loc)
+  declare_local(ctx, "__FUNCTION__", 0, func_name_ty, func_def.loc)
+  declare_local(ctx, "__PRETTY_FUNCTION__", 0, func_name_ty, func_def.loc)
   for param in params {
     if param.name == "" {
       add_sem_error(ctx, param.loc, "parameter name missing in definition")
@@ -2365,7 +2370,7 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
       add_sem_error(ctx, param.loc, "parameter declared as void")
     } else {
       let param_ty = adjust_param_type_for_local(param.ty)
-      declare_local(ctx, param.name, param_ty, param.loc)
+      declare_local(ctx, param.name, param.id, param_ty, param.loc)
     }
   }
   check_stmt(ctx, func_def.body, resolved_return)
@@ -2504,6 +2509,7 @@ fn compound_literal_type(
 fn update_decl_type(
   ctx : SemContext,
   name : String,
+  id : Int,
   ty : CType,
   is_local~ : Bool,
 ) -> Unit {
@@ -2516,7 +2522,9 @@ fn update_decl_type(
     if scope.contains(name) {
       scope.set(name, ty)
       ctx.locals[idx] = scope
-      ctx.local_values.set(name, ty)
+      if id > 0 {
+        ctx.local_values.set(id, ty)
+      }
     }
   } else if ctx.globals.contains(name) {
     ctx.globals.set(name, ty)
@@ -2524,15 +2532,15 @@ fn update_decl_type(
 }
 
 ///|
-fn record_local_binding(ctx : SemContext, name : String, ty : CType) -> Unit {
-  if ctx.locals.length() == 0 {
+fn record_local_binding(ctx : SemContext, id : Int, ty : CType) -> Unit {
+  if ctx.locals.length() == 0 || id <= 0 {
     return
   }
   let idx = ctx.locals.length() - 1
   let overrides = ctx.local_overrides[idx]
-  overrides.push((name, ctx.local_values.get(name)))
+  overrides.push((id, ctx.local_values.get(id)))
   ctx.local_overrides[idx] = overrides
-  ctx.local_values.set(name, ty)
+  ctx.local_values.set(id, ty)
 }
 
 ///|
@@ -2666,7 +2674,7 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
     add_sem_error(ctx, decl.loc, "variable '\{decl.name}' has void type")
   }
   if is_local {
-    declare_local(ctx, decl.name, final_ty, decl.loc)
+    declare_local(ctx, decl.name, decl.id, final_ty, decl.loc)
   } else {
     declare_global(ctx, decl.name, final_ty, decl.loc)
   }
@@ -2681,7 +2689,7 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
           Some(size) => {
             let updated = apply_inferred_array_size(final_ty, size)
             final_ty = updated
-            update_decl_type(ctx, decl.name, updated, is_local~)
+            update_decl_type(ctx, decl.name, decl.id, updated, is_local~)
           }
         }
     }
@@ -3611,6 +3619,7 @@ fn promote_old_style_param_type(ty : CType) -> CType {
 fn promote_old_style_params(params : Array[Param]) -> Array[Param] {
   params.map(param => {
     name: param.name,
+    id: param.id,
     ty: promote_old_style_param_type(param.ty),
     loc: param.loc,
   })
@@ -4007,12 +4016,12 @@ fn index_access_type(
 ///|
 fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
   match expr {
-    Expr::Ident(name~, loc~) =>
+    Expr::Ident(name~, id~, loc~) =>
       if ctx.enum_consts.contains(name) {
         add_sem_error(ctx, loc, "expression is not assignable")
         None
       } else {
-        match lookup_value(ctx, name) {
+        match lookup_value(ctx, name, id) {
           Some(ty) => Some(ty)
           None => {
             add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
@@ -4060,11 +4069,11 @@ fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
 ///|
 fn type_of_lvalue_optional(ctx : SemContext, expr : Expr) -> CType? {
   match expr {
-    Expr::Ident(name~, ..) =>
+    Expr::Ident(name~, id~, ..) =>
       if ctx.enum_consts.contains(name) {
         None
       } else {
-        match lookup_value(ctx, name) {
+        match lookup_value(ctx, name, id) {
           Some(ty) => Some(ty)
           None => None
         }
@@ -4196,8 +4205,8 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
     Expr::FloatLit(value~, ..) => float_type_from_literal(value)
     Expr::CharLit(..) => default_int_type()
     Expr::StringLit(..) => CType::Pointer(char_type())
-    Expr::Ident(name~, loc~) =>
-      match lookup_value(ctx, name) {
+    Expr::Ident(name~, id~, loc~) =>
+      match lookup_value(ctx, name, id) {
         Some(ty) => decay_type(ty)
         None => {
           add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
@@ -4604,8 +4613,8 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
           }
           if args.length() >= 1 {
             match args[0] {
-              Expr::Ident(name=ap_name, loc=ap_loc) =>
-                match lookup_local_only(ctx, ap_name) {
+              Expr::Ident(name=_, id=ap_id, loc=ap_loc) =>
+                match lookup_local_only(ctx, ap_id) {
                   None =>
                     add_sem_error(
                       ctx,
@@ -4644,8 +4653,8 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
         }
       }
       let callee_ty = match callee {
-        Expr::Ident(name~, loc=ident_loc) =>
-          match lookup_value(ctx, name) {
+        Expr::Ident(name~, id~, loc=ident_loc) =>
+          match lookup_value(ctx, name, id) {
             Some(ty) => ty
             None => {
               match builtin_func_sig(name) {
@@ -5192,6 +5201,7 @@ fn type_of_compound_assign(
 fn declare_local(
   ctx : SemContext,
   name : String,
+  id : Int,
   ty : CType,
   loc : SrcLoc,
 ) -> Unit {
@@ -5205,7 +5215,7 @@ fn declare_local(
   } else {
     scope.set(name, ty)
     ctx.locals[idx] = scope
-    record_local_binding(ctx, name, ty)
+    record_local_binding(ctx, id, ty)
   }
 }
 
@@ -5287,8 +5297,8 @@ fn merge_global_decl_type(existing : CType, incoming : CType) -> CType {
 }
 
 ///|
-fn lookup_value(ctx : SemContext, name : String) -> CType? {
-  let mut found = ctx.local_values.get(name)
+fn lookup_value(ctx : SemContext, name : String, id : Int) -> CType? {
+  let mut found = if id > 0 { ctx.local_values.get(id) } else { None }
   if found is None {
     found = ctx.globals.get(name)
   }
@@ -5344,11 +5354,11 @@ fn pop_scope(ctx : SemContext) -> Unit {
       let mut i = overrides.length()
       while i > 0 {
         i = i - 1
-        let (name, prev) = overrides[i]
+        let (id, prev) = overrides[i]
         match prev {
-          Some(ty) => ctx.local_values.set(name, ty)
+          Some(ty) => ctx.local_values.set(id, ty)
           None => {
-            ctx.local_values.remove(name)
+            ctx.local_values.remove(id)
           }
         }
       }

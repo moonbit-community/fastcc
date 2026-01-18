@@ -356,6 +356,7 @@ struct EnumItem {
 ///|
 struct Param {
   name : String
+  id : Int
   ty : CType
   loc : SrcLoc
 } derive(Show, Eq, ToJson)
@@ -363,6 +364,7 @@ struct Param {
 ///|
 struct FuncDef {
   name : String
+  id : Int
   return_type : CType
   params : Array[Param]
   varargs : Bool
@@ -377,6 +379,7 @@ struct FuncDef {
 ///|
 struct FuncDecl {
   name : String
+  id : Int
   return_type : CType
   params : Array[Param]
   varargs : Bool
@@ -390,6 +393,7 @@ struct FuncDecl {
 ///|
 struct VarDecl {
   name : String
+  id : Int
   ty : CType
   init : Initializer?
   storage : StorageClass
@@ -467,7 +471,7 @@ enum Expr {
   FloatLit(value~ : String, loc~ : SrcLoc)
   CharLit(value~ : Int, loc~ : SrcLoc)
   StringLit(value~ : String, length~ : Int, loc~ : SrcLoc)
-  Ident(name~ : String, loc~ : SrcLoc)
+  Ident(name~ : String, id~ : Int, loc~ : SrcLoc)
   BuiltinTypesCompatibleP(a~ : CType, b~ : CType, loc~ : SrcLoc)
   BuiltinOffsetof(ty~ : CType, path~ : Array[String], loc~ : SrcLoc)
   BuiltinVaArg(list~ : Expr, ty~ : CType, loc~ : SrcLoc)

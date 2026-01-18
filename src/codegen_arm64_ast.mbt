@@ -439,6 +439,7 @@ fn const_float_bits_from_expr(
 fn alloc_local(
   alloc : LocalAlloc,
   name : String,
+  id : Int,
   ty : CType,
   loc : SrcLoc,
 ) -> LocalSlot? {
@@ -465,7 +466,7 @@ fn alloc_local(
   }
   let sem_idx = alloc.sem.locals.length() - 1
   alloc.sem.locals[sem_idx].set(name, ty)
-  record_local_binding(alloc.sem, name, ty)
+  record_local_binding(alloc.sem, id, ty)
   Some(slot)
 }
 
@@ -473,6 +474,7 @@ fn alloc_local(
 fn alloc_local_byref(
   alloc : LocalAlloc,
   name : String,
+  id : Int,
   ty : CType,
 ) -> LocalSlot {
   let size = 8
@@ -492,7 +494,7 @@ fn alloc_local_byref(
   }
   let sem_idx = alloc.sem.locals.length() - 1
   alloc.sem.locals[sem_idx].set(name, ty)
-  record_local_binding(alloc.sem, name, ty)
+  record_local_binding(alloc.sem, id, ty)
   slot
 }
 
@@ -885,7 +887,7 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt, walk_exprs : Bool) -> Unit {
             }
           _ => ()
         }
-        match alloc_local(alloc, d.name, decl_ty, d.loc) {
+        match alloc_local(alloc, d.name, d.id, decl_ty, d.loc) {
           None => ()
           Some(slot) =>
             match strip_top_qualifiers(slot.ty) {
@@ -4095,7 +4097,7 @@ fn gen_call_direct(
       type_of_expr(
         alloc.sem,
         Expr::Call(
-          callee=Expr::Ident(name=name, loc=loc),
+          callee=Expr::Ident(name=name, id=0, loc=loc),
           args=args,
           loc=loc,
         ),
@@ -4924,7 +4926,7 @@ fn gen_lvalue_addr(
   bag : DiagBag,
 ) -> Unit {
   match expr {
-    Expr::Ident(name~, loc~) => {
+    Expr::Ident(name~, id=_, loc~) => {
       if is_func_name_ident(name) {
         if gen_func_name_addr(emitter, syms, cstrings, alloc, dst, loc, bag) {
           return
@@ -6328,7 +6330,7 @@ fn gen_expr_floatbits(
         None => add_error(bag, loc, "codegen: expected float type for va_arg")
       }
     }
-    Expr::Ident(name~, loc~) =>
+    Expr::Ident(name~, id=_, loc~) =>
       match lookup_local(alloc, name) {
         Some(slot) =>
           emit_load_local_scalar(emitter, alloc.sem, slot.ty, dst, slot.offset, loc, bag)
@@ -6712,7 +6714,7 @@ fn gen_expr_int32(
         (expr, dst) =>
           gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, dst, bag),
       )
-    Expr::Ident(name~, loc~) => {
+    Expr::Ident(name~, id=_, loc~) => {
       match alloc.sem.enum_consts.get(name) {
         Some(v) => {
           arm64_movimm(emitter, dst.reinterpret_as_uint(), v.to_uint64())
@@ -8727,7 +8729,7 @@ fn gen_expr_ptr(
       let sym = cstring_sym_or_add(cstrings, syms, value)
       emit_addr_global(emitter, syms, sym, dst)
     }
-    Expr::Ident(name~, loc~) => {
+    Expr::Ident(name~, id=_, loc~) => {
       if is_func_name_ident(name) {
         if gen_func_name_addr(emitter, syms, cstrings, alloc, dst, loc, bag) {
           return
@@ -10100,7 +10102,7 @@ fn gen_stmt(
             }
           _ => ()
         }
-        match alloc_local(alloc, d.name, decl_ty, d.loc) {
+        match alloc_local(alloc, d.name, d.id, decl_ty, d.loc) {
           None => ()
           Some(slot) => {
             let mut slot0 = slot
@@ -10840,9 +10842,9 @@ fn compute_frame_plan(sem : SemContext, func : FuncDef, bag : DiagBag) -> FrameP
     let param_ty = param_tys[i]
     let loc_i = layout.arg_locs.get(i).unwrap_or(0)
     if (loc_i & 1) != 0 {
-      alloc_local_byref(alloc, p.name, param_ty) |> ignore
+      alloc_local_byref(alloc, p.name, p.id, param_ty) |> ignore
     } else {
-      alloc_local(alloc, p.name, param_ty, p.loc) |> ignore
+      alloc_local(alloc, p.name, p.id, param_ty, p.loc) |> ignore
     }
     i = i + 1
   }
@@ -11026,9 +11028,9 @@ fn gen_func_def(
     let byref = (loc_i & 1) != 0
     let slot =
       if byref {
-        Some(alloc_local_byref(alloc, p.name, param_ty))
+        Some(alloc_local_byref(alloc, p.name, p.id, param_ty))
       } else {
-        alloc_local(alloc, p.name, param_ty, p.loc)
+        alloc_local(alloc, p.name, p.id, param_ty, p.loc)
       }
     match slot {
       None => ()

@@ -233,6 +233,7 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
                           decls.push(
                             Decl::FuncDef({
                               name: decl.name,
+                              id: decl.id,
                               return_type,
                               params: final_params,
                               varargs: decl.varargs,
@@ -256,6 +257,7 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
                           decls.push(
                             Decl::FuncDecl({
                               name: decl.name,
+                              id: decl.id,
                               return_type,
                               params: final_params,
                               varargs: decl.varargs,
@@ -279,6 +281,7 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
                         decls.push(
                           Decl::Var({
                             name: decl.name,
+                            id: decl.id,
                             ty: adjusted_ty,
                             init,
                             storage,
@@ -299,6 +302,7 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
                     decls.push(
                       Decl::Var({
                         name: decl.name,
+                        id: decl.id,
                         ty: adjusted_ty,
                         init,
                         storage,
@@ -387,6 +391,7 @@ fn parse_old_style_param_decls(
                       seen.set(decl.name, true)
                       updated[idx] = {
                         name: decl.name,
+                        id: decl.id,
                         ty: adjusted_ty,
                         loc: decl.loc,
                       }
@@ -1403,6 +1408,7 @@ fn parse_type_name(p : Parser) -> CType? {
 ///|
 struct Declarator {
   name : String
+  id : Int
   ty : CType
   params : Array[Param]?
   varargs : Bool
@@ -1424,6 +1430,7 @@ fn parse_declarator(p : Parser, base : CType) -> Declarator? {
       Some(decl) =>
         Some({
           name: decl.name,
+          id: decl.id,
           ty: decl.ty,
           params: decl.params,
           varargs: decl.varargs,
@@ -1451,6 +1458,7 @@ fn parse_declarator(p : Parser, base : CType) -> Declarator? {
         }
         Some({
           name: tok.lexeme,
+          id: tok.id,
           ty,
           params,
           varargs,
@@ -1526,23 +1534,23 @@ fn parse_field_declarator(
       let (size, size_expr) = inner_array_sizes[i]
       wrapped = CType::Array(elem=wrapped, size~, size_expr~)
     }
-    let (name, loc) = match name_tok {
-      Some(tok) => (tok.lexeme, tok.loc)
-      None => ("", fallback_loc)
+    let (name, id, loc) = match name_tok {
+      Some(tok) => (tok.lexeme, tok.id, tok.loc)
+      None => ("", 0, fallback_loc)
     }
-    Some({ name, ty: wrapped, params, varargs, is_old_style, attrs, loc })
+    Some({ name, id, ty: wrapped, params, varargs, is_old_style, attrs, loc })
   } else {
-    let (name, loc) = if peek_token(p).kind == Ident {
+    let (name, id, loc) = if peek_token(p).kind == Ident {
       let name_tok = advance_token(p)
-      (name_tok.lexeme, name_tok.loc)
+      (name_tok.lexeme, name_tok.id, name_tok.loc)
     } else {
-      ("", fallback_loc)
+      ("", 0, fallback_loc)
     }
     let (ty, params, varargs, is_old_style, suffix_attrs) = parse_declarator_suffix(
       p, ty0,
     )
     attrs = merge_attrs(attrs, suffix_attrs)
-    Some({ name, ty, params, varargs, is_old_style, attrs, loc })
+    Some({ name, id, ty, params, varargs, is_old_style, attrs, loc })
   }
 }
 
@@ -1703,6 +1711,7 @@ fn parse_paren_pointer_declarator(p : Parser, base : CType) -> Declarator? {
       }
       Some({
         name: tok.lexeme,
+        id: tok.id,
         ty: wrapped,
         params: inner_params,
         varargs: inner_varargs,
@@ -1884,6 +1893,7 @@ fn parse_struct_fields(p : Parser) -> Array[RecordItem] {
           let decl = if peek_token(p).kind == Colon {
             Some({
               name: "",
+              id: 0,
               ty: base,
               params: None,
               varargs: false,
@@ -2023,6 +2033,7 @@ fn parse_param_list(p : Parser) -> (Array[Param], Bool, Bool) {
         Some(tok) =>
           params.push({
             name: tok.lexeme,
+            id: tok.id,
             ty: CType::Int(kind=CIntKind::Int, unsigned=false),
             loc: tok.loc,
           })
@@ -2088,7 +2099,12 @@ fn parse_param_after_base(
     Some(param) => {
       let call_conv = normalize_call_conv(attrs.call_conv)
       let adjusted_ty = apply_call_conv_to_type(param.ty, call_conv)
-      Some({ name: param.name, ty: adjusted_ty, loc: param.loc })
+      Some({
+        name: param.name,
+        id: param.id,
+        ty: adjusted_ty,
+        loc: param.loc,
+      })
     }
     None => {
       add_parse_error(p, loc, "expected parameter declarator")
@@ -2147,11 +2163,11 @@ fn parse_param_declarator(
     }
     let call_conv = normalize_call_conv(attrs.call_conv)
     let adjusted_ty = apply_call_conv_to_type(wrapped, call_conv)
-    let (name, loc) = match name_tok {
-      Some(tok) => (tok.lexeme, tok.loc)
-      None => ("", fallback_loc)
+    let (name, id, loc) = match name_tok {
+      Some(tok) => (tok.lexeme, tok.id, tok.loc)
+      None => ("", 0, fallback_loc)
     }
-    return Some({ name, ty: adjusted_ty, loc })
+    return Some({ name, id, ty: adjusted_ty, loc })
   }
 
   if peek_token(p).kind == Ident {
@@ -2162,7 +2178,12 @@ fn parse_param_declarator(
     attrs = merge_attrs(attrs, suffix_attrs)
     let call_conv = normalize_call_conv(attrs.call_conv)
     let adjusted_ty = apply_call_conv_to_type(ty, call_conv)
-    return Some({ name: name_tok.lexeme, ty: adjusted_ty, loc: name_tok.loc })
+    return Some({
+      name: name_tok.lexeme,
+      id: name_tok.id,
+      ty: adjusted_ty,
+      loc: name_tok.loc,
+    })
   }
 
   // Unnamed parameter: still allow declarator suffixes like `int[10]`.
@@ -2170,7 +2191,7 @@ fn parse_param_declarator(
   attrs = merge_attrs(attrs, suffix_attrs)
   let call_conv = normalize_call_conv(attrs.call_conv)
   let adjusted_ty = apply_call_conv_to_type(ty, call_conv)
-  Some({ name: "", ty: adjusted_ty, loc: fallback_loc })
+  Some({ name: "", id: 0, ty: adjusted_ty, loc: fallback_loc })
 }
 
 ///|
@@ -2353,6 +2374,7 @@ fn parse_stmt(p : Parser) -> Stmt {
                   }
                   decls.push({
                     name: decl.name,
+                    id: decl.id,
                     ty: adjusted_ty,
                     init: actual_init,
                     storage,
@@ -2538,6 +2560,7 @@ fn parse_for_init(p : Parser) -> Stmt? {
                   }
                   decls.push({
                     name: decl.name,
+                    id: decl.id,
                     ty: adjusted_ty,
                     init: actual_init,
                     storage,
@@ -2926,7 +2949,7 @@ fn parse_expr_primary(p : Parser) -> Expr {
         expect(p, RParen, "expected ')' after __builtin_va_arg") |> ignore
         Expr::BuiltinVaArg(list~, ty~, loc=tok.loc)
       } else {
-        Expr::Ident(name=tok.lexeme, loc=tok.loc)
+        Expr::Ident(name=tok.lexeme, id=tok.id, loc=tok.loc)
       }
     LParen =>
       if p.current.kind == LBrace {
