@@ -3188,6 +3188,7 @@ struct SymTable {
   externals : FastMap[Int, Bool]
   link_cache : FastMap[String, String]
   ident_syms : FastMap[Int, Sym]
+  call_layout_cache : FastMap[Int, Arm64PcsLayout]
 }
 
 ///|
@@ -3199,6 +3200,7 @@ fn new_symtab_with_capacity(capacity : Int) -> SymTable {
     externals: fast_map_new(capacity=cap),
     link_cache: fast_map_new(capacity=cap),
     ident_syms: fast_map_new(capacity=cap),
+    call_layout_cache: fast_map_new(capacity=cap),
   }
 }
 
@@ -4205,50 +4207,99 @@ fn gen_call_direct(
   } else {
     alloc.sem.functions.get(name)
   }
-  let (fixed_count, is_varargs, ret_ty) = match sig {
-    None => (
-      0,
-      false,
-      type_of_expr(
-        alloc.sem,
-        Expr::Call(
-          callee=Expr::Ident(name=name, id=id, node_id=0, loc=loc),
-          args=args,
-          node_id=0,
-          loc=loc,
-        ),
-      ),
-    )
-    Some(s) => (s.params.length(), s.varargs, s.return_type)
+  let mut fixed_count = 0
+  let mut is_varargs = false
+  let mut ret_ty = default_int_type()
+  match sig {
+    None => {
+      ret_ty =
+        type_of_expr(
+          alloc.sem,
+          Expr::Call(
+            callee=Expr::Ident(name=name, id=id, node_id=0, loc=loc),
+            args=args,
+            node_id=0,
+            loc=loc,
+          ),
+        )
+    }
+    Some(s) => {
+      fixed_count = s.params.length()
+      is_varargs = s.varargs
+      ret_ty = s.return_type
+    }
   }
   let is_varargs_call = is_varargs && args.length() > fixed_count
   let variadic_index = if is_varargs_call { fixed_count } else { 0 }
 
-  let arg_tys : Array[CType] = Array::new(capacity=args.length())
-  let mut i = 0
-  while i < args.length() {
-    let arg = args[i]
-    let param_ty = match sig {
-      None => type_of_expr(alloc.sem, arg)
-      Some(s) =>
-        if i < s.params.length() {
-          s.params[i]
-        } else {
-          type_of_expr(alloc.sem, arg)
-        }
-    }
-    let store_ty =
-      if is_varargs_call && i >= fixed_count {
-        promote_vararg_type(param_ty)
+  let mut arg_tys : Array[CType] = []
+  let mut use_sig_params = false
+  match sig {
+    Some(s) =>
+      if !s.varargs && !s.is_old_style && args.length() == s.params.length() {
+        arg_tys = s.params
+        use_sig_params = true
       } else {
-        param_ty
+        let built : Array[CType] = Array::new(capacity=args.length())
+        let mut i = 0
+        while i < args.length() {
+          let arg = args[i]
+          let param_ty =
+            if i < s.params.length() {
+              s.params[i]
+            } else {
+              type_of_expr(alloc.sem, arg)
+            }
+          let store_ty =
+            if is_varargs_call && i >= fixed_count {
+              promote_vararg_type(param_ty)
+            } else {
+              param_ty
+            }
+          built.push(store_ty)
+          i = i + 1
+        }
+        arg_tys = built
       }
-    arg_tys.push(store_ty)
-    i = i + 1
+    None => {
+      let built : Array[CType] = Array::new(capacity=args.length())
+      let mut i = 0
+      while i < args.length() {
+        let arg = args[i]
+        let param_ty = type_of_expr(alloc.sem, arg)
+        let store_ty =
+          if is_varargs_call && i >= fixed_count {
+            promote_vararg_type(param_ty)
+          } else {
+            param_ty
+          }
+        built.push(store_ty)
+        i = i + 1
+      }
+      arg_tys = built
+    }
   }
 
   let sym = sym_for_ident(syms, name, id=id)
   let emit_call_fn = fn() { emit_call(emitter, sym) }
+  let mut cached_layout : Arm64PcsLayout? = None
+  if use_sig_params && id > 0 {
+    match syms.call_layout_cache.get(id) {
+      Some(layout) => cached_layout = Some(layout)
+      None => {
+        let layout = arm64_pcs(
+          alloc.sem,
+          variadic_index,
+          ret_ty,
+          arg_tys,
+          loc,
+          bag,
+        )
+        syms.call_layout_cache.set(id, layout)
+        cached_layout = Some(layout)
+      }
+    }
+  }
   gen_call_with_layout(
     emitter,
     alloc,
@@ -4263,6 +4314,7 @@ fn gen_call_direct(
     loc,
     bag,
     emit_call_fn,
+    layout=cached_layout,
   )
   ret_ty
 }
@@ -4292,8 +4344,12 @@ fn gen_call_with_layout(
   loc : SrcLoc,
   bag : DiagBag,
   emit_call : () -> Unit,
+  layout~ : Arm64PcsLayout?,
 ) -> Unit {
-  let layout = arm64_pcs(alloc.sem, variadic_index, ret_ty, arg_tys, loc, bag)
+  let layout = match layout {
+    Some(found) => found
+    None => arm64_pcs(alloc.sem, variadic_index, ret_ty, arg_tys, loc, bag)
+  }
   let arg_locs = layout.arg_locs
   let arg_sizes = layout.arg_sizes
   let arg_aligns = layout.arg_aligns
@@ -4769,6 +4825,7 @@ fn gen_call_expr_impl(
     loc,
     bag,
     emit_call_fn,
+    layout=None,
   )
   give_reg(pool, fn_reg)
 
