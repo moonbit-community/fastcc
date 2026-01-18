@@ -3616,13 +3616,6 @@ fn register_case_range(
   }
   let idx = ctx.switch_stack.length() - 1
   let info = ctx.switch_stack[idx]
-  for item in info.cases {
-    let (existing_start, existing_end, _) = item
-    if start <= existing_end && existing_start <= end {
-      add_sem_error(ctx, loc, "duplicate case value")
-      return
-    }
-  }
   info.cases.push((start, end, loc))
   ctx.switch_stack[idx] = info
 }
@@ -3639,8 +3632,47 @@ fn with_switch(ctx : SemContext, f : () -> Unit) -> Unit {
   ctx.switch_depth = ctx.switch_depth + 1
   ctx.switch_stack.push({ cases: [], has_default: false })
   f()
-  ignore(ctx.switch_stack.pop())
+  match ctx.switch_stack.pop() {
+    None => ()
+    Some(info) => check_switch_cases(ctx, info)
+  }
   ctx.switch_depth = ctx.switch_depth - 1
+}
+
+///|
+fn check_switch_cases(ctx : SemContext, info : SwitchInfo) -> Unit {
+  let cases = info.cases
+  if cases.length() < 2 {
+    return
+  }
+  cases.sort_by((a, b) => {
+    let (a_start, a_end, _) = a
+    let (b_start, b_end, _) = b
+    if a_start < b_start {
+      -1
+    } else if a_start > b_start {
+      1
+    } else if a_end < b_end {
+      -1
+    } else if a_end > b_end {
+      1
+    } else {
+      0
+    }
+  })
+  let (_, first_end, _) = cases[0]
+  let mut prev_end = first_end
+  let mut i = 1
+  while i < cases.length() {
+    let (start, end, loc) = cases[i]
+    if prev_end >= start {
+      add_sem_error(ctx, loc, "duplicate case value")
+    }
+    if end > prev_end {
+      prev_end = end
+    }
+    i = i + 1
+  }
 }
 
 ///|
