@@ -45,17 +45,49 @@ fn new_parser(pp : Preprocessor) -> Parser {
 }
 
 ///|
-fn special_ident_kind(name : String) -> TokenKind? {
-  let (kind, keyword_lexeme) = keyword_or_ident_view(name[:])
-  match keyword_lexeme {
-    None => None
-    Some(_) =>
-      match kind {
-        KwVoid | KwBool | KwChar | KwShort | KwInt | KwLong | KwFloat |
-        KwDouble | KwSigned | KwUnsigned | KwConst | KwVolatile |
-        KwRestrict | KwInline | KwNoreturn => Some(kind)
-        _ => None
-      }
+fn special_ident_kind(tok : Token, ids : KeywordIds) -> TokenKind? {
+  let id = tok.id
+  if id == 0 {
+    return None
+  }
+  if id == ids.kw_void {
+    Some(KwVoid)
+  } else if id == ids.kw_u_bool {
+    Some(KwBool)
+  } else if id == ids.kw_char {
+    Some(KwChar)
+  } else if id == ids.kw_short {
+    Some(KwShort)
+  } else if id == ids.kw_int {
+    Some(KwInt)
+  } else if id == ids.kw_long {
+    Some(KwLong)
+  } else if id == ids.kw_float || id == ids.kw_u_float16 {
+    Some(KwFloat)
+  } else if id == ids.kw_double {
+    Some(KwDouble)
+  } else if id == ids.kw_signed || id == ids.kw_du_signed ||
+    id == ids.kw_du_signed_du {
+    Some(KwSigned)
+  } else if id == ids.kw_unsigned || id == ids.kw_du_unsigned ||
+    id == ids.kw_du_unsigned_du {
+    Some(KwUnsigned)
+  } else if id == ids.kw_const || id == ids.kw_du_const ||
+    id == ids.kw_du_const_du {
+    Some(KwConst)
+  } else if id == ids.kw_volatile || id == ids.kw_du_volatile ||
+    id == ids.kw_du_volatile_du {
+    Some(KwVolatile)
+  } else if id == ids.kw_restrict || id == ids.kw_du_restrict ||
+    id == ids.kw_du_restrict_du {
+    Some(KwRestrict)
+  } else if id == ids.kw_inline || id == ids.kw_du_inline ||
+    id == ids.kw_du_inline_du {
+    Some(KwInline)
+  } else if id == ids.kw_u_noreturn {
+    Some(KwNoreturn)
+  } else {
+    None
   }
 }
 
@@ -441,9 +473,10 @@ fn strip_type_qualifiers(ty : CType) -> CType {
 fn parse_type_qualifiers(p : Parser) -> TypeQual {
   let mut qual = empty_qual()
   while true {
-    let mut kind = peek_token(p).kind
+    let tok = peek_token(p)
+    let mut kind = tok.kind
     if kind == Ident {
-      match special_ident_kind(peek_token(p).lexeme) {
+      match special_ident_kind(tok, p.pp.keyword_ids) {
         Some(mapped) => kind = mapped
         None => ()
       }
@@ -508,7 +541,7 @@ fn parse_type_specifiers(
     let tok = peek_token(p)
     let mut kind = tok.kind
     if kind == Ident {
-      match special_ident_kind(tok.lexeme) {
+      match special_ident_kind(tok, p.pp.keyword_ids) {
         Some(mapped) => kind = mapped
         None => ()
       }
@@ -828,9 +861,10 @@ fn parse_decl_specs(p : Parser, allow_storage? : Bool = true) -> DeclSpecs? {
 
 ///|
 fn is_type_spec_start(p : Parser) -> Bool {
-  let mut kind = peek_token(p).kind
+  let tok = peek_token(p)
+  let mut kind = tok.kind
   if kind == Ident {
-    match special_ident_kind(peek_token(p).lexeme) {
+    match special_ident_kind(tok, p.pp.keyword_ids) {
       Some(mapped) => kind = mapped
       None => ()
     }
@@ -1023,7 +1057,8 @@ fn parse_asm_stmt(p : Parser, loc : SrcLoc) -> AsmStmt {
       continue
     }
     if peek_token(p).kind == Ident {
-      match special_ident_kind(peek_token(p).lexeme) {
+      let tok = peek_token(p)
+      match special_ident_kind(tok, p.pp.keyword_ids) {
         Some(KwVolatile) => {
           ignore(advance_token(p))
           is_volatile = true
@@ -1975,7 +2010,7 @@ fn parse_param_list(p : Parser) -> (Array[Param], Bool, Bool) {
   }
   let first = peek_token(p)
   let first_mapped = if first.kind == Ident {
-    special_ident_kind(first.lexeme)
+    special_ident_kind(first, p.pp.keyword_ids)
   } else {
     None
   }

@@ -4,7 +4,8 @@ fn lex_tokens(text : String) -> (Array[Token], DiagBag) {
   let map = new_source_map()
   let file = add_file(map, "<test>", text)
   let interner = new_string_interner()
-  let lexer = new_lexer(file, bag, interner)
+  let keyword_ids = init_keyword_ids(interner)
+  let lexer = new_lexer(file, bag, interner, keyword_ids)
   let out : Array[Token] = []
   while out.length() < 512 {
     let tok = next_token(lexer)

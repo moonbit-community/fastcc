@@ -44,6 +44,7 @@ struct Preprocessor {
   date_literal : String
   time_literal : String
   interner : StringInterner
+  keyword_ids : KeywordIds
   hidden_singletons : FastMap[Int, Array[Int]]
 }
 
@@ -68,9 +69,10 @@ fn make_builtin_token(
 
 ///|
 fn make_builtin_word_token(pp : Preprocessor, word : String) -> Token {
-  let (kind, keyword_lexeme) = keyword_or_ident_view(word[:])
+  let (kind, keyword_lexeme, keyword_id) =
+    keyword_or_ident_view_with_id(word[:], pp.keyword_ids)
   match keyword_lexeme {
-    Some(lexeme) => make_builtin_token(kind, lexeme)
+    Some(lexeme) => make_builtin_token(kind, lexeme, id=keyword_id)
     None => {
       let (lexeme, id) = pp.interner.intern_view_with_id(word[:])
       make_builtin_token(Ident, lexeme, id=id)
@@ -236,8 +238,9 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
   Preprocessor {
   let (date_literal, time_literal) = init_datetime_literals()
   let interner = new_string_interner()
+  let keyword_ids = init_keyword_ids(interner)
   let pp = {
-    lexer: new_lexer(file, diags, interner),
+    lexer: new_lexer(file, diags, interner, keyword_ids),
     lexer_stack: [],
     held_stack: [],
     path_stack: [],
@@ -260,6 +263,7 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
     date_literal,
     time_literal,
     interner,
+    keyword_ids,
     hidden_singletons: fast_map_new(),
   }
   init_builtin_macros(pp)
@@ -624,7 +628,7 @@ fn include_file(
           pp.dir_stack.push(pp.current_dir)
           pp.logical_path_stack.push(pp.logical_path)
           pp.line_adjust_stack.push(pp.line_adjust)
-          pp.lexer = new_lexer(file, pp.diags, pp.interner)
+          pp.lexer = new_lexer(file, pp.diags, pp.interner, pp.keyword_ids)
           pp.current_path = resolved
           pp.current_dir = dir_name(resolved)
           pp.logical_path = resolved
