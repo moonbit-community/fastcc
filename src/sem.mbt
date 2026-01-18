@@ -4823,6 +4823,11 @@ fn set_cached_expr_type(ctx : SemContext, expr : Expr, ty : CType) -> Unit {
   if id <= 0 {
     return
   }
+  let cache_len = ctx.expr_type_cache.length()
+  if id <= cache_len {
+    ctx.expr_type_cache[id - 1] = Some(ty)
+    return
+  }
   ensure_expr_type_cache(ctx, id)
   ctx.expr_type_cache[id - 1] = Some(ty)
 }
@@ -4838,7 +4843,12 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
       computed
     }
   }
-  maybe_record_agg_temp_for_expr(ctx, expr, ty)
+  if ctx.record_agg_temps {
+    match ctx.current_func_name {
+      Some(_) => maybe_record_agg_temp_for_expr(ctx, expr, ty)
+      None => ()
+    }
+  }
   ty
 }
 
