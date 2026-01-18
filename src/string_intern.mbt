@@ -1,12 +1,12 @@
 ///|
 struct StringInterner {
-  map : Map[String, Int]
+  map : FastMap[StringView, Int]
   strings : Array[String]
 }
 
 ///|
 fn new_string_interner() -> StringInterner {
-  { map: Map::new(), strings: [] }
+  { map: fast_map_new(), strings: [] }
 }
 
 ///|
@@ -14,14 +14,14 @@ fn StringInterner::intern_view_with_id(
   self : StringInterner,
   view : StringView,
 ) -> (String, Int) {
-  match self.map.get_from_string(view) {
+  match self.map.get(view) {
     Some(id) => (self.strings[id - 1], id)
     None => {
       let owned = view.to_string()
       let id = self.strings.length() + 1
       self.strings.push(owned)
       let stored = self.strings[id - 1]
-      self.map.set(stored, id)
+      self.map.set(stored[:], id)
       (stored, id)
     }
   }
