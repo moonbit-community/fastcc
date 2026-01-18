@@ -85,48 +85,27 @@ fn new_expr_id(p : Parser) -> Int {
 
 ///|
 fn special_ident_kind(tok : Token, ids : KeywordIds) -> TokenKind? {
-  let id = tok.id
-  if id == 0 {
-    return None
-  }
-  if id == ids.kw_void {
-    Some(KwVoid)
-  } else if id == ids.kw_u_bool {
-    Some(KwBool)
-  } else if id == ids.kw_char {
-    Some(KwChar)
-  } else if id == ids.kw_short {
-    Some(KwShort)
-  } else if id == ids.kw_int {
-    Some(KwInt)
-  } else if id == ids.kw_long {
-    Some(KwLong)
-  } else if id == ids.kw_float || id == ids.kw_u_float16 {
-    Some(KwFloat)
-  } else if id == ids.kw_double {
-    Some(KwDouble)
-  } else if id == ids.kw_signed || id == ids.kw_du_signed ||
-    id == ids.kw_du_signed_du {
-    Some(KwSigned)
-  } else if id == ids.kw_unsigned || id == ids.kw_du_unsigned ||
-    id == ids.kw_du_unsigned_du {
-    Some(KwUnsigned)
-  } else if id == ids.kw_const || id == ids.kw_du_const ||
-    id == ids.kw_du_const_du {
-    Some(KwConst)
-  } else if id == ids.kw_volatile || id == ids.kw_du_volatile ||
-    id == ids.kw_du_volatile_du {
-    Some(KwVolatile)
-  } else if id == ids.kw_restrict || id == ids.kw_du_restrict ||
-    id == ids.kw_du_restrict_du {
-    Some(KwRestrict)
-  } else if id == ids.kw_inline || id == ids.kw_du_inline ||
-    id == ids.kw_du_inline_du {
-    Some(KwInline)
-  } else if id == ids.kw_u_noreturn {
-    Some(KwNoreturn)
-  } else {
-    None
+  match keyword_kind_from_id(tok.id, ids) {
+    Some(kind) =>
+      match kind {
+        KwVoid
+        | KwBool
+        | KwChar
+        | KwShort
+        | KwInt
+        | KwLong
+        | KwFloat
+        | KwDouble
+        | KwSigned
+        | KwUnsigned
+        | KwConst
+        | KwVolatile
+        | KwRestrict
+        | KwInline
+        | KwNoreturn => Some(kind)
+        _ => None
+      }
+    None => None
   }
 }
 

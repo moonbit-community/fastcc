@@ -309,14 +309,10 @@ fn lex_ident(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
   lex.col = lex.col + (idx - start)
   lex.line_start = false
   let name_view = slice_to_view(text, start, idx)
-  let (kind, keyword_lexeme, keyword_id) =
-    keyword_or_ident_view_with_id(name_view, lex.keyword_ids)
-  match keyword_lexeme {
-    Some(lexeme) => make_token(kind, lexeme, loc, line_start, id=keyword_id)
-    None => {
-      let (name, id) = lex.interner.intern_view_with_id(name_view)
-      make_token(kind, name, loc, line_start, id=id)
-    }
+  let (name, id) = lex.interner.intern_view_with_id(name_view)
+  match keyword_kind_from_id(id, lex.keyword_ids) {
+    Some(kind) => make_token(kind, name, loc, line_start, id=id)
+    None => make_token(Ident, name, loc, line_start, id=id)
   }
 }
 

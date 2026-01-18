@@ -69,14 +69,10 @@ fn make_builtin_token(
 
 ///|
 fn make_builtin_word_token(pp : Preprocessor, word : String) -> Token {
-  let (kind, keyword_lexeme, keyword_id) =
-    keyword_or_ident_view_with_id(word[:], pp.keyword_ids)
-  match keyword_lexeme {
-    Some(lexeme) => make_builtin_token(kind, lexeme, id=keyword_id)
-    None => {
-      let (lexeme, id) = pp.interner.intern_view_with_id(word[:])
-      make_builtin_token(Ident, lexeme, id=id)
-    }
+  let (lexeme, id) = pp.interner.intern_view_with_id(word[:])
+  match keyword_kind_from_id(id, pp.keyword_ids) {
+    Some(kind) => make_builtin_token(kind, lexeme, id=id)
+    None => make_builtin_token(Ident, lexeme, id=id)
   }
 }
 
