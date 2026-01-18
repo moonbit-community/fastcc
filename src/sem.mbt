@@ -738,8 +738,12 @@ fn maybe_record_agg_temp_for_expr(
   if !ctx.record_agg_temps {
     return
   }
-  if !expr_is_lvalue_simple(expr) && expr_may_be_aggregate(expr) {
-    record_agg_temp_for_type(ctx, ty, expr_loc(expr))
+  match strip_top_qualifiers(ty) {
+    CType::Struct(..) | CType::Union(..) =>
+      if !expr_is_lvalue_simple(expr) {
+        record_agg_temp_for_type(ctx, ty, expr_loc(expr))
+      }
+    _ => ()
   }
 }
 
