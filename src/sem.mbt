@@ -17,7 +17,9 @@ struct RecordDef {
 struct SemContext {
   diags : DiagBag
   globals : FastMap[String, CType]
+  globals_by_id : FastMap[Int, CType]
   functions : FastMap[String, FuncSig]
+  functions_by_id : FastMap[Int, FuncSig]
   function_defs : FastMap[String, Bool]
   locals : Array[FastMap[String, CType]]
   local_values : FastMap[Int, CType]
@@ -79,7 +81,9 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
   {
     diags,
     globals: fast_map_new(),
+    globals_by_id: fast_map_new(),
     functions: fast_map_new(),
+    functions_by_id: fast_map_new(),
     function_defs: fast_map_new(),
     locals: [],
     local_values: fast_map_new(),
@@ -2311,7 +2315,7 @@ fn check_func_decl(ctx : SemContext, func_decl : FuncDecl) -> Unit {
     func_decl.is_old_style,
     call_conv,
   )
-  add_function_sig(ctx, func_decl.name, sig, func_decl.loc, is_def=false)
+  add_function_sig(ctx, func_decl.name, func_decl.id, sig, func_decl.loc, is_def=false)
 }
 
 ///|
@@ -2343,7 +2347,7 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
     func_def.is_old_style,
     call_conv,
   )
-  add_function_sig(ctx, func_def.name, sig, func_def.loc, is_def=true)
+  add_function_sig(ctx, func_def.name, func_def.id, sig, func_def.loc, is_def=true)
   let prev_func = ctx.current_func_name
   let prev_agg_size = ctx.current_agg_temp_size
   let prev_agg_align = ctx.current_agg_temp_align
@@ -2401,6 +2405,7 @@ fn func_sig_from_params(
 fn add_function_sig(
   ctx : SemContext,
   name : String,
+  id : Int,
   sig : FuncSig,
   loc : SrcLoc,
   is_def~ : Bool,
@@ -2408,6 +2413,7 @@ fn add_function_sig(
   if ctx.enum_consts.contains(name) {
     add_sem_error(ctx, loc, "redefinition of '\{name}'")
   }
+  let mut updated : FuncSig? = None
   if ctx.functions.contains(name) {
     match ctx.functions.get(name) {
       Some(existing) =>
@@ -2419,11 +2425,21 @@ fn add_function_sig(
           )
         } else if existing.is_old_style && !sig.is_old_style {
           ctx.functions.set(name, sig)
+          updated = Some(sig)
+        } else {
+          updated = Some(existing)
         }
       None => ()
     }
   } else {
     ctx.functions.set(name, sig)
+    updated = Some(sig)
+  }
+  if id > 0 {
+    match updated {
+      None => ()
+      Some(resolved) => ctx.functions_by_id.set(id, resolved)
+    }
   }
   if is_def {
     if ctx.function_defs.contains(name) {
@@ -2528,6 +2544,9 @@ fn update_decl_type(
     }
   } else if ctx.globals.contains(name) {
     ctx.globals.set(name, ty)
+    if id > 0 && ctx.globals_by_id.contains(id) {
+      ctx.globals_by_id.set(id, ty)
+    }
   }
 }
 
@@ -2664,7 +2683,7 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
         )
       }
       let sig = { return_type, params, varargs, is_old_style, call_conv }
-      add_function_sig(ctx, decl.name, sig, decl.loc, is_def=false)
+      add_function_sig(ctx, decl.name, decl.id, sig, decl.loc, is_def=false)
       return
     }
     _ => ()
@@ -2676,7 +2695,7 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
   if is_local {
     declare_local(ctx, decl.name, decl.id, final_ty, decl.loc)
   } else {
-    declare_global(ctx, decl.name, final_ty, decl.loc)
+    declare_global(ctx, decl.name, decl.id, final_ty, decl.loc)
   }
   if type_has_vla_object_size(final_ty) && decl.init is Some(_) {
     add_sem_error(ctx, decl.loc, "variable length array cannot be initialized")
@@ -4659,7 +4678,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
             None => {
               match builtin_func_sig(name) {
                 Some(sig) => {
-                  add_function_sig(ctx, name, sig, ident_loc, is_def=false)
+                  add_function_sig(ctx, name, id, sig, ident_loc, is_def=false)
                   CType::Function(
                     return_type=sig.return_type,
                     params=sig.params,
@@ -4676,7 +4695,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
                     is_old_style: true,
                     call_conv: CallConv::Default,
                   }
-                  add_function_sig(ctx, name, sig, ident_loc, is_def=false)
+                  add_function_sig(ctx, name, id, sig, ident_loc, is_def=false)
                   CType::Function(
                     return_type=sig.return_type,
                     params=sig.params,
@@ -5223,6 +5242,7 @@ fn declare_local(
 fn declare_global(
   ctx : SemContext,
   name : String,
+  id : Int,
   ty : CType,
   loc : SrcLoc,
 ) -> Unit {
@@ -5233,15 +5253,26 @@ fn declare_global(
     }
     None => ()
   }
+  let mut updated : CType? = None
   match ctx.globals.get(name) {
-    None => ctx.globals.set(name, ty)
+    None => {
+      ctx.globals.set(name, ty)
+      updated = Some(ty)
+    }
     Some(existing) =>
       if !types_compatible_for_decl(existing, ty) {
         add_sem_error(ctx, loc, "redefinition of global '\{name}'")
       } else {
         let merged = merge_global_decl_type(existing, ty)
         ctx.globals.set(name, merged)
+        updated = Some(merged)
       }
+  }
+  if id > 0 {
+    match updated {
+      None => ()
+      Some(resolved) => ctx.globals_by_id.set(id, resolved)
+    }
   }
 }
 
@@ -5300,10 +5331,23 @@ fn merge_global_decl_type(existing : CType, incoming : CType) -> CType {
 fn lookup_value(ctx : SemContext, name : String, id : Int) -> CType? {
   let mut found = if id > 0 { ctx.local_values.get(id) } else { None }
   if found is None {
-    found = ctx.globals.get(name)
+    if id > 0 {
+      found = ctx.globals_by_id.get(id)
+    }
+    if found is None {
+      found = ctx.globals.get(name)
+    }
   }
   if found is None {
-    match ctx.functions.get(name) {
+    let sig = if id > 0 {
+      match ctx.functions_by_id.get(id) {
+        Some(found_sig) => Some(found_sig)
+        None => ctx.functions.get(name)
+      }
+    } else {
+      ctx.functions.get(name)
+    }
+    match sig {
       Some(sig) =>
         found = Some(
           CType::Function(

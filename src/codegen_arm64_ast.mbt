@@ -56,6 +56,8 @@ struct LocalAlloc {
   vla_scopes : Array[VlaScopeInfo]
   local_values : FastMap[String, LocalSlot]
   local_overrides : Array[Array[(String, LocalSlot?)]]
+  local_id_values : FastMap[Int, LocalSlot]
+  local_id_overrides : Array[Array[(Int, LocalSlot?)]]
   func_name : String
   compound_literal_slots : FastMap[String, Int]
   mut agg_temp_offset : Int?
@@ -83,6 +85,8 @@ fn new_local_alloc(sem : SemContext, ret_ty : CType, func_name : String) ->
     vla_scopes: [],
     local_values: fast_map_new(),
     local_overrides: [],
+    local_id_values: fast_map_new(),
+    local_id_overrides: [],
     func_name,
     compound_literal_slots: fast_map_new(),
     agg_temp_offset: None,
@@ -108,6 +112,8 @@ fn new_local_alloc_with_compound_slots(
     vla_scopes: [],
     local_values: fast_map_new(),
     local_overrides: [],
+    local_id_values: fast_map_new(),
+    local_id_overrides: [],
     func_name,
     compound_literal_slots,
     agg_temp_offset: None,
@@ -122,6 +128,7 @@ fn cg_push_scope(alloc : LocalAlloc) -> Unit {
   alloc.scopes.push(fast_map_new())
   alloc.vla_scopes.push({ num: 0, loc: 0, locorig: 0 })
   alloc.local_overrides.push([])
+  alloc.local_id_overrides.push([])
   push_scope(alloc.sem)
 }
 
@@ -143,18 +150,46 @@ fn cg_pop_scope(alloc : LocalAlloc) -> Unit {
       }
     }
   }
+  match alloc.local_id_overrides.pop() {
+    None => ()
+    Some(overrides) => {
+      let mut i = overrides.length()
+      while i > 0 {
+        i = i - 1
+        let (id, prev) = overrides[i]
+        match prev {
+          Some(slot) => alloc.local_id_values.set(id, slot)
+          None => alloc.local_id_values.remove(id)
+        }
+      }
+    }
+  }
   pop_scope(alloc.sem)
 }
 
 ///|
-fn lookup_local(alloc : LocalAlloc, name : String) -> LocalSlot? {
+fn lookup_local(alloc : LocalAlloc, name : String, id : Int) -> LocalSlot? {
+  if id > 0 {
+    match alloc.local_id_values.get(id) {
+      Some(slot) => return Some(slot)
+      None => ()
+    }
+  }
   alloc.local_values.get(name)
 }
 
 ///|
-fn record_local_slot(alloc : LocalAlloc, name : String, slot : LocalSlot) -> Unit {
+fn record_local_slot(
+  alloc : LocalAlloc,
+  name : String,
+  id : Int,
+  slot : LocalSlot,
+) -> Unit {
   if alloc.local_overrides.length() == 0 {
     alloc.local_values.set(name, slot)
+    if id > 0 {
+      alloc.local_id_values.set(id, slot)
+    }
     return
   }
   let idx = alloc.local_overrides.length() - 1
@@ -162,6 +197,25 @@ fn record_local_slot(alloc : LocalAlloc, name : String, slot : LocalSlot) -> Uni
   overrides.push((name, alloc.local_values.get(name)))
   alloc.local_overrides[idx] = overrides
   alloc.local_values.set(name, slot)
+  if id > 0 {
+    let id_overrides = alloc.local_id_overrides[idx]
+    id_overrides.push((id, alloc.local_id_values.get(id)))
+    alloc.local_id_overrides[idx] = id_overrides
+    alloc.local_id_values.set(id, slot)
+  }
+}
+
+///|
+fn update_local_slot(
+  alloc : LocalAlloc,
+  name : String,
+  id : Int,
+  slot : LocalSlot,
+) -> Unit {
+  alloc.local_values.set(name, slot)
+  if id > 0 {
+    alloc.local_id_values.set(id, slot)
+  }
 }
 
 ///|
@@ -460,9 +514,9 @@ fn alloc_local(
   let already = scope.contains(name)
   scope.set(name, slot)
   if !already {
-    record_local_slot(alloc, name, slot)
+    record_local_slot(alloc, name, id, slot)
   } else {
-    alloc.local_values.set(name, slot)
+    update_local_slot(alloc, name, id, slot)
   }
   let sem_idx = alloc.sem.locals.length() - 1
   alloc.sem.locals[sem_idx].set(name, ty)
@@ -488,9 +542,9 @@ fn alloc_local_byref(
   let already = scope.contains(name)
   scope.set(name, slot)
   if !already {
-    record_local_slot(alloc, name, slot)
+    record_local_slot(alloc, name, id, slot)
   } else {
-    alloc.local_values.set(name, slot)
+    update_local_slot(alloc, name, id, slot)
   }
   let sem_idx = alloc.sem.locals.length() - 1
   alloc.sem.locals[sem_idx].set(name, ty)
@@ -901,7 +955,7 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt, walk_exprs : Bool) -> Unit {
                 }
                 let scope_idx = alloc.scopes.length() - 1
                 alloc.scopes[scope_idx].set(d.name, updated)
-                alloc.local_values.set(d.name, updated)
+                update_local_slot(alloc, d.name, d.id, updated)
                 vla_record_decl(alloc, slot.offset) |> ignore
               }
               _ => ()
@@ -4494,7 +4548,7 @@ fn gen_call_expr_impl(
   loc : SrcLoc,
   bag : DiagBag,
 ) -> Unit {
-  if callee is Expr::Ident(name~, ..) {
+  if callee is Expr::Ident(name~, id~, ..) {
     if name == "__builtin_expect" {
       if args.length() != 2 {
         add_error(bag, loc, "__builtin_expect expects 2 arguments")
@@ -4554,7 +4608,7 @@ fn gen_call_expr_impl(
     if name == "__builtin_va_end" {
       return
     }
-    if lookup_local(alloc, name) is None && alloc.sem.functions.contains(name) {
+    if lookup_local(alloc, name, id) is None && alloc.sem.functions.contains(name) {
       let ret_ty = gen_call_direct(emitter, alloc, syms, pool, cstrings, name, args, sret, loc, bag)
       match float_kind_of_type(ret_ty) {
         Some(k) =>
@@ -4926,13 +4980,13 @@ fn gen_lvalue_addr(
   bag : DiagBag,
 ) -> Unit {
   match expr {
-    Expr::Ident(name~, id=_, loc~) => {
+    Expr::Ident(name~, id~, loc~) => {
       if is_func_name_ident(name) {
         if gen_func_name_addr(emitter, syms, cstrings, alloc, dst, loc, bag) {
           return
         }
       }
-      match lookup_local(alloc, name) {
+      match lookup_local(alloc, name, id) {
         Some(slot) =>
           if slot.byref {
             arm64_ldrx(
@@ -6085,8 +6139,8 @@ fn store_lvalue_scalar(
     None => ()
   }
   match lvalue {
-    Expr::Ident(name~, ..) =>
-      match lookup_local(alloc, name) {
+    Expr::Ident(name~, id~, ..) =>
+      match lookup_local(alloc, name, id) {
         Some(slot) =>
           emit_store_local_scalar(
             emitter,
@@ -6330,8 +6384,8 @@ fn gen_expr_floatbits(
         None => add_error(bag, loc, "codegen: expected float type for va_arg")
       }
     }
-    Expr::Ident(name~, id=_, loc~) =>
-      match lookup_local(alloc, name) {
+    Expr::Ident(name~, id~, loc~) =>
+      match lookup_local(alloc, name, id) {
         Some(slot) =>
           emit_load_local_scalar(emitter, alloc.sem, slot.ty, dst, slot.offset, loc, bag)
         None => {
@@ -6714,7 +6768,7 @@ fn gen_expr_int32(
         (expr, dst) =>
           gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, dst, bag),
       )
-    Expr::Ident(name~, id=_, loc~) => {
+    Expr::Ident(name~, id~, loc~) => {
       match alloc.sem.enum_consts.get(name) {
         Some(v) => {
           arm64_movimm(emitter, dst.reinterpret_as_uint(), v.to_uint64())
@@ -6727,7 +6781,7 @@ fn gen_expr_int32(
           return
         }
       }
-      match lookup_local(alloc, name) {
+      match lookup_local(alloc, name, id) {
         Some(slot) =>
           emit_load_local_scalar(emitter, alloc.sem, slot.ty, dst, slot.offset, loc, bag)
         None => {
@@ -8470,8 +8524,8 @@ fn gen_expr_int32(
     }
 	    Expr::SizeofExpr(expr=inner, loc~) => {
 	      match inner {
-	        Expr::Ident(name~, ..) =>
-	          match lookup_local(alloc, name) {
+	        Expr::Ident(name~, id~, ..) =>
+	          match lookup_local(alloc, name, id) {
 	            None => ()
 	            Some(slot) =>
 	              match strip_top_qualifiers(slot.ty) {
@@ -8729,13 +8783,13 @@ fn gen_expr_ptr(
       let sym = cstring_sym_or_add(cstrings, syms, value)
       emit_addr_global(emitter, syms, sym, dst)
     }
-    Expr::Ident(name~, id=_, loc~) => {
+    Expr::Ident(name~, id~, loc~) => {
       if is_func_name_ident(name) {
         if gen_func_name_addr(emitter, syms, cstrings, alloc, dst, loc, bag) {
           return
         }
       }
-      match lookup_local(alloc, name) {
+      match lookup_local(alloc, name, id) {
         Some(slot) =>
           match strip_top_qualifiers(slot.ty) {
             CType::Array(size=None, size_expr=Some(_), ..) =>
@@ -10117,7 +10171,7 @@ fn gen_stmt(
                 }
                 let scope_idx = alloc.scopes.length() - 1
                 alloc.scopes[scope_idx].set(d.name, updated)
-                alloc.local_values.set(d.name, updated)
+                update_local_slot(alloc, d.name, d.id, updated)
                 slot0 = updated
                 match vla_record_decl(alloc, slot0.offset) {
                   None => ()
