@@ -39,6 +39,7 @@ struct SemContext {
   func_has_stmt_expr : FastMap[String, Bool]
   enum_defs : FastMap[String, Array[EnumItem]]
   enum_consts : FastMap[String, Int]
+  enum_consts_by_id : FastMap[Int, Int]
   enum_types : FastMap[String, CType]
   compound_literal_types : FastMap[String, CType]
   func_agg_temps : FastMap[String, (Int, Int)]
@@ -103,6 +104,7 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     func_has_stmt_expr: fast_map_new(),
     enum_defs: fast_map_new(),
     enum_consts: fast_map_new(),
+    enum_consts_by_id: fast_map_new(),
     enum_types: fast_map_new(),
     compound_literal_types: fast_map_new(),
     func_agg_temps: fast_map_new(),
@@ -196,6 +198,25 @@ fn lookup_local_only(ctx : SemContext, id : Int) -> CType? {
     return None
   }
   ctx.local_values.get(id)
+}
+
+///|
+fn enum_const_value(ctx : SemContext, name : String, id : Int) -> Int? {
+  if id > 0 {
+    match ctx.enum_consts_by_id.get(id) {
+      Some(v) => return Some(v)
+      None => return None
+    }
+  }
+  ctx.enum_consts.get(name)
+}
+
+///|
+fn enum_const_exists(ctx : SemContext, name : String, id : Int) -> Bool {
+  if id > 0 {
+    return ctx.enum_consts_by_id.contains(id)
+  }
+  ctx.enum_consts.contains(name)
 }
 
 ///|
@@ -1472,7 +1493,7 @@ fn register_enum_def(
         None => value
         Some(expr) => eval_const_expr(ctx, expr, item.loc)
       }
-      define_enum_const(ctx, item.name, item.loc, current)
+      define_enum_const(ctx, item.name, item.id, item.loc, current)
       if !has_value {
         min_value = current
         max_value = current
@@ -1497,10 +1518,11 @@ fn register_enum_def(
 fn define_enum_const(
   ctx : SemContext,
   name : String,
+  id : Int,
   loc : SrcLoc,
   value : Int,
 ) -> Unit {
-  let mut conflict = ctx.enum_consts.contains(name)
+  let mut conflict = enum_const_exists(ctx, name, id)
   if !conflict && ctx.globals.contains(name) {
     conflict = true
   }
@@ -1512,6 +1534,9 @@ fn define_enum_const(
     return
   }
   ctx.enum_consts.set(name, value)
+  if id > 0 {
+    ctx.enum_consts_by_id.set(id, value)
+  }
 }
 
 ///|
@@ -1766,8 +1791,8 @@ fn eval_const_expr_value(
       add_sem_error(ctx, loc, "invalid constant expression")
       (0, false)
     }
-    Expr::Ident(name~, ..) =>
-      match ctx.enum_consts.get(name) {
+    Expr::Ident(name~, id~, ..) =>
+      match enum_const_value(ctx, name, id) {
         Some(v) => (v, true)
         None => {
           add_sem_error(ctx, loc, "invalid constant expression")
@@ -2179,7 +2204,7 @@ fn union_field_offset_and_type(
 fn is_constant_expr_for_builtin(ctx : SemContext, expr : Expr) -> Bool {
   match expr {
     Expr::IntLit(..) | Expr::CharLit(..) => true
-    Expr::Ident(name~, ..) => ctx.enum_consts.contains(name)
+    Expr::Ident(name~, id~, ..) => enum_const_exists(ctx, name, id)
     Expr::Unary(op~, expr=inner, ..) =>
       match op {
         UnaryOp::Plus | UnaryOp::Minus | UnaryOp::BitNot | UnaryOp::Not =>
@@ -2253,7 +2278,7 @@ fn try_eval_int_const(ctx : SemContext, expr : Expr) -> Int? {
   match expr {
     Expr::IntLit(value~, ..) => Some(parse_int_value(value))
     Expr::CharLit(value~, ..) => Some(value)
-    Expr::Ident(name~, ..) => ctx.enum_consts.get(name)
+    Expr::Ident(name~, id~, ..) => enum_const_value(ctx, name, id)
     Expr::Unary(op~, expr~, ..) =>
       match op {
         UnaryOp::Plus =>
@@ -2410,7 +2435,7 @@ fn add_function_sig(
   loc : SrcLoc,
   is_def~ : Bool,
 ) -> Unit {
-  if ctx.enum_consts.contains(name) {
+  if enum_const_exists(ctx, name, id) {
     add_sem_error(ctx, loc, "redefinition of '\{name}'")
   }
   let mut updated : FuncSig? = None
@@ -4036,7 +4061,7 @@ fn index_access_type(
 fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
   match expr {
     Expr::Ident(name~, id~, loc~) =>
-      if ctx.enum_consts.contains(name) {
+      if enum_const_exists(ctx, name, id) {
         add_sem_error(ctx, loc, "expression is not assignable")
         None
       } else {
@@ -4089,7 +4114,7 @@ fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
 fn type_of_lvalue_optional(ctx : SemContext, expr : Expr) -> CType? {
   match expr {
     Expr::Ident(name~, id~, ..) =>
-      if ctx.enum_consts.contains(name) {
+      if enum_const_exists(ctx, name, id) {
         None
       } else {
         match lookup_value(ctx, name, id) {
@@ -5246,12 +5271,9 @@ fn declare_global(
   ty : CType,
   loc : SrcLoc,
 ) -> Unit {
-  match ctx.enum_consts.get(name) {
-    Some(_) => {
-      add_sem_error(ctx, loc, "redefinition of global '\{name}'")
-      return
-    }
-    None => ()
+  if enum_const_exists(ctx, name, id) {
+    add_sem_error(ctx, loc, "redefinition of global '\{name}'")
+    return
   }
   let mut updated : CType? = None
   match ctx.globals.get(name) {
@@ -5362,7 +5384,7 @@ fn lookup_value(ctx : SemContext, name : String, id : Int) -> CType? {
     }
   }
   if found is None {
-    if ctx.enum_consts.contains(name) {
+    if enum_const_exists(ctx, name, id) {
       found = Some(default_int_type())
     } else if name == "__func__" {
       let elem = apply_qualifiers(char_type(), with_const(empty_qual()))

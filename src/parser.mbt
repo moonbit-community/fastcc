@@ -1991,7 +1991,7 @@ fn parse_enum_items(p : Parser) -> Array[EnumItem] {
         } else {
           None
         }
-        items.push({ name: tok.lexeme, value, loc: tok.loc })
+        items.push({ name: tok.lexeme, id: tok.id, value, loc: tok.loc })
       }
     }
     if match_token(p, Comma) is Some(_) {

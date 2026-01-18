@@ -349,6 +349,7 @@ enum RecordItem {
 ///|
 struct EnumItem {
   name : String
+  id : Int
   value : Expr?
   loc : SrcLoc
 } derive(Show, Eq, ToJson)

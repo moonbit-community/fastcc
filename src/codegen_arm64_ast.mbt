@@ -3162,6 +3162,7 @@ struct SymTable {
   name_to_id : FastMap[String, Int]
   externals : FastMap[Int, Bool]
   link_cache : FastMap[String, String]
+  ident_syms : FastMap[Int, Sym]
 }
 
 ///|
@@ -3172,6 +3173,7 @@ fn new_symtab_with_capacity(capacity : Int) -> SymTable {
     name_to_id: fast_map_new(capacity=cap),
     externals: fast_map_new(capacity=cap),
     link_cache: fast_map_new(capacity=cap),
+    ident_syms: fast_map_new(capacity=cap),
   }
 }
 
@@ -3195,13 +3197,25 @@ fn link_name(name : String) -> String {
 }
 
 ///|
-fn sym_for_ident(tab : SymTable, name : String) -> Sym {
-  match tab.link_cache.get(name) {
-    Some(link) => sym_for_name(tab, link)
-    None => {
-      let link = link_name(name)
-      tab.link_cache.set(name, link)
-      sym_for_name(tab, link)
+fn sym_for_ident(tab : SymTable, name : String, id? : Int = 0) -> Sym {
+  if id > 0 {
+    match tab.ident_syms.get(id) {
+      Some(sym) => sym
+      None => {
+        let link = link_name(name)
+        let sym = sym_for_name(tab, link)
+        tab.ident_syms.set(id, sym)
+        sym
+      }
+    }
+  } else {
+    match tab.link_cache.get(name) {
+      Some(link) => sym_for_name(tab, link)
+      None => {
+        let link = link_name(name)
+        tab.link_cache.set(name, link)
+        sym_for_name(tab, link)
+      }
     }
   }
 }
@@ -4138,12 +4152,20 @@ fn gen_call_direct(
   pool : RegPool,
   cstrings : CstringPool,
   name : String,
+  id? : Int = 0,
   args : Array[Expr],
   sret : SRetAddr?,
   loc : SrcLoc,
   bag : DiagBag,
 ) -> CType {
-  let sig = alloc.sem.functions.get(name)
+  let sig = if id > 0 {
+    match alloc.sem.functions_by_id.get(id) {
+      Some(found) => Some(found)
+      None => alloc.sem.functions.get(name)
+    }
+  } else {
+    alloc.sem.functions.get(name)
+  }
   let (fixed_count, is_varargs, ret_ty) = match sig {
     None => (
       0,
@@ -4151,7 +4173,7 @@ fn gen_call_direct(
       type_of_expr(
         alloc.sem,
         Expr::Call(
-          callee=Expr::Ident(name=name, id=0, loc=loc),
+          callee=Expr::Ident(name=name, id=id, loc=loc),
           args=args,
           loc=loc,
         ),
@@ -4185,7 +4207,7 @@ fn gen_call_direct(
     i = i + 1
   }
 
-  let sym = sym_for_ident(syms, name)
+  let sym = sym_for_ident(syms, name, id=id)
   let emit_call_fn = fn() { emit_call(emitter, sym) }
   gen_call_with_layout(
     emitter,
@@ -4608,8 +4630,26 @@ fn gen_call_expr_impl(
     if name == "__builtin_va_end" {
       return
     }
-    if lookup_local(alloc, name, id) is None && alloc.sem.functions.contains(name) {
-      let ret_ty = gen_call_direct(emitter, alloc, syms, pool, cstrings, name, args, sret, loc, bag)
+    let has_func = if id > 0 {
+      alloc.sem.functions_by_id.contains(id) || alloc.sem.functions.contains(name)
+    } else {
+      alloc.sem.functions.contains(name)
+    }
+    if lookup_local(alloc, name, id) is None && has_func {
+      let ret_ty =
+        gen_call_direct(
+          emitter,
+          alloc,
+          syms,
+          pool,
+          cstrings,
+          name,
+          id=id,
+          args,
+          sret,
+          loc,
+          bag,
+        )
       match float_kind_of_type(ret_ty) {
         Some(k) =>
           if k == CFloatKind::Double {
@@ -5012,7 +5052,7 @@ fn gen_lvalue_addr(
             }
           }
         None => {
-          let sym = sym_for_ident(syms, name)
+          let sym = sym_for_ident(syms, name, id=id)
           emit_addr_global(emitter, syms, sym, dst)
         }
       }
@@ -6152,7 +6192,7 @@ fn store_lvalue_scalar(
             bag,
           )
         None => {
-          let sym = sym_for_ident(syms, name)
+          let sym = sym_for_ident(syms, name, id=id)
           let addr_reg : Int = 16
           emit_addr_global(emitter, syms, sym, addr_reg)
           let (size, _) = match scalar_size_signed_or_error(alloc.sem, value_ty, loc) {
@@ -6389,7 +6429,7 @@ fn gen_expr_floatbits(
         Some(slot) =>
           emit_load_local_scalar(emitter, alloc.sem, slot.ty, dst, slot.offset, loc, bag)
         None => {
-          let sym = sym_for_ident(syms, name)
+          let sym = sym_for_ident(syms, name, id=id)
           let addr_reg : Int = 16
           emit_addr_global(emitter, syms, sym, addr_reg)
           let size = if is_double { 8 } else { 4 }
@@ -6769,7 +6809,7 @@ fn gen_expr_int32(
           gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, dst, bag),
       )
     Expr::Ident(name~, id~, loc~) => {
-      match alloc.sem.enum_consts.get(name) {
+      match enum_const_value(alloc.sem, name, id) {
         Some(v) => {
           arm64_movimm(emitter, dst.reinterpret_as_uint(), v.to_uint64())
           return
@@ -6785,13 +6825,19 @@ fn gen_expr_int32(
         Some(slot) =>
           emit_load_local_scalar(emitter, alloc.sem, slot.ty, dst, slot.offset, loc, bag)
         None => {
-          let sym = sym_for_ident(syms, name)
-          let ty = match alloc.sem.globals.get(name) {
+          let sym = sym_for_ident(syms, name, id=id)
+          let global_ty =
+            if id > 0 { alloc.sem.globals_by_id.get(id) } else { None }
+          let ty = match global_ty {
             Some(gty) => decay_type(gty)
             None =>
-              match expr_ty {
-                Some(ty) => ty
-                None => type_of_expr(alloc.sem, expr)
+              match alloc.sem.globals.get(name) {
+                Some(gty) => decay_type(gty)
+                None =>
+                  match expr_ty {
+                    Some(ty) => ty
+                    None => type_of_expr(alloc.sem, expr)
+                  }
               }
           }
           emit_addr_global(emitter, syms, sym, dst)
@@ -8814,12 +8860,23 @@ fn gen_expr_ptr(
               )
           }
         None => {
-          let sym = sym_for_ident(syms, name)
+          let sym = sym_for_ident(syms, name, id=id)
           emit_addr_global(emitter, syms, sym, dst)
-          if alloc.sem.functions.contains(name) {
+          let has_func = if id > 0 {
+            alloc.sem.functions_by_id.contains(id) || alloc.sem.functions.contains(name)
+          } else {
+            alloc.sem.functions.contains(name)
+          }
+          if has_func {
             return
           }
-          match alloc.sem.globals.get(name) {
+          let global_ty =
+            if id > 0 { alloc.sem.globals_by_id.get(id) } else { None }
+          let global_ty = match global_ty {
+            Some(found) => Some(found)
+            None => alloc.sem.globals.get(name)
+          }
+          match global_ty {
             Some(gty) =>
               match strip_top_qualifiers(gty) {
                 CType::Array(..) => return
@@ -11406,7 +11463,7 @@ fn const_pointer_from_lvalue(
   expr : Expr,
 ) -> (Sym, Int)? {
   match expr {
-    Expr::Ident(name~, ..) => Some((sym_for_ident(syms, name), 0))
+    Expr::Ident(name~, id~, ..) => Some((sym_for_ident(syms, name, id=id), 0))
     Expr::StringLit(value~, ..) =>
       Some((cstring_sym_or_add(cstrings, syms, value), 0))
     Expr::Member(base~, name~, is_arrow~, loc~) => {
@@ -11467,8 +11524,8 @@ fn const_pointer_from_expr(
   match expr {
     Expr::StringLit(value~, ..) =>
       Some((cstring_sym_or_add(cstrings, syms, value), 0))
-    Expr::Ident(name~, ..) =>
-      Some((sym_for_ident(syms, name), 0))
+    Expr::Ident(name~, id~, ..) =>
+      Some((sym_for_ident(syms, name, id=id), 0))
     Expr::Member(..) | Expr::Index(..) =>
       match type_of_lvalue(sem, expr) {
         Some(ty) =>
@@ -12210,9 +12267,15 @@ fn codegen_arm64_object_bytes_with_sem(
       })
       syms.externals.set(id, true)
     } else {
-      let var_ty = match sem.globals.get(var_decl.name) {
+      let global_ty =
+        if var_decl.id > 0 { sem.globals_by_id.get(var_decl.id) } else { None }
+      let var_ty = match global_ty {
         Some(t) => t
-        None => var_decl.ty
+        None =>
+          match sem.globals.get(var_decl.name) {
+            Some(t) => t
+            None => var_decl.ty
+          }
       }
       let (size, align) = match type_size_align_or_error(sem, var_ty, var_decl.loc) {
         None => continue
