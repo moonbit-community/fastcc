@@ -4632,7 +4632,7 @@ fn gen_call_expr_impl(
       _ => ()
     }
     let has_func = if id > 0 {
-      alloc.sem.functions_by_id.contains(id) || alloc.sem.functions.contains(name)
+      alloc.sem.functions_by_id.contains(id)
     } else {
       alloc.sem.functions.contains(name)
     }

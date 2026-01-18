@@ -5502,22 +5502,10 @@ fn merge_global_decl_type(existing : CType, incoming : CType) -> CType {
 fn lookup_value(ctx : SemContext, name : String, id : Int) -> CType? {
   let mut found = if id > 0 { ctx.local_values.get(id) } else { None }
   if found is None {
-    if id > 0 {
-      found = ctx.globals_by_id.get(id)
-    }
-    if found is None {
-      found = ctx.globals.get(name)
-    }
+    found = if id > 0 { ctx.globals_by_id.get(id) } else { ctx.globals.get(name) }
   }
   if found is None {
-    let sig = if id > 0 {
-      match ctx.functions_by_id.get(id) {
-        Some(found_sig) => Some(found_sig)
-        None => ctx.functions.get(name)
-      }
-    } else {
-      ctx.functions.get(name)
-    }
+    let sig = if id > 0 { ctx.functions_by_id.get(id) } else { ctx.functions.get(name) }
     match sig {
       Some(sig) =>
         found = Some(
