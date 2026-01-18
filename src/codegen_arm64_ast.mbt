@@ -4036,8 +4036,18 @@ fn store_call_arg_to_slot(
           if type_is_pointer_like(ty) {
             gen_expr_ptr(emitter, alloc, syms, pool, cstrings, arg, tmp, bag)
           } else {
-            gen_expr_int32(emitter, alloc, syms, pool, cstrings, arg, tmp, bag)
             let from_ty = type_of_expr(alloc.sem, arg)
+            gen_expr_int32(
+              emitter,
+              alloc,
+              syms,
+              pool,
+              cstrings,
+              arg,
+              tmp,
+              bag,
+              expr_ty=from_ty,
+            )
             emit_int_cast(emitter, alloc.sem, from_ty, ty, tmp, loc, bag)
           }
           arm64_strx(emitter, 3, tmp.reinterpret_as_uint(), (31 : UInt), slot_off)
@@ -7350,7 +7360,21 @@ fn gen_expr_int32(
       match op {
         BinaryOp::Comma => {
           gen_expr_discard(emitter, alloc, syms, pool, cstrings, left, bag)
-          gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+          match expr_ty {
+            Some(ty) =>
+              gen_expr_int32(
+                emitter,
+                alloc,
+                syms,
+                pool,
+                cstrings,
+                right,
+                dst,
+                bag,
+                expr_ty=ty,
+              )
+            None => gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+          }
         }
         BinaryOp::Assign => {
           let lhs_ty = type_of_expr(alloc.sem, left)
@@ -7458,8 +7482,18 @@ fn gen_expr_int32(
                     return
                   }
                 }
-                gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, idx, bag)
                 let idx_ty = type_of_expr(alloc.sem, right)
+                gen_expr_int32(
+                  emitter,
+                  alloc,
+                  syms,
+                  pool,
+                  cstrings,
+                  right,
+                  idx,
+                  bag,
+                  expr_ty=idx_ty,
+                )
                 emit_int_extend_to_64(emitter, alloc.sem, idx_ty, idx, loc, bag)
                 let elem_ty = match element_type_for_pointer_arith(left_ty) {
                   None => {
@@ -7883,7 +7917,17 @@ fn gen_expr_int32(
                 }
               }
               None => {
-                gen_expr_int32(emitter, alloc, syms, pool, cstrings, left, dst, bag)
+                gen_expr_int32(
+                  emitter,
+                  alloc,
+                  syms,
+                  pool,
+                  cstrings,
+                  left,
+                  dst,
+                  bag,
+                  expr_ty=left_ty,
+                )
                 emit_cmp(emitter, false, dst, 31)
               }
             }
@@ -7925,7 +7969,17 @@ fn gen_expr_int32(
                 }
               }
               None => {
-                gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+                gen_expr_int32(
+                  emitter,
+                  alloc,
+                  syms,
+                  pool,
+                  cstrings,
+                  right,
+                  dst,
+                  bag,
+                  expr_ty=right_ty,
+                )
                 emit_cmp(emitter, false, dst, 31)
               }
             }
@@ -8057,13 +8111,33 @@ fn gen_expr_int32(
                 if type_is_pointer_like(left_ty) {
                   gen_expr_ptr(emitter, alloc, syms, pool, cstrings, left, tmp, bag)
                 } else {
-                  gen_expr_int32(emitter, alloc, syms, pool, cstrings, left, tmp, bag)
+                  gen_expr_int32(
+                    emitter,
+                    alloc,
+                    syms,
+                    pool,
+                    cstrings,
+                    left,
+                    tmp,
+                    bag,
+                    expr_ty=left_ty,
+                  )
                   emit_int_extend_to_64(emitter, alloc.sem, left_ty, tmp, loc, bag)
                 }
                 if type_is_pointer_like(right_ty) {
                   gen_expr_ptr(emitter, alloc, syms, pool, cstrings, right, dst, bag)
                 } else {
-                  gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+                  gen_expr_int32(
+                    emitter,
+                    alloc,
+                    syms,
+                    pool,
+                    cstrings,
+                    right,
+                    dst,
+                    bag,
+                    expr_ty=right_ty,
+                  )
                   emit_int_extend_to_64(emitter, alloc.sem, right_ty, dst, loc, bag)
                 }
                 emit_cmp(emitter, true, tmp, dst)
@@ -8161,6 +8235,7 @@ fn gen_expr_int32(
             left,
             left_reg,
             bag,
+            expr_ty=left_ty,
           )
           let tmp = take_reg(pool) catch {
             err => {
@@ -8169,7 +8244,17 @@ fn gen_expr_int32(
             }
           }
           emit_mov(emitter, true, tmp, left_reg)
-          gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+          gen_expr_int32(
+            emitter,
+            alloc,
+            syms,
+            pool,
+            cstrings,
+            right,
+            dst,
+            bag,
+            expr_ty=right_ty,
+          )
           match op {
             BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le |
             BinaryOp::Gt | BinaryOp::Ge => {
@@ -8461,7 +8546,17 @@ fn gen_expr_int32(
         (CType::Int(kind=to_kind, unsigned=to_unsigned), CType::Float(kind=from_kind)) => {
           if !float_kind_supported(from_kind) {
             add_error(bag, cast_loc, "codegen: unsupported float type")
-            gen_expr_int32(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
+            gen_expr_int32(
+              emitter,
+              alloc,
+              syms,
+              pool,
+              cstrings,
+              inner,
+              dst,
+              bag,
+              expr_ty=from_ty,
+            )
             return
           }
           gen_expr_to_float_kind_bits_with_type(
@@ -8504,11 +8599,32 @@ fn gen_expr_int32(
           if type_is_pointer_like(from_ty) {
             gen_expr_ptr(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
           } else {
-            gen_expr_int32(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
+            gen_expr_int32(
+              emitter,
+              alloc,
+              syms,
+              pool,
+              cstrings,
+              inner,
+              dst,
+              bag,
+              expr_ty=from_ty,
+            )
           }
           emit_int_cast(emitter, alloc.sem, from_ty, to_ty, dst, cast_loc, bag)
         }
-        _ => gen_expr_int32(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
+        _ =>
+          gen_expr_int32(
+            emitter,
+            alloc,
+            syms,
+            pool,
+            cstrings,
+            inner,
+            dst,
+            bag,
+            expr_ty=from_ty,
+          )
       }
     }
     Expr::Conditional(cond~, then_expr~, else_expr~, loc~) => {
