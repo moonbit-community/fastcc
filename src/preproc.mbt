@@ -51,16 +51,30 @@ struct Preprocessor {
 struct ExpandingGuard { restore_len : Int }
 
 ///|
-fn make_builtin_token(kind : TokenKind, lexeme : String) -> Token {
-  { kind, lexeme, loc: dummy_loc(0), line_start: false, hidden: empty_hidden }
+fn make_builtin_token(
+  kind : TokenKind,
+  lexeme : String,
+  id? : Int = 0,
+) -> Token {
+  {
+    kind,
+    lexeme,
+    id,
+    loc: dummy_loc(0),
+    line_start: false,
+    hidden: empty_hidden,
+  }
 }
 
 ///|
-fn make_builtin_word_token(word : String) -> Token {
+fn make_builtin_word_token(pp : Preprocessor, word : String) -> Token {
   let (kind, keyword_lexeme) = keyword_or_ident_view(word[:])
   match keyword_lexeme {
     Some(lexeme) => make_builtin_token(kind, lexeme)
-    None => make_builtin_token(Ident, word)
+    None => {
+      let (lexeme, id) = pp.interner.intern_view_with_id(word[:])
+      make_builtin_token(Ident, lexeme, id=id)
+    }
   }
 }
 
@@ -81,7 +95,7 @@ fn define_macro(
 ///|
 fn define_words_macro(pp : Preprocessor, name : String, words : Array[String]) ->
   Unit {
-  let tokens = words.map(w => make_builtin_word_token(w))
+  let tokens = words.map(w => make_builtin_word_token(pp, w))
   define_macro(pp, name, tokens)
 }
 
@@ -129,7 +143,7 @@ fn init_builtin_macros(pp : Preprocessor) -> Unit {
     make_builtin_token(IntLit, "3412"),
   ])
   define_macro(pp, "__BYTE_ORDER__", [
-    make_builtin_token(Ident, "__ORDER_LITTLE_ENDIAN__"),
+    make_builtin_word_token(pp, "__ORDER_LITTLE_ENDIAN__"),
   ])
   define_int_macro(pp, "__LITTLE_ENDIAN__", 1)
 
@@ -314,6 +328,7 @@ fn next_input_token(pp : Preprocessor) -> Token {
     {
       kind: Eof,
       lexeme: "",
+      id: 0,
       loc: lexer_loc(pp.lexer),
       line_start: false,
       hidden: empty_hidden,
@@ -767,6 +782,7 @@ fn normalize_macro_args(
           {
             kind: Comma,
             lexeme: ",",
+            id: 0,
             loc,
             line_start: false,
             hidden: empty_hidden,
@@ -846,6 +862,7 @@ fn make_string_literal(text : String, loc : SrcLoc) -> Token {
   {
     kind: StrLit,
     lexeme: "\"" + escaped + "\"",
+    id: 0,
     loc,
     line_start: false,
     hidden: empty_hidden,
@@ -892,6 +909,7 @@ fn make_int_literal_token(value : Int, loc : SrcLoc) -> Token {
   {
     kind: IntLit,
     lexeme: value.to_string(),
+    id: 0,
     loc,
     line_start: false,
     hidden: empty_hidden,
@@ -993,6 +1011,7 @@ fn lookup_param_index(params : Array[String], name : String) -> Int? {
 
 ///|
 fn substitute_macro(
+  pp : Preprocessor,
   macro_def : Macro,
   raw_args : Array[Array[Token]],
   expanded_args : Array[Array[Token]],
@@ -1057,14 +1076,18 @@ fn substitute_macro(
         i = i + 2
         continue
       }
-      let merged = {
+      let merged_lexeme = last.lexeme + next_tokens[0].lexeme
+      let (merged, merged_id) =
+        pp.interner.intern_view_with_id(merged_lexeme[:])
+      let merged_token = {
         kind: Ident,
-        lexeme: last.lexeme + next_tokens[0].lexeme,
+        lexeme: merged,
+        id: merged_id,
         loc,
         line_start: false,
         hidden: merge_hidden(last.hidden, next_tokens[0].hidden),
       }
-      out.push(merged)
+      out.push(merged_token)
       if next_tokens.length() > 1 {
         for j = 1; j < next_tokens.length(); j = j + 1 {
           let t = next_tokens[j]
@@ -1074,6 +1097,7 @@ fn substitute_macro(
             out.push({
               kind: t.kind,
               lexeme: t.lexeme,
+              id: t.id,
               loc,
               line_start: false,
               hidden: t.hidden,
@@ -1096,6 +1120,7 @@ fn substitute_macro(
           out.push({
             kind: t.kind,
             lexeme: t.lexeme,
+            id: t.id,
             loc: t.loc,
             line_start: false,
             hidden: t.hidden,
@@ -1110,6 +1135,7 @@ fn substitute_macro(
     out.push({
       kind: tok.kind,
       lexeme: tok.lexeme,
+      id: tok.id,
       loc,
       line_start: false,
       hidden: tok.hidden,
@@ -1304,6 +1330,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                       let expanded_args = expand_macro_args(pp, norm_raw)
                       push_expanding(pp, tok.lexeme)
                       let replaced = substitute_macro(
+                        pp,
                         macro_def,
                         norm_raw,
                         expanded_args,
@@ -1449,6 +1476,7 @@ fn normalize_macro_tokens(tokens : Array[Token]) -> Array[Token] {
     out.push({
       kind: tok.kind,
       lexeme: tok.lexeme,
+      id: tok.id,
       loc: tok.loc,
       line_start: false,
       hidden: tok.hidden,
@@ -1583,6 +1611,7 @@ fn add_hidden(pp : Preprocessor, tok : Token, name : String) -> Token {
         return {
           kind: tok.kind,
           lexeme: tok.lexeme,
+          id: tok.id,
           loc: tok.loc,
           line_start: tok.line_start,
           hidden,
@@ -1594,6 +1623,7 @@ fn add_hidden(pp : Preprocessor, tok : Token, name : String) -> Token {
     return {
       kind: tok.kind,
       lexeme: tok.lexeme,
+      id: tok.id,
       loc: tok.loc,
       line_start: tok.line_start,
       hidden,
@@ -1607,6 +1637,7 @@ fn add_hidden(pp : Preprocessor, tok : Token, name : String) -> Token {
     {
       kind: tok.kind,
       lexeme: tok.lexeme,
+      id: tok.id,
       loc: tok.loc,
       line_start: tok.line_start,
       hidden: out,
@@ -2411,6 +2442,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
                     let expanded_args = expand_macro_args(pp, norm_args)
                     push_expanding(pp, tok.lexeme)
                     let replaced = substitute_macro(
+                      pp,
                       macro_def,
                       norm_args,
                       expanded_args,
@@ -2451,6 +2483,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
     {
       kind: Eof,
       lexeme: "",
+      id: 0,
       loc: lexer_loc(pp.lexer),
       line_start: false,
       hidden: empty_hidden,

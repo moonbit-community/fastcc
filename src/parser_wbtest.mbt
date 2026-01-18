@@ -117,7 +117,8 @@ test "parser tracks typedef struct name" {
   let parser = new_parser(pp)
   ignore(parse_translation_unit_with(parser))
   let scope0 = parser.type_scopes[0]
-  assert_true(scope0.contains("T"))
+  let (_, type_id) = parser.pp.interner.intern_view_with_id("T"[:])
+  assert_true(scope0.contains(type_id))
 }
 
 ///|

@@ -64,8 +64,9 @@ fn make_token(
   lexeme : String,
   loc : SrcLoc,
   line_start : Bool,
+  id? : Int = 0,
 ) -> Token {
-  { kind, lexeme, loc, line_start, hidden: empty_hidden }
+  { kind, lexeme, id, loc, line_start, hidden: empty_hidden }
 }
 
 ///|
@@ -305,8 +306,8 @@ fn lex_ident(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
   match keyword_lexeme {
     Some(lexeme) => make_token(kind, lexeme, loc, line_start)
     None => {
-      let name = lex.interner.intern_view(name_view)
-      make_token(kind, name, loc, line_start)
+      let (name, id) = lex.interner.intern_view_with_id(name_view)
+      make_token(kind, name, loc, line_start, id=id)
     }
   }
 }

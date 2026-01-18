@@ -102,6 +102,7 @@ enum TokenKind {
 struct Token {
   kind : TokenKind
   lexeme : String
+  id : Int
   loc : SrcLoc
   line_start : Bool
   hidden : Array[String]
