@@ -617,7 +617,7 @@ fn gen_type_size_bytes_to_reg(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   ty : CType,
   dst : Int,
   loc : SrcLoc,
@@ -713,7 +713,7 @@ fn gen_vla_alloc_to_local_slot(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   slot_offset : Int,
   size_slot_offset : Int?,
   array_ty : CType,
@@ -789,7 +789,7 @@ fn gen_vla_size_bytes_to_reg(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   elem_ty : CType,
   size_expr : Expr,
   dst : Int,
@@ -1542,7 +1542,7 @@ fn gen_cond_expr_cmp_zero(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   cond : Expr,
   bag : DiagBag,
 ) -> Unit {
@@ -1917,7 +1917,7 @@ fn gen_agg_expr_to_addr(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   expr : Expr,
   dst_reg : Int,
   dst_off : Int,
@@ -2402,7 +2402,7 @@ fn gen_string_init_to_addr(
   emitter : Arm64Emitter,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   value : String,
   length : Int,
   dst_reg : Int,
@@ -2410,13 +2410,7 @@ fn gen_string_init_to_addr(
   bag : DiagBag,
   loc : SrcLoc,
 ) -> Unit {
-  let sym = match cstrings.get(value) {
-    None => {
-      add_error(bag, loc, "codegen: missing string literal in cstring pool")
-      return
-    }
-    Some(s) => s
-  }
+  let sym = cstring_sym_or_add(cstrings, syms, value)
   let src_reg = take_reg(pool) catch {
     err => {
       add_error(bag, loc, err.to_string())
@@ -2536,7 +2530,7 @@ fn gen_initializer_to_addr(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   base_reg : Int,
   base_off : Int,
   ty : CType,
@@ -3396,7 +3390,7 @@ fn gen_builtin_va_start(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   args : Array[Expr],
   loc : SrcLoc,
   bag : DiagBag,
@@ -3437,7 +3431,7 @@ fn gen_builtin_va_copy(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   args : Array[Expr],
   loc : SrcLoc,
   bag : DiagBag,
@@ -3495,7 +3489,7 @@ fn gen_builtin_va_arg_load(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   list_expr : Expr,
   ty : CType,
   dst : Int,
@@ -3969,7 +3963,7 @@ fn store_call_arg_to_slot(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   arg : Expr,
   ty : CType,
   slot_off : UInt64,
@@ -4076,7 +4070,7 @@ fn gen_call_direct(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   name : String,
   args : Array[Expr],
   sret : SRetAddr?,
@@ -4161,7 +4155,7 @@ fn gen_call_with_layout(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   args : Array[Expr],
   arg_tys : Array[CType],
   ret_ty : CType,
@@ -4481,7 +4475,7 @@ fn gen_call_expr_impl(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   callee : Expr,
   args : Array[Expr],
   sret : SRetAddr?,
@@ -4648,7 +4642,7 @@ fn gen_call_expr(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   callee : Expr,
   args : Array[Expr],
   loc : SrcLoc,
@@ -4674,7 +4668,7 @@ fn gen_call_expr_with_sret(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   callee : Expr,
   args : Array[Expr],
   sret_reg : Int,
@@ -4708,33 +4702,31 @@ fn element_type_for_pointer_arith(ty : CType) -> CType? {
 ///|
 fn gen_func_name_addr(
   emitter : Arm64Emitter,
-  cstrings : FastMap[String, Sym],
+  syms : SymTable,
+  cstrings : CstringPool,
   alloc : LocalAlloc,
   dst : Int,
   loc : SrcLoc,
   bag : DiagBag,
 ) -> Bool {
-  match cstrings.get(alloc.func_name) {
-    None => {
-      add_error(bag, loc, "codegen: missing __func__ string literal")
-      false
-    }
-    Some(sym) => {
-      let adrp_off = emitter_pc(emitter)
-      greloca(emitter, sym, adrp_off, R_AARCH64_ADR_PREL_PG_HI21, 0)
-      emit32(emitter, (0x90000000 : UInt64).lor(dst.to_uint64()).to_uint())
-      let add_off = emitter_pc(emitter)
-      greloca(emitter, sym, add_off, R_AARCH64_ADD_ABS_LO12_NC, 0)
-      emit32(
-        emitter,
-        (0x91000000 : UInt64)
-        .lor(dst.to_uint64())
-        .lor(dst.to_uint64() << 5)
-        .to_uint(),
-      )
-      true
-    }
+  if alloc.func_name == "" {
+    add_error(bag, loc, "codegen: missing __func__ string literal")
+    return false
   }
+  let sym = cstring_sym_or_add(cstrings, syms, alloc.func_name)
+  let adrp_off = emitter_pc(emitter)
+  greloca(emitter, sym, adrp_off, R_AARCH64_ADR_PREL_PG_HI21, 0)
+  emit32(emitter, (0x90000000 : UInt64).lor(dst.to_uint64()).to_uint())
+  let add_off = emitter_pc(emitter)
+  greloca(emitter, sym, add_off, R_AARCH64_ADD_ABS_LO12_NC, 0)
+  emit32(
+    emitter,
+    (0x91000000 : UInt64)
+    .lor(dst.to_uint64())
+    .lor(dst.to_uint64() << 5)
+    .to_uint(),
+  )
+  true
 }
 
 ///|
@@ -4748,7 +4740,7 @@ fn gen_index_addr_with_elem_type(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   base : Expr,
   index : Expr,
   dst : Int,
@@ -4866,7 +4858,7 @@ fn gen_compound_literal_addr_with_type(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   ty : CType,
   init : Initializer,
   loc : SrcLoc,
@@ -4912,7 +4904,7 @@ fn gen_lvalue_addr(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   expr : Expr,
   dst : Int,
   bag : DiagBag,
@@ -4920,7 +4912,7 @@ fn gen_lvalue_addr(
   match expr {
     Expr::Ident(name~, loc~) => {
       if is_func_name_ident(name) {
-        if gen_func_name_addr(emitter, cstrings, alloc, dst, loc, bag) {
+        if gen_func_name_addr(emitter, syms, cstrings, alloc, dst, loc, bag) {
           return
         }
       }
@@ -5688,7 +5680,7 @@ fn gen_member_base_addr(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   base : Expr,
   is_arrow : Bool,
   dst : Int,
@@ -5707,7 +5699,7 @@ fn gen_member_addr_with_info(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   base : Expr,
   base_ty : CType,
   is_arrow : Bool,
@@ -6054,7 +6046,7 @@ fn store_lvalue_scalar(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   lvalue : Expr,
   value_reg : Int,
   value_ty : CType,
@@ -6154,7 +6146,7 @@ fn gen_expr_to_float_kind_bits_with_type(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   expr : Expr,
   src_ty : CType,
   target_kind : CFloatKind,
@@ -6235,7 +6227,7 @@ fn gen_expr_to_float_kind_bits(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   expr : Expr,
   target_kind : CFloatKind,
   dst : Int,
@@ -6262,7 +6254,7 @@ fn gen_expr_floatbits(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   expr : Expr,
   kind_raw : CFloatKind,
   dst : Int,
@@ -6677,7 +6669,7 @@ fn gen_expr_int32(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   expr : Expr,
   dst : Int,
   bag : DiagBag,
@@ -6715,7 +6707,7 @@ fn gen_expr_int32(
         None => ()
       }
       if is_func_name_ident(name) {
-        if gen_func_name_addr(emitter, cstrings, alloc, dst, loc, bag) {
+        if gen_func_name_addr(emitter, syms, cstrings, alloc, dst, loc, bag) {
           return
         }
       }
@@ -8642,28 +8634,24 @@ fn gen_expr_int32(
         err => add_error(bag, loc, err.to_string())
       }
     }
-    Expr::StringLit(value=value, loc=loc, ..) =>
-      match cstrings.get(value) {
-        None =>
-          add_error(bag, loc, "codegen: missing string literal in cstring pool")
-        Some(sym) => {
-          let adrp_off = emitter_pc(emitter)
-          greloca(emitter, sym, adrp_off, R_AARCH64_ADR_PREL_PG_HI21, 0)
-          emit32(
-            emitter,
-            (0x90000000 : UInt64).lor(dst.to_uint64()).to_uint(),
-          )
-          let add_off = emitter_pc(emitter)
-          greloca(emitter, sym, add_off, R_AARCH64_ADD_ABS_LO12_NC, 0)
-          emit32(
-            emitter,
-            (0x91000000 : UInt64)
-            .lor(dst.to_uint64())
-            .lor(dst.to_uint64() << 5)
-            .to_uint(),
-          )
-        }
-      }
+    Expr::StringLit(value=value, ..) => {
+      let sym = cstring_sym_or_add(cstrings, syms, value)
+      let adrp_off = emitter_pc(emitter)
+      greloca(emitter, sym, adrp_off, R_AARCH64_ADR_PREL_PG_HI21, 0)
+      emit32(
+        emitter,
+        (0x90000000 : UInt64).lor(dst.to_uint64()).to_uint(),
+      )
+      let add_off = emitter_pc(emitter)
+      greloca(emitter, sym, add_off, R_AARCH64_ADD_ABS_LO12_NC, 0)
+      emit32(
+        emitter,
+        (0x91000000 : UInt64)
+        .lor(dst.to_uint64())
+        .lor(dst.to_uint64() << 5)
+        .to_uint(),
+      )
+    }
     _ =>
       add_error(bag, expr_loc(expr), "codegen: unsupported expression")
   }
@@ -8692,7 +8680,7 @@ fn gen_expr_ptr(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   expr : Expr,
   dst : Int,
   bag : DiagBag,
@@ -8721,14 +8709,13 @@ fn gen_expr_ptr(
         (expr, dst) =>
           gen_expr_ptr(emitter, alloc, syms, pool, cstrings, expr, dst, bag),
       )
-    Expr::StringLit(value=value, loc=loc, ..) =>
-      match cstrings.get(value) {
-        None => add_error(bag, loc, "codegen: missing string literal in cstring pool")
-        Some(sym) => emit_addr_global(emitter, syms, sym, dst)
-      }
+    Expr::StringLit(value=value, ..) => {
+      let sym = cstring_sym_or_add(cstrings, syms, value)
+      emit_addr_global(emitter, syms, sym, dst)
+    }
     Expr::Ident(name~, loc~) => {
       if is_func_name_ident(name) {
-        if gen_func_name_addr(emitter, cstrings, alloc, dst, loc, bag) {
+        if gen_func_name_addr(emitter, syms, cstrings, alloc, dst, loc, bag) {
           return
         }
       }
@@ -9424,7 +9411,7 @@ fn gen_expr_any(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   expr : Expr,
   dst : Int,
   bag : DiagBag,
@@ -9449,7 +9436,7 @@ fn gen_expr_any_with_type(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   expr : Expr,
   ty : CType,
   dst : Int,
@@ -9484,7 +9471,7 @@ fn gen_expr_discard(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   expr : Expr,
   bag : DiagBag,
 ) -> Unit {
@@ -9640,7 +9627,7 @@ fn gen_stmt_expr_with(
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   stmts : Array[Stmt],
   dst : Int,
   zero_is64 : Bool,
@@ -9863,7 +9850,7 @@ fn gen_switch_body(
   switches : Array[SwitchChains],
   breakables : Array[Int],
   labels : LabelCtx,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   stmt : Stmt,
   bag : DiagBag,
   return_chain : Int,
@@ -10039,7 +10026,7 @@ fn gen_stmt(
   switches : Array[SwitchChains],
   breakables : Array[Int],
   labels : LabelCtx,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   stmt : Stmt,
   bag : DiagBag,
   return_chain : Int,
@@ -10955,7 +10942,7 @@ fn gen_func_def(
   sem : SemContext,
   syms : SymTable,
   func_offsets : FastMap[String, Int],
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   func : FuncDef,
   bag : DiagBag,
 ) -> Unit {
@@ -11193,26 +11180,41 @@ fn gen_func_def(
 }
 
 ///|
-fn cstring_record(
-  order : Array[String],
-  seen : FastMap[String, Bool],
-  value : String,
-) -> Unit {
-  if !seen.contains(value) {
-    seen.set(value, true)
-    order.push(value)
-  }
-}
-
-///|
 struct StringEntry {
   index : Int
   value : String
 }
 
 ///|
-struct NodeCounter {
-  mut count : Int
+struct CstringPool {
+  order : Array[String]
+  syms : FastMap[String, Sym]
+}
+
+///|
+fn new_cstring_pool(capacity : Int) -> CstringPool {
+  {
+    order: Array::new(capacity=capacity),
+    syms: fast_map_new(capacity=capacity),
+  }
+}
+
+fn cstring_sym_or_add(
+  pool : CstringPool,
+  syms : SymTable,
+  value : String,
+) -> Sym {
+  match pool.syms.get(value) {
+    Some(sym) => sym
+    None => {
+      let index = pool.order.length()
+      let sym_name = "_L_.str.\{index}"
+      let sym = sym_for_name(syms, sym_name)
+      pool.syms.set(value, sym)
+      pool.order.push(value)
+      sym
+    }
+  }
 }
 
 ///|
@@ -11229,78 +11231,6 @@ fn string_has_nul(value : String) -> Bool {
 }
 
 ///|
-fn collect_cstring_expr(
-  order : Array[String],
-  seen : FastMap[String, Bool],
-  func_name : String,
-  counter : NodeCounter,
-  expr : Expr,
-) -> Unit {
-  counter.count = counter.count + 1
-  match expr {
-    Expr::StringLit(value~, ..) => cstring_record(order, seen, value)
-    Expr::Ident(name~, ..) =>
-      if func_name != "" && is_func_name_ident(name) {
-        cstring_record(order, seen, func_name)
-      }
-    Expr::Unary(expr=inner, ..) =>
-      collect_cstring_expr(order, seen, func_name, counter, inner)
-    Expr::Cast(expr=inner, ..) =>
-      collect_cstring_expr(order, seen, func_name, counter, inner)
-    Expr::SizeofExpr(expr=inner, ..) =>
-      collect_cstring_expr(order, seen, func_name, counter, inner)
-    Expr::AlignofExpr(expr=inner, ..) =>
-      collect_cstring_expr(order, seen, func_name, counter, inner)
-    Expr::Binary(left~, right~, ..) => {
-      collect_cstring_expr(order, seen, func_name, counter, left)
-      collect_cstring_expr(order, seen, func_name, counter, right)
-    }
-    Expr::Conditional(cond~, then_expr~, else_expr~, ..) => {
-      collect_cstring_expr(order, seen, func_name, counter, cond)
-      collect_cstring_expr(order, seen, func_name, counter, then_expr)
-      collect_cstring_expr(order, seen, func_name, counter, else_expr)
-    }
-    Expr::Call(callee~, args~, ..) => {
-      collect_cstring_expr(order, seen, func_name, counter, callee)
-      for a in args {
-        collect_cstring_expr(order, seen, func_name, counter, a)
-      }
-    }
-    Expr::Index(base~, index~, ..) => {
-      collect_cstring_expr(order, seen, func_name, counter, base)
-      collect_cstring_expr(order, seen, func_name, counter, index)
-    }
-    Expr::Member(base~, ..) => collect_cstring_expr(order, seen, func_name, counter, base)
-    Expr::BuiltinVaArg(list~, ..) =>
-      collect_cstring_expr(order, seen, func_name, counter, list)
-    Expr::CompoundLiteral(init~, ..) =>
-      collect_cstring_initializer(order, seen, func_name, counter, init)
-    Expr::StmtExpr(stmts~, ..) =>
-      for s in stmts {
-        collect_cstring_stmt(order, seen, func_name, counter, s)
-      }
-    _ => ()
-  }
-}
-
-///|
-fn collect_cstring_initializer(
-  order : Array[String],
-  seen : FastMap[String, Bool],
-  func_name : String,
-  counter : NodeCounter,
-  init : Initializer,
-) -> Unit {
-  counter.count = counter.count + 1
-  match init {
-    Initializer::Expr(expr~, ..) =>
-      collect_cstring_expr(order, seen, func_name, counter, expr)
-    Initializer::List(items~, ..) =>
-      for item in items {
-        collect_cstring_initializer(order, seen, func_name, counter, item.value)
-      }
-  }
-}
 
 ///|
 fn ensure_bytes_len(buf : Array[Int], size : Int) -> Unit {
@@ -11383,16 +11313,13 @@ fn store_bitfield_int_le(
 fn const_pointer_from_lvalue(
   sem : SemContext,
   syms : SymTable,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   expr : Expr,
 ) -> (Sym, Int)? {
   match expr {
     Expr::Ident(name~, ..) => Some((sym_for_ident(syms, name), 0))
     Expr::StringLit(value~, ..) =>
-      match cstrings.get(value) {
-        Some(sym) => Some((sym, 0))
-        None => None
-      }
+      Some((cstring_sym_or_add(cstrings, syms, value), 0))
     Expr::Member(base~, name~, is_arrow~, loc~) => {
       let base_ptr = if is_arrow {
         const_pointer_from_expr(sem, syms, cstrings, base)
@@ -11445,15 +11372,12 @@ fn const_pointer_from_lvalue(
 fn const_pointer_from_expr(
   sem : SemContext,
   syms : SymTable,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   expr : Expr,
 ) -> (Sym, Int)? {
   match expr {
     Expr::StringLit(value~, ..) =>
-      match cstrings.get(value) {
-        Some(sym) => Some((sym, 0))
-        None => None
-      }
+      Some((cstring_sym_or_add(cstrings, syms, value), 0))
     Expr::Ident(name~, ..) =>
       Some((sym_for_ident(syms, name), 0))
     Expr::Member(..) | Expr::Index(..) =>
@@ -11480,7 +11404,7 @@ fn const_pointer_from_expr(
 fn fill_global_initializer_bytes(
   sem : SemContext,
   syms : SymTable,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   ty : CType,
   init : Initializer,
   bytes : Array[Int],
@@ -12020,7 +11944,7 @@ fn fill_global_initializer_bytes(
 fn build_global_initializer_bytes(
   sem : SemContext,
   syms : SymTable,
-  cstrings : FastMap[String, Sym],
+  cstrings : CstringPool,
   ty : CType,
   init : Initializer,
   bag : DiagBag,
@@ -12038,92 +11962,6 @@ fn build_global_initializer_bytes(
   let relocs : Array[Reloc] = []
   fill_global_initializer_bytes(sem, syms, cstrings, ty, init, bytes, relocs, 0, bag)
   Some((bytes, relocs))
-}
-
-///|
-fn collect_cstring_stmt(
-  order : Array[String],
-  seen : FastMap[String, Bool],
-  func_name : String,
-  counter : NodeCounter,
-  stmt : Stmt,
-) -> Unit {
-  counter.count = counter.count + 1
-  match stmt {
-    Stmt::Compound(stmts~, ..) =>
-      for s in stmts {
-        collect_cstring_stmt(order, seen, func_name, counter, s)
-      }
-    Stmt::If(cond~, then_branch~, else_branch~, ..) => {
-      collect_cstring_expr(order, seen, func_name, counter, cond)
-      collect_cstring_stmt(order, seen, func_name, counter, then_branch)
-      match else_branch {
-        None => ()
-        Some(s) => collect_cstring_stmt(order, seen, func_name, counter, s)
-      }
-    }
-    Stmt::While(cond~, body~, ..) => {
-      collect_cstring_expr(order, seen, func_name, counter, cond)
-      collect_cstring_stmt(order, seen, func_name, counter, body)
-    }
-    Stmt::DoWhile(cond~, body~, ..) => {
-      collect_cstring_stmt(order, seen, func_name, counter, body)
-      collect_cstring_expr(order, seen, func_name, counter, cond)
-    }
-    Stmt::For(init~, cond~, step~, body~, ..) => {
-      match init {
-        None => ()
-        Some(s) => collect_cstring_stmt(order, seen, func_name, counter, s)
-      }
-      match cond {
-        None => ()
-        Some(e) => collect_cstring_expr(order, seen, func_name, counter, e)
-      }
-      match step {
-        None => ()
-        Some(e) => collect_cstring_expr(order, seen, func_name, counter, e)
-      }
-      collect_cstring_stmt(order, seen, func_name, counter, body)
-    }
-    Stmt::Return(value~, ..) =>
-      match value {
-        None => ()
-        Some(e) => collect_cstring_expr(order, seen, func_name, counter, e)
-      }
-    Stmt::ExprStmt(expr~, ..) =>
-      collect_cstring_expr(order, seen, func_name, counter, expr)
-    Stmt::DeclStmt(decls~, ..) =>
-      for d in decls {
-        match d.init {
-          None => ()
-          Some(init) =>
-            collect_cstring_initializer(order, seen, func_name, counter, init)
-        }
-      }
-    Stmt::Switch(cond~, body~, ..) => {
-      collect_cstring_expr(order, seen, func_name, counter, cond)
-      collect_cstring_stmt(order, seen, func_name, counter, body)
-    }
-    Stmt::Case(expr~, end_expr~, body~, ..) => {
-      collect_cstring_expr(order, seen, func_name, counter, expr)
-      match end_expr {
-        None => ()
-        Some(e) => collect_cstring_expr(order, seen, func_name, counter, e)
-      }
-      collect_cstring_stmt(order, seen, func_name, counter, body)
-    }
-    Stmt::Default(body~, ..) =>
-      collect_cstring_stmt(order, seen, func_name, counter, body)
-    Stmt::Label(body=body, ..) =>
-      collect_cstring_stmt(order, seen, func_name, counter, body)
-    Stmt::Asm(_) |
-    Stmt::Goto(name=_, loc=_) |
-    Stmt::Break(_) |
-    Stmt::Continue(_) |
-    Stmt::TagDef(ty=_, loc=_) |
-    Stmt::StaticAssert(_) |
-    Stmt::Empty(_) => ()
-  }
 }
 
 ///|
@@ -12191,9 +12029,6 @@ fn codegen_arm64_object_bytes_with_sem(
   let decl_count = unit.decls.length()
   let mut func_count = 0
   let mut main_found = false
-  let cstring_order : Array[String] = Array::new(capacity=decl_count)
-  let cstring_seen : FastMap[String, Bool] = fast_map_new(capacity=decl_count)
-  let node_counter : NodeCounter = { count: 0 }
   let func_defs : Array[FuncDef] = Array::new(capacity=decl_count)
   let var_decls : Array[VarDecl] = Array::new(capacity=decl_count)
   let external_symbols : Array[(String, Bool)] = Array::new(capacity=decl_count)
@@ -12205,30 +12040,12 @@ fn codegen_arm64_object_bytes_with_sem(
           main_found = true
         }
         func_defs.push(func)
-        collect_cstring_stmt(
-          cstring_order,
-          cstring_seen,
-          func.name,
-          node_counter,
-          func.body,
-        )
       }
       Decl::Var(var_decl) =>
         {
           var_decls.push(var_decl)
           let link = link_name(var_decl.name)
           external_symbols.push((link, var_decl.storage == StorageClass::Extern))
-          match var_decl.init {
-            None => ()
-            Some(init) =>
-              collect_cstring_initializer(
-                cstring_order,
-                cstring_seen,
-                "",
-                node_counter,
-                init,
-              )
-          }
         }
       Decl::FuncDecl(func_decl) => {
         let link = link_name(func_decl.name)
@@ -12237,55 +12054,18 @@ fn codegen_arm64_object_bytes_with_sem(
       _ => ()
     }
   }
-  let sym_capacity = decl_count + cstring_order.length()
+  let sym_capacity = if decl_count > 0 { decl_count * 2 } else { 0 }
   let syms = new_symtab_with_capacity(sym_capacity)
   for pair in external_symbols {
     let (name, is_ext) = pair
     let sym = sym_for_name(syms, name)
     syms.externals.set(sym.id, is_ext)
   }
-  let node_count = node_counter.count
-  let code_cap_from_nodes = if node_count > 0 { node_count * 2 } else { 0 }
-  let reloc_cap_from_nodes = if node_count > 0 { node_count / 8 } else { 0 }
-  let code_capacity = if func_count * 256 > code_cap_from_nodes {
-    func_count * 256
-  } else {
-    code_cap_from_nodes
-  }
-  let reloc_capacity = if func_count * 16 > reloc_cap_from_nodes {
-    func_count * 16
-  } else {
-    reloc_cap_from_nodes
-  }
+  let code_capacity = func_count * 256
+  let reloc_capacity = func_count * 16
   let emitter = new_arm64_emitter_with_capacity(code_capacity, reloc_capacity)
   let func_offsets : FastMap[String, Int] = fast_map_new(capacity=func_count)
-  let string_syms : FastMap[String, Sym] = fast_map_new(capacity=cstring_order.length())
-  let cstring_entries : Array[StringEntry] = Array::new(capacity=cstring_order.length())
-  let rodata_entries : Array[StringEntry] = Array::new(capacity=cstring_order.length())
-  let mut i = 0
-  while i < cstring_order.length() {
-    let value = cstring_order[i]
-    let sym_name = "_L_.str.\{i}"
-    let sym = sym_for_name(syms, sym_name)
-    string_syms.set(value, sym)
-    let entry : StringEntry = { index: i, value }
-    if string_has_nul(value) {
-      rodata_entries.push(entry)
-    } else {
-      cstring_entries.push(entry)
-    }
-    i = i + 1
-  }
-  let (cstring_offsets, cstring_section) = build_string_section(
-    cstring_entries,
-    ".cstring",
-    1,
-  )
-  let (rodata_offsets, rodata_section) = build_string_section(
-    rodata_entries,
-    ".rodata",
-    4,
-  )
+  let cstring_pool = new_cstring_pool(decl_count)
 
   // Generate `main` first when present for stable layout, but allow objects without `main`.
   if main_found {
@@ -12296,7 +12076,7 @@ fn codegen_arm64_object_bytes_with_sem(
           sem,
           syms,
           func_offsets,
-          string_syms,
+          cstring_pool,
           func,
           bag,
         )
@@ -12310,7 +12090,7 @@ fn codegen_arm64_object_bytes_with_sem(
         sem,
         syms,
         func_offsets,
-        string_syms,
+        cstring_pool,
         func,
         bag,
       )
@@ -12325,37 +12105,7 @@ fn codegen_arm64_object_bytes_with_sem(
   let mut data_align = 4
   let mut bss_size = 0
   let mut bss_align = 4
-  let def_capacity = var_decls.length() +
-    cstring_entries.length() +
-    rodata_entries.length()
-  let def_symbols : FastMap[String, ObjSymbol] = fast_map_new(capacity=def_capacity)
-
-  for entry in cstring_entries {
-    let name = "_L_.str.\{entry.index}"
-    let off = cstring_offsets.get(entry.value).unwrap_or(0)
-    let id = syms.name_to_id.get(name).unwrap_or(0)
-    def_symbols.set(name, {
-      id,
-      name,
-      section: Some(".cstring"),
-      value: off,
-      is_external: false,
-    })
-    syms.externals.set(id, false)
-  }
-  for entry in rodata_entries {
-    let name = "_L_.str.\{entry.index}"
-    let off = rodata_offsets.get(entry.value).unwrap_or(0)
-    let id = syms.name_to_id.get(name).unwrap_or(0)
-    def_symbols.set(name, {
-      id,
-      name,
-      section: Some(".rodata"),
-      value: off,
-      is_external: false,
-    })
-    syms.externals.set(id, false)
-  }
+  let def_symbols : FastMap[String, ObjSymbol] = fast_map_new(capacity=decl_count * 2)
 
   for var_decl in var_decls {
     let link = link_name(var_decl.name)
@@ -12401,7 +12151,7 @@ fn codegen_arm64_object_bytes_with_sem(
           match build_global_initializer_bytes(
             sem,
             syms,
-            string_syms,
+            cstring_pool,
             var_ty,
             init,
             bag,
@@ -12449,6 +12199,59 @@ fn codegen_arm64_object_bytes_with_sem(
         }
       }
     }
+  }
+
+  let cstring_entries : Array[StringEntry] =
+    Array::new(capacity=cstring_pool.order.length())
+  let rodata_entries : Array[StringEntry] =
+    Array::new(capacity=cstring_pool.order.length())
+  let mut i = 0
+  while i < cstring_pool.order.length() {
+    let value = cstring_pool.order[i]
+    let entry : StringEntry = { index: i, value }
+    if string_has_nul(value) {
+      rodata_entries.push(entry)
+    } else {
+      cstring_entries.push(entry)
+    }
+    i = i + 1
+  }
+  let (cstring_offsets, cstring_section) = build_string_section(
+    cstring_entries,
+    ".cstring",
+    1,
+  )
+  let (rodata_offsets, rodata_section) = build_string_section(
+    rodata_entries,
+    ".rodata",
+    4,
+  )
+
+  for entry in cstring_entries {
+    let name = "_L_.str.\{entry.index}"
+    let off = cstring_offsets.get(entry.value).unwrap_or(0)
+    let id = syms.name_to_id.get(name).unwrap_or(0)
+    def_symbols.set(name, {
+      id,
+      name,
+      section: Some(".cstring"),
+      value: off,
+      is_external: false,
+    })
+    syms.externals.set(id, false)
+  }
+  for entry in rodata_entries {
+    let name = "_L_.str.\{entry.index}"
+    let off = rodata_offsets.get(entry.value).unwrap_or(0)
+    let id = syms.name_to_id.get(name).unwrap_or(0)
+    def_symbols.set(name, {
+      id,
+      name,
+      section: Some(".rodata"),
+      value: off,
+      is_external: false,
+    })
+    syms.externals.set(id, false)
   }
 
   for decl in unit.decls {
