@@ -1580,7 +1580,17 @@ fn gen_cond_expr_cmp_zero(
         }
       }
       None => {
-        gen_expr_int32(emitter, alloc, syms, pool, cstrings, cond, tmp, bag)
+        gen_expr_int32(
+          emitter,
+          alloc,
+          syms,
+          pool,
+          cstrings,
+          cond,
+          tmp,
+          bag,
+          expr_ty=cond_ty,
+        )
         let is64 = match scalar_size_signed_or_error(alloc.sem, cond_ty, expr_loc(cond)) {
           None => false
           Some((size, _)) => size == 8
@@ -4499,7 +4509,17 @@ fn gen_call_expr_impl(
           if type_is_pointer_like(ret_ty) {
             gen_expr_ptr(emitter, alloc, syms, pool, cstrings, args[0], tmp, bag)
           } else {
-            gen_expr_int32(emitter, alloc, syms, pool, cstrings, args[0], tmp, bag)
+            gen_expr_int32(
+              emitter,
+              alloc,
+              syms,
+              pool,
+              cstrings,
+              args[0],
+              tmp,
+              bag,
+              expr_ty=ret_ty,
+            )
           }
       }
       gen_expr_discard(emitter, alloc, syms, pool, cstrings, args[1], bag)
@@ -6159,7 +6179,17 @@ fn gen_expr_to_float_kind_bits_with_type(
     }
     None => {
       // int -> float/double
-      gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, dst, bag)
+      gen_expr_int32(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        expr,
+        dst,
+        bag,
+        expr_ty=src_ty,
+      )
       let is_unsigned = match strip_top_qualifiers_keep_attrs(src_ty) {
         CType::Int(unsigned~, ..) => unsigned
         _ => false
@@ -6641,6 +6671,7 @@ fn gen_expr_int32(
   expr : Expr,
   dst : Int,
   bag : DiagBag,
+  expr_ty? : CType,
 ) -> Unit {
   match expr {
     Expr::IntLit(value~, loc~) =>
@@ -6685,7 +6716,11 @@ fn gen_expr_int32(
           let sym = sym_for_ident(syms, name)
           let ty = match alloc.sem.globals.get(name) {
             Some(gty) => decay_type(gty)
-            None => type_of_expr(alloc.sem, expr)
+            None =>
+              match expr_ty {
+                Some(ty) => ty
+                None => type_of_expr(alloc.sem, expr)
+              }
           }
           emit_addr_global(emitter, syms, sym, dst)
           let (size, signed) = match scalar_size_signed_or_error(alloc.sem, ty, loc) {
@@ -6850,7 +6885,10 @@ fn gen_expr_int32(
         }
         None => {
           gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, expr, addr, bag)
-          let ty = type_of_expr(alloc.sem, expr)
+          let ty = match expr_ty {
+            Some(ty) => ty
+            None => type_of_expr(alloc.sem, expr)
+          }
           let (size, signed) = match scalar_size_signed_or_error(alloc.sem, ty, loc) {
             None => {
               give_reg(pool, addr)
@@ -6964,7 +7002,11 @@ fn gen_expr_int32(
           gen_expr_int32(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
         UnaryOp::Minus => {
           gen_expr_int32(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
-          let (size, _) = match scalar_size_signed_or_error(alloc.sem, type_of_expr(alloc.sem, expr), loc) {
+          let ty = match expr_ty {
+            Some(ty) => ty
+            None => type_of_expr(alloc.sem, expr)
+          }
+          let (size, _) = match scalar_size_signed_or_error(alloc.sem, ty, loc) {
             None => return
             Some(v) => v
           }
@@ -6976,7 +7018,11 @@ fn gen_expr_int32(
         }
         UnaryOp::BitNot => {
           gen_expr_int32(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
-          let (size, _) = match scalar_size_signed_or_error(alloc.sem, type_of_expr(alloc.sem, expr), loc) {
+          let ty = match expr_ty {
+            Some(ty) => ty
+            None => type_of_expr(alloc.sem, expr)
+          }
+          let (size, _) = match scalar_size_signed_or_error(alloc.sem, ty, loc) {
             None => return
             Some(v) => v
           }
@@ -8154,7 +8200,10 @@ fn gen_expr_int32(
               }
             }
             BinaryOp::Shl | BinaryOp::Shr => {
-              let result_ty = type_of_expr(alloc.sem, expr)
+              let result_ty = match expr_ty {
+                Some(ty) => ty
+                None => type_of_expr(alloc.sem, expr)
+              }
               let (res_size, res_signed) = match scalar_size_signed_or_error(alloc.sem, result_ty, loc) {
                 None => {
                   give_reg(pool, tmp)
@@ -8207,7 +8256,10 @@ fn gen_expr_int32(
               }
             }
             _ => {
-              let result_ty = type_of_expr(alloc.sem, expr)
+              let result_ty = match expr_ty {
+                Some(ty) => ty
+                None => type_of_expr(alloc.sem, expr)
+              }
               let (res_size, res_signed) = match scalar_size_signed_or_error(alloc.sem, result_ty, loc) {
                 None => {
                   give_reg(pool, tmp)
@@ -9305,7 +9357,7 @@ fn gen_expr_any_with_type(
       if type_is_pointer_like(ty) {
         gen_expr_ptr(emitter, alloc, syms, pool, cstrings, expr, dst, bag)
       } else {
-        gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, dst, bag)
+        gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, dst, bag, expr_ty=ty)
       }
   }
 }
