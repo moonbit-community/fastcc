@@ -10838,7 +10838,11 @@ fn compute_frame_plan(sem : SemContext, func : FuncDef, bag : DiagBag) -> FrameP
     }
     i = i + 1
   }
-  reserve_compound_literals_stmt(alloc, func.body)
+  let has_compound_literals =
+    sem.func_has_compound_literal.get(func.name).unwrap_or(false)
+  if has_compound_literals {
+    reserve_compound_literals_stmt(alloc, func.body)
+  }
   match sem.func_agg_temps.get(func.name) {
     None => ()
     Some((size, align)) => {

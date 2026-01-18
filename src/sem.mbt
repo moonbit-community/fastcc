@@ -31,6 +31,7 @@ struct SemContext {
   union_field_access_cache : FastMap[String, FastMap[String, FieldAccessInfo]]
   struct_size_cache : FastMap[String, (Int, Int)]
   union_size_cache : FastMap[String, (Int, Int)]
+  func_has_compound_literal : FastMap[String, Bool]
   func_has_stmt_expr : FastMap[String, Bool]
   enum_defs : FastMap[String, Array[EnumItem]]
   enum_consts : FastMap[String, Int]
@@ -90,6 +91,7 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     union_field_access_cache: fast_map_new(),
     struct_size_cache: fast_map_new(),
     union_size_cache: fast_map_new(),
+    func_has_compound_literal: fast_map_new(),
     func_has_stmt_expr: fast_map_new(),
     enum_defs: fast_map_new(),
     enum_consts: fast_map_new(),
@@ -2534,6 +2536,14 @@ fn record_stmt_expr(ctx : SemContext) -> Unit {
 }
 
 ///|
+fn record_compound_literal(ctx : SemContext) -> Unit {
+  match ctx.current_func_name {
+    None => ()
+    Some(name) => ctx.func_has_compound_literal.set(name, true)
+  }
+}
+
+///|
 fn require_complete_object_type(
   ctx : SemContext,
   ty : CType,
@@ -3992,8 +4002,10 @@ fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
         }
       }
     }
-    Expr::CompoundLiteral(ty~, init~, loc~) =>
+    Expr::CompoundLiteral(ty~, init~, loc~) => {
+      record_compound_literal(ctx)
       Some(compound_literal_type(ctx, ty, init, loc))
+    }
     Expr::StmtExpr(stmts~, loc~) =>
       stmt_expr_lvalue_type(ctx, stmts, loc)
     _ => {
@@ -4038,8 +4050,10 @@ fn type_of_lvalue_optional(ctx : SemContext, expr : Expr) -> CType? {
         }
       }
     }
-    Expr::CompoundLiteral(ty~, init~, loc~) =>
+    Expr::CompoundLiteral(ty~, init~, loc~) => {
+      record_compound_literal(ctx)
       Some(compound_literal_type(ctx, ty, init, loc))
+    }
     Expr::StmtExpr(stmts~, loc~) =>
       stmt_expr_lvalue_type(ctx, stmts, loc)
     _ => None
@@ -4163,6 +4177,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
       resolve_type(ctx, ty, loc)
     }
     Expr::CompoundLiteral(ty~, init~, loc~) => {
+      record_compound_literal(ctx)
       let resolved = compound_literal_type(ctx, ty, init, loc)
       decay_type(resolved)
     }
