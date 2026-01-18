@@ -1009,7 +1009,11 @@ fn reserve_compound_literal_slot(
     None => ()
   }
   let resolved = compound_literal_type(alloc.sem, ty, init, loc)
-  match type_size_align_or_error(alloc.sem, resolved, loc) {
+  let size_align = match alloc.sem.compound_literal_sizes.get(key) {
+    Some(value) => Some(value)
+    None => type_size_align_or_error(alloc.sem, resolved, loc)
+  }
+  match size_align {
     None => ()
     Some((size, align)) =>
       if size > 0 {
@@ -4879,7 +4883,11 @@ fn gen_compound_literal_addr_with_type(
     }
     Some(off) => {
       let resolved = compound_literal_type(alloc.sem, ty, init, loc)
-      match type_size_align_or_error(alloc.sem, resolved, loc) {
+      let size_align = match alloc.sem.compound_literal_sizes.get(key) {
+        Some(value) => Some(value)
+        None => type_size_align_or_error(alloc.sem, resolved, loc)
+      }
+      match size_align {
         None => ()
         Some((size, _)) =>
           if size > 0 {
