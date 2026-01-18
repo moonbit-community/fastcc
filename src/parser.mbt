@@ -2550,11 +2550,27 @@ fn parse_expr_comma(p : Parser) -> Expr {
 ///|
 fn parse_expr_eq(p : Parser) -> Expr {
   let left = parse_expr_cond(p)
-  match match_assign_op(p) {
+  let tok = p.current
+  let op = match tok.kind {
+    Assign => Some(BinaryOp::Assign)
+    PlusAssign => Some(BinaryOp::AddAssign)
+    MinusAssign => Some(BinaryOp::SubAssign)
+    StarAssign => Some(BinaryOp::MulAssign)
+    SlashAssign => Some(BinaryOp::DivAssign)
+    PercentAssign => Some(BinaryOp::ModAssign)
+    ShiftLeftAssign => Some(BinaryOp::ShlAssign)
+    ShiftRightAssign => Some(BinaryOp::ShrAssign)
+    AmpAssign => Some(BinaryOp::BitAndAssign)
+    PipeAssign => Some(BinaryOp::BitOrAssign)
+    CaretAssign => Some(BinaryOp::BitXorAssign)
+    _ => None
+  }
+  match op {
     None => left
-    Some((op, tok)) => {
+    Some(op_val) => {
+      advance_token(p) |> ignore
       let right = parse_expr_eq(p)
-      Expr::Binary(op~, left~, right~, loc=tok.loc)
+      Expr::Binary(op=op_val, left~, right~, loc=tok.loc)
     }
   }
 }
@@ -2895,31 +2911,6 @@ fn parse_expr_primary(p : Parser) -> Expr {
 }
 
 ///|
-fn match_assign_op(p : Parser) -> (BinaryOp, Token)? {
-  let tok = peek_token(p)
-  let op = match tok.kind {
-    Assign => Some(BinaryOp::Assign)
-    PlusAssign => Some(BinaryOp::AddAssign)
-    MinusAssign => Some(BinaryOp::SubAssign)
-    StarAssign => Some(BinaryOp::MulAssign)
-    SlashAssign => Some(BinaryOp::DivAssign)
-    PercentAssign => Some(BinaryOp::ModAssign)
-    ShiftLeftAssign => Some(BinaryOp::ShlAssign)
-    ShiftRightAssign => Some(BinaryOp::ShrAssign)
-    AmpAssign => Some(BinaryOp::BitAndAssign)
-    PipeAssign => Some(BinaryOp::BitOrAssign)
-    CaretAssign => Some(BinaryOp::BitXorAssign)
-    _ => None
-  }
-  match op {
-    None => None
-    Some(op_val) => {
-      ignore(advance_token(p))
-      Some((op_val, tok))
-    }
-  }
-}
-
 ///|
 fn parse_string_literal_expr(p : Parser, first : Token) -> Expr {
   let (value, len) = decode_string_literal(p, first.lexeme, first.loc)
