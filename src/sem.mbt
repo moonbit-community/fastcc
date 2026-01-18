@@ -14,12 +14,28 @@ struct RecordDef {
 }
 
 ///|
+enum BuiltinCallKind {
+  ChooseExpr
+  Expect
+  ConstantP
+  Unreachable
+  VaStart
+  VaCopy
+  VaEnd
+  FrameAddress
+  ReturnAddress
+} derive(Show, Eq, ToJson)
+
+///|
 struct SemContext {
   diags : DiagBag
   globals : FastMap[String, CType]
   globals_by_id : FastMap[Int, CType]
   functions : FastMap[String, FuncSig]
   functions_by_id : FastMap[Int, FuncSig]
+  builtin_call_ids : FastMap[Int, BuiltinCallKind]
+  builtin_sig_ids : FastMap[Int, FuncSig]
+  atomic_template_ids : FastMap[Int, String]
   function_defs : FastMap[String, Bool]
   locals : Array[FastMap[String, CType]]
   local_values : FastMap[Int, CType]
@@ -85,6 +101,9 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     globals_by_id: fast_map_new(),
     functions: fast_map_new(),
     functions_by_id: fast_map_new(),
+    builtin_call_ids: fast_map_new(),
+    builtin_sig_ids: fast_map_new(),
+    atomic_template_ids: fast_map_new(),
     function_defs: fast_map_new(),
     locals: [],
     local_values: fast_map_new(),
@@ -1925,24 +1944,27 @@ fn eval_const_expr_value(
         Some((_, align)) => (align, true)
       }
     }
-    Expr::Call(callee=Expr::Ident(name~, ..), args~, loc=call_loc) =>
-      if name == "__builtin_choose_expr" && args.length() == 3 {
-        let (cond_val, ok) = eval_const_expr_value(ctx, args[0], call_loc)
-        if !ok {
-          return (0, false)
+    Expr::Call(callee=Expr::Ident(name~, id~, ..), args~, loc=call_loc) =>
+      match builtin_call_kind(ctx, name, id) {
+        Some(BuiltinCallKind::ChooseExpr) if args.length() == 3 => {
+          let (cond_val, ok) = eval_const_expr_value(ctx, args[0], call_loc)
+          if !ok {
+            return (0, false)
+          }
+          if cond_val != 0 {
+            eval_const_expr_value(ctx, args[1], call_loc)
+          } else {
+            eval_const_expr_value(ctx, args[2], call_loc)
+          }
         }
-        if cond_val != 0 {
-          eval_const_expr_value(ctx, args[1], call_loc)
-        } else {
-          eval_const_expr_value(ctx, args[2], call_loc)
+        Some(BuiltinCallKind::Expect) if args.length() == 2 =>
+          eval_const_expr_value(ctx, args[0], call_loc)
+        Some(BuiltinCallKind::ConstantP) if args.length() == 1 =>
+          (if is_constant_expr_for_builtin(ctx, args[0]) { 1 } else { 0 }, true)
+        _ => {
+          add_sem_error(ctx, loc, "invalid constant expression")
+          (0, false)
         }
-      } else if name == "__builtin_expect" && args.length() == 2 {
-        eval_const_expr_value(ctx, args[0], call_loc)
-      } else if name == "__builtin_constant_p" && args.length() == 1 {
-        (if is_constant_expr_for_builtin(ctx, args[0]) { 1 } else { 0 }, true)
-      } else {
-        add_sem_error(ctx, loc, "invalid constant expression")
-        (0, false)
       }
     _ => {
       add_sem_error(ctx, loc, "invalid constant expression")
@@ -2251,23 +2273,22 @@ fn is_constant_expr_for_builtin(ctx : SemContext, expr : Expr) -> Bool {
     Expr::AlignofType(ty~, loc~) => type_size_align(ctx, ty, loc) is Some(_)
     Expr::BuiltinTypesCompatibleP(..) => true
     Expr::BuiltinOffsetof(..) => true
-    Expr::Call(callee=Expr::Ident(name~, ..), args~, ..) =>
-      if name == "__builtin_choose_expr" && args.length() == 3 {
-        match try_eval_int_const(ctx, args[0]) {
-          Some(v) =>
-            if v != 0 {
-              is_constant_expr_for_builtin(ctx, args[1])
-            } else {
-              is_constant_expr_for_builtin(ctx, args[2])
-            }
-          None => false
-        }
-      } else if name == "__builtin_expect" && args.length() == 2 {
-        is_constant_expr_for_builtin(ctx, args[0])
-      } else if name == "__builtin_constant_p" && args.length() == 1 {
-        true
-      } else {
-        false
+    Expr::Call(callee=Expr::Ident(name~, id~, ..), args~, ..) =>
+      match builtin_call_kind(ctx, name, id) {
+        Some(BuiltinCallKind::ChooseExpr) if args.length() == 3 =>
+          match try_eval_int_const(ctx, args[0]) {
+            Some(v) =>
+              if v != 0 {
+                is_constant_expr_for_builtin(ctx, args[1])
+              } else {
+                is_constant_expr_for_builtin(ctx, args[2])
+              }
+            None => false
+          }
+        Some(BuiltinCallKind::Expect) if args.length() == 2 =>
+          is_constant_expr_for_builtin(ctx, args[0])
+        Some(BuiltinCallKind::ConstantP) if args.length() == 1 => true
+        _ => false
       }
     _ => false
   }
@@ -4612,86 +4633,90 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
       }
     }
     Expr::Call(callee~, args~, loc~) => {
-      if callee is Expr::Ident(name~, ..) {
-        if name == "__builtin_choose_expr" {
-          if args.length() != 3 {
-            add_sem_error(ctx, loc, "__builtin_choose_expr expects 3 arguments")
-            return default_int_type()
+      if callee is Expr::Ident(name~, id~, ..) {
+        match builtin_call_kind(ctx, name, id) {
+          Some(BuiltinCallKind::ChooseExpr) => {
+            if args.length() != 3 {
+              add_sem_error(ctx, loc, "__builtin_choose_expr expects 3 arguments")
+              return default_int_type()
+            }
+            let cond = eval_const_expr(ctx, args[0], loc)
+            if cond != 0 {
+              let chosen = type_of_expr(ctx, args[1])
+              ignore(type_of_expr(ctx, args[2]))
+              return chosen
+            } else {
+              let chosen = type_of_expr(ctx, args[2])
+              ignore(type_of_expr(ctx, args[1]))
+              return chosen
+            }
           }
-          let cond = eval_const_expr(ctx, args[0], loc)
-          if cond != 0 {
-            let chosen = type_of_expr(ctx, args[1])
-            ignore(type_of_expr(ctx, args[2]))
-            return chosen
-          } else {
-            let chosen = type_of_expr(ctx, args[2])
+          Some(BuiltinCallKind::Expect) => {
+            if args.length() != 2 {
+              add_sem_error(ctx, loc, "__builtin_expect expects 2 arguments")
+              return default_int_type()
+            }
             ignore(type_of_expr(ctx, args[1]))
-            return chosen
+            return type_of_expr(ctx, args[0])
           }
-        }
-        if name == "__builtin_expect" {
-          if args.length() != 2 {
-            add_sem_error(ctx, loc, "__builtin_expect expects 2 arguments")
+          Some(BuiltinCallKind::ConstantP) => {
+            if args.length() != 1 {
+              add_sem_error(ctx, loc, "__builtin_constant_p expects 1 argument")
+              return default_int_type()
+            }
+            ignore(type_of_expr(ctx, args[0]))
             return default_int_type()
           }
-          ignore(type_of_expr(ctx, args[1]))
-          return type_of_expr(ctx, args[0])
-        }
-        if name == "__builtin_constant_p" {
-          if args.length() != 1 {
-            add_sem_error(ctx, loc, "__builtin_constant_p expects 1 argument")
-            return default_int_type()
-          }
-          ignore(type_of_expr(ctx, args[0]))
-          return default_int_type()
-        }
-        if name == "__builtin_unreachable" {
-          if args.length() != 0 {
-            add_sem_error(ctx, loc, "__builtin_unreachable expects no args")
-          }
-          return CType::Void
-        }
-        if name == "__builtin_va_start" {
-          if args.length() != 2 {
-            add_sem_error(ctx, loc, "__builtin_va_start expects 2 arguments")
-          }
-          if args.length() >= 1 {
-            match args[0] {
-              Expr::Ident(name=_, id=ap_id, loc=ap_loc) =>
-                match lookup_local_only(ctx, ap_id) {
-                  None =>
-                    add_sem_error(
-                      ctx,
-                      ap_loc,
-                      "__builtin_va_start expects a local variable",
-                    )
-                  Some(_) => ()
-                }
-              _ =>
-                add_sem_error(
-                  ctx,
-                  expr_loc(args[0]),
-                  "__builtin_va_start expects a local variable",
-                )
+          Some(BuiltinCallKind::Unreachable) => {
+            if args.length() != 0 {
+              add_sem_error(ctx, loc, "__builtin_unreachable expects no args")
             }
+            return CType::Void
           }
-          for arg in args {
-            ignore(type_of_expr(ctx, arg))
-          }
-          return CType::Void
-        }
-        if name == "__builtin_frame_address" || name == "__builtin_return_address" {
-          if args.length() != 1 {
-            add_sem_error(ctx, loc, "\{name} expects 1 argument")
-          } else {
-            let level = eval_const_expr(ctx, args[0], loc)
-            if level < 0 {
-              add_sem_error(ctx, loc, "\{name} only takes non-negative integers")
+          Some(BuiltinCallKind::VaStart) => {
+            if args.length() != 2 {
+              add_sem_error(ctx, loc, "__builtin_va_start expects 2 arguments")
             }
+            if args.length() >= 1 {
+              match args[0] {
+                Expr::Ident(name=_, id=ap_id, loc=ap_loc) =>
+                  match lookup_local_only(ctx, ap_id) {
+                    None =>
+                      add_sem_error(
+                        ctx,
+                        ap_loc,
+                        "__builtin_va_start expects a local variable",
+                      )
+                    Some(_) => ()
+                  }
+                _ =>
+                  add_sem_error(
+                    ctx,
+                    expr_loc(args[0]),
+                    "__builtin_va_start expects a local variable",
+                  )
+              }
+            }
+            for arg in args {
+              ignore(type_of_expr(ctx, arg))
+            }
+            return CType::Void
           }
-          return void_pointer_type()
+          Some(BuiltinCallKind::FrameAddress) |
+          Some(BuiltinCallKind::ReturnAddress) => {
+            if args.length() != 1 {
+              add_sem_error(ctx, loc, "\{name} expects 1 argument")
+            } else {
+              let level = eval_const_expr(ctx, args[0], loc)
+              if level < 0 {
+                add_sem_error(ctx, loc, "\{name} only takes non-negative integers")
+              }
+            }
+            return void_pointer_type()
+          }
+          _ => ()
         }
-        match atomic_builtin_return_type(ctx, name, args, loc) {
+        match atomic_builtin_return_type(ctx, name, id, args, loc) {
           None => ()
           Some(ret) => return ret
         }
@@ -4701,7 +4726,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
           match lookup_value(ctx, name, id) {
             Some(ty) => ty
             None => {
-              match builtin_func_sig(name) {
+              match builtin_func_sig_from_ident(ctx, name, id) {
                 Some(sig) => {
                   add_function_sig(ctx, name, id, sig, ident_loc, is_def=false)
                   CType::Function(
@@ -4788,7 +4813,130 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
 }
 
 ///|
-fn builtin_func_sig(name : String) -> FuncSig? {
+fn has_builtin_prefix(name : String) -> Bool {
+  let len = name.length()
+  len >= 10 &&
+    name[0] == 95 &&
+    name[1] == 95 &&
+    name[2] == 98 &&
+    name[3] == 117 &&
+    name[4] == 105 &&
+    name[5] == 108 &&
+    name[6] == 116 &&
+    name[7] == 105 &&
+    name[8] == 110 &&
+    name[9] == 95
+}
+
+///|
+fn has_atomic_prefix(name : String) -> Bool {
+  let len = name.length()
+  len >= 9 &&
+    name[0] == 95 &&
+    name[1] == 95 &&
+    name[2] == 97 &&
+    name[3] == 116 &&
+    name[4] == 111 &&
+    name[5] == 109 &&
+    name[6] == 105 &&
+    name[7] == 99 &&
+    name[8] == 95
+}
+
+///|
+fn builtin_call_kind(
+  ctx : SemContext,
+  name : String,
+  id : Int,
+) -> BuiltinCallKind? {
+  if id != 0 {
+    match ctx.builtin_call_ids.get(id) {
+      Some(kind) => return Some(kind)
+      None => ()
+    }
+  }
+  if !has_builtin_prefix(name) {
+    return None
+  }
+  let kind = match name {
+    "__builtin_choose_expr" => Some(BuiltinCallKind::ChooseExpr)
+    "__builtin_expect" => Some(BuiltinCallKind::Expect)
+    "__builtin_constant_p" => Some(BuiltinCallKind::ConstantP)
+    "__builtin_unreachable" => Some(BuiltinCallKind::Unreachable)
+    "__builtin_va_start" => Some(BuiltinCallKind::VaStart)
+    "__builtin_va_copy" => Some(BuiltinCallKind::VaCopy)
+    "__builtin_va_end" => Some(BuiltinCallKind::VaEnd)
+    "__builtin_frame_address" => Some(BuiltinCallKind::FrameAddress)
+    "__builtin_return_address" => Some(BuiltinCallKind::ReturnAddress)
+    _ => None
+  }
+  match kind {
+    Some(value) => {
+      if id != 0 {
+        ctx.builtin_call_ids.set(id, value)
+      }
+      Some(value)
+    }
+    None => None
+  }
+}
+
+///|
+fn builtin_func_sig_from_ident(
+  ctx : SemContext,
+  name : String,
+  id : Int,
+) -> FuncSig? {
+  if id != 0 {
+    match ctx.builtin_sig_ids.get(id) {
+      Some(sig) => return Some(sig)
+      None => ()
+    }
+  }
+  if !has_builtin_prefix(name) {
+    return None
+  }
+  let sig = builtin_func_sig_by_name(name)
+  match sig {
+    Some(value) => {
+      if id != 0 {
+        ctx.builtin_sig_ids.set(id, value)
+      }
+      Some(value)
+    }
+    None => None
+  }
+}
+
+///|
+fn atomic_builtin_template_from_ident(
+  ctx : SemContext,
+  name : String,
+  id : Int,
+) -> String? {
+  if id != 0 {
+    match ctx.atomic_template_ids.get(id) {
+      Some(template) => return Some(template)
+      None => ()
+    }
+  }
+  if !has_atomic_prefix(name) {
+    return None
+  }
+  let template = atomic_builtin_template_by_name(name)
+  match template {
+    Some(value) => {
+      if id != 0 {
+        ctx.atomic_template_ids.set(id, value)
+      }
+      Some(value)
+    }
+    None => None
+  }
+}
+
+///|
+fn builtin_func_sig_by_name(name : String) -> FuncSig? {
   let voidp = void_pointer_type()
   let charp = char_pointer_type()
   let size_t = size_t_type()
@@ -4948,7 +5096,7 @@ fn builtin_func_sig(name : String) -> FuncSig? {
 }
 
 ///|
-fn atomic_builtin_template(name : String) -> String? {
+fn atomic_builtin_template_by_name(name : String) -> String? {
   match name {
     "__atomic_store" => Some("alm.?")
     "__atomic_load" => Some("Asm.v")
@@ -4979,10 +5127,11 @@ fn is_pow2_int(x : Int) -> Bool {
 fn atomic_builtin_return_type(
   ctx : SemContext,
   name : String,
+  id : Int,
   args : Array[Expr],
   loc : SrcLoc,
 ) -> CType? {
-  let template = match atomic_builtin_template(name) {
+  let template = match atomic_builtin_template_from_ident(ctx, name, id) {
     None => return None
     Some(v) => v
   }

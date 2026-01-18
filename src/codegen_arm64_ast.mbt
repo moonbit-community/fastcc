@@ -4571,64 +4571,65 @@ fn gen_call_expr_impl(
   bag : DiagBag,
 ) -> Unit {
   if callee is Expr::Ident(name~, id~, ..) {
-    if name == "__builtin_expect" {
-      if args.length() != 2 {
-        add_error(bag, loc, "__builtin_expect expects 2 arguments")
-        return
-      }
-      let tmp = take_reg(pool) catch {
-        err => {
-          add_error(bag, loc, err.to_string())
+    match builtin_call_kind(alloc.sem, name, id) {
+      Some(BuiltinCallKind::Expect) => {
+        if args.length() != 2 {
+          add_error(bag, loc, "__builtin_expect expects 2 arguments")
           return
         }
-      }
-      let ret_ty = type_of_expr(alloc.sem, args[0])
-      match float_kind_of_type(ret_ty) {
-        Some(k) =>
-          gen_expr_to_float_kind_bits_with_type(
-            emitter,
-            alloc,
-            syms,
-            pool,
-            cstrings,
-            args[0],
-            ret_ty,
-            k,
-            tmp,
-            bag,
-          )
-        None =>
-          if type_is_pointer_like(ret_ty) {
-            gen_expr_ptr(emitter, alloc, syms, pool, cstrings, args[0], tmp, bag)
-          } else {
-            gen_expr_int32(
+        let tmp = take_reg(pool) catch {
+          err => {
+            add_error(bag, loc, err.to_string())
+            return
+          }
+        }
+        let ret_ty = type_of_expr(alloc.sem, args[0])
+        match float_kind_of_type(ret_ty) {
+          Some(k) =>
+            gen_expr_to_float_kind_bits_with_type(
               emitter,
               alloc,
               syms,
               pool,
               cstrings,
               args[0],
+              ret_ty,
+              k,
               tmp,
               bag,
-              expr_ty=ret_ty,
             )
-          }
+          None =>
+            if type_is_pointer_like(ret_ty) {
+              gen_expr_ptr(emitter, alloc, syms, pool, cstrings, args[0], tmp, bag)
+            } else {
+              gen_expr_int32(
+                emitter,
+                alloc,
+                syms,
+                pool,
+                cstrings,
+                args[0],
+                tmp,
+                bag,
+                expr_ty=ret_ty,
+              )
+            }
+        }
+        gen_expr_discard(emitter, alloc, syms, pool, cstrings, args[1], bag)
+        emit_mov(emitter, true, 0, tmp)
+        give_reg(pool, tmp)
+        return
       }
-      gen_expr_discard(emitter, alloc, syms, pool, cstrings, args[1], bag)
-      emit_mov(emitter, true, 0, tmp)
-      give_reg(pool, tmp)
-      return
-    }
-    if name == "__builtin_va_start" {
-      gen_builtin_va_start(emitter, alloc, syms, pool, cstrings, args, loc, bag)
-      return
-    }
-    if name == "__builtin_va_copy" {
-      gen_builtin_va_copy(emitter, alloc, syms, pool, cstrings, args, loc, bag)
-      return
-    }
-    if name == "__builtin_va_end" {
-      return
+      Some(BuiltinCallKind::VaStart) => {
+        gen_builtin_va_start(emitter, alloc, syms, pool, cstrings, args, loc, bag)
+        return
+      }
+      Some(BuiltinCallKind::VaCopy) => {
+        gen_builtin_va_copy(emitter, alloc, syms, pool, cstrings, args, loc, bag)
+        return
+      }
+      Some(BuiltinCallKind::VaEnd) => return
+      _ => ()
     }
     let has_func = if id > 0 {
       alloc.sem.functions_by_id.contains(id) || alloc.sem.functions.contains(name)
