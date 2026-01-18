@@ -10535,12 +10535,15 @@ fn gen_stmt(
             match d.init {
               None => ()
               Some(init) => {
-                match type_size_align_or_error(alloc.sem, slot0.ty, d.loc) {
-                  None => ()
-                  Some((size, _)) =>
-                    if size > 0 {
-                      emit_zero_bytes(emitter, 29, slot0.offset, size)
-                    }
+                let needs_zero = type_is_aggregate(slot0.ty)
+                if needs_zero {
+                  match type_size_align_or_error(alloc.sem, slot0.ty, d.loc) {
+                    None => ()
+                    Some((size, _)) =>
+                      if size > 0 {
+                        emit_zero_bytes(emitter, 29, slot0.offset, size)
+                      }
+                  }
                 }
                 gen_initializer_to_addr(
                   emitter,
