@@ -2329,21 +2329,17 @@ fn resolve_init_designator_offset_type(
                 add_error(bag, des_loc, "codegen: incomplete struct '\{tag}'")
                 return None
               }
-              Some(list) =>
-                match find_field(sem, list, name, id) {
-                  None => {
-                    add_error(bag, des_loc, "codegen: unknown field '\{name}'")
-                    return None
-                  }
-                  Some(field) => {
-                    let field_off = match eval_builtin_offsetof(sem, current, [name], des_loc) {
-                      None => 0
-                      Some(v) => v
-                    }
-                    off = off + field_off
-                    current = strip_top_qualifiers(field.ty)
-                  }
-                }
+              Some(_) => ()
+            }
+            match record_field_access_info(sem, current, name, id, des_loc) {
+              None => {
+                add_error(bag, des_loc, "codegen: unknown field '\{name}'")
+                return None
+              }
+              Some(info) => {
+                off = off + info.offset
+                current = strip_top_qualifiers(info.ty)
+              }
             }
           }
           CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
@@ -2359,17 +2355,17 @@ fn resolve_init_designator_offset_type(
                 add_error(bag, des_loc, "codegen: incomplete union '\{tag}'")
                 return None
               }
-              Some(list) =>
-                match find_field(sem, list, name, id) {
-                  None => {
-                    add_error(bag, des_loc, "codegen: unknown field '\{name}'")
-                    return None
-                  }
-                  Some(field) => {
-                    // Union fields always start at offset 0.
-                    current = strip_top_qualifiers(field.ty)
-                  }
-                }
+              Some(_) => ()
+            }
+            match record_field_access_info(sem, current, name, id, des_loc) {
+              None => {
+                add_error(bag, des_loc, "codegen: unknown field '\{name}'")
+                return None
+              }
+              Some(info) => {
+                off = off + info.offset
+                current = strip_top_qualifiers(info.ty)
+              }
             }
           }
           _ => {
