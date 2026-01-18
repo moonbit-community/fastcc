@@ -182,24 +182,27 @@ fn record_local_slot(
   id : Int,
   slot : LocalSlot,
 ) -> Unit {
-  if alloc.local_overrides.length() == 0 {
-    alloc.local_values.set(name, slot)
-    if id > 0 {
-      alloc.local_id_values.set(id, slot)
+  if id <= 0 {
+    if alloc.local_overrides.length() == 0 {
+      alloc.local_values.set(name, slot)
+      return
     }
+    let idx = alloc.local_overrides.length() - 1
+    let overrides = alloc.local_overrides[idx]
+    overrides.push((name, alloc.local_values.get(name)))
+    alloc.local_overrides[idx] = overrides
+    alloc.local_values.set(name, slot)
     return
   }
-  let idx = alloc.local_overrides.length() - 1
-  let overrides = alloc.local_overrides[idx]
-  overrides.push((name, alloc.local_values.get(name)))
-  alloc.local_overrides[idx] = overrides
-  alloc.local_values.set(name, slot)
-  if id > 0 {
-    let id_overrides = alloc.local_id_overrides[idx]
-    id_overrides.push((id, alloc.local_id_values.get(id)))
-    alloc.local_id_overrides[idx] = id_overrides
+  if alloc.local_id_overrides.length() == 0 {
     alloc.local_id_values.set(id, slot)
+    return
   }
+  let idx = alloc.local_id_overrides.length() - 1
+  let id_overrides = alloc.local_id_overrides[idx]
+  id_overrides.push((id, alloc.local_id_values.get(id)))
+  alloc.local_id_overrides[idx] = id_overrides
+  alloc.local_id_values.set(id, slot)
 }
 
 ///|
@@ -209,9 +212,10 @@ fn update_local_slot(
   id : Int,
   slot : LocalSlot,
 ) -> Unit {
-  alloc.local_values.set(name, slot)
   if id > 0 {
     alloc.local_id_values.set(id, slot)
+  } else {
+    alloc.local_values.set(name, slot)
   }
 }
 
