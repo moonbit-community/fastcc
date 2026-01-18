@@ -9234,6 +9234,31 @@ fn gen_expr_any(
   bag : DiagBag,
 ) -> Unit {
   let ty = type_of_expr(alloc.sem, expr)
+  gen_expr_any_with_type(
+    emitter,
+    alloc,
+    syms,
+    pool,
+    cstrings,
+    expr,
+    ty,
+    dst,
+    bag,
+  )
+}
+
+///|
+fn gen_expr_any_with_type(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : FastMap[String, Sym],
+  expr : Expr,
+  ty : CType,
+  dst : Int,
+  bag : DiagBag,
+) -> Unit {
   match float_kind_of_type(ty) {
     Some(k) =>
       gen_expr_to_float_kind_bits_with_type(
@@ -9323,7 +9348,7 @@ fn gen_expr_discard(
               bag,
             ),
           )
-        _ => gen_expr_any(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
+        _ => gen_expr_any_with_type(emitter, alloc, syms, pool, cstrings, expr, ty, 0, bag)
       }
     _ =>
       if type_is_aggregate(ty) {
@@ -9358,7 +9383,7 @@ fn gen_expr_discard(
           }
         }
       } else {
-        gen_expr_any(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
+        gen_expr_any_with_type(emitter, alloc, syms, pool, cstrings, expr, ty, 0, bag)
       }
   }
 }
