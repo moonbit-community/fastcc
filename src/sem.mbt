@@ -53,6 +53,10 @@ struct SemContext {
   struct_field_access_cache_by_id : FastMap[Int, FastMap[Int, FieldAccessInfo]]
   union_field_access_cache : FastMap[String, FastMap[String, FieldAccessInfo]]
   union_field_access_cache_by_id : FastMap[Int, FastMap[Int, FieldAccessInfo]]
+  struct_field_index_cache : FastMap[String, FastMap[String, Int]]
+  struct_field_index_cache_by_id : FastMap[Int, FastMap[Int, Int]]
+  union_field_index_cache : FastMap[String, FastMap[String, Int]]
+  union_field_index_cache_by_id : FastMap[Int, FastMap[Int, Int]]
   struct_size_cache : FastMap[String, (Int, Int)]
   struct_size_cache_by_id : FastMap[Int, (Int, Int)]
   union_size_cache : FastMap[String, (Int, Int)]
@@ -131,6 +135,10 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     struct_field_access_cache_by_id: fast_map_new(),
     union_field_access_cache: fast_map_new(),
     union_field_access_cache_by_id: fast_map_new(),
+    struct_field_index_cache: fast_map_new(),
+    struct_field_index_cache_by_id: fast_map_new(),
+    union_field_index_cache: fast_map_new(),
+    union_field_index_cache_by_id: fast_map_new(),
     struct_size_cache: fast_map_new(),
     struct_size_cache_by_id: fast_map_new(),
     union_size_cache: fast_map_new(),
@@ -3161,7 +3169,7 @@ fn check_struct_initializer(
     if item.designators.length() > 0 {
       match item.designators[0] {
         InitDesignator::Field(name~, id~, ..) =>
-          match find_field_index(ctx, fields, name, id) {
+          match find_field_index_cached(ctx, ty, name, id, item.loc) {
             None => ()
             Some(idx) => index = idx + 1
           }
@@ -4048,6 +4056,204 @@ fn find_field_index(
     }
   }
   None
+}
+
+///|
+fn collect_field_index_cache_from_field(
+  ctx : SemContext,
+  field : Field,
+  top_index : Int,
+  loc : SrcLoc,
+  cache_by_name : FastMap[String, Int],
+  cache_by_id : FastMap[Int, Int],
+) -> Unit {
+  if field.name != "" {
+    if !cache_by_name.contains(field.name) {
+      cache_by_name.set(field.name, top_index)
+    }
+    if field.id > 0 && !cache_by_id.contains(field.id) {
+      cache_by_id.set(field.id, top_index)
+    }
+    return
+  }
+  match strip_top_qualifiers(field.ty) {
+    CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+      let nested = ensure_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=false,
+        loc,
+      )
+      match nested {
+        None => ()
+        Some(def) =>
+          for nested_field in def.fields {
+            collect_field_index_cache_from_field(
+              ctx,
+              nested_field,
+              top_index,
+              loc,
+              cache_by_name,
+              cache_by_id,
+            )
+          }
+      }
+    }
+    CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+      let nested = ensure_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=true,
+        loc,
+      )
+      match nested {
+        None => ()
+        Some(def) =>
+          for nested_field in def.fields {
+            collect_field_index_cache_from_field(
+              ctx,
+              nested_field,
+              top_index,
+              loc,
+              cache_by_name,
+              cache_by_id,
+            )
+          }
+      }
+    }
+    _ => ()
+  }
+}
+
+///|
+fn build_field_index_caches(
+  ctx : SemContext,
+  fields : Array[Field],
+  loc : SrcLoc,
+) -> (FastMap[String, Int], FastMap[Int, Int]) {
+  let cache_by_name : FastMap[String, Int] = fast_map_new()
+  let cache_by_id : FastMap[Int, Int] = fast_map_new()
+  for i = 0; i < fields.length(); i = i + 1 {
+    collect_field_index_cache_from_field(
+      ctx,
+      fields[i],
+      i,
+      loc,
+      cache_by_name,
+      cache_by_id,
+    )
+  }
+  (cache_by_name, cache_by_id)
+}
+
+///|
+fn find_field_index_cached(
+  ctx : SemContext,
+  record_ty : CType,
+  name : String,
+  id : Int,
+  loc : SrcLoc,
+) -> Int? {
+  let resolved = resolve_type(ctx, record_ty, loc) |> strip_top_qualifiers
+  match resolved {
+    CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) =>
+      match ensure_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=false,
+        loc,
+      ) {
+        None => None
+        Some(def) =>
+          if tag != "" &&
+            (if tag_id != 0 {
+              ctx.struct_defs_by_id.contains(tag_id)
+            } else {
+              ctx.struct_defs.contains(tag)
+            }) {
+            if id > 0 && tag_id != 0 {
+              let cache = match ctx.struct_field_index_cache_by_id.get(tag_id) {
+                Some(existing) => existing
+                None => {
+                  let (built_name, built_id) = build_field_index_caches(ctx, def.fields, loc)
+                  ctx.struct_field_index_cache_by_id.set(tag_id, built_id)
+                  ctx.struct_field_index_cache.set(tag, built_name)
+                  built_id
+                }
+              }
+              cache.get(id)
+            } else {
+              let cache = match ctx.struct_field_index_cache.get(tag) {
+                Some(existing) => existing
+                None => {
+                  let (built_name, built_id) = build_field_index_caches(ctx, def.fields, loc)
+                  ctx.struct_field_index_cache.set(tag, built_name)
+                  if tag_id != 0 {
+                    ctx.struct_field_index_cache_by_id.set(tag_id, built_id)
+                  }
+                  built_name
+                }
+              }
+              cache.get(name)
+            }
+          } else {
+            find_field_index(ctx, def.fields, name, id)
+          }
+      }
+    CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) =>
+      match ensure_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=true,
+        loc,
+      ) {
+        None => None
+        Some(def) =>
+          if tag != "" &&
+            (if tag_id != 0 {
+              ctx.union_defs_by_id.contains(tag_id)
+            } else {
+              ctx.union_defs.contains(tag)
+            }) {
+            if id > 0 && tag_id != 0 {
+              let cache = match ctx.union_field_index_cache_by_id.get(tag_id) {
+                Some(existing) => existing
+                None => {
+                  let (built_name, built_id) = build_field_index_caches(ctx, def.fields, loc)
+                  ctx.union_field_index_cache_by_id.set(tag_id, built_id)
+                  ctx.union_field_index_cache.set(tag, built_name)
+                  built_id
+                }
+              }
+              cache.get(id)
+            } else {
+              let cache = match ctx.union_field_index_cache.get(tag) {
+                Some(existing) => existing
+                None => {
+                  let (built_name, built_id) = build_field_index_caches(ctx, def.fields, loc)
+                  ctx.union_field_index_cache.set(tag, built_name)
+                  if tag_id != 0 {
+                    ctx.union_field_index_cache_by_id.set(tag_id, built_id)
+                  }
+                  built_name
+                }
+              }
+              cache.get(name)
+            }
+          } else {
+            find_field_index(ctx, def.fields, name, id)
+          }
+      }
+    _ => None
+  }
 }
 
 ///|

@@ -2812,7 +2812,7 @@ fn gen_initializer_to_addr(
             if item.designators.length() > 0 {
               match item.designators[0] {
                 InitDesignator::Field(name~, id~, ..) =>
-                  match find_field_index(alloc.sem, list, name, id) {
+                  match find_field_index_cached(alloc.sem, ty, name, id, item.loc) {
                     None => ()
                     Some(idx) => index = idx + 1
                   }
@@ -12048,7 +12048,7 @@ fn fill_global_initializer_bytes(
               }
               match item.designators[0] {
                 InitDesignator::Field(name~, id~, ..) =>
-                  match find_field_index(sem, list, name, id) {
+                  match find_field_index_cached(sem, ty, name, id, item.loc) {
                     None => ()
                     Some(idx) => index = idx + 1
                   }
