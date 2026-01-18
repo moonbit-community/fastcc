@@ -844,7 +844,7 @@ fn infer_array_size_from_init_items(items : Array[InitItem]) -> Int {
 }
 
 ///|
-fn layout_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
+fn layout_stmt(alloc : LocalAlloc, stmt : Stmt, walk_exprs : Bool) -> Unit {
   match stmt {
     Stmt::Compound(stmts~, ..) => {
       let mut did_scope = false
@@ -853,7 +853,7 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
           cg_push_scope(alloc)
           did_scope = true
         }
-        layout_stmt(alloc, s)
+        layout_stmt(alloc, s, walk_exprs)
       }
       if did_scope {
         cg_pop_scope(alloc)
@@ -907,25 +907,25 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
         }
         match d.init {
           None => ()
-          Some(init) => layout_initializer(alloc, init)
+          Some(init) => layout_initializer(alloc, init, walk_exprs)
         }
       }
     }
     Stmt::If(cond~, then_branch~, else_branch~, ..) => {
-      layout_expr(alloc, cond)
-      layout_stmt(alloc, then_branch)
+      layout_expr(alloc, cond, walk_exprs)
+      layout_stmt(alloc, then_branch, walk_exprs)
       match else_branch {
         None => ()
-        Some(s) => layout_stmt(alloc, s)
+        Some(s) => layout_stmt(alloc, s, walk_exprs)
       }
     }
     Stmt::While(cond~, body~, ..) => {
-      layout_expr(alloc, cond)
-      layout_stmt(alloc, body)
+      layout_expr(alloc, cond, walk_exprs)
+      layout_stmt(alloc, body, walk_exprs)
     }
     Stmt::DoWhile(cond~, body~, ..) => {
-      layout_stmt(alloc, body)
-      layout_expr(alloc, cond)
+      layout_stmt(alloc, body, walk_exprs)
+      layout_expr(alloc, cond, walk_exprs)
     }
     Stmt::For(init~, cond~, step~, body~, ..) => {
       let needs_scope = match init {
@@ -937,41 +937,41 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
       }
       match init {
         None => ()
-        Some(s) => layout_stmt(alloc, s)
+        Some(s) => layout_stmt(alloc, s, walk_exprs)
       }
       match cond {
         None => ()
-        Some(e) => layout_expr(alloc, e)
+        Some(e) => layout_expr(alloc, e, walk_exprs)
       }
       match step {
         None => ()
-        Some(e) => layout_expr(alloc, e)
+        Some(e) => layout_expr(alloc, e, walk_exprs)
       }
-      layout_stmt(alloc, body)
+      layout_stmt(alloc, body, walk_exprs)
       if needs_scope {
         cg_pop_scope(alloc)
       }
     }
     Stmt::Switch(cond~, body~, ..) => {
-      layout_expr(alloc, cond)
-      layout_stmt(alloc, body)
+      layout_expr(alloc, cond, walk_exprs)
+      layout_stmt(alloc, body, walk_exprs)
     }
     Stmt::Case(expr~, end_expr~, body~, ..) => {
-      layout_expr(alloc, expr)
+      layout_expr(alloc, expr, walk_exprs)
       match end_expr {
         None => ()
-        Some(e) => layout_expr(alloc, e)
+        Some(e) => layout_expr(alloc, e, walk_exprs)
       }
-      layout_stmt(alloc, body)
+      layout_stmt(alloc, body, walk_exprs)
     }
-    Stmt::Default(body~, ..) => layout_stmt(alloc, body)
-    Stmt::Label(body=body, ..) => layout_stmt(alloc, body)
+    Stmt::Default(body~, ..) => layout_stmt(alloc, body, walk_exprs)
+    Stmt::Label(body=body, ..) => layout_stmt(alloc, body, walk_exprs)
     Stmt::Return(value~, ..) =>
       match value {
         None => ()
-        Some(e) => layout_expr(alloc, e)
+        Some(e) => layout_expr(alloc, e, walk_exprs)
       }
-    Stmt::ExprStmt(expr~, ..) => layout_expr(alloc, expr)
+    Stmt::ExprStmt(expr~, ..) => layout_expr(alloc, expr, walk_exprs)
     Stmt::Asm(_) |
     Stmt::Goto(name=_, loc=_) |
     Stmt::Break(_) |
@@ -983,12 +983,15 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
 }
 
 ///|
-fn layout_initializer(alloc : LocalAlloc, init : Initializer) -> Unit {
+fn layout_initializer(alloc : LocalAlloc, init : Initializer, walk_exprs : Bool) -> Unit {
+  if !walk_exprs {
+    return
+  }
   match init {
-    Initializer::Expr(expr~, ..) => layout_expr(alloc, expr)
+    Initializer::Expr(expr~, ..) => layout_expr(alloc, expr, walk_exprs)
     Initializer::List(items~, ..) =>
       for item in items {
-        layout_initializer(alloc, item.value)
+        layout_initializer(alloc, item.value, walk_exprs)
       }
   }
 }
@@ -1148,25 +1151,28 @@ fn reserve_compound_literals_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
 }
 
 ///|
-fn layout_expr(alloc : LocalAlloc, expr : Expr) -> Unit {
+fn layout_expr(alloc : LocalAlloc, expr : Expr, walk_exprs : Bool) -> Unit {
+  if !walk_exprs {
+    return
+  }
   match expr {
-    Expr::Unary(expr=inner, ..) => layout_expr(alloc, inner)
-    Expr::Cast(expr=inner, ..) => layout_expr(alloc, inner)
-    Expr::CompoundLiteral(init~, ..) => layout_initializer(alloc, init)
+    Expr::Unary(expr=inner, ..) => layout_expr(alloc, inner, walk_exprs)
+    Expr::Cast(expr=inner, ..) => layout_expr(alloc, inner, walk_exprs)
+    Expr::CompoundLiteral(init~, ..) => layout_initializer(alloc, init, walk_exprs)
     Expr::SizeofExpr(..) | Expr::AlignofExpr(..) => ()
     Expr::Binary(left~, right~, ..) => {
-      layout_expr(alloc, left)
-      layout_expr(alloc, right)
+      layout_expr(alloc, left, walk_exprs)
+      layout_expr(alloc, right, walk_exprs)
     }
     Expr::Conditional(cond~, then_expr~, else_expr~, ..) => {
-      layout_expr(alloc, cond)
-      layout_expr(alloc, then_expr)
-      layout_expr(alloc, else_expr)
+      layout_expr(alloc, cond, walk_exprs)
+      layout_expr(alloc, then_expr, walk_exprs)
+      layout_expr(alloc, else_expr, walk_exprs)
     }
     Expr::Call(callee~, args~, ..) => {
-      layout_expr(alloc, callee)
+      layout_expr(alloc, callee, walk_exprs)
       for a in args {
-        layout_expr(alloc, a)
+        layout_expr(alloc, a, walk_exprs)
       }
     }
     Expr::StmtExpr(stmts~, ..) => {
@@ -1176,18 +1182,18 @@ fn layout_expr(alloc : LocalAlloc, expr : Expr) -> Unit {
           cg_push_scope(alloc)
           did_scope = true
         }
-        layout_stmt(alloc, s)
+        layout_stmt(alloc, s, walk_exprs)
       }
       if did_scope {
         cg_pop_scope(alloc)
       }
     }
     Expr::Index(base~, index~, ..) => {
-      layout_expr(alloc, base)
-      layout_expr(alloc, index)
+      layout_expr(alloc, base, walk_exprs)
+      layout_expr(alloc, index, walk_exprs)
     }
-    Expr::Member(base~, ..) => layout_expr(alloc, base)
-    Expr::BuiltinVaArg(list~, ..) => layout_expr(alloc, list)
+    Expr::Member(base~, ..) => layout_expr(alloc, base, walk_exprs)
+    Expr::BuiltinVaArg(list~, ..) => layout_expr(alloc, list, walk_exprs)
     _ => ()
   }
 }
@@ -10850,7 +10856,8 @@ fn compute_frame_plan(sem : SemContext, func : FuncDef, bag : DiagBag) -> FrameP
   let agg_temp_align = alloc.agg_temp_align
   let agg_temp_offset = alloc.agg_temp_offset
   let compound_literal_slots = alloc.compound_literal_slots
-  layout_stmt(alloc, func.body)
+  let walk_exprs = sem.func_has_stmt_expr.get(func.name).unwrap_or(false)
+  layout_stmt(alloc, func.body, walk_exprs)
   let frame_size = align_up(alloc.used_bytes, 16)
   cg_pop_scope(alloc)
   {
