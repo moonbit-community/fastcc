@@ -148,7 +148,8 @@ fn parse_translation_unit_with(p : Parser) -> TranslationUnit {
       None => synchronize(p)
     }
   }
-  { decls, }
+  let expr_id_max = p.next_expr_id
+  { decls, expr_id_max }
 }
 
 ///|

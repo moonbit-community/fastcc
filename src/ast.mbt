@@ -427,6 +427,7 @@ enum Decl {
 ///|
 struct TranslationUnit {
   decls : Array[Decl]
+  expr_id_max : Int
 } derive(Show, Eq, ToJson)
 
 ///|

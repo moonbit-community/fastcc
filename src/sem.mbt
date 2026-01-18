@@ -1390,6 +1390,7 @@ fn type_has_vla_object_size(ty : CType) -> Bool {
 ///|
 fn check_translation_unit(unit : TranslationUnit, diags : DiagBag) -> SemContext {
   let ctx = new_sem_context(diags)
+  ensure_expr_type_cache(ctx, unit.expr_id_max)
   for decl in unit.decls {
     check_decl(ctx, decl)
   }
@@ -4808,8 +4809,12 @@ fn cached_expr_type(ctx : SemContext, expr : Expr) -> CType? {
   if id <= 0 {
     return None
   }
-  ensure_expr_type_cache(ctx, id)
-  ctx.expr_type_cache[id - 1]
+  let cache_len = ctx.expr_type_cache.length()
+  if id <= cache_len {
+    ctx.expr_type_cache[id - 1]
+  } else {
+    None
+  }
 }
 
 ///|
