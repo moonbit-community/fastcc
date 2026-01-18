@@ -5,8 +5,8 @@ struct Parser {
   mut lookahead : Token
   diags : DiagBag
   type_scopes : Array[FastMap[Int, CType]]
-  typedef_counts : FastMap[Int, Int]
-  typedef_values : FastMap[Int, CType]
+  typedef_counts : Array[Int]
+  typedef_values : Array[CType?]
   typedef_overrides : Array[Array[(Int, CType?)]]
   pending_typedef_scopes : Array[Bool]
   mut anon_tag_id : Int
@@ -23,8 +23,8 @@ struct BuiltinIds {
 ///|
 fn new_parser(pp : Preprocessor) -> Parser {
   let builtins : FastMap[Int, CType] = fast_map_new()
-  let typedef_counts : FastMap[Int, Int] = fast_map_new()
-  let typedef_values : FastMap[Int, CType] = fast_map_new()
+  let typedef_counts : Array[Int] = []
+  let typedef_values : Array[CType?] = []
   let builtin_defs = [
     ("__builtin_va_list", CType::Pointer(CType::Void)),
     ("_Float16", CType::Int(kind=CIntKind::Short, unsigned=true)),
@@ -33,8 +33,9 @@ fn new_parser(pp : Preprocessor) -> Parser {
     let (name, ty) = def
     let (_, id) = pp.interner.intern_view_with_id(name[:])
     builtins.set(id, ty)
-    typedef_counts.set(id, 1)
-    typedef_values.set(id, ty)
+    ensure_typedef_capacity_with(typedef_counts, typedef_values, id)
+    typedef_counts[id - 1] = 1
+    typedef_values[id - 1] = Some(ty)
   }
   let current = next_pp_token(pp)
   let lookahead = next_pp_token(pp)
@@ -3269,6 +3270,70 @@ fn expr_loc(expr : Expr) -> SrcLoc {
 }
 
 ///|
+fn ensure_typedef_capacity_with(
+  counts : Array[Int],
+  values : Array[CType?],
+  id : Int,
+) -> Unit {
+  if id <= 0 {
+    return
+  }
+  let mut idx = counts.length()
+  while idx < id {
+    counts.push(0)
+    values.push(None)
+    idx = idx + 1
+  }
+}
+
+///|
+fn ensure_typedef_capacity(p : Parser, id : Int) -> Unit {
+  ensure_typedef_capacity_with(p.typedef_counts, p.typedef_values, id)
+}
+
+///|
+fn get_typedef_count(p : Parser, id : Int) -> Int {
+  if id <= 0 {
+    return 0
+  }
+  if id <= p.typedef_counts.length() {
+    p.typedef_counts[id - 1]
+  } else {
+    0
+  }
+}
+
+///|
+fn set_typedef_count(p : Parser, id : Int, count : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  ensure_typedef_capacity(p, id)
+  p.typedef_counts[id - 1] = count
+}
+
+///|
+fn get_typedef_value(p : Parser, id : Int) -> CType? {
+  if id <= 0 {
+    return None
+  }
+  if id <= p.typedef_values.length() {
+    p.typedef_values[id - 1]
+  } else {
+    None
+  }
+}
+
+///|
+fn set_typedef_value(p : Parser, id : Int, value : CType?) -> Unit {
+  if id <= 0 {
+    return
+  }
+  ensure_typedef_capacity(p, id)
+  p.typedef_values[id - 1] = value
+}
+
+///|
 fn push_typedef_scope(p : Parser) -> Unit {
   p.type_scopes.push(fast_map_new())
   p.typedef_overrides.push([])
@@ -3283,10 +3348,7 @@ fn pop_typedef_scope(p : Parser) -> Unit {
       while i > 0 {
         i = i - 1
         let (id, prev) = overrides[i]
-        match prev {
-          Some(ty) => p.typedef_values.set(id, ty)
-          None => p.typedef_values.remove(id)
-        }
+        set_typedef_value(p, id, prev)
       }
     }
   }
@@ -3338,10 +3400,8 @@ fn inc_typedef_count(p : Parser, id : Int) -> Unit {
   if id == 0 {
     return
   }
-  match p.typedef_counts.get(id) {
-    None => p.typedef_counts.set(id, 1)
-    Some(count) => p.typedef_counts.set(id, count + 1)
-  }
+  let count = get_typedef_count(p, id)
+  set_typedef_count(p, id, count + 1)
 }
 
 ///|
@@ -3349,14 +3409,11 @@ fn dec_typedef_count(p : Parser, id : Int) -> Unit {
   if id == 0 {
     return
   }
-  match p.typedef_counts.get(id) {
-    None => ()
-    Some(count) =>
-      if count <= 1 {
-        p.typedef_counts.remove(id)
-      } else {
-        p.typedef_counts.set(id, count - 1)
-      }
+  let count = get_typedef_count(p, id)
+  if count <= 1 {
+    set_typedef_count(p, id, 0)
+  } else {
+    set_typedef_count(p, id, count - 1)
   }
 }
 
@@ -3405,12 +3462,12 @@ fn define_typedef(p : Parser, name : String, ty : CType) -> Unit {
   p.type_scopes[idx] = scope
   if !already {
     let overrides = p.typedef_overrides[idx]
-    overrides.push((id, p.typedef_values.get(id)))
+    overrides.push((id, get_typedef_value(p, id)))
     p.typedef_overrides[idx] = overrides
-    p.typedef_values.set(id, resolved)
+    set_typedef_value(p, id, Some(resolved))
     inc_typedef_count(p, id)
   } else {
-    p.typedef_values.set(id, resolved)
+    set_typedef_value(p, id, Some(resolved))
   }
 }
 
@@ -3420,7 +3477,7 @@ fn lookup_typedef(p : Parser, tok : Token) -> CType? {
   if id == 0 {
     return None
   }
-  p.typedef_values.get(id)
+  get_typedef_value(p, id)
 }
 
 ///|
@@ -3429,7 +3486,7 @@ fn has_typedef(p : Parser, tok : Token) -> Bool {
   if id == 0 {
     return false
   }
-  p.typedef_counts.get(id) is Some(_)
+  get_typedef_count(p, id) > 0
 }
 
 ///|
