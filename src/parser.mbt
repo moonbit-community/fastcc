@@ -8,6 +8,7 @@ struct Parser {
   typedef_counts : FastMap[String, Int]
   typedef_values : FastMap[String, CType]
   typedef_overrides : Array[Array[(String, CType?)]]
+  pending_typedef_scopes : Array[Bool]
   mut anon_tag_id : Int
 }
 
@@ -36,6 +37,7 @@ fn new_parser(pp : Preprocessor) -> Parser {
     typedef_counts,
     typedef_values,
     typedef_overrides: [[]],
+    pending_typedef_scopes: [],
     anon_tag_id: 0,
   }
 }
@@ -2134,88 +2136,108 @@ fn parse_param_declarator(
 
 ///|
 fn parse_compound_stmt(p : Parser, loc : SrcLoc) -> Stmt {
-  let mut did_scope = false
+  p.pending_typedef_scopes.push(false)
   let stmts : Array[Stmt] = []
   while !is_at_end(p) && peek_token(p).kind != RBrace {
-    if !did_scope {
-      let tok = peek_token(p)
-      if !(tok.kind == Ident && peek_kind(p, 1) == Colon) &&
-        is_type_start(p, tok) {
-        push_typedef_scope(p)
-        did_scope = true
-      }
-    }
     stmts.push(parse_stmt(p))
   }
   expect(p, RBrace, "expected '}'") |> ignore
-  if did_scope {
-    pop_typedef_scope(p)
-  }
+  let did_scope = p.pending_typedef_scopes.pop().unwrap_or(false)
+  if did_scope { pop_typedef_scope(p) }
   Stmt::Compound(stmts~, loc~)
 }
 
 ///|
 fn parse_stmt(p : Parser) -> Stmt {
   let tok = peek_token(p)
-  if match_token(p, LBrace) is Some(lbrace) {
-    return parse_compound_stmt(p, lbrace.loc)
-  }
-  if match_token(p, KwStaticAssert) is Some(assert_tok) {
-    let static_assert = parse_static_assert(p, assert_tok.loc)
-    expect(p, Semicolon, "expected ';' after _Static_assert") |> ignore
-    return Stmt::StaticAssert(static_assert)
-  }
-  if match_token(p, KwAsm) is Some(asm_tok) {
-    let asm_stmt = parse_asm_stmt(p, asm_tok.loc)
-    expect(p, Semicolon, "expected ';' after asm") |> ignore
-    return Stmt::Asm(asm_stmt)
-  }
-  if match_token(p, KwCase) is Some(case_tok) {
-    let expr = parse_expr(p)
-    let end_expr = if match_token(p, Ellipsis) is Some(_) {
-      Some(parse_expr(p))
-    } else {
-      None
+  match tok.kind {
+    LBrace => {
+      let lbrace = advance_token(p)
+      return parse_compound_stmt(p, lbrace.loc)
     }
-    expect(p, Colon, "expected ':' after case") |> ignore
-    let body = parse_stmt(p)
-    return Stmt::Case(expr~, end_expr~, body~, loc=case_tok.loc)
-  }
-  if match_token(p, KwDefault) is Some(def_tok) {
-    expect(p, Colon, "expected ':' after default") |> ignore
-    let body = parse_stmt(p)
-    return Stmt::Default(body~, loc=def_tok.loc)
-  }
-  if match_token(p, KwIf) is Some(if_tok) {
-    return parse_if_stmt(p, if_tok.loc)
-  }
-  if match_token(p, KwWhile) is Some(while_tok) {
-    return parse_while_stmt(p, while_tok.loc)
-  }
-  if match_token(p, KwDo) is Some(do_tok) {
-    return parse_do_while_stmt(p, do_tok.loc)
-  }
-  if match_token(p, KwFor) is Some(for_tok) {
-    return parse_for_stmt(p, for_tok.loc)
-  }
-  if match_token(p, KwSwitch) is Some(sw_tok) {
-    return parse_switch_stmt(p, sw_tok.loc)
-  }
-  if match_token(p, KwBreak) is Some(break_tok) {
-    expect(p, Semicolon, "expected ';' after break") |> ignore
-    return Stmt::Break(loc=break_tok.loc)
-  }
-  if match_token(p, KwContinue) is Some(cont_tok) {
-    expect(p, Semicolon, "expected ';' after continue") |> ignore
-    return Stmt::Continue(loc=cont_tok.loc)
-  }
-  if match_token(p, KwGoto) is Some(goto_tok) {
-    let name = match expect_ident(p, "expected label after goto") {
-      None => ""
-      Some(tok) => tok.lexeme
+    KwStaticAssert => {
+      let assert_tok = advance_token(p)
+      let static_assert = parse_static_assert(p, assert_tok.loc)
+      expect(p, Semicolon, "expected ';' after _Static_assert") |> ignore
+      return Stmt::StaticAssert(static_assert)
     }
-    expect(p, Semicolon, "expected ';' after goto") |> ignore
-    return Stmt::Goto(name~, loc=goto_tok.loc)
+    KwAsm => {
+      let asm_tok = advance_token(p)
+      let asm_stmt = parse_asm_stmt(p, asm_tok.loc)
+      expect(p, Semicolon, "expected ';' after asm") |> ignore
+      return Stmt::Asm(asm_stmt)
+    }
+    KwCase => {
+      let case_tok = advance_token(p)
+      let expr = parse_expr(p)
+      let end_expr = if match_token(p, Ellipsis) is Some(_) {
+        Some(parse_expr(p))
+      } else {
+        None
+      }
+      expect(p, Colon, "expected ':' after case") |> ignore
+      let body = parse_stmt(p)
+      return Stmt::Case(expr~, end_expr~, body~, loc=case_tok.loc)
+    }
+    KwDefault => {
+      let def_tok = advance_token(p)
+      expect(p, Colon, "expected ':' after default") |> ignore
+      let body = parse_stmt(p)
+      return Stmt::Default(body~, loc=def_tok.loc)
+    }
+    KwIf => {
+      let if_tok = advance_token(p)
+      return parse_if_stmt(p, if_tok.loc)
+    }
+    KwWhile => {
+      let while_tok = advance_token(p)
+      return parse_while_stmt(p, while_tok.loc)
+    }
+    KwDo => {
+      let do_tok = advance_token(p)
+      return parse_do_while_stmt(p, do_tok.loc)
+    }
+    KwFor => {
+      let for_tok = advance_token(p)
+      return parse_for_stmt(p, for_tok.loc)
+    }
+    KwSwitch => {
+      let sw_tok = advance_token(p)
+      return parse_switch_stmt(p, sw_tok.loc)
+    }
+    KwBreak => {
+      let break_tok = advance_token(p)
+      expect(p, Semicolon, "expected ';' after break") |> ignore
+      return Stmt::Break(loc=break_tok.loc)
+    }
+    KwContinue => {
+      let cont_tok = advance_token(p)
+      expect(p, Semicolon, "expected ';' after continue") |> ignore
+      return Stmt::Continue(loc=cont_tok.loc)
+    }
+    KwGoto => {
+      let goto_tok = advance_token(p)
+      let name = match expect_ident(p, "expected label after goto") {
+        None => ""
+        Some(tok) => tok.lexeme
+      }
+      expect(p, Semicolon, "expected ';' after goto") |> ignore
+      return Stmt::Goto(name~, loc=goto_tok.loc)
+    }
+    KwReturn => {
+      let ret_tok = advance_token(p)
+      if match_token(p, Semicolon) is Some(_) {
+        return Stmt::Return(value=None, loc=ret_tok.loc)
+      }
+      let value = parse_expr(p)
+      expect(p, Semicolon, "expected ';' after return") |> ignore
+      return Stmt::Return(value=Some(value), loc=ret_tok.loc)
+    }
+    Semicolon => {
+      let semi = advance_token(p)
+      return Stmt::Empty(loc=semi.loc)
+    }
+    _ => ()
   }
   if tok.kind == Ident && peek_kind(p, 1) == Colon {
     let label_tok = advance_token(p)
@@ -2224,15 +2246,8 @@ fn parse_stmt(p : Parser) -> Stmt {
     let body = parse_stmt(p)
     return Stmt::Label(name=label_tok.lexeme, body~, loc=label_tok.loc)
   }
-  if match_token(p, KwReturn) is Some(ret_tok) {
-    if match_token(p, Semicolon) is Some(_) {
-      return Stmt::Return(value=None, loc=ret_tok.loc)
-    }
-    let value = parse_expr(p)
-    expect(p, Semicolon, "expected ';' after return") |> ignore
-    return Stmt::Return(value=Some(value), loc=ret_tok.loc)
-  }
   if is_type_start(p, tok) {
+    ensure_typedef_scope(p)
     match parse_decl_specs(p) {
       Some(specs) => {
         let base = specs.ty
@@ -2329,9 +2344,6 @@ fn parse_stmt(p : Parser) -> Stmt {
       }
     }
   }
-  if match_token(p, Semicolon) is Some(semi) {
-    return Stmt::Empty(loc=semi.loc)
-  }
   let expr = parse_expr(p)
   expect(p, Semicolon, "expected ';' after expression") |> ignore
   Stmt::ExprStmt(expr~, loc=expr_loc(expr))
@@ -2374,12 +2386,15 @@ fn parse_do_while_stmt(p : Parser, loc : SrcLoc) -> Stmt {
 ///|
 fn parse_for_stmt(p : Parser, loc : SrcLoc) -> Stmt {
   expect(p, LParen, "expected '(' after for") |> ignore
-  let mut did_scope = false
-  if is_type_start(p, peek_token(p)) {
-    push_typedef_scope(p)
-    did_scope = true
-  }
+  p.pending_typedef_scopes.push(false)
   let init = parse_for_init(p)
+  let mut did_scope = false
+  let scope_idx = p.pending_typedef_scopes.length() - 1
+  if p.pending_typedef_scopes[scope_idx] {
+    did_scope = true
+  } else {
+    p.pending_typedef_scopes.pop() |> ignore
+  }
   let cond = if match_token(p, Semicolon) is Some(_) {
     None
   } else {
@@ -2396,7 +2411,8 @@ fn parse_for_stmt(p : Parser, loc : SrcLoc) -> Stmt {
   }
   let body = parse_stmt(p)
   if did_scope {
-    pop_typedef_scope(p)
+    let opened = p.pending_typedef_scopes.pop().unwrap_or(false)
+    if opened { pop_typedef_scope(p) }
   }
   Stmt::For(init~, cond~, step~, body~, loc~)
 }
@@ -2416,6 +2432,7 @@ fn parse_for_init(p : Parser) -> Stmt? {
     return None
   }
   if is_type_start(p, peek_token(p)) {
+    ensure_typedef_scope(p)
     match parse_decl_specs(p) {
       Some(specs) => {
         let base = specs.ty
@@ -3171,6 +3188,19 @@ fn pop_typedef_scope(p : Parser) -> Unit {
       for name, _ in scope {
         dec_typedef_count(p, name)
       }
+  }
+}
+
+///|
+fn ensure_typedef_scope(p : Parser) -> Unit {
+  let len = p.pending_typedef_scopes.length()
+  if len == 0 {
+    return
+  }
+  let idx = len - 1
+  if !p.pending_typedef_scopes[idx] {
+    push_typedef_scope(p)
+    p.pending_typedef_scopes[idx] = true
   }
 }
 
