@@ -6683,7 +6683,10 @@ fn gen_expr_int32(
           emit_load_local_scalar(emitter, alloc.sem, slot.ty, dst, slot.offset, loc, bag)
         None => {
           let sym = sym_for_ident(syms, name)
-          let ty = type_of_expr(alloc.sem, expr)
+          let ty = match alloc.sem.globals.get(name) {
+            Some(gty) => decay_type(gty)
+            None => type_of_expr(alloc.sem, expr)
+          }
           emit_addr_global(emitter, syms, sym, dst)
           let (size, signed) = match scalar_size_signed_or_error(alloc.sem, ty, loc) {
             None => return
