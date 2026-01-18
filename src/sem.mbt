@@ -31,6 +31,8 @@ struct SemContext {
   union_field_access_cache : FastMap[String, FastMap[String, FieldAccessInfo]]
   struct_size_cache : FastMap[String, (Int, Int)]
   union_size_cache : FastMap[String, (Int, Int)]
+  func_compound_literals : FastMap[String, Array[String]]
+  compound_literal_sizes : FastMap[String, (Int, Int)]
   func_has_compound_literal : FastMap[String, Bool]
   func_has_stmt_expr : FastMap[String, Bool]
   enum_defs : FastMap[String, Array[EnumItem]]
@@ -91,6 +93,8 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     union_field_access_cache: fast_map_new(),
     struct_size_cache: fast_map_new(),
     union_size_cache: fast_map_new(),
+    func_compound_literals: fast_map_new(),
+    compound_literal_sizes: fast_map_new(),
     func_has_compound_literal: fast_map_new(),
     func_has_stmt_expr: fast_map_new(),
     enum_defs: fast_map_new(),
@@ -2536,10 +2540,43 @@ fn record_stmt_expr(ctx : SemContext) -> Unit {
 }
 
 ///|
-fn record_compound_literal(ctx : SemContext) -> Unit {
+fn record_compound_literal(
+  ctx : SemContext,
+  loc : SrcLoc,
+  ty : CType,
+) -> Unit {
+  if !ctx.record_agg_temps {
+    return
+  }
   match ctx.current_func_name {
     None => ()
-    Some(name) => ctx.func_has_compound_literal.set(name, true)
+    Some(name) => {
+      ctx.func_has_compound_literal.set(name, true)
+      let key = compound_literal_key(loc)
+      let keys = match ctx.func_compound_literals.get(name) {
+        None => []
+        Some(list) => list
+      }
+      let mut has_key = false
+      for existing in keys {
+        if existing == key {
+          has_key = true
+        }
+      }
+      if !has_key {
+        keys.push(key)
+        ctx.func_compound_literals.set(name, keys)
+      }
+      if !ctx.compound_literal_sizes.contains(key) {
+        match type_size_align(ctx, ty, loc) {
+          None => ()
+          Some((size, align)) =>
+            if size > 0 {
+              ctx.compound_literal_sizes.set(key, (size, align))
+            }
+        }
+      }
+    }
   }
 }
 
@@ -4003,8 +4040,9 @@ fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
       }
     }
     Expr::CompoundLiteral(ty~, init~, loc~) => {
-      record_compound_literal(ctx)
-      Some(compound_literal_type(ctx, ty, init, loc))
+      let resolved = compound_literal_type(ctx, ty, init, loc)
+      record_compound_literal(ctx, loc, resolved)
+      Some(resolved)
     }
     Expr::StmtExpr(stmts~, loc~) =>
       stmt_expr_lvalue_type(ctx, stmts, loc)
@@ -4051,8 +4089,9 @@ fn type_of_lvalue_optional(ctx : SemContext, expr : Expr) -> CType? {
       }
     }
     Expr::CompoundLiteral(ty~, init~, loc~) => {
-      record_compound_literal(ctx)
-      Some(compound_literal_type(ctx, ty, init, loc))
+      let resolved = compound_literal_type(ctx, ty, init, loc)
+      record_compound_literal(ctx, loc, resolved)
+      Some(resolved)
     }
     Expr::StmtExpr(stmts~, loc~) =>
       stmt_expr_lvalue_type(ctx, stmts, loc)
@@ -4177,8 +4216,8 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
       resolve_type(ctx, ty, loc)
     }
     Expr::CompoundLiteral(ty~, init~, loc~) => {
-      record_compound_literal(ctx)
       let resolved = compound_literal_type(ctx, ty, init, loc)
+      record_compound_literal(ctx, loc, resolved)
       decay_type(resolved)
     }
     Expr::StmtExpr(stmts~, loc~) => stmt_expr_result_type(ctx, stmts, loc)

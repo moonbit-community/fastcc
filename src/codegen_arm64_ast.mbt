@@ -10838,10 +10838,24 @@ fn compute_frame_plan(sem : SemContext, func : FuncDef, bag : DiagBag) -> FrameP
     }
     i = i + 1
   }
-  let has_compound_literals =
-    sem.func_has_compound_literal.get(func.name).unwrap_or(false)
-  if has_compound_literals {
-    reserve_compound_literals_stmt(alloc, func.body)
+  match sem.func_compound_literals.get(func.name) {
+    None => ()
+    Some(keys) =>
+      for key in keys {
+        match alloc.compound_literal_slots.get(key) {
+          Some(_) => ()
+          None =>
+            match sem.compound_literal_sizes.get(key) {
+              None => ()
+              Some((size, align)) =>
+                if size > 0 {
+                  let slot_align = if align <= 0 { 1 } else { align }
+                  let offset = alloc_hidden_slot(alloc, size, slot_align)
+                  alloc.compound_literal_slots.set(key, offset)
+                }
+            }
+        }
+      }
   }
   match sem.func_agg_temps.get(func.name) {
     None => ()
