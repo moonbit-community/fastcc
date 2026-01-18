@@ -7,7 +7,7 @@ struct CondState {
 
 ///|
 struct Macro {
-  params : Array[String]
+  params : Array[Int]
   is_variadic : Bool
   is_function : Bool
   replacement : Array[Token]
@@ -114,8 +114,9 @@ fn define_func_macro_zero(pp : Preprocessor, name : String) -> Unit {
   if id == 0 {
     return
   }
+  let param_id = macro_id_from_name(pp, "x")
   pp.macros.set(id, {
-    params: ["x"],
+    params: [param_id],
     is_variadic: true,
     is_function: true,
     replacement: [make_builtin_token(IntLit, "0")],
@@ -128,8 +129,9 @@ fn define_func_macro_empty(pp : Preprocessor, name : String) -> Unit {
   if id == 0 {
     return
   }
+  let param_id = macro_id_from_name(pp, "x")
   pp.macros.set(id, {
-    params: ["x"],
+    params: [param_id],
     is_variadic: true,
     is_function: true,
     replacement: [],
@@ -668,8 +670,8 @@ fn parse_macro_params(
   pp : Preprocessor,
   args : Array[Token],
   loc : SrcLoc,
-) -> (Array[String], Bool, Array[Token])? {
-  let params : Array[String] = []
+) -> (Array[Int], Bool, Array[Token])? {
+  let params : Array[Int] = []
   let mut i = 1
   let mut is_variadic = false
   while i < args.length() {
@@ -681,7 +683,8 @@ fn parse_macro_params(
     }
     if tok.kind == Ellipsis {
       is_variadic = true
-      params.push("__VA_ARGS__")
+      let varargs_id = macro_id_from_name(pp, "__VA_ARGS__")
+      params.push(varargs_id)
       i = i + 1
       continue
     }
@@ -689,13 +692,19 @@ fn parse_macro_params(
       add_pp_error(pp, loc, "invalid macro parameter")
       return None
     }
-    params.push(tok.lexeme)
+    let param_id = macro_id_from_token(pp, tok)
+    if param_id == 0 {
+      add_pp_error(pp, loc, "invalid macro parameter")
+      return None
+    }
+    params.push(param_id)
     i = i + 1
     if i < args.length() && args[i].kind == Comma {
       i = i + 1
       if i < args.length() && args[i].kind == Ellipsis {
         is_variadic = true
-        params.push("__VA_ARGS__")
+        let varargs_id = macro_id_from_name(pp, "__VA_ARGS__")
+        params.push(varargs_id)
         i = i + 1
       }
       continue
@@ -1033,9 +1042,9 @@ fn pad2_space(value : Int) -> String {
 }
 
 ///|
-fn lookup_param_index(params : Array[String], name : String) -> Int? {
+fn lookup_param_index(params : Array[Int], id : Int) -> Int? {
   for i = 0; i < params.length(); i = i + 1 {
-    if params[i] == name {
+    if params[i] == id {
       return Some(i)
     }
   }
@@ -1061,7 +1070,13 @@ fn substitute_macro(
     if tok.kind == Hash && i + 1 < macro_def.replacement.length() {
       let next_tok = macro_def.replacement[i + 1]
       if next_tok.kind == Ident {
-        match lookup_param_index(params, next_tok.lexeme) {
+        let param_id =
+          if next_tok.id > 0 {
+            next_tok.id
+          } else {
+            macro_id_from_name(pp, next_tok.lexeme)
+          }
+        match lookup_param_index(params, param_id) {
           Some(idx) => {
             let arg_tokens = if idx < raw_args.length() {
               raw_args[idx]
@@ -1090,7 +1105,13 @@ fn substitute_macro(
       let mut next_from_param = false
       let next_tok = macro_def.replacement[i + 1]
       if next_tok.kind == Ident {
-        match lookup_param_index(params, next_tok.lexeme) {
+        let param_id =
+          if next_tok.id > 0 {
+            next_tok.id
+          } else {
+            macro_id_from_name(pp, next_tok.lexeme)
+          }
+        match lookup_param_index(params, param_id) {
           Some(idx) => {
             next_tokens = if idx < raw_args.length() {
               raw_args[idx]
@@ -1142,7 +1163,13 @@ fn substitute_macro(
       continue
     }
     if tok.kind == Ident {
-      match lookup_param_index(params, tok.lexeme) {
+      let param_id =
+        if tok.id > 0 {
+          tok.id
+        } else {
+          macro_id_from_name(pp, tok.lexeme)
+        }
+      match lookup_param_index(params, param_id) {
         Some(idx) => {
         let arg_tokens = if idx < expanded_args.length() {
           expanded_args[idx]
