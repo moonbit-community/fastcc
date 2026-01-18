@@ -2316,10 +2316,11 @@ fn resolve_init_designator_offset_type(
         }
       InitDesignator::Field(name~, loc=des_loc) =>
         match strip_top_qualifiers(current) {
-          CType::Struct(name=tag, fields=field_list, attrs=_) => {
+          CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
             let fields = resolve_struct_fields(
               sem,
               tag,
+              tag_id,
               field_list,
               is_union=false,
             )
@@ -2345,10 +2346,11 @@ fn resolve_init_designator_offset_type(
                 }
             }
           }
-          CType::Union(name=tag, fields=field_list, attrs=_) => {
+          CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
             let fields = resolve_struct_fields(
               sem,
               tag,
+              tag_id,
               field_list,
               is_union=true,
             )
@@ -2565,10 +2567,11 @@ fn collect_elided_array_items_codegen(
 ///|
 fn has_single_init_field_codegen(sem : SemContext, ty : CType) -> Bool {
   match strip_top_qualifiers(ty) {
-    CType::Struct(name=tag, fields=field_list, attrs=_) => {
+    CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
       let fields = resolve_struct_fields(
         sem,
         tag,
+        tag_id,
         field_list,
         is_union=false,
       )
@@ -2581,10 +2584,11 @@ fn has_single_init_field_codegen(sem : SemContext, ty : CType) -> Bool {
           }
       }
     }
-    CType::Union(name=tag, fields=field_list, attrs=_) => {
+    CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
       let fields = resolve_struct_fields(
         sem,
         tag,
+        tag_id,
         field_list,
         is_union=true,
       )
@@ -2790,10 +2794,11 @@ fn gen_initializer_to_addr(
             }
           }
         }
-        CType::Struct(name=tag, fields=field_list, attrs=_) => {
+        CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
           let fields = resolve_struct_fields(
             alloc.sem,
             tag,
+            tag_id,
             field_list,
             is_union=false,
           )
@@ -3014,10 +3019,11 @@ fn gen_initializer_to_addr(
             }
           }
         }
-        CType::Union(name=tag, fields=field_list, attrs=_) => {
+        CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
           let fields = resolve_struct_fields(
             alloc.sem,
             tag,
+            tag_id,
             field_list,
             is_union=true,
           )
@@ -3714,8 +3720,15 @@ fn arm64_hfa_aux(
     None => ()
   }
   match strip_top_qualifiers(ty) {
-    CType::Struct(name=tag, fields=field_list, attrs=struct_attrs) =>
-      match ensure_struct_fields(sem, tag, field_list, is_union=false, loc) {
+    CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=struct_attrs) =>
+      match ensure_struct_fields(
+        sem,
+        tag,
+        tag_id,
+        field_list,
+        is_union=false,
+        loc,
+      ) {
         None => None
         Some(def) => {
           for field in def.fields {
@@ -3743,8 +3756,15 @@ fn arm64_hfa_aux(
           }
         }
       }
-    CType::Union(name=tag, fields=field_list, attrs=union_attrs) =>
-      match ensure_struct_fields(sem, tag, field_list, is_union=true, loc) {
+    CType::Union(name=tag, id=tag_id, fields=field_list, attrs=union_attrs) =>
+      match ensure_struct_fields(
+        sem,
+        tag,
+        tag_id,
+        field_list,
+        is_union=true,
+        loc,
+      ) {
         None => None
         Some(def) => {
           for field in def.fields {
@@ -5644,19 +5664,42 @@ fn record_field_access_info(
 ) -> FieldAccessInfo? {
   let resolved = resolve_type(ctx, record_ty, loc) |> strip_top_qualifiers
   match resolved {
-    CType::Struct(name=tag, fields=field_list, attrs=struct_attrs) =>
-      match ensure_struct_fields(ctx, tag, field_list, is_union=false, loc) {
+    CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=struct_attrs) =>
+      match ensure_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=false,
+        loc,
+      ) {
         None => None
         Some(def) =>
           if tag != "" &&
             attrs_layout_empty(struct_attrs) &&
-            ctx.struct_defs.contains(tag) {
-            let cache = match ctx.struct_field_access_cache.get(tag) {
-              Some(existing) => existing
-              None => {
-                let built = build_struct_field_access_cache(ctx, def, struct_attrs, loc)
-                ctx.struct_field_access_cache.set(tag, built)
-                built
+            (if tag_id != 0 {
+              ctx.struct_defs_by_id.contains(tag_id)
+            } else {
+              ctx.struct_defs.contains(tag)
+            }) {
+            let cache = if tag_id != 0 {
+              match ctx.struct_field_access_cache_by_id.get(tag_id) {
+                Some(existing) => existing
+                None => {
+                  let built = build_struct_field_access_cache(ctx, def, struct_attrs, loc)
+                  ctx.struct_field_access_cache_by_id.set(tag_id, built)
+                  ctx.struct_field_access_cache.set(tag, built)
+                  built
+                }
+              }
+            } else {
+              match ctx.struct_field_access_cache.get(tag) {
+                Some(existing) => existing
+                None => {
+                  let built = build_struct_field_access_cache(ctx, def, struct_attrs, loc)
+                  ctx.struct_field_access_cache.set(tag, built)
+                  built
+                }
               }
             }
             cache.get(name)
@@ -5664,19 +5707,42 @@ fn record_field_access_info(
             struct_field_access_info(ctx, def, struct_attrs, name, loc)
           }
       }
-    CType::Union(name=tag, fields=field_list, attrs=union_attrs) =>
-      match ensure_struct_fields(ctx, tag, field_list, is_union=true, loc) {
+    CType::Union(name=tag, id=tag_id, fields=field_list, attrs=union_attrs) =>
+      match ensure_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=true,
+        loc,
+      ) {
         None => None
         Some(def) =>
           if tag != "" &&
             attrs_layout_empty(union_attrs) &&
-            ctx.union_defs.contains(tag) {
-            let cache = match ctx.union_field_access_cache.get(tag) {
-              Some(existing) => existing
-              None => {
-                let built = build_union_field_access_cache(ctx, def, union_attrs, loc)
-                ctx.union_field_access_cache.set(tag, built)
-                built
+            (if tag_id != 0 {
+              ctx.union_defs_by_id.contains(tag_id)
+            } else {
+              ctx.union_defs.contains(tag)
+            }) {
+            let cache = if tag_id != 0 {
+              match ctx.union_field_access_cache_by_id.get(tag_id) {
+                Some(existing) => existing
+                None => {
+                  let built = build_union_field_access_cache(ctx, def, union_attrs, loc)
+                  ctx.union_field_access_cache_by_id.set(tag_id, built)
+                  ctx.union_field_access_cache.set(tag, built)
+                  built
+                }
+              }
+            } else {
+              match ctx.union_field_access_cache.get(tag) {
+                Some(existing) => existing
+                None => {
+                  let built = build_union_field_access_cache(ctx, def, union_attrs, loc)
+                  ctx.union_field_access_cache.set(tag, built)
+                  built
+                }
               }
             }
             cache.get(name)
@@ -5696,17 +5762,35 @@ fn build_record_field_access_cache(
 ) -> FastMap[String, FieldAccessInfo] {
   let resolved = resolve_type(ctx, record_ty, loc) |> strip_top_qualifiers
   match resolved {
-    CType::Struct(name=tag, fields=field_list, attrs=struct_attrs) =>
-      match ensure_struct_fields(ctx, tag, field_list, is_union=false, loc) {
+    CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=struct_attrs) =>
+      match ensure_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=false,
+        loc,
+      ) {
         None => fast_map_new()
         Some(def) =>
           if tag != "" &&
             attrs_layout_empty(struct_attrs) &&
-            ctx.struct_defs.contains(tag) {
-            match ctx.struct_field_access_cache.get(tag) {
+            (if tag_id != 0 {
+              ctx.struct_defs_by_id.contains(tag_id)
+            } else {
+              ctx.struct_defs.contains(tag)
+            }) {
+            match (if tag_id != 0 {
+              ctx.struct_field_access_cache_by_id.get(tag_id)
+            } else {
+              ctx.struct_field_access_cache.get(tag)
+            }) {
               Some(existing) => existing
               None => {
                 let built = build_struct_field_access_cache(ctx, def, struct_attrs, loc)
+                if tag_id != 0 {
+                  ctx.struct_field_access_cache_by_id.set(tag_id, built)
+                }
                 ctx.struct_field_access_cache.set(tag, built)
                 built
               }
@@ -5715,17 +5799,35 @@ fn build_record_field_access_cache(
             build_struct_field_access_cache(ctx, def, struct_attrs, loc)
           }
       }
-    CType::Union(name=tag, fields=field_list, attrs=union_attrs) =>
-      match ensure_struct_fields(ctx, tag, field_list, is_union=true, loc) {
+    CType::Union(name=tag, id=tag_id, fields=field_list, attrs=union_attrs) =>
+      match ensure_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=true,
+        loc,
+      ) {
         None => fast_map_new()
         Some(def) =>
           if tag != "" &&
             attrs_layout_empty(union_attrs) &&
-            ctx.union_defs.contains(tag) {
-            match ctx.union_field_access_cache.get(tag) {
+            (if tag_id != 0 {
+              ctx.union_defs_by_id.contains(tag_id)
+            } else {
+              ctx.union_defs.contains(tag)
+            }) {
+            match (if tag_id != 0 {
+              ctx.union_field_access_cache_by_id.get(tag_id)
+            } else {
+              ctx.union_field_access_cache.get(tag)
+            }) {
               Some(existing) => existing
               None => {
                 let built = build_union_field_access_cache(ctx, def, union_attrs, loc)
+                if tag_id != 0 {
+                  ctx.union_field_access_cache_by_id.set(tag_id, built)
+                }
                 ctx.union_field_access_cache.set(tag, built)
                 built
               }
@@ -11763,10 +11865,11 @@ fn fill_global_initializer_bytes(
             }
           }
         }
-        CType::Struct(name=tag, fields=field_list, attrs=_) => {
+        CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
           let fields = resolve_struct_fields(
             sem,
             tag,
+            tag_id,
             field_list,
             is_union=false,
           )
@@ -11966,10 +12069,11 @@ fn fill_global_initializer_bytes(
             }
           }
         }
-        CType::Union(name=tag, fields=field_list, attrs=_) => {
+        CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
           let fields = resolve_struct_fields(
             sem,
             tag,
+            tag_id,
             field_list,
             is_union=true,
           )

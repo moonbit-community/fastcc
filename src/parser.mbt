@@ -1855,19 +1855,25 @@ fn parse_array_size(p : Parser) -> (Int?, Expr?) {
 }
 
 ///|
-fn next_anon_tag(p : Parser) -> String {
+fn next_anon_tag(p : Parser) -> (String, Int) {
   p.anon_tag_id = p.anon_tag_id + 1
-  "__anon_tag_\{p.anon_tag_id}"
+  let name = "__anon_tag_\{p.anon_tag_id}"
+  let (_, id) = p.pp.interner.intern_view_with_id(name[:])
+  (name, id)
 }
 
 ///|
 fn parse_struct_type(p : Parser, is_union~ : Bool) -> (CType, SrcLoc)? {
   let kw = advance_token(p)
   let mut attrs = parse_attributes(p)
-  let mut name = if peek_token(p).kind == Ident {
-    advance_token(p).lexeme
+  let mut name = ""
+  let mut id = 0
+  if peek_token(p).kind == Ident {
+    let tok = advance_token(p)
+    name = tok.lexeme
+    id = tok.id
   } else {
-    ""
+    ()
   }
   attrs = merge_attrs(attrs, parse_attributes(p))
   if match_token(p, LBrace) is Some(_) {
@@ -1875,12 +1881,14 @@ fn parse_struct_type(p : Parser, is_union~ : Bool) -> (CType, SrcLoc)? {
     expect(p, RBrace, "expected '}' after fields") |> ignore
     attrs = merge_attrs(attrs, parse_attributes(p))
     if name == "" {
-      name = next_anon_tag(p)
+      let (anon_name, anon_id) = next_anon_tag(p)
+      name = anon_name
+      id = anon_id
     }
     let ty = if is_union {
-      CType::Union(name~, fields=Some(fields), attrs~)
+      CType::Union(name~, id~, fields=Some(fields), attrs~)
     } else {
-      CType::Struct(name~, fields=Some(fields), attrs~)
+      CType::Struct(name~, id~, fields=Some(fields), attrs~)
     }
     return Some((ty, kw.loc))
   }
@@ -1889,9 +1897,9 @@ fn parse_struct_type(p : Parser, is_union~ : Bool) -> (CType, SrcLoc)? {
     return None
   }
   let ty = if is_union {
-    CType::Union(name~, fields=None, attrs~)
+    CType::Union(name~, id~, fields=None, attrs~)
   } else {
-    CType::Struct(name~, fields=None, attrs~)
+    CType::Struct(name~, id~, fields=None, attrs~)
   }
   Some((ty, kw.loc))
 }
@@ -1985,24 +1993,30 @@ fn parse_struct_fields(p : Parser) -> Array[RecordItem] {
 ///|
 fn parse_enum_type(p : Parser) -> (CType, SrcLoc)? {
   let kw = advance_token(p)
-  let mut name = if peek_token(p).kind == Ident {
-    advance_token(p).lexeme
+  let mut name = ""
+  let mut id = 0
+  if peek_token(p).kind == Ident {
+    let tok = advance_token(p)
+    name = tok.lexeme
+    id = tok.id
   } else {
-    ""
+    ()
   }
   if match_token(p, LBrace) is Some(_) {
     let items = parse_enum_items(p)
     expect(p, RBrace, "expected '}' after enum") |> ignore
     if name == "" {
-      name = next_anon_tag(p)
+      let (anon_name, anon_id) = next_anon_tag(p)
+      name = anon_name
+      id = anon_id
     }
-    return Some((CType::Enum(name~, items=Some(items)), kw.loc))
+    return Some((CType::Enum(name~, id~, items=Some(items)), kw.loc))
   }
   if name == "" {
     add_parse_error(p, kw.loc, "expected enum name or '{'")
     return None
   }
-  Some((CType::Enum(name~, items=None), kw.loc))
+  Some((CType::Enum(name~, id~, items=None), kw.loc))
 }
 
 ///|
@@ -3478,11 +3492,11 @@ fn typedef_ref_type(ty : CType) -> CType {
         is_old_style~,
         call_conv~,
       )
-    CType::Struct(name~, fields=Some(_), attrs~) =>
-      CType::Struct(name~, fields=None, attrs~)
-    CType::Union(name~, fields=Some(_), attrs~) =>
-      CType::Union(name~, fields=None, attrs~)
-    CType::Enum(name~, items=Some(_)) => CType::Enum(name~, items=None)
+    CType::Struct(name~, id~, fields=Some(_), attrs~) =>
+      CType::Struct(name~, id~, fields=None, attrs~)
+    CType::Union(name~, id~, fields=Some(_), attrs~) =>
+      CType::Union(name~, id~, fields=None, attrs~)
+    CType::Enum(name~, id~, items=Some(_)) => CType::Enum(name~, id~, items=None)
     _ => ty
   }
 }

@@ -28,7 +28,7 @@ fn struct_size_align_from_text(
     check_decl(ctx, decl)
   }
   assert_true(!has_errors(sem_bag))
-  let ty = CType::Struct(name~, fields=None, attrs=empty_attrs())
+  let ty = CType::Struct(name~, id=0, fields=None, attrs=empty_attrs())
   match type_size_align(ctx, ty, dummy_loc(0)) {
     Some((size, align)) => (size, align)
     None => fail("expected struct size")

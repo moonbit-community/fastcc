@@ -42,21 +42,31 @@ struct SemContext {
   local_overrides : Array[Array[(Int, CType?)]]
   type_aliases : FastMap[String, CType]
   struct_defs : FastMap[String, RecordDef]
+  struct_defs_by_id : FastMap[Int, RecordDef]
   union_defs : FastMap[String, RecordDef]
+  union_defs_by_id : FastMap[Int, RecordDef]
   struct_member_cache : FastMap[String, FastMap[String, CType]]
+  struct_member_cache_by_id : FastMap[Int, FastMap[String, CType]]
   union_member_cache : FastMap[String, FastMap[String, CType]]
+  union_member_cache_by_id : FastMap[Int, FastMap[String, CType]]
   struct_field_access_cache : FastMap[String, FastMap[String, FieldAccessInfo]]
+  struct_field_access_cache_by_id : FastMap[Int, FastMap[String, FieldAccessInfo]]
   union_field_access_cache : FastMap[String, FastMap[String, FieldAccessInfo]]
+  union_field_access_cache_by_id : FastMap[Int, FastMap[String, FieldAccessInfo]]
   struct_size_cache : FastMap[String, (Int, Int)]
+  struct_size_cache_by_id : FastMap[Int, (Int, Int)]
   union_size_cache : FastMap[String, (Int, Int)]
+  union_size_cache_by_id : FastMap[Int, (Int, Int)]
   func_compound_literals : FastMap[String, Array[String]]
   compound_literal_sizes : FastMap[String, (Int, Int)]
   func_has_compound_literal : FastMap[String, Bool]
   func_has_stmt_expr : FastMap[String, Bool]
   enum_defs : FastMap[String, Array[EnumItem]]
+  enum_defs_by_id : FastMap[Int, Array[EnumItem]]
   enum_consts : FastMap[String, Int]
   enum_consts_by_id : FastMap[Int, Int]
   enum_types : FastMap[String, CType]
+  enum_types_by_id : FastMap[Int, CType]
   compound_literal_types : FastMap[String, CType]
   func_agg_temps : FastMap[String, (Int, Int)]
   switch_stack : Array[SwitchInfo]
@@ -110,21 +120,31 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     local_overrides: [],
     type_aliases,
     struct_defs: fast_map_new(),
+    struct_defs_by_id: fast_map_new(),
     union_defs: fast_map_new(),
+    union_defs_by_id: fast_map_new(),
     struct_member_cache: fast_map_new(),
+    struct_member_cache_by_id: fast_map_new(),
     union_member_cache: fast_map_new(),
+    union_member_cache_by_id: fast_map_new(),
     struct_field_access_cache: fast_map_new(),
+    struct_field_access_cache_by_id: fast_map_new(),
     union_field_access_cache: fast_map_new(),
+    union_field_access_cache_by_id: fast_map_new(),
     struct_size_cache: fast_map_new(),
+    struct_size_cache_by_id: fast_map_new(),
     union_size_cache: fast_map_new(),
+    union_size_cache_by_id: fast_map_new(),
     func_compound_literals: fast_map_new(),
     compound_literal_sizes: fast_map_new(),
     func_has_compound_literal: fast_map_new(),
     func_has_stmt_expr: fast_map_new(),
     enum_defs: fast_map_new(),
+    enum_defs_by_id: fast_map_new(),
     enum_consts: fast_map_new(),
     enum_consts_by_id: fast_map_new(),
     enum_types: fast_map_new(),
+    enum_types_by_id: fast_map_new(),
     compound_literal_types: fast_map_new(),
     func_agg_temps: fast_map_new(),
     switch_stack: [],
@@ -477,10 +497,17 @@ fn is_float_type(ty : CType) -> Bool {
 ///|
 fn enum_type_for_arith(ctx : SemContext, ty : CType) -> CType {
   match strip_top_qualifiers(ty) {
-    CType::Enum(name~, ..) =>
-      match ctx.enum_types.get(name) {
-        Some(base) => base
-        None => default_int_type()
+    CType::Enum(name~, id~, ..) =>
+      if id != 0 {
+        match ctx.enum_types_by_id.get(id) {
+          Some(base) => base
+          None => default_int_type()
+        }
+      } else {
+        match ctx.enum_types.get(name) {
+          Some(base) => base
+          None => default_int_type()
+        }
       }
     _ => ty
   }
@@ -648,27 +675,52 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
       Some((size, size))
     }
     CType::Pointer(_) => Some((8, 8))
-    CType::Enum(name~, items~) => {
-      let enum_ty = match ctx.enum_types.get(name) {
-        Some(base) => Some(base)
-        None =>
-          match items {
-            None => {
-              add_sem_error(ctx, loc, "incomplete enum '\{name}'")
-              None
-            }
-            Some(list) =>
-              if list.length() == 0 {
+    CType::Enum(name~, id~, items~) => {
+      let enum_ty = if id != 0 {
+        match ctx.enum_types_by_id.get(id) {
+          Some(base) => Some(base)
+          None =>
+            match items {
+              None => {
                 add_sem_error(ctx, loc, "incomplete enum '\{name}'")
                 None
-              } else {
-                let base = enum_type_from_items(ctx, list)
-                if name != "" {
-                  ctx.enum_types.set(name, base)
-                }
-                Some(base)
               }
-          }
+              Some(list) =>
+                if list.length() == 0 {
+                  add_sem_error(ctx, loc, "incomplete enum '\{name}'")
+                  None
+                } else {
+                  let base = enum_type_from_items(ctx, list)
+                  if name != "" {
+                    ctx.enum_types_by_id.set(id, base)
+                    ctx.enum_types.set(name, base)
+                  }
+                  Some(base)
+                }
+            }
+        }
+      } else {
+        match ctx.enum_types.get(name) {
+          Some(base) => Some(base)
+          None =>
+            match items {
+              None => {
+                add_sem_error(ctx, loc, "incomplete enum '\{name}'")
+                None
+              }
+              Some(list) =>
+                if list.length() == 0 {
+                  add_sem_error(ctx, loc, "incomplete enum '\{name}'")
+                  None
+                } else {
+                  let base = enum_type_from_items(ctx, list)
+                  if name != "" {
+                    ctx.enum_types.set(name, base)
+                  }
+                  Some(base)
+                }
+            }
+        }
       }
       match enum_ty {
         None => None
@@ -705,18 +757,36 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
           }
       }
     }
-    CType::Struct(name=tag, fields=field_list, attrs=struct_attrs) =>
-      match ensure_struct_fields(ctx, tag, field_list, is_union=false, loc) {
+    CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=struct_attrs) =>
+      match ensure_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=false,
+        loc,
+      ) {
         None => None
         Some(def) => {
           let merged = merge_attrs(def.attrs, struct_attrs)
           if tag != "" && attrs_is_empty(struct_attrs) {
-            match ctx.struct_size_cache.get(tag) {
-              Some(value) => Some(value)
-              None => {
-                let value = struct_size_align(ctx, def.fields, merged, loc)
-                ctx.struct_size_cache.set(tag, value)
-                Some(value)
+            if tag_id != 0 {
+              match ctx.struct_size_cache_by_id.get(tag_id) {
+                Some(value) => Some(value)
+                None => {
+                  let value = struct_size_align(ctx, def.fields, merged, loc)
+                  ctx.struct_size_cache_by_id.set(tag_id, value)
+                  Some(value)
+                }
+              }
+            } else {
+              match ctx.struct_size_cache.get(tag) {
+                Some(value) => Some(value)
+                None => {
+                  let value = struct_size_align(ctx, def.fields, merged, loc)
+                  ctx.struct_size_cache.set(tag, value)
+                  Some(value)
+                }
               }
             }
           } else {
@@ -724,18 +794,36 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
           }
         }
       }
-    CType::Union(name=tag, fields=field_list, attrs=struct_attrs) =>
-      match ensure_struct_fields(ctx, tag, field_list, is_union=true, loc) {
+    CType::Union(name=tag, id=tag_id, fields=field_list, attrs=struct_attrs) =>
+      match ensure_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=true,
+        loc,
+      ) {
         None => None
         Some(def) => {
           let merged = merge_attrs(def.attrs, struct_attrs)
           if tag != "" && attrs_is_empty(struct_attrs) {
-            match ctx.union_size_cache.get(tag) {
-              Some(value) => Some(value)
-              None => {
-                let value = union_size_align(ctx, def.fields, merged, loc)
-                ctx.union_size_cache.set(tag, value)
-                Some(value)
+            if tag_id != 0 {
+              match ctx.union_size_cache_by_id.get(tag_id) {
+                Some(value) => Some(value)
+                None => {
+                  let value = union_size_align(ctx, def.fields, merged, loc)
+                  ctx.union_size_cache_by_id.set(tag_id, value)
+                  Some(value)
+                }
+              }
+            } else {
+              match ctx.union_size_cache.get(tag) {
+                Some(value) => Some(value)
+                None => {
+                  let value = union_size_align(ctx, def.fields, merged, loc)
+                  ctx.union_size_cache.set(tag, value)
+                  Some(value)
+                }
               }
             }
           } else {
@@ -798,6 +886,7 @@ fn maybe_record_agg_temp_for_expr(
 fn ensure_struct_fields(
   ctx : SemContext,
   tag : String,
+  tag_id : Int,
   fields : Array[RecordItem]?,
   is_union~ : Bool,
   loc : SrcLoc,
@@ -805,7 +894,7 @@ fn ensure_struct_fields(
   match fields {
     Some(list) =>
       if tag != "" {
-        match lookup_struct_def(ctx, tag, is_union=is_union) {
+        match lookup_struct_def(ctx, tag, tag_id, is_union=is_union) {
           Some(def) => Some(def)
           None => Some({ fields: record_items_to_fields(list), attrs: empty_attrs() })
         }
@@ -814,19 +903,39 @@ fn ensure_struct_fields(
       }
     None =>
       if is_union {
-        match ctx.union_defs.get(tag) {
-          Some(def) if def.fields.length() > 0 => Some(def)
-          _ => {
-            add_sem_error(ctx, loc, "incomplete union '\{tag}'")
-            None
+        if tag_id != 0 {
+          match ctx.union_defs_by_id.get(tag_id) {
+            Some(def) if def.fields.length() > 0 => Some(def)
+            _ => {
+              add_sem_error(ctx, loc, "incomplete union '\{tag}'")
+              None
+            }
+          }
+        } else {
+          match ctx.union_defs.get(tag) {
+            Some(def) if def.fields.length() > 0 => Some(def)
+            _ => {
+              add_sem_error(ctx, loc, "incomplete union '\{tag}'")
+              None
+            }
           }
         }
       } else {
-        match ctx.struct_defs.get(tag) {
-          Some(def) if def.fields.length() > 0 => Some(def)
-          _ => {
-            add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
-            None
+        if tag_id != 0 {
+          match ctx.struct_defs_by_id.get(tag_id) {
+            Some(def) if def.fields.length() > 0 => Some(def)
+            _ => {
+              add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
+              None
+            }
+          }
+        } else {
+          match ctx.struct_defs.get(tag) {
+            Some(def) if def.fields.length() > 0 => Some(def)
+            _ => {
+              add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
+              None
+            }
           }
         }
       }
@@ -1322,11 +1431,11 @@ fn register_type_defs(ctx : SemContext, ty : CType, loc : SrcLoc) -> Unit {
   match ty {
     CType::Qualified(base~, ..) => register_type_defs(ctx, base, loc)
     CType::Attributed(base~, ..) => register_type_defs(ctx, base, loc)
-    CType::Struct(name~, fields~, attrs~) =>
-      register_struct_def(ctx, name, fields, attrs, is_union=false, loc)
-    CType::Union(name~, fields~, attrs~) =>
-      register_struct_def(ctx, name, fields, attrs, is_union=true, loc)
-    CType::Enum(name~, items~) => register_enum_def(ctx, name, items, loc)
+    CType::Struct(name~, id~, fields~, attrs~) =>
+      register_struct_def(ctx, name, id, fields, attrs, is_union=false, loc)
+    CType::Union(name~, id~, fields~, attrs~) =>
+      register_struct_def(ctx, name, id, fields, attrs, is_union=true, loc)
+    CType::Enum(name~, id~, items~) => register_enum_def(ctx, name, id, items, loc)
     CType::Pointer(inner) => register_type_defs(ctx, inner, loc)
     CType::Array(elem~, ..) => register_type_defs(ctx, elem, loc)
     CType::Function(return_type~, params~, ..) => {
@@ -1343,6 +1452,7 @@ fn register_type_defs(ctx : SemContext, ty : CType, loc : SrcLoc) -> Unit {
 fn register_struct_def(
   ctx : SemContext,
   name : String,
+  id : Int,
   fields : Array[RecordItem]?,
   attrs : Attributes,
   is_union~ : Bool,
@@ -1352,7 +1462,17 @@ fn register_struct_def(
     return
   }
   if is_union {
-    if ctx.struct_defs.contains(name) {
+    if id != 0 {
+      if ctx.struct_defs_by_id.contains(id) {
+        add_sem_error(ctx, loc, "redefinition of '\{name}'")
+        return
+      }
+    } else if ctx.struct_defs.contains(name) {
+      add_sem_error(ctx, loc, "redefinition of '\{name}'")
+      return
+    }
+  } else if id != 0 {
+    if ctx.union_defs_by_id.contains(id) {
       add_sem_error(ctx, loc, "redefinition of '\{name}'")
       return
     }
@@ -1376,9 +1496,17 @@ fn register_struct_def(
     }
   }
   if is_union {
-    match ctx.union_defs.get(name) {
+    let existing = if id != 0 {
+      ctx.union_defs_by_id.get(id)
+    } else {
+      ctx.union_defs.get(name)
+    }
+    match existing {
       None => {
         ctx.union_defs.set(name, incoming)
+        if id != 0 {
+          ctx.union_defs_by_id.set(id, incoming)
+        }
         validate_fields(incoming)
       }
       Some(existing) =>
@@ -1389,6 +1517,9 @@ fn register_struct_def(
               attrs: merge_attrs(existing.attrs, incoming.attrs),
             }
             ctx.union_defs.set(name, merged)
+            if id != 0 {
+              ctx.union_defs_by_id.set(id, merged)
+            }
           } else {
             add_sem_error(ctx, loc, "redefinition of '\{name}'")
           }
@@ -1398,6 +1529,9 @@ fn register_struct_def(
             attrs: merge_attrs(existing.attrs, incoming.attrs),
           }
           ctx.union_defs.set(name, merged)
+          if id != 0 {
+            ctx.union_defs_by_id.set(id, merged)
+          }
           validate_fields(merged)
         } else {
           let merged = {
@@ -1405,12 +1539,23 @@ fn register_struct_def(
             attrs: merge_attrs(existing.attrs, incoming.attrs),
           }
           ctx.union_defs.set(name, merged)
+          if id != 0 {
+            ctx.union_defs_by_id.set(id, merged)
+          }
         }
     }
   } else {
-    match ctx.struct_defs.get(name) {
+    let existing = if id != 0 {
+      ctx.struct_defs_by_id.get(id)
+    } else {
+      ctx.struct_defs.get(name)
+    }
+    match existing {
       None => {
         ctx.struct_defs.set(name, incoming)
+        if id != 0 {
+          ctx.struct_defs_by_id.set(id, incoming)
+        }
         validate_fields(incoming)
       }
       Some(existing) =>
@@ -1421,6 +1566,9 @@ fn register_struct_def(
               attrs: merge_attrs(existing.attrs, incoming.attrs),
             }
             ctx.struct_defs.set(name, merged)
+            if id != 0 {
+              ctx.struct_defs_by_id.set(id, merged)
+            }
           } else {
             add_sem_error(ctx, loc, "redefinition of '\{name}'")
           }
@@ -1430,6 +1578,9 @@ fn register_struct_def(
             attrs: merge_attrs(existing.attrs, incoming.attrs),
           }
           ctx.struct_defs.set(name, merged)
+          if id != 0 {
+            ctx.struct_defs_by_id.set(id, merged)
+          }
           validate_fields(merged)
         } else {
           let merged = {
@@ -1437,6 +1588,9 @@ fn register_struct_def(
             attrs: merge_attrs(existing.attrs, incoming.attrs),
           }
           ctx.struct_defs.set(name, merged)
+          if id != 0 {
+            ctx.struct_defs_by_id.set(id, merged)
+          }
         }
     }
   }
@@ -1483,6 +1637,7 @@ fn register_struct_def(
 fn register_enum_def(
   ctx : SemContext,
   name : String,
+  id : Int,
   items : Array[EnumItem]?,
   loc : SrcLoc,
 ) -> Unit {
@@ -1493,13 +1648,26 @@ fn register_enum_def(
     None => []
     Some(val) => val
   }
-  match ctx.enum_defs.get(name) {
-    None => ctx.enum_defs.set(name, incoming)
+  let existing = if id != 0 {
+    ctx.enum_defs_by_id.get(id)
+  } else {
+    ctx.enum_defs.get(name)
+  }
+  match existing {
+    None => {
+      ctx.enum_defs.set(name, incoming)
+      if id != 0 {
+        ctx.enum_defs_by_id.set(id, incoming)
+      }
+    }
     Some(existing) =>
       if existing.length() > 0 && incoming.length() > 0 {
         add_sem_error(ctx, loc, "redefinition of '\{name}'")
       } else if existing.length() == 0 && incoming.length() > 0 {
         ctx.enum_defs.set(name, incoming)
+        if id != 0 {
+          ctx.enum_defs_by_id.set(id, incoming)
+        }
       }
   }
   if incoming.length() > 0 {
@@ -1528,9 +1696,13 @@ fn register_enum_def(
       value = current + 1
     }
     if has_value {
-      ctx.enum_types.set(name, enum_int_type_from_range(min_value, max_value))
+    let base = enum_int_type_from_range(min_value, max_value)
+    ctx.enum_types.set(name, base)
+    if id != 0 {
+      ctx.enum_types_by_id.set(id, base)
     }
   }
+}
 }
 
 ///|
@@ -2008,8 +2180,15 @@ fn eval_builtin_offsetof_and_type(
   let mut offset = 0
   for name in path {
     match strip_top_qualifiers(current) {
-      CType::Struct(name=tag, fields=field_list, attrs=attrs) =>
-        match ensure_struct_fields(ctx, tag, field_list, is_union=false, loc) {
+      CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=attrs) =>
+        match ensure_struct_fields(
+          ctx,
+          tag,
+          tag_id,
+          field_list,
+          is_union=false,
+          loc,
+        ) {
           None => return None
           Some(def) =>
             match struct_field_offset_and_type(ctx, def, attrs, name, loc) {
@@ -2032,8 +2211,15 @@ fn eval_builtin_offsetof_and_type(
               }
             }
         }
-      CType::Union(name=tag, fields=field_list, attrs=attrs) =>
-        match ensure_struct_fields(ctx, tag, field_list, is_union=true, loc) {
+      CType::Union(name=tag, id=tag_id, fields=field_list, attrs=attrs) =>
+        match ensure_struct_fields(
+          ctx,
+          tag,
+          tag_id,
+          field_list,
+          is_union=true,
+          loc,
+        ) {
           None => return None
           Some(def) =>
             match union_field_offset_and_type(ctx, def, attrs, name, loc) {
@@ -2669,11 +2855,11 @@ fn require_complete_object_type(
       }
       require_complete_object_type(ctx, elem, loc)
     }
-    CType::Struct(name=tag, fields=field_list, attrs=_) =>
-      ensure_struct_fields(ctx, tag, field_list, is_union=false, loc) |> ignore
-    CType::Union(name=tag, fields=field_list, attrs=_) =>
-      ensure_struct_fields(ctx, tag, field_list, is_union=true, loc) |> ignore
-    CType::Enum(name=tag, items~) =>
+    CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) =>
+      ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=false, loc) |> ignore
+    CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) =>
+      ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=true, loc) |> ignore
+    CType::Enum(name=tag, id=tag_id, items~) =>
       match items {
         Some(list) =>
           if list.length() == 0 {
@@ -2681,11 +2867,19 @@ fn require_complete_object_type(
           } else {
             let base = enum_type_from_items(ctx, list)
             if tag != "" {
-              ctx.enum_types.set(tag, base)
+              if tag_id != 0 {
+                ctx.enum_types_by_id.set(tag_id, base)
+              } else {
+                ctx.enum_types.set(tag, base)
+              }
             }
           }
         None =>
-          if !ctx.enum_types.contains(tag) {
+          if tag_id != 0 {
+            if !ctx.enum_types_by_id.contains(tag_id) {
+              add_sem_error(ctx, loc, "incomplete enum '\{tag}'")
+            }
+          } else if !ctx.enum_types.contains(tag) {
             add_sem_error(ctx, loc, "incomplete enum '\{tag}'")
           }
       }
@@ -2919,10 +3113,11 @@ fn check_initializer_list(
         Some(_) => None
       }
     }
-    CType::Struct(name=tag, fields=field_list, attrs=_) => {
+    CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
       let fields = resolve_struct_fields(
         ctx,
         tag,
+        tag_id,
         field_list,
         is_union=false,
       )
@@ -2933,8 +3128,8 @@ fn check_initializer_list(
       }
       None
     }
-    CType::Union(name=tag, fields=field_list, attrs=_) => {
-      let fields = resolve_struct_fields(ctx, tag, field_list, is_union=true)
+    CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+      let fields = resolve_struct_fields(ctx, tag, tag_id, field_list, is_union=true)
       match fields {
         None => add_sem_error(ctx, loc, "incomplete union '\{tag}'")
         Some(list) =>
@@ -3074,10 +3269,11 @@ fn collect_elided_array_items(
 ///|
 fn has_single_init_field(ctx : SemContext, ty : CType) -> Bool {
   match strip_top_qualifiers(ty) {
-    CType::Struct(name=tag, fields=field_list, attrs=_) => {
+    CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
       let fields = resolve_struct_fields(
         ctx,
         tag,
+        tag_id,
         field_list,
         is_union=false,
       )
@@ -3090,10 +3286,11 @@ fn has_single_init_field(ctx : SemContext, ty : CType) -> Bool {
           }
       }
     }
-    CType::Union(name=tag, fields=field_list, attrs=_) => {
+    CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
       let fields = resolve_struct_fields(
         ctx,
         tag,
+        tag_id,
         field_list,
         is_union=true,
       )
@@ -3167,10 +3364,11 @@ fn resolve_designator_type(
         }
       InitDesignator::Field(name~, ..) =>
         match strip_top_qualifiers(current) {
-          CType::Struct(name=tag, fields=field_list, attrs=_) => {
+          CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
             let fields = resolve_struct_fields(
               ctx,
               tag,
+              tag_id,
               field_list,
               is_union=false,
             )
@@ -3189,10 +3387,11 @@ fn resolve_designator_type(
                 }
             }
           }
-          CType::Union(name=tag, fields=field_list, attrs=_) => {
+          CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
             let fields = resolve_struct_fields(
               ctx,
               tag,
+              tag_id,
               field_list,
               is_union=true,
             )
@@ -3518,12 +3717,12 @@ fn type_eq(a : CType, b : CType) -> Bool {
       }
       true
     }
-    (CType::Struct(name=a_name, ..), CType::Struct(name=b_name, ..)) =>
-      a_name == b_name
-    (CType::Union(name=a_name, ..), CType::Union(name=b_name, ..)) =>
-      a_name == b_name
-    (CType::Enum(name=a_name, ..), CType::Enum(name=b_name, ..)) =>
-      a_name == b_name
+    (CType::Struct(name=a_name, id=a_id, ..), CType::Struct(name=b_name, id=b_id, ..)) =>
+      if a_id != 0 && b_id != 0 { a_id == b_id } else { a_name == b_name }
+    (CType::Union(name=a_name, id=a_id, ..), CType::Union(name=b_name, id=b_id, ..)) =>
+      if a_id != 0 && b_id != 0 { a_id == b_id } else { a_name == b_name }
+    (CType::Enum(name=a_name, id=a_id, ..), CType::Enum(name=b_name, id=b_id, ..)) =>
+      if a_id != 0 && b_id != 0 { a_id == b_id } else { a_name == b_name }
     _ => false
   }
 }
@@ -3692,9 +3891,10 @@ fn promote_old_style_params(params : Array[Param]) -> Array[Param] {
 fn lookup_struct_fields(
   ctx : SemContext,
   name : String,
+  id : Int,
   is_union~ : Bool,
 ) -> Array[Field]? {
-  match lookup_struct_def(ctx, name, is_union=is_union) {
+  match lookup_struct_def(ctx, name, id, is_union=is_union) {
     Some(def) => Some(def.fields)
     None => None
   }
@@ -3704,12 +3904,21 @@ fn lookup_struct_fields(
 fn lookup_struct_def(
   ctx : SemContext,
   name : String,
+  id : Int,
   is_union~ : Bool,
 ) -> RecordDef? {
-  let defs = if is_union { ctx.union_defs } else { ctx.struct_defs }
-  match defs.get(name) {
-    None => None
-    Some(def) => if def.fields.length() == 0 { None } else { Some(def) }
+  if id != 0 {
+    let defs = if is_union { ctx.union_defs_by_id } else { ctx.struct_defs_by_id }
+    match defs.get(id) {
+      None => None
+      Some(def) => if def.fields.length() == 0 { None } else { Some(def) }
+    }
+  } else {
+    let defs = if is_union { ctx.union_defs } else { ctx.struct_defs }
+    match defs.get(name) {
+      None => None
+      Some(def) => if def.fields.length() == 0 { None } else { Some(def) }
+    }
   }
 }
 
@@ -3717,11 +3926,12 @@ fn lookup_struct_def(
 fn resolve_struct_fields(
   ctx : SemContext,
   tag : String,
+  tag_id : Int,
   fields : Array[RecordItem]?,
   is_union~ : Bool,
 ) -> Array[Field]? {
   if tag != "" {
-    match lookup_struct_fields(ctx, tag, is_union=is_union) {
+    match lookup_struct_fields(ctx, tag, tag_id, is_union=is_union) {
       Some(list) => return Some(list)
       None => ()
     }
@@ -3740,10 +3950,11 @@ fn find_field(ctx : SemContext, fields : Array[Field], name : String) -> Field? 
     }
     if field.name == "" {
       match strip_top_qualifiers(field.ty) {
-        CType::Struct(name=tag, fields=field_list, attrs=_) => {
+        CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
           let nested = resolve_struct_fields(
             ctx,
             tag,
+            tag_id,
             field_list,
             is_union=false,
           )
@@ -3756,10 +3967,11 @@ fn find_field(ctx : SemContext, fields : Array[Field], name : String) -> Field? 
               }
           }
         }
-        CType::Union(name=tag, fields=field_list, attrs=_) => {
+        CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
           let nested = resolve_struct_fields(
             ctx,
             tag,
+            tag_id,
             field_list,
             is_union=true,
           )
@@ -3791,10 +4003,11 @@ fn find_field_index(
     }
     if fields[i].name == "" {
       match strip_top_qualifiers(fields[i].ty) {
-        CType::Struct(name=tag, fields=field_list, attrs=_) => {
+        CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
           let nested = resolve_struct_fields(
             ctx,
             tag,
+            tag_id,
             field_list,
             is_union=false,
           )
@@ -3807,10 +4020,11 @@ fn find_field_index(
               }
           }
         }
-        CType::Union(name=tag, fields=field_list, attrs=_) => {
+        CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
           let nested = resolve_struct_fields(
             ctx,
             tag,
+            tag_id,
             field_list,
             is_union=true,
           )
@@ -3848,8 +4062,15 @@ fn collect_member_cache_from_fields(
       continue
     }
     match strip_top_qualifiers(field.ty) {
-      CType::Struct(name=tag, fields=field_list, attrs=_) => {
-        let def = ensure_struct_fields(ctx, tag, field_list, is_union=false, loc)
+      CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+        let def = ensure_struct_fields(
+          ctx,
+          tag,
+          tag_id,
+          field_list,
+          is_union=false,
+          loc,
+        )
         match def {
           None => ()
           Some(def_val) =>
@@ -3862,8 +4083,15 @@ fn collect_member_cache_from_fields(
             )
         }
       }
-      CType::Union(name=tag, fields=field_list, attrs=_) => {
-        let def = ensure_struct_fields(ctx, tag, field_list, is_union=true, loc)
+      CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+        let def = ensure_struct_fields(
+          ctx,
+          tag,
+          tag_id,
+          field_list,
+          is_union=true,
+          loc,
+        )
         match def {
           None => ()
           Some(def_val) =>
@@ -3901,8 +4129,15 @@ fn member_access_search(
   loc : SrcLoc,
 ) -> CType? {
   match strip_top_qualifiers(ty) {
-    CType::Struct(name=tag, fields=field_list, attrs=_) => {
-      let def = ensure_struct_fields(ctx, tag, field_list, is_union=false, loc)
+    CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+      let def = ensure_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=false,
+        loc,
+      )
       match def {
         None => None
         Some(def_val) => {
@@ -3923,8 +4158,15 @@ fn member_access_search(
         }
       }
     }
-    CType::Union(name=tag, fields=field_list, attrs=_) => {
-      let def = ensure_struct_fields(ctx, tag, field_list, is_union=true, loc)
+    CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+      let def = ensure_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=true,
+        loc,
+      )
       match def {
         None => None
         Some(def_val) => {
@@ -3970,18 +4212,37 @@ fn member_access_type(
   }
   let (obj_qual, obj_base) = split_top_qual(obj_ty)
   match strip_top_qualifiers(obj_base) {
-    CType::Struct(name=tag, fields=field_list, attrs=_) => {
-      let def = ensure_struct_fields(ctx, tag, field_list, is_union=false, loc)
+    CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+      let def = ensure_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=false,
+        loc,
+      )
       match def {
         None => None
         Some(def_val) =>
           if tag != "" {
-            let cache = match ctx.struct_member_cache.get(tag) {
-              Some(existing) => existing
-              None => {
-                let built = build_member_cache(ctx, def_val.fields, loc)
-                ctx.struct_member_cache.set(tag, built)
-                built
+            let cache = if tag_id != 0 {
+              match ctx.struct_member_cache_by_id.get(tag_id) {
+                Some(existing) => existing
+                None => {
+                  let built = build_member_cache(ctx, def_val.fields, loc)
+                  ctx.struct_member_cache_by_id.set(tag_id, built)
+                  ctx.struct_member_cache.set(tag, built)
+                  built
+                }
+              }
+            } else {
+              match ctx.struct_member_cache.get(tag) {
+                Some(existing) => existing
+                None => {
+                  let built = build_member_cache(ctx, def_val.fields, loc)
+                  ctx.struct_member_cache.set(tag, built)
+                  built
+                }
               }
             }
             match cache.get(name) {
@@ -4004,18 +4265,37 @@ fn member_access_type(
           }
       }
     }
-    CType::Union(name=tag, fields=field_list, attrs=_) => {
-      let def = ensure_struct_fields(ctx, tag, field_list, is_union=true, loc)
+    CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+      let def = ensure_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=true,
+        loc,
+      )
       match def {
         None => None
         Some(def_val) =>
           if tag != "" {
-            let cache = match ctx.union_member_cache.get(tag) {
-              Some(existing) => existing
-              None => {
-                let built = build_member_cache(ctx, def_val.fields, loc)
-                ctx.union_member_cache.set(tag, built)
-                built
+            let cache = if tag_id != 0 {
+              match ctx.union_member_cache_by_id.get(tag_id) {
+                Some(existing) => existing
+                None => {
+                  let built = build_member_cache(ctx, def_val.fields, loc)
+                  ctx.union_member_cache_by_id.set(tag_id, built)
+                  ctx.union_member_cache.set(tag, built)
+                  built
+                }
+              }
+            } else {
+              match ctx.union_member_cache.get(tag) {
+                Some(existing) => existing
+                None => {
+                  let built = build_member_cache(ctx, def_val.fields, loc)
+                  ctx.union_member_cache.set(tag, built)
+                  built
+                }
               }
             }
             match cache.get(name) {

@@ -230,10 +230,10 @@ fn apply_type_attrs(ty : CType, attrs : Attributes) -> CType {
     return ty
   }
   match ty {
-    CType::Struct(name~, fields~, attrs=existing) =>
-      CType::Struct(name~, fields~, attrs=merge_attrs(existing, attrs))
-    CType::Union(name~, fields~, attrs=existing) =>
-      CType::Union(name~, fields~, attrs=merge_attrs(existing, attrs))
+    CType::Struct(name~, id~, fields~, attrs=existing) =>
+      CType::Struct(name~, id~, fields~, attrs=merge_attrs(existing, attrs))
+    CType::Union(name~, id~, fields~, attrs=existing) =>
+      CType::Union(name~, id~, fields~, attrs=merge_attrs(existing, attrs))
     CType::Attributed(attrs=existing, base~) =>
       CType::Attributed(attrs=merge_attrs(existing, attrs), base~)
     _ => CType::Attributed(attrs~, base=ty)
@@ -309,9 +309,19 @@ enum CType {
   Float(kind~ : CFloatKind)
   Pointer(CType)
   Array(elem~ : CType, size~ : Int?, size_expr~ : Expr?)
-  Struct(name~ : String, fields~ : Array[RecordItem]?, attrs~ : Attributes)
-  Union(name~ : String, fields~ : Array[RecordItem]?, attrs~ : Attributes)
-  Enum(name~ : String, items~ : Array[EnumItem]?)
+  Struct(
+    name~ : String,
+    id~ : Int,
+    fields~ : Array[RecordItem]?,
+    attrs~ : Attributes,
+  )
+  Union(
+    name~ : String,
+    id~ : Int,
+    fields~ : Array[RecordItem]?,
+    attrs~ : Attributes,
+  )
+  Enum(name~ : String, id~ : Int, items~ : Array[EnumItem]?)
   TypeofExpr(expr~ : Expr)
   Function(
     return_type~ : CType,
