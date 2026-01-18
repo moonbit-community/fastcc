@@ -37,7 +37,7 @@ struct SemContext {
   builtin_sig_ids : FastMap[Int, FuncSig]
   atomic_template_ids : FastMap[Int, String]
   function_defs : FastMap[String, Bool]
-  locals : Array[FastMap[String, CType]]
+  locals : Array[FastMap[Int, CType]]
   local_values : FastMap[Int, CType]
   local_overrides : Array[Array[(Int, CType?)]]
   type_aliases : FastMap[String, CType]
@@ -2576,17 +2576,15 @@ fn update_decl_type(
   is_local~ : Bool,
 ) -> Unit {
   if is_local {
-    if ctx.locals.length() == 0 {
+    if ctx.locals.length() == 0 || id <= 0 {
       return
     }
     let idx = ctx.locals.length() - 1
     let scope = ctx.locals[idx]
-    if scope.contains(name) {
-      scope.set(name, ty)
+    if scope.contains(id) {
+      scope.set(id, ty)
       ctx.locals[idx] = scope
-      if id > 0 {
-        ctx.local_values.set(id, ty)
-      }
+      ctx.local_values.set(id, ty)
     }
   } else if ctx.globals.contains(name) {
     ctx.globals.set(name, ty)
@@ -5398,15 +5396,15 @@ fn declare_local(
   ty : CType,
   loc : SrcLoc,
 ) -> Unit {
-  if ctx.locals.length() == 0 {
+  if ctx.locals.length() == 0 || id <= 0 {
     return
   }
   let idx = ctx.locals.length() - 1
   let scope = ctx.locals[idx]
-  if scope.contains(name) {
+  if scope.contains(id) {
     add_sem_error(ctx, loc, "redefinition of '\{name}'")
   } else {
-    scope.set(name, ty)
+    scope.set(id, ty)
     ctx.locals[idx] = scope
     record_local_binding(ctx, id, ty)
   }
