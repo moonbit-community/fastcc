@@ -1544,7 +1544,18 @@ fn gen_cond_expr_cmp_zero(
   } else {
     match float_kind_of_type(cond_ty) {
       Some(k) => {
-        gen_expr_to_float_kind_bits(emitter, alloc, syms, pool, cstrings, cond, k, tmp, bag)
+        gen_expr_to_float_kind_bits_with_type(
+          emitter,
+          alloc,
+          syms,
+          pool,
+          cstrings,
+          cond,
+          cond_ty,
+          k,
+          tmp,
+          bag,
+        )
         if k == CFloatKind::Double {
           emit_fmov_x_to_d(emitter, 0, tmp)
           emit_fcmp_zero(emitter, true, 0)
@@ -3938,7 +3949,17 @@ fn store_call_arg_to_slot(
           return
         }
       }
-      gen_expr_to_float_kind_bits(emitter, alloc, syms, pool, cstrings, arg, k, tmp, bag)
+      gen_expr_to_float_kind_bits(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        arg,
+        k,
+        tmp,
+        bag,
+      )
       if k == CFloatKind::Double {
         arm64_strx(emitter, 3, tmp.reinterpret_as_uint(), (31 : UInt), slot_off)
       } else {
@@ -4436,13 +4457,14 @@ fn gen_call_expr_impl(
       let ret_ty = type_of_expr(alloc.sem, args[0])
       match float_kind_of_type(ret_ty) {
         Some(k) =>
-          gen_expr_to_float_kind_bits(
+          gen_expr_to_float_kind_bits_with_type(
             emitter,
             alloc,
             syms,
             pool,
             cstrings,
             args[0],
+            ret_ty,
             k,
             tmp,
             bag,
@@ -6070,13 +6092,14 @@ fn store_lvalue_scalar(
 }
 
 ///|
-fn gen_expr_to_float_kind_bits(
+fn gen_expr_to_float_kind_bits_with_type(
   emitter : Arm64Emitter,
   alloc : LocalAlloc,
   syms : SymTable,
   pool : RegPool,
   cstrings : FastMap[String, Sym],
   expr : Expr,
+  src_ty : CType,
   target_kind : CFloatKind,
   dst : Int,
   bag : DiagBag,
@@ -6086,11 +6109,10 @@ fn gen_expr_to_float_kind_bits(
     add_error(bag, expr_loc(expr), "codegen: unsupported float type")
     return
   }
-  let src_ty = type_of_expr(alloc.sem, expr)
   match float_kind_of_type(src_ty) {
     Some(src_kind_raw) => {
       let src_kind = normalize_float_kind(src_kind_raw)
-      gen_expr_floatbits(emitter, alloc, syms, pool, cstrings, expr, dst, bag)
+      gen_expr_floatbits(emitter, alloc, syms, pool, cstrings, expr, src_kind_raw, dst, bag)
       if src_kind == norm_target {
         return
       }
@@ -6141,6 +6163,33 @@ fn gen_expr_to_float_kind_bits(
 }
 
 ///|
+fn gen_expr_to_float_kind_bits(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : FastMap[String, Sym],
+  expr : Expr,
+  target_kind : CFloatKind,
+  dst : Int,
+  bag : DiagBag,
+) -> Unit {
+  let src_ty = type_of_expr(alloc.sem, expr)
+  gen_expr_to_float_kind_bits_with_type(
+    emitter,
+    alloc,
+    syms,
+    pool,
+    cstrings,
+    expr,
+    src_ty,
+    target_kind,
+    dst,
+    bag,
+  )
+}
+
+///|
 fn gen_expr_floatbits(
   emitter : Arm64Emitter,
   alloc : LocalAlloc,
@@ -6148,16 +6197,10 @@ fn gen_expr_floatbits(
   pool : RegPool,
   cstrings : FastMap[String, Sym],
   expr : Expr,
+  kind_raw : CFloatKind,
   dst : Int,
   bag : DiagBag,
 ) -> Unit {
-  let kind_raw = match float_kind_of_type(type_of_expr(alloc.sem, expr)) {
-    None => {
-      add_error(bag, expr_loc(expr), "codegen: expected float expression")
-      return
-    }
-    Some(k) => k
-  }
   let kind = normalize_float_kind(kind_raw)
   if !float_kind_supported(kind) {
     add_error(bag, expr_loc(expr), "codegen: unsupported float type")
@@ -6183,7 +6226,17 @@ fn gen_expr_floatbits(
         loc,
         bag,
         (expr, dst) =>
-          gen_expr_floatbits(emitter, alloc, syms, pool, cstrings, expr, dst, bag),
+          gen_expr_floatbits(
+            emitter,
+            alloc,
+            syms,
+            pool,
+            cstrings,
+            expr,
+            kind_raw,
+            dst,
+            bag,
+          ),
       )
     Expr::BuiltinVaArg(list~, ty~, loc~) => {
       match float_kind_of_type(strip_top_qualifiers(ty)) {
@@ -6921,7 +6974,13 @@ fn gen_expr_int32(
             }
           }
           gen_expr_ptr(emitter, alloc, syms, pool, cstrings, inner, addr, bag)
-          let ty = type_of_expr(alloc.sem, expr)
+          let ty = match deref_pointee_type(alloc.sem, inner, loc, bag) {
+            None => {
+              give_reg(pool, addr)
+              return
+            }
+            Some(t) => t
+          }
           let (size, signed) = match scalar_size_signed_or_error(alloc.sem, ty, loc) {
             None => {
               give_reg(pool, addr)
@@ -7727,13 +7786,14 @@ fn gen_expr_int32(
           } else {
             match left_fk {
               Some(k) => {
-                gen_expr_to_float_kind_bits(
+                gen_expr_to_float_kind_bits_with_type(
                   emitter,
                   alloc,
                   syms,
                   pool,
                   cstrings,
                   left,
+                  left_ty,
                   k,
                   dst,
                   bag,
@@ -7768,13 +7828,14 @@ fn gen_expr_int32(
           } else {
             match right_fk {
               Some(k) => {
-                gen_expr_to_float_kind_bits(
+                gen_expr_to_float_kind_bits_with_type(
                   emitter,
                   alloc,
                   syms,
                   pool,
                   cstrings,
                   right,
+                  right_ty,
                   k,
                   dst,
                   bag,
@@ -7856,24 +7917,26 @@ fn gen_expr_int32(
                   return
                 }
               }
-              gen_expr_to_float_kind_bits(
+              gen_expr_to_float_kind_bits_with_type(
                 emitter,
                 alloc,
                 syms,
                 pool,
                 cstrings,
                 left,
+                left_ty,
                 k,
                 dst,
                 bag,
               )
-              gen_expr_to_float_kind_bits(
+              gen_expr_to_float_kind_bits_with_type(
                 emitter,
                 alloc,
                 syms,
                 pool,
                 cstrings,
                 right,
+                right_ty,
                 k,
                 rhs_reg,
                 bag,
@@ -8319,13 +8382,14 @@ fn gen_expr_int32(
             gen_expr_int32(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
             return
           }
-          gen_expr_to_float_kind_bits(
+          gen_expr_to_float_kind_bits_with_type(
             emitter,
             alloc,
             syms,
             pool,
             cstrings,
             inner,
+            from_ty,
             from_kind,
             dst,
             bag,
@@ -8404,6 +8468,23 @@ fn gen_expr_int32(
       }
     _ =>
       add_error(bag, expr_loc(expr), "codegen: unsupported expression")
+  }
+}
+
+///|
+fn deref_pointee_type(
+  sem : SemContext,
+  inner : Expr,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> CType? {
+  let inner_ty = type_of_expr(sem, inner)
+  match strip_top_qualifiers(inner_ty) {
+    CType::Pointer(pointee) => Some(pointee)
+    _ => {
+      add_error(bag, loc, "codegen: cannot dereference non-pointer")
+      None
+    }
   }
 }
 
@@ -8682,7 +8763,10 @@ fn gen_expr_ptr(
       gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
     Expr::Unary(op=UnaryOp::Deref, expr=inner, loc~) => {
       gen_expr_ptr(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
-      let ty = type_of_expr(alloc.sem, expr)
+      let ty = match deref_pointee_type(alloc.sem, inner, loc, bag) {
+        None => return
+        Some(t) => t
+      }
       let (size, signed) = match scalar_size_signed_or_error(alloc.sem, ty, loc) {
         None => return
         Some(v) => v
@@ -9149,7 +9233,19 @@ fn gen_expr_any(
 ) -> Unit {
   let ty = type_of_expr(alloc.sem, expr)
   match float_kind_of_type(ty) {
-    Some(k) => gen_expr_to_float_kind_bits(emitter, alloc, syms, pool, cstrings, expr, k, dst, bag)
+    Some(k) =>
+      gen_expr_to_float_kind_bits_with_type(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        expr,
+        ty,
+        k,
+        dst,
+        bag,
+      )
     None =>
       if type_is_pointer_like(ty) {
         gen_expr_ptr(emitter, alloc, syms, pool, cstrings, expr, dst, bag)
@@ -10313,7 +10409,19 @@ fn gen_stmt(
         Some(expr) =>
           match float_kind_of_type(rt) {
             Some(k) => {
-              gen_expr_to_float_kind_bits(emitter, alloc, syms, pool, cstrings, expr, k, 0, bag)
+              let expr_ty = type_of_expr(alloc.sem, expr)
+              gen_expr_to_float_kind_bits_with_type(
+                emitter,
+                alloc,
+                syms,
+                pool,
+                cstrings,
+                expr,
+                expr_ty,
+                k,
+                0,
+                bag,
+              )
               if k == CFloatKind::Double {
                 emit_fmov_x_to_d(emitter, 0, 0)
               } else {
