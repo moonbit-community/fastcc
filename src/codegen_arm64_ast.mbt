@@ -170,10 +170,7 @@ fn cg_pop_scope(alloc : LocalAlloc) -> Unit {
 ///|
 fn lookup_local(alloc : LocalAlloc, name : String, id : Int) -> LocalSlot? {
   if id > 0 {
-    match alloc.local_id_values.get(id) {
-      Some(slot) => return Some(slot)
-      None => ()
-    }
+    return alloc.local_id_values.get(id)
   }
   alloc.local_values.get(name)
 }
