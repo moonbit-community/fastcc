@@ -233,7 +233,7 @@ fn init_builtin_macros(pp : Preprocessor) -> Unit {
 fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
   Preprocessor {
   let (date_literal, time_literal) = init_datetime_literals()
-  let interner = new_string_interner()
+  let interner = new_string_interner_with_capacity()
   let keyword_ids = init_keyword_ids(interner)
   let pp = {
     lexer: new_lexer(file, diags, interner, keyword_ids),

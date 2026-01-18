@@ -3,7 +3,7 @@ fn lex_tokens(text : String) -> (Array[Token], DiagBag) {
   let bag = new_diag_bag()
   let map = new_source_map()
   let file = add_file(map, "<test>", text)
-  let interner = new_string_interner()
+  let interner = new_string_interner_with_capacity()
   let keyword_ids = init_keyword_ids(interner)
   let lexer = new_lexer(file, bag, interner, keyword_ids)
   let out : Array[Token] = []

@@ -4,9 +4,14 @@ struct StringInterner {
   strings : Array[String]
 }
 
-///|
-fn new_string_interner() -> StringInterner {
-  { map: fast_map_new(), strings: [] }
+fn new_string_interner_with_capacity(capacity? : Int) -> StringInterner {
+  match capacity {
+    None => { map: fast_map_new(), strings: [] }
+    Some(value) => {
+      let cap = if value > 0 { value } else { 0 }
+      { map: fast_map_new(capacity=cap), strings: Array::new(capacity=cap) }
+    }
+  }
 }
 
 ///|
