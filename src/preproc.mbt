@@ -35,16 +35,16 @@ struct Preprocessor {
   include_paths : Array[String]
   diags : DiagBag
   map : SourceMap
-  macros : FastMap[String, Macro]
+  macros : FastMap[Int, Macro]
   pending : Array[Token]
   mut held : Token?
   cond_stack : Array[CondState]
-  expanding : Array[String]
+  expanding : Array[Int]
   expanding_guards : Array[ExpandingGuard]
   date_literal : String
   time_literal : String
   interner : StringInterner
-  hidden_singletons : FastMap[String, Array[String]]
+  hidden_singletons : FastMap[Int, Array[Int]]
 }
 
 ///|
@@ -84,7 +84,11 @@ fn define_macro(
   name : String,
   replacement : Array[Token],
 ) -> Unit {
-  pp.macros.set(name, {
+  let id = macro_id_from_name(pp, name)
+  if id == 0 {
+    return
+  }
+  pp.macros.set(id, {
     params: [],
     is_variadic: false,
     is_function: false,
@@ -106,7 +110,11 @@ fn define_int_macro(pp : Preprocessor, name : String, value : Int) -> Unit {
 
 ///|
 fn define_func_macro_zero(pp : Preprocessor, name : String) -> Unit {
-  pp.macros.set(name, {
+  let id = macro_id_from_name(pp, name)
+  if id == 0 {
+    return
+  }
+  pp.macros.set(id, {
     params: ["x"],
     is_variadic: true,
     is_function: true,
@@ -116,7 +124,11 @@ fn define_func_macro_zero(pp : Preprocessor, name : String) -> Unit {
 
 ///|
 fn define_func_macro_empty(pp : Preprocessor, name : String) -> Unit {
-  pp.macros.set(name, {
+  let id = macro_id_from_name(pp, name)
+  if id == 0 {
+    return
+  }
+  pp.macros.set(id, {
     params: ["x"],
     is_variadic: true,
     is_function: true,
@@ -282,6 +294,27 @@ fn is_keyword_kind(kind : TokenKind) -> Bool {
 ///|
 fn is_macro_name_token(tok : Token) -> Bool {
   tok.kind == Ident || is_keyword_kind(tok.kind)
+}
+
+///|
+fn macro_id_from_name(pp : Preprocessor, name : String) -> Int {
+  if name == "" {
+    return 0
+  }
+  let (_, id) = pp.interner.intern_view_with_id(name[:])
+  id
+}
+
+///|
+fn macro_id_from_token(pp : Preprocessor, tok : Token) -> Int {
+  if !is_macro_name_token(tok) {
+    return 0
+  }
+  if tok.id > 0 {
+    tok.id
+  } else {
+    macro_id_from_name(pp, tok.lexeme)
+  }
 }
 
 ///|
@@ -809,9 +842,9 @@ fn is_adjacent(left : Token, right : Token) -> Bool {
 }
 
 ///|
-fn is_expanding(pp : Preprocessor, name : String) -> Bool {
+fn is_expanding(pp : Preprocessor, id : Int) -> Bool {
   for n in pp.expanding {
-    if physical_equal(n, name) || n == name {
+    if n == id {
       return true
     }
   }
@@ -819,8 +852,8 @@ fn is_expanding(pp : Preprocessor, name : String) -> Bool {
 }
 
 ///|
-fn push_expanding(pp : Preprocessor, name : String) -> Unit {
-  pp.expanding.push(name)
+fn push_expanding(pp : Preprocessor, id : Int) -> Unit {
+  pp.expanding.push(id)
 }
 
 ///|
@@ -1244,6 +1277,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
   while i < len {
     let tok = tokens[i]
     let is_macro_name = is_macro_name_token(tok)
+    let macro_id = if is_macro_name { macro_id_from_token(pp, tok) } else { 0 }
     if is_macro_name {
       match builtin_macro_tokens(pp, tok) {
         Some(replacement) => {
@@ -1265,12 +1299,14 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
         None => ()
       }
     }
-    let hidden_ok = tok.hidden.length() == 0 || !hidden_contains(tok.hidden, tok.lexeme)
-    if is_macro_name && hidden_ok {
-      match pp.macros.get(tok.lexeme) {
+    let hidden_ok = !is_macro_name ||
+      tok.hidden.length() == 0 ||
+      (macro_id != 0 && !hidden_contains(tok.hidden, macro_id))
+    if is_macro_name && macro_id != 0 && hidden_ok {
+      match pp.macros.get(macro_id) {
         None => ()
         Some(macro_def) => {
-          if is_expanding(pp, tok.lexeme) {
+          if is_expanding(pp, macro_id) {
             match out_opt {
               Some(arr) => arr.push(tok)
               None => ()
@@ -1328,7 +1364,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                         continue
                       }
                       let expanded_args = expand_macro_args(pp, norm_raw)
-                      push_expanding(pp, tok.lexeme)
+                      push_expanding(pp, macro_id)
                       let replaced = substitute_macro(
                         pp,
                         macro_def,
@@ -1337,7 +1373,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                         tok.loc,
                       )
                       let expanded =
-                        add_hidden_tokens(pp, expand_tokens(pp, replaced), tok.lexeme)
+                        add_hidden_tokens(pp, expand_tokens(pp, replaced), macro_id)
                       pop_expanding(pp)
                       let out = match out_opt {
                         Some(arr) => arr
@@ -1364,9 +1400,9 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
             i = i + 1
             continue
           } else {
-            push_expanding(pp, tok.lexeme)
+            push_expanding(pp, macro_id)
             let expanded =
-              add_hidden_tokens(pp, expand_tokens(pp, macro_def.replacement), tok.lexeme)
+              add_hidden_tokens(pp, expand_tokens(pp, macro_def.replacement), macro_id)
             pop_expanding(pp)
             let out = match out_opt {
               Some(arr) => arr
@@ -1567,7 +1603,7 @@ fn release_expanding_guards(pp : Preprocessor) -> Unit {
 }
 
 ///|
-fn merge_hidden(a : Array[String], b : Array[String]) -> Array[String] {
+fn merge_hidden(a : Array[Int], b : Array[Int]) -> Array[Int] {
   if a.length() == 0 {
     return b
   }
@@ -1594,9 +1630,9 @@ fn merge_hidden(a : Array[String], b : Array[String]) -> Array[String] {
 }
 
 ///|
-fn hidden_contains(hidden : Array[String], name : String) -> Bool {
+fn hidden_contains(hidden : Array[Int], id : Int) -> Bool {
   for h in hidden {
-    if physical_equal(h, name) || h == name {
+    if h == id {
       return true
     }
   }
@@ -1604,9 +1640,9 @@ fn hidden_contains(hidden : Array[String], name : String) -> Bool {
 }
 
 ///|
-fn add_hidden(pp : Preprocessor, tok : Token, name : String) -> Token {
+fn add_hidden(pp : Preprocessor, tok : Token, id : Int) -> Token {
   if tok.hidden.length() == 0 {
-    match pp.hidden_singletons.get(name) {
+    match pp.hidden_singletons.get(id) {
       Some(hidden) =>
         return {
           kind: tok.kind,
@@ -1618,8 +1654,8 @@ fn add_hidden(pp : Preprocessor, tok : Token, name : String) -> Token {
         }
       None => ()
     }
-    let hidden = [name]
-    pp.hidden_singletons.set(name, hidden)
+    let hidden = [id]
+    pp.hidden_singletons.set(id, hidden)
     return {
       kind: tok.kind,
       lexeme: tok.lexeme,
@@ -1629,11 +1665,11 @@ fn add_hidden(pp : Preprocessor, tok : Token, name : String) -> Token {
       hidden,
     }
   }
-  if hidden_contains(tok.hidden, name) {
+  if hidden_contains(tok.hidden, id) {
     tok
   } else {
     let out = tok.hidden.copy()
-    out.push(name)
+    out.push(id)
     {
       kind: tok.kind,
       lexeme: tok.lexeme,
@@ -1649,11 +1685,11 @@ fn add_hidden(pp : Preprocessor, tok : Token, name : String) -> Token {
 fn add_hidden_tokens(
   pp : Preprocessor,
   tokens : Array[Token],
-  name : String,
+  id : Int,
 ) -> Array[Token] {
   let out : Array[Token] = Array::new(capacity=tokens.length())
   for tok in tokens {
-    out.push(add_hidden(pp, tok, name))
+    out.push(add_hidden(pp, tok, id))
   }
   out
 }
@@ -1816,10 +1852,14 @@ fn parse_pp_int_literal(
 ///|
 fn macro_int_value(
   pp : Preprocessor,
-  name : String,
+  tok : Token,
   loc : SrcLoc,
 ) -> PpValue? {
-  match pp.macros.get(name) {
+  let id = macro_id_from_token(pp, tok)
+  if id == 0 {
+    return None
+  }
+  match pp.macros.get(id) {
     None => None
     Some(macro_def) => {
       if macro_def.is_function {
@@ -1857,7 +1897,7 @@ fn parse_primary(p : IfParser, loc : SrcLoc) -> PpValue {
         if tok.lexeme == "defined" {
           return parse_defined(p, loc)
         }
-        match macro_int_value(p.pp, tok.lexeme, tok.loc) {
+        match macro_int_value(p.pp, tok, tok.loc) {
           Some(v) => return v
           None => {
             if match_kind(p, LParen) {
@@ -1908,7 +1948,7 @@ fn parse_defined(p : IfParser, loc : SrcLoc) -> PpValue {
         if !match_kind(p, RParen) {
           add_pp_error(p.pp, loc, "missing ')' after defined")
         }
-        return pp_bool_value(p.pp.macros.contains(tok.lexeme))
+        return pp_bool_value(p.pp.macros.contains(macro_id_from_token(p.pp, tok)))
       }
       _ => {
         add_pp_error(p.pp, loc, "expected identifier after defined(")
@@ -1918,7 +1958,7 @@ fn parse_defined(p : IfParser, loc : SrcLoc) -> PpValue {
   }
   match advance_if(p) {
     Some(tok) if is_macro_name_token(tok) =>
-      pp_bool_value(p.pp.macros.contains(tok.lexeme))
+      pp_bool_value(p.pp.macros.contains(macro_id_from_token(p.pp, tok)))
     _ => {
       add_pp_error(p.pp, loc, "expected identifier after defined")
       { value: 0, is_unsigned: false }
@@ -2236,9 +2276,13 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
       add_pp_error(pp, name_tok.loc, "missing macro name in #define")
       return
     }
-    let macro_name = args[0].lexeme
+    let macro_id = macro_id_from_token(pp, args[0])
+    if macro_id == 0 {
+      add_pp_error(pp, name_tok.loc, "invalid macro name in #define")
+      return
+    }
     match parse_define_macro(pp, args[0], slice_tokens(args, 1), name_tok.loc) {
-      Some(macro_def) => pp.macros.set(macro_name, macro_def)
+      Some(macro_def) => pp.macros.set(macro_id, macro_def)
       None => ()
     }
     return
@@ -2249,7 +2293,10 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
       add_pp_error(pp, name_tok.loc, "missing macro name in #undef")
       return
     }
-    pp.macros.remove(args[0].lexeme)
+    let macro_id = macro_id_from_token(pp, args[0])
+    if macro_id != 0 {
+      pp.macros.remove(macro_id)
+    }
     return
   }
   if name == "ifdef" {
@@ -2261,7 +2308,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     let args = read_directive_tokens(pp)
     let cond = args.length() > 0 &&
       is_macro_name_token(args[0]) &&
-      pp.macros.contains(args[0].lexeme)
+      pp.macros.contains(macro_id_from_token(pp, args[0]))
     push_cond(pp, cond)
     return
   }
@@ -2274,7 +2321,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     let args = read_directive_tokens(pp)
     let cond = args.length() > 0 &&
       is_macro_name_token(args[0]) &&
-      !pp.macros.contains(args[0].lexeme)
+      !pp.macros.contains(macro_id_from_token(pp, args[0]))
     push_cond(pp, cond)
     return
   }
@@ -2406,6 +2453,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
       continue
     }
     let is_macro_name = is_macro_name_token(tok)
+    let macro_id = if is_macro_name { macro_id_from_token(pp, tok) } else { 0 }
     if is_macro_name {
       match builtin_macro_tokens(pp, tok) {
         Some(tokens) => {
@@ -2415,12 +2463,14 @@ fn next_pp_token(pp : Preprocessor) -> Token {
         None => ()
       }
     }
-    let hidden_ok = tok.hidden.length() == 0 || !hidden_contains(tok.hidden, tok.lexeme)
-    if is_macro_name && hidden_ok {
-      match pp.macros.get(tok.lexeme) {
+    let hidden_ok = !is_macro_name ||
+      tok.hidden.length() == 0 ||
+      (macro_id != 0 && !hidden_contains(tok.hidden, macro_id))
+    if is_macro_name && macro_id != 0 && hidden_ok {
+      match pp.macros.get(macro_id) {
         None => ()
         Some(macro_def) => {
-          if is_expanding(pp, tok.lexeme) {
+          if is_expanding(pp, macro_id) {
             return tok
           }
           if macro_def.is_function {
@@ -2440,7 +2490,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
                   Some(norm_args) => {
                     let restore_len = pp.pending.length()
                     let expanded_args = expand_macro_args(pp, norm_args)
-                    push_expanding(pp, tok.lexeme)
+                    push_expanding(pp, macro_id)
                     let replaced = substitute_macro(
                       pp,
                       macro_def,
@@ -2449,7 +2499,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
                       tok.loc,
                     )
                     let expanded =
-                      add_hidden_tokens(pp, expand_tokens(pp, replaced), tok.lexeme)
+                      add_hidden_tokens(pp, expand_tokens(pp, replaced), macro_id)
                     if expanded.length() > 0 {
                       pp.expanding_guards.push({ restore_len, })
                       push_tokens(pp, expanded)
@@ -2463,9 +2513,9 @@ fn next_pp_token(pp : Preprocessor) -> Token {
             }
           } else {
             let restore_len = pp.pending.length()
-            push_expanding(pp, tok.lexeme)
+            push_expanding(pp, macro_id)
             let expanded =
-              add_hidden_tokens(pp, expand_tokens(pp, macro_def.replacement), tok.lexeme)
+              add_hidden_tokens(pp, expand_tokens(pp, macro_def.replacement), macro_id)
             if expanded.length() > 0 {
               pp.expanding_guards.push({ restore_len, })
               push_tokens(pp, expanded)

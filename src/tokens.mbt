@@ -105,11 +105,11 @@ struct Token {
   id : Int
   loc : SrcLoc
   line_start : Bool
-  hidden : Array[String]
+  hidden : Array[Int]
 } derive(Show, Eq, ToJson)
 
 ///|
-let empty_hidden : Array[String] = []
+let empty_hidden : Array[Int] = []
 
 ///|
 fn keyword_or_ident_view(name : StringView) -> (TokenKind, String?) {
