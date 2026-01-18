@@ -16,7 +16,7 @@ DATASET=vc APPLY_VC_PATCH=1 DETAIL=1 REPEAT=3 WARMUP=1 scripts/bench_tinycc_comp
 
 Results (3 runs):
 
-- tinycc.mbt total: 0.554s
+- tinycc.mbt total: 0.555s
 - refs/tinycc total: 0.114s
 - ratio (mbt/ref): 4.88x
 - phases avg ms: parse=201.615 sem=103.302 codegen=211.535 total=516.452
