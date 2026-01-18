@@ -479,27 +479,40 @@ enum BinaryOp {
 
 ///|
 enum Expr {
-  IntLit(value~ : String, loc~ : SrcLoc)
-  FloatLit(value~ : String, loc~ : SrcLoc)
-  CharLit(value~ : Int, loc~ : SrcLoc)
-  StringLit(value~ : String, length~ : Int, loc~ : SrcLoc)
-  Ident(name~ : String, id~ : Int, loc~ : SrcLoc)
-  BuiltinTypesCompatibleP(a~ : CType, b~ : CType, loc~ : SrcLoc)
-  BuiltinOffsetof(ty~ : CType, path~ : Array[String], loc~ : SrcLoc)
-  BuiltinVaArg(list~ : Expr, ty~ : CType, loc~ : SrcLoc)
-  Unary(op~ : UnaryOp, expr~ : Expr, loc~ : SrcLoc)
-  Cast(ty~ : CType, expr~ : Expr, loc~ : SrcLoc)
-  CompoundLiteral(ty~ : CType, init~ : Initializer, loc~ : SrcLoc)
-  StmtExpr(stmts~ : Array[Stmt], loc~ : SrcLoc)
-  SizeofExpr(expr~ : Expr, loc~ : SrcLoc)
-  SizeofType(ty~ : CType, loc~ : SrcLoc)
-  AlignofExpr(expr~ : Expr, loc~ : SrcLoc)
-  AlignofType(ty~ : CType, loc~ : SrcLoc)
-  Binary(op~ : BinaryOp, left~ : Expr, right~ : Expr, loc~ : SrcLoc)
-  Conditional(cond~ : Expr, then_expr~ : Expr, else_expr~ : Expr, loc~ : SrcLoc)
-  Call(callee~ : Expr, args~ : Array[Expr], loc~ : SrcLoc)
-  Index(base~ : Expr, index~ : Expr, loc~ : SrcLoc)
-  Member(base~ : Expr, name~ : String, id~ : Int, is_arrow~ : Bool, loc~ : SrcLoc)
+  IntLit(value~ : String, node_id~ : Int, loc~ : SrcLoc)
+  FloatLit(value~ : String, node_id~ : Int, loc~ : SrcLoc)
+  CharLit(value~ : Int, node_id~ : Int, loc~ : SrcLoc)
+  StringLit(value~ : String, length~ : Int, node_id~ : Int, loc~ : SrcLoc)
+  Ident(name~ : String, id~ : Int, node_id~ : Int, loc~ : SrcLoc)
+  BuiltinTypesCompatibleP(a~ : CType, b~ : CType, node_id~ : Int, loc~ : SrcLoc)
+  BuiltinOffsetof(ty~ : CType, path~ : Array[String], node_id~ : Int, loc~ : SrcLoc)
+  BuiltinVaArg(list~ : Expr, ty~ : CType, node_id~ : Int, loc~ : SrcLoc)
+  Unary(op~ : UnaryOp, expr~ : Expr, node_id~ : Int, loc~ : SrcLoc)
+  Cast(ty~ : CType, expr~ : Expr, node_id~ : Int, loc~ : SrcLoc)
+  CompoundLiteral(ty~ : CType, init~ : Initializer, node_id~ : Int, loc~ : SrcLoc)
+  StmtExpr(stmts~ : Array[Stmt], node_id~ : Int, loc~ : SrcLoc)
+  SizeofExpr(expr~ : Expr, node_id~ : Int, loc~ : SrcLoc)
+  SizeofType(ty~ : CType, node_id~ : Int, loc~ : SrcLoc)
+  AlignofExpr(expr~ : Expr, node_id~ : Int, loc~ : SrcLoc)
+  AlignofType(ty~ : CType, node_id~ : Int, loc~ : SrcLoc)
+  Binary(op~ : BinaryOp, left~ : Expr, right~ : Expr, node_id~ : Int, loc~ : SrcLoc)
+  Conditional(
+    cond~ : Expr,
+    then_expr~ : Expr,
+    else_expr~ : Expr,
+    node_id~ : Int,
+    loc~ : SrcLoc,
+  )
+  Call(callee~ : Expr, args~ : Array[Expr], node_id~ : Int, loc~ : SrcLoc)
+  Index(base~ : Expr, index~ : Expr, node_id~ : Int, loc~ : SrcLoc)
+  Member(
+    base~ : Expr,
+    name~ : String,
+    id~ : Int,
+    is_arrow~ : Bool,
+    node_id~ : Int,
+    loc~ : SrcLoc,
+  )
 } derive(Show, Eq, ToJson)
 
 ///|

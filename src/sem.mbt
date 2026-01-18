@@ -72,6 +72,7 @@ struct SemContext {
   enum_types : FastMap[String, CType]
   enum_types_by_id : FastMap[Int, CType]
   compound_literal_types : FastMap[String, CType]
+  expr_type_cache : Array[CType?]
   func_agg_temps : FastMap[String, (Int, Int)]
   switch_stack : Array[SwitchInfo]
   mut labels_defined : FastMap[String, Bool]
@@ -154,6 +155,7 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     enum_types: fast_map_new(),
     enum_types_by_id: fast_map_new(),
     compound_literal_types: fast_map_new(),
+    expr_type_cache: [],
     func_agg_temps: fast_map_new(),
     switch_stack: [],
     labels_defined: fast_map_new(),
@@ -1192,7 +1194,7 @@ fn type_for_sizeof(ctx : SemContext, expr : Expr) -> CType {
   let prev = ctx.record_agg_temps
   ctx.record_agg_temps = false
   let ty = match expr {
-    Expr::Ident(name~, id~, loc~) =>
+    Expr::Ident(name~, id~, loc~, ..) =>
       match lookup_value(ctx, name, id) {
         Some(ty) => ty
         None => {
@@ -1217,7 +1219,7 @@ fn type_for_typeof(ctx : SemContext, expr : Expr) -> CType {
   let prev = ctx.record_agg_temps
   ctx.record_agg_temps = false
   let ty = match expr {
-    Expr::Ident(name~, id~, loc~) =>
+    Expr::Ident(name~, id~, loc~, ..) =>
       match lookup_value(ctx, name, id) {
         Some(ty) => ty
         None => {
@@ -1415,7 +1417,7 @@ fn check_decl(ctx : SemContext, decl : Decl) -> Unit {
       }
       check_func_def(ctx, func_def)
     }
-    Decl::Typedef(name~, ty~, attrs~, loc~) => {
+    Decl::Typedef(name~, ty~, attrs~, loc~, ..) => {
       register_type_defs(ctx, ty, loc)
       let resolved = resolve_type(ctx, ty, loc)
       let resolved_with_attrs = apply_type_attrs(resolved, type_attrs_from(attrs))
@@ -1428,7 +1430,7 @@ fn check_decl(ctx : SemContext, decl : Decl) -> Unit {
       )
       ctx.type_aliases.set(name, final_ty)
     }
-    Decl::TagDef(ty~, loc~) => register_type_defs(ctx, ty, loc)
+    Decl::TagDef(ty~, loc~, ..) => register_type_defs(ctx, ty, loc)
     Decl::StaticAssert(static_assert) => check_static_assert(ctx, static_assert)
     Decl::Asm(asm_stmt) => check_asm_stmt(ctx, asm_stmt)
   }
@@ -1998,14 +2000,14 @@ fn eval_const_expr_value(
           (0, false)
         }
       }
-    Expr::BuiltinTypesCompatibleP(a~, b~, loc=type_loc) => {
+    Expr::BuiltinTypesCompatibleP(a~, b~, loc=type_loc, ..) => {
       register_type_defs(ctx, a, type_loc)
       register_type_defs(ctx, b, type_loc)
       let lhs = resolve_type(ctx, a, type_loc)
       let rhs = resolve_type(ctx, b, type_loc)
       (if types_compatible_for_decl(lhs, rhs) { 1 } else { 0 }, true)
     }
-    Expr::BuiltinOffsetof(ty~, path~, loc=type_loc) => {
+    Expr::BuiltinOffsetof(ty~, path~, loc=type_loc, ..) => {
       register_type_defs(ctx, ty, type_loc)
       match eval_builtin_offsetof(ctx, ty, path, type_loc) {
         None => (0, false)
@@ -2088,7 +2090,7 @@ fn eval_const_expr_value(
       }
     }
     Expr::Cast(expr~, ..) => eval_const_expr_value(ctx, expr, loc)
-    Expr::SizeofExpr(expr~, loc~) => {
+    Expr::SizeofExpr(expr~, loc~, ..) => {
       let ty = type_for_sizeof(ctx, expr)
       match strip_top_qualifiers(ty) {
         CType::Array(size=None, size_expr=Some(_), ..) => (0, false)
@@ -2099,7 +2101,7 @@ fn eval_const_expr_value(
       }
       }
     }
-    Expr::SizeofType(ty~, loc~) => {
+    Expr::SizeofType(ty~, loc~, ..) => {
       register_type_defs(ctx, ty, loc)
       match strip_top_qualifiers(resolve_type(ctx, ty, loc)) {
         CType::Array(size=None, size_expr=Some(_), ..) => (0, false)
@@ -2110,21 +2112,21 @@ fn eval_const_expr_value(
       }
       }
     }
-    Expr::AlignofExpr(expr~, loc~) => {
+    Expr::AlignofExpr(expr~, loc~, ..) => {
       let ty = type_for_sizeof(ctx, expr)
       match type_size_align(ctx, ty, loc) {
         None => (0, false)
         Some((_, align)) => (align, true)
       }
     }
-    Expr::AlignofType(ty~, loc~) => {
+    Expr::AlignofType(ty~, loc~, ..) => {
       register_type_defs(ctx, ty, loc)
       match type_size_align(ctx, ty, loc) {
         None => (0, false)
         Some((_, align)) => (align, true)
       }
     }
-    Expr::Call(callee=Expr::Ident(name~, id~, ..), args~, loc=call_loc) =>
+    Expr::Call(callee=Expr::Ident(name~, id~, ..), args~, loc=call_loc, ..) =>
       match builtin_call_kind(ctx, name, id) {
         Some(BuiltinCallKind::ChooseExpr) if args.length() == 3 => {
           let (cond_val, ok) = eval_const_expr_value(ctx, args[0], call_loc)
@@ -2452,19 +2454,19 @@ fn is_constant_expr_for_builtin(ctx : SemContext, expr : Expr) -> Bool {
         None => false
       }
     Expr::Cast(expr=inner, ..) => is_constant_expr_for_builtin(ctx, inner)
-    Expr::SizeofExpr(expr=inner, loc~) =>
+    Expr::SizeofExpr(expr=inner, loc~, ..) =>
       match strip_top_qualifiers(type_for_sizeof(ctx, inner)) {
         CType::Array(size=None, size_expr=Some(_), ..) => false
         _ => type_size_align(ctx, type_for_sizeof(ctx, inner), loc) is Some(_)
       }
-    Expr::SizeofType(ty~, loc~) =>
+    Expr::SizeofType(ty~, loc~, ..) =>
       match strip_top_qualifiers(resolve_type(ctx, ty, loc)) {
         CType::Array(size=None, size_expr=Some(_), ..) => false
         _ => type_size_align(ctx, ty, loc) is Some(_)
       }
-    Expr::AlignofExpr(expr=inner, loc~) =>
+    Expr::AlignofExpr(expr=inner, loc~, ..) =>
       type_size_align(ctx, type_for_sizeof(ctx, inner), loc) is Some(_)
-    Expr::AlignofType(ty~, loc~) => type_size_align(ctx, ty, loc) is Some(_)
+    Expr::AlignofType(ty~, loc~, ..) => type_size_align(ctx, ty, loc) is Some(_)
     Expr::BuiltinTypesCompatibleP(..) => true
     Expr::BuiltinOffsetof(..) => true
     Expr::Call(callee=Expr::Ident(name~, id~, ..), args~, ..) =>
@@ -4609,7 +4611,7 @@ fn index_access_type(
 ///|
 fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
   match expr {
-    Expr::Ident(name~, id~, loc~) =>
+    Expr::Ident(name~, id~, loc~, ..) =>
       if enum_const_exists(ctx, name, id) {
         add_sem_error(ctx, loc, "expression is not assignable")
         None
@@ -4622,7 +4624,7 @@ fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
           }
         }
       }
-    Expr::Index(base~, index~, loc~) =>
+    Expr::Index(base~, index~, loc~, ..) =>
       match
         index_access_type(
           ctx,
@@ -4633,9 +4635,9 @@ fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
         Some(ty) => Some(ty)
         None => None
       }
-    Expr::Member(base~, name~, id~, is_arrow~, loc~) =>
+    Expr::Member(base~, name~, id~, is_arrow~, loc~, ..) =>
       member_access_type(ctx, type_of_expr(ctx, base), name, id, is_arrow~, loc)
-    Expr::Unary(op=UnaryOp::Deref, expr=inner, loc~) => {
+    Expr::Unary(op=UnaryOp::Deref, expr=inner, loc~, ..) => {
       let inner_ty = type_of_expr(ctx, inner)
       match strip_top_qualifiers(inner_ty) {
         CType::Pointer(pointee) => Some(pointee)
@@ -4645,12 +4647,12 @@ fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
         }
       }
     }
-    Expr::CompoundLiteral(ty~, init~, loc~) => {
+    Expr::CompoundLiteral(ty~, init~, loc~, ..) => {
       let resolved = compound_literal_type(ctx, ty, init, loc)
       record_compound_literal(ctx, loc, resolved)
       Some(resolved)
     }
-    Expr::StmtExpr(stmts~, loc~) =>
+    Expr::StmtExpr(stmts~, loc~, ..) =>
       stmt_expr_lvalue_type(ctx, stmts, loc)
     _ => {
       add_sem_error(ctx, expr_loc(expr), "expression is not assignable")
@@ -4671,7 +4673,7 @@ fn type_of_lvalue_optional(ctx : SemContext, expr : Expr) -> CType? {
           None => None
         }
       }
-    Expr::Index(base~, index~, loc~) =>
+    Expr::Index(base~, index~, loc~, ..) =>
       match
         index_access_type(
           ctx,
@@ -4682,9 +4684,9 @@ fn type_of_lvalue_optional(ctx : SemContext, expr : Expr) -> CType? {
         Some(ty) => Some(ty)
         None => None
       }
-    Expr::Member(base~, name~, id~, is_arrow~, loc~) =>
+    Expr::Member(base~, name~, id~, is_arrow~, loc~, ..) =>
       member_access_type(ctx, type_of_expr_impl(ctx, base), name, id, is_arrow~, loc)
-    Expr::Unary(op=UnaryOp::Deref, expr=inner, loc~) => {
+    Expr::Unary(op=UnaryOp::Deref, expr=inner, loc~, ..) => {
       let inner_ty = type_of_expr_impl(ctx, inner)
       match strip_top_qualifiers(inner_ty) {
         CType::Pointer(pointee) => Some(pointee)
@@ -4694,12 +4696,12 @@ fn type_of_lvalue_optional(ctx : SemContext, expr : Expr) -> CType? {
         }
       }
     }
-    Expr::CompoundLiteral(ty~, init~, loc~) => {
+    Expr::CompoundLiteral(ty~, init~, loc~, ..) => {
       let resolved = compound_literal_type(ctx, ty, init, loc)
       record_compound_literal(ctx, loc, resolved)
       Some(resolved)
     }
-    Expr::StmtExpr(stmts~, loc~) =>
+    Expr::StmtExpr(stmts~, loc~, ..) =>
       stmt_expr_lvalue_type(ctx, stmts, loc)
     _ => None
   }
@@ -4785,8 +4787,52 @@ fn stmt_expr_lvalue_type(
 }
 
 ///|
+fn ensure_expr_type_cache(ctx : SemContext, id : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  let cache_len = ctx.expr_type_cache.length()
+  if cache_len >= id {
+    return
+  }
+  let mut i = cache_len
+  while i < id {
+    ctx.expr_type_cache.push(None)
+    i = i + 1
+  }
+}
+
+///|
+fn cached_expr_type(ctx : SemContext, expr : Expr) -> CType? {
+  let id = expr_node_id(expr)
+  if id <= 0 {
+    return None
+  }
+  ensure_expr_type_cache(ctx, id)
+  ctx.expr_type_cache[id - 1]
+}
+
+///|
+fn set_cached_expr_type(ctx : SemContext, expr : Expr, ty : CType) -> Unit {
+  let id = expr_node_id(expr)
+  if id <= 0 {
+    return
+  }
+  ensure_expr_type_cache(ctx, id)
+  ctx.expr_type_cache[id - 1] = Some(ty)
+}
+
+///|
 fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
-  let ty = type_of_expr_impl(ctx, expr)
+  let cached = cached_expr_type(ctx, expr)
+  let ty = match cached {
+    Some(found) => found
+    None => {
+      let computed = type_of_expr_impl(ctx, expr)
+      set_cached_expr_type(ctx, expr, computed)
+      computed
+    }
+  }
   maybe_record_agg_temp_for_expr(ctx, expr, ty)
   ty
 }
@@ -4798,7 +4844,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
     Expr::FloatLit(value~, ..) => float_type_from_literal(value)
     Expr::CharLit(..) => default_int_type()
     Expr::StringLit(..) => CType::Pointer(char_type())
-    Expr::Ident(name~, id~, loc~) =>
+    Expr::Ident(name~, id~, loc~, ..) =>
       match lookup_value(ctx, name, id) {
         Some(ty) => decay_type(ty)
         None => {
@@ -4806,28 +4852,28 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
           default_int_type()
         }
       }
-    Expr::BuiltinTypesCompatibleP(a~, b~, loc~) => {
+    Expr::BuiltinTypesCompatibleP(a~, b~, loc~, ..) => {
       register_type_defs(ctx, a, loc)
       register_type_defs(ctx, b, loc)
       default_int_type()
     }
-    Expr::BuiltinOffsetof(ty~, path~, loc~) => {
+    Expr::BuiltinOffsetof(ty~, path~, loc~, ..) => {
       register_type_defs(ctx, ty, loc)
       ignore(eval_builtin_offsetof(ctx, ty, path, loc))
       size_t_type()
     }
-    Expr::BuiltinVaArg(list~, ty~, loc~) => {
+    Expr::BuiltinVaArg(list~, ty~, loc~, ..) => {
       ignore(type_of_expr(ctx, list))
       register_type_defs(ctx, ty, loc)
       resolve_type(ctx, ty, loc)
     }
-    Expr::CompoundLiteral(ty~, init~, loc~) => {
+    Expr::CompoundLiteral(ty~, init~, loc~, ..) => {
       let resolved = compound_literal_type(ctx, ty, init, loc)
       record_compound_literal(ctx, loc, resolved)
       decay_type(resolved)
     }
-    Expr::StmtExpr(stmts~, loc~) => stmt_expr_result_type(ctx, stmts, loc)
-    Expr::Unary(op~, expr~, loc~) =>
+    Expr::StmtExpr(stmts~, loc~, ..) => stmt_expr_result_type(ctx, stmts, loc)
+    Expr::Unary(op~, expr~, loc~, ..) =>
       match op {
         UnaryOp::Addr =>
           match type_of_lvalue(ctx, expr) {
@@ -4897,7 +4943,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
             }
           }
       }
-    Expr::Cast(ty~, expr~, loc~) => {
+    Expr::Cast(ty~, expr~, loc~, ..) => {
       register_type_defs(ctx, ty, loc)
       let resolved = resolve_type(ctx, ty, loc)
       type_of_expr(ctx, expr) |> ignore
@@ -4911,7 +4957,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
       }
       default_int_type()
     }
-    Expr::SizeofType(ty~, loc~) => {
+    Expr::SizeofType(ty~, loc~, ..) => {
       register_type_defs(ctx, ty, loc)
       let resolved = resolve_type(ctx, ty, loc)
       match strip_top_qualifiers(resolved) {
@@ -4920,18 +4966,18 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
       }
       default_int_type()
     }
-    Expr::AlignofExpr(expr~, loc~) => {
+    Expr::AlignofExpr(expr~, loc~, ..) => {
       let ty = type_for_sizeof(ctx, expr)
       type_size_align(ctx, ty, loc) |> ignore
       default_int_type()
     }
-    Expr::AlignofType(ty~, loc~) => {
+    Expr::AlignofType(ty~, loc~, ..) => {
       register_type_defs(ctx, ty, loc)
       let resolved = resolve_type(ctx, ty, loc)
       type_size_align(ctx, resolved, loc) |> ignore
       default_int_type()
     }
-    Expr::Binary(op~, left~, right~, loc~) =>
+    Expr::Binary(op~, left~, right~, loc~, ..) =>
       match op {
         BinaryOp::Assign =>
           match type_of_lvalue(ctx, left) {
@@ -5104,7 +5150,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
           common_int_type(ctx, lhs_ty, rhs_ty)
         }
       }
-    Expr::Conditional(cond~, then_expr~, else_expr~, loc~) => {
+    Expr::Conditional(cond~, then_expr~, else_expr~, loc~, ..) => {
       check_cond_expr(ctx, cond)
       let then_ty = type_of_expr(ctx, then_expr)
       let else_ty = type_of_expr(ctx, else_expr)
@@ -5139,7 +5185,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
       }
       then_ty
     }
-    Expr::Index(base~, index~, loc~) =>
+    Expr::Index(base~, index~, loc~, ..) =>
       match
         index_access_type(
           ctx,
@@ -5150,7 +5196,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
         Some(ty) => decay_type(ty)
         None => default_int_type()
       }
-    Expr::Member(base~, name~, id~, is_arrow~, loc~) => {
+    Expr::Member(base~, name~, id~, is_arrow~, loc~, ..) => {
       let base_ty = type_of_expr(ctx, base)
       if !is_arrow && !expr_is_lvalue_simple(base) {
         record_agg_temp_for_type(ctx, base_ty, loc)
@@ -5160,7 +5206,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
         None => default_int_type()
       }
     }
-    Expr::Call(callee~, args~, loc~) => {
+    Expr::Call(callee~, args~, loc~, ..) => {
       if callee is Expr::Ident(name~, id~, ..) {
         match builtin_call_kind(ctx, name, id) {
           Some(BuiltinCallKind::ChooseExpr) => {
@@ -5207,7 +5253,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
             }
             if args.length() >= 1 {
               match args[0] {
-                Expr::Ident(name=_, id=ap_id, loc=ap_loc) =>
+                Expr::Ident(name=_, id=ap_id, loc=ap_loc, ..) =>
                   match lookup_local_only(ctx, ap_id) {
                     None =>
                       add_sem_error(
@@ -5250,7 +5296,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
         }
       }
       let callee_ty = match callee {
-        Expr::Ident(name~, id~, loc=ident_loc) =>
+        Expr::Ident(name~, id~, loc=ident_loc, ..) =>
           match lookup_value(ctx, name, id) {
             Some(ty) => ty
             None => {

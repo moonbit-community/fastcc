@@ -1107,7 +1107,7 @@ fn reserve_compound_literals_initializer(
 ///|
 fn reserve_compound_literals_expr(alloc : LocalAlloc, expr : Expr) -> Unit {
   match expr {
-    Expr::CompoundLiteral(ty~, init~, loc~) => {
+    Expr::CompoundLiteral(ty~, init~, loc~, ..) => {
       reserve_compound_literal_slot(alloc, ty, init, loc)
       reserve_compound_literals_initializer(alloc, init)
     }
@@ -2072,7 +2072,7 @@ fn gen_agg_expr_to_addr(
         emit_store_agg_return_gp_to_addr(emitter, size, dst_reg, dst_off, loc, bag)
       }
     }
-    Expr::Binary(op=BinaryOp::Assign, left~, right~, loc~) => {
+    Expr::Binary(op=BinaryOp::Assign, left~, right~, loc~, ..) => {
       let lhs_ty = type_of_expr(alloc.sem, left)
       match strip_top_qualifiers(lhs_ty) {
         CType::Struct(..) | CType::Union(..) => {
@@ -2126,7 +2126,7 @@ fn gen_agg_expr_to_addr(
         loc,
         bag,
       )
-    Expr::IntLit(value~, loc~) =>
+    Expr::IntLit(value~, loc~, ..) =>
       match parse_int64_literal(value) {
         Some(v) =>
           if v == 0 {
@@ -2152,7 +2152,7 @@ fn gen_agg_expr_to_addr(
         bag,
       )
     }
-    Expr::Conditional(cond~, then_expr~, else_expr~, loc~) => {
+    Expr::Conditional(cond~, then_expr~, else_expr~, loc~, ..) => {
       gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, cond, bag)
       let br_else = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
       gen_agg_expr_to_addr(
@@ -2191,7 +2191,7 @@ fn gen_agg_expr_to_addr(
         err => add_error(bag, loc, err.to_string())
       }
     }
-    Expr::StmtExpr(stmts~, loc~) =>
+    Expr::StmtExpr(stmts~, loc~, ..) =>
       gen_stmt_expr_with(
         emitter,
         alloc,
@@ -4212,8 +4212,9 @@ fn gen_call_direct(
       type_of_expr(
         alloc.sem,
         Expr::Call(
-          callee=Expr::Ident(name=name, id=id, loc=loc),
+          callee=Expr::Ident(name=name, id=id, node_id=0, loc=loc),
           args=args,
+          node_id=0,
           loc=loc,
         ),
       ),
@@ -5060,7 +5061,7 @@ fn gen_lvalue_addr(
   bag : DiagBag,
 ) -> Unit {
   match expr {
-    Expr::Ident(name~, id~, loc~) => {
+    Expr::Ident(name~, id~, loc~, ..) => {
       if is_func_name_ident(name) {
         if gen_func_name_addr(emitter, syms, cstrings, alloc, dst, loc, bag) {
           return
@@ -5097,7 +5098,7 @@ fn gen_lvalue_addr(
         }
       }
     }
-    Expr::CompoundLiteral(ty~, init~, loc~) => {
+    Expr::CompoundLiteral(ty~, init~, loc~, ..) => {
       ignore(
         gen_compound_literal_addr_with_type(
           emitter,
@@ -5113,7 +5114,7 @@ fn gen_lvalue_addr(
         ),
       )
     }
-    Expr::StmtExpr(stmts~, loc~) => {
+    Expr::StmtExpr(stmts~, loc~, ..) => {
       let mut last_is_expr = false
       if stmts.length() > 0 {
         match stmts[stmts.length() - 1] {
@@ -5141,7 +5142,7 @@ fn gen_lvalue_addr(
     }
     Expr::Unary(op=UnaryOp::Deref, expr=inner, ..) =>
       gen_expr_ptr(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
-    Expr::Index(base~, index~, loc~) => {
+    Expr::Index(base~, index~, loc~, ..) => {
       ignore(
         gen_index_addr_with_elem_type(
           emitter,
@@ -5157,7 +5158,7 @@ fn gen_lvalue_addr(
         ),
       )
     }
-    Expr::Member(base~, name~, id~, is_arrow~, loc~) => {
+    Expr::Member(base~, name~, id~, is_arrow~, loc~, ..) => {
       let base_ty = type_of_expr(alloc.sem, base)
       if is_arrow {
         gen_expr_ptr(emitter, alloc, syms, pool, cstrings, base, dst, bag)
@@ -5988,7 +5989,7 @@ fn member_bitfield_info(
   expr : Expr,
 ) -> (Expr, Bool, FieldAccessInfo)? {
   match expr {
-    Expr::Member(base~, name~, id~, is_arrow~, loc~) =>
+    Expr::Member(base~, name~, id~, is_arrow~, loc~, ..) =>
       match member_access_info(alloc.sem, base, name, id, is_arrow, loc) {
         Some(info) =>
           match info.bit_width {
@@ -6594,12 +6595,12 @@ fn gen_expr_floatbits(
   }
   let is_double = float_is_double(kind)
   match expr {
-    Expr::FloatLit(value~, loc~) =>
+    Expr::FloatLit(value~, loc~, ..) =>
       match parse_float_literal_bits(value, kind) {
         None => add_error(bag, loc, "codegen: invalid float literal")
         Some(bits) => arm64_movimm(emitter, dst.reinterpret_as_uint(), bits)
       }
-    Expr::StmtExpr(stmts~, loc~) =>
+    Expr::StmtExpr(stmts~, loc~, ..) =>
       gen_stmt_expr_with(
         emitter,
         alloc,
@@ -6624,7 +6625,7 @@ fn gen_expr_floatbits(
             bag,
           ),
       )
-    Expr::BuiltinVaArg(list~, ty~, loc~) => {
+    Expr::BuiltinVaArg(list~, ty~, loc~, ..) => {
       match float_kind_of_type(strip_top_qualifiers(ty)) {
         Some(_) =>
           ignore(gen_builtin_va_arg_load(
@@ -6641,7 +6642,7 @@ fn gen_expr_floatbits(
         None => add_error(bag, loc, "codegen: expected float type for va_arg")
       }
     }
-    Expr::Ident(name~, id~, loc~) =>
+    Expr::Ident(name~, id~, loc~, ..) =>
       match lookup_local(alloc, name, id) {
         Some(slot) =>
           emit_load_local_scalar(emitter, alloc.sem, slot.ty, dst, slot.offset, loc, bag)
@@ -6667,7 +6668,7 @@ fn gen_expr_floatbits(
           )
         }
       }
-    Expr::Index(base=_, index=_, loc~) | Expr::Member(loc=loc, ..) |
+    Expr::Index(base=_, index=_, loc~, ..) | Expr::Member(loc=loc, ..) |
     Expr::Unary(op=UnaryOp::Deref, loc=loc, ..) | Expr::CompoundLiteral(loc=loc, ..) => {
       let addr = take_reg(pool) catch {
         err => {
@@ -6707,7 +6708,7 @@ fn gen_expr_floatbits(
         dst,
         bag,
       )
-    Expr::Unary(op=UnaryOp::Minus, expr=inner, loc=_) => {
+    Expr::Unary(op=UnaryOp::Minus, expr=inner, loc=_, ..) => {
       gen_expr_to_float_kind_bits(
         emitter,
         alloc,
@@ -6782,7 +6783,7 @@ fn gen_expr_floatbits(
         )
       }
     }
-    Expr::Binary(op~, left~, right~, loc~) =>
+    Expr::Binary(op~, left~, right~, loc~, ..) =>
       match op {
         BinaryOp::Comma => {
           gen_expr_discard(emitter, alloc, syms, pool, cstrings, left, bag)
@@ -6928,7 +6929,7 @@ fn gen_expr_floatbits(
             "codegen: unsupported float binary operator",
           )
       }
-    Expr::Cast(ty=to_ty, expr=inner, loc=_) => {
+    Expr::Cast(ty=to_ty, expr=inner, loc=_, ..) => {
       let target_kind = match float_kind_of_type(to_ty) {
         None => kind
         Some(k) => k
@@ -6945,13 +6946,13 @@ fn gen_expr_floatbits(
         bag,
       )
     }
-    Expr::Call(callee~, args~, loc~) => {
+    Expr::Call(callee~, args~, loc~, ..) => {
       gen_call_expr(emitter, alloc, syms, pool, cstrings, callee, args, loc, bag)
       if dst != 0 {
         emit_mov(emitter, true, dst, 0)
       }
     }
-    Expr::Conditional(cond~, then_expr~, else_expr~, loc~) => {
+    Expr::Conditional(cond~, then_expr~, else_expr~, loc~, ..) => {
       gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, cond, bag)
       let br_else = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
       gen_expr_to_float_kind_bits(
@@ -7003,14 +7004,14 @@ fn gen_expr_int32(
   expr_ty? : CType,
 ) -> Unit {
   match expr {
-    Expr::IntLit(value~, loc~) =>
+    Expr::IntLit(value~, loc~, ..) =>
       match parse_int64_literal(value) {
         None => add_error(bag, loc, "codegen: invalid integer literal")
         Some(v) => arm64_movimm(emitter, dst.reinterpret_as_uint(), v.reinterpret_as_uint64())
       }
     Expr::CharLit(value~, ..) =>
       arm64_movimm(emitter, dst.reinterpret_as_uint(), value.to_uint64())
-    Expr::StmtExpr(stmts~, loc~) =>
+    Expr::StmtExpr(stmts~, loc~, ..) =>
       gen_stmt_expr_with(
         emitter,
         alloc,
@@ -7025,7 +7026,7 @@ fn gen_expr_int32(
         (expr, dst) =>
           gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, dst, bag),
       )
-    Expr::Ident(name~, id~, loc~) => {
+    Expr::Ident(name~, id~, loc~, ..) => {
       match enum_const_value(alloc.sem, name, id) {
         Some(v) => {
           arm64_movimm(emitter, dst.reinterpret_as_uint(), v.to_uint64())
@@ -7080,7 +7081,7 @@ fn gen_expr_int32(
         }
       }
     }
-    Expr::Index(base~, index~, loc~) => {
+    Expr::Index(base~, index~, loc~, ..) => {
       let addr = take_reg(pool) catch {
         err => {
           add_error(bag, loc, err.to_string())
@@ -7130,7 +7131,7 @@ fn gen_expr_int32(
       )
       give_reg(pool, addr)
     }
-    Expr::Member(base~, name~, id~, is_arrow~, loc~) => {
+    Expr::Member(base~, name~, id~, is_arrow~, loc~, ..) => {
       let base_ty = type_of_expr(alloc.sem, base)
       let info = member_access_info_from_base_type(
         alloc.sem,
@@ -7252,7 +7253,7 @@ fn gen_expr_int32(
       }
       give_reg(pool, addr)
     }
-    Expr::CompoundLiteral(ty~, init~, loc~) => {
+    Expr::CompoundLiteral(ty~, init~, loc~, ..) => {
       let addr = take_reg(pool) catch {
         err => {
           add_error(bag, loc, err.to_string())
@@ -7306,7 +7307,7 @@ fn gen_expr_int32(
       )
       give_reg(pool, addr)
     }
-    Expr::BuiltinVaArg(list~, ty~, loc~) => {
+    Expr::BuiltinVaArg(list~, ty~, loc~, ..) => {
       match float_kind_of_type(strip_top_qualifiers(ty)) {
         Some(_) => add_error(bag, loc, "codegen: va_arg for float handled elsewhere")
         None =>
@@ -7325,14 +7326,14 @@ fn gen_expr_int32(
           }
       }
     }
-    Expr::BuiltinOffsetof(ty~, path~, loc~) => {
+    Expr::BuiltinOffsetof(ty~, path~, loc~, ..) => {
       match eval_builtin_offsetof(alloc.sem, ty, path, loc) {
         None => add_error(bag, loc, "codegen: unsupported expression")
         Some(off) =>
           arm64_movimm(emitter, dst.reinterpret_as_uint(), off.to_uint64())
       }
     }
-    Expr::Unary(op~, expr=inner, loc~) => {
+    Expr::Unary(op~, expr=inner, loc~, ..) => {
       match op {
         UnaryOp::Plus =>
           gen_expr_int32(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
@@ -7682,7 +7683,7 @@ fn gen_expr_int32(
         }
       }
     }
-    Expr::Binary(op~, left~, right~, loc~) =>
+    Expr::Binary(op~, left~, right~, loc~, ..) =>
       match op {
         BinaryOp::Comma => {
           gen_expr_discard(emitter, alloc, syms, pool, cstrings, left, bag)
@@ -8780,13 +8781,13 @@ fn gen_expr_int32(
           give_reg(pool, tmp)
         }
       }
-    Expr::Call(callee~, args~, loc~) => {
+    Expr::Call(callee~, args~, loc~, ..) => {
       gen_call_expr(emitter, alloc, syms, pool, cstrings, callee, args, loc, bag)
       if dst != 0 {
         emit_mov(emitter, true, dst, 0)
       }
     }
-	    Expr::SizeofExpr(expr=inner, loc~) => {
+	    Expr::SizeofExpr(expr=inner, loc~, ..) => {
 	      match inner {
 	        Expr::Ident(name~, id~, ..) =>
 	          match lookup_local(alloc, name, id) {
@@ -8840,7 +8841,7 @@ fn gen_expr_int32(
 	          }
 	      }
 	    }
-	    Expr::SizeofType(ty~, loc~) =>
+	    Expr::SizeofType(ty~, loc~, ..) =>
 	      match strip_top_qualifiers(ty) {
 	        CType::Array(elem=elem_ty, size=None, size_expr=Some(expr)) =>
 	          gen_vla_size_bytes_to_reg(
@@ -8866,7 +8867,7 @@ fn gen_expr_int32(
 	              )
 	          }
 	      }
-    Expr::Cast(ty=to_ty, expr=inner, loc=cast_loc) => {
+    Expr::Cast(ty=to_ty, expr=inner, loc=cast_loc, ..) => {
       let from_ty = type_of_expr(alloc.sem, inner)
       match (strip_top_qualifiers_keep_attrs(to_ty), strip_top_qualifiers_keep_attrs(from_ty)) {
         (CType::Int(kind=to_kind, unsigned=to_unsigned), CType::Float(kind=from_kind)) => {
@@ -8953,7 +8954,7 @@ fn gen_expr_int32(
           )
       }
     }
-    Expr::Conditional(cond~, then_expr~, else_expr~, loc~) => {
+    Expr::Conditional(cond~, then_expr~, else_expr~, loc~, ..) => {
       gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, cond, bag)
       let br_else = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
       gen_expr_int32(emitter, alloc, syms, pool, cstrings, then_expr, dst, bag)
@@ -9020,7 +9021,7 @@ fn gen_expr_ptr(
   bag : DiagBag,
 ) -> Unit {
   match expr {
-    Expr::IntLit(value~, loc~) =>
+    Expr::IntLit(value~, loc~, ..) =>
       match parse_int64_literal(value) {
         None => add_error(bag, loc, "codegen: invalid integer literal")
         Some(v) =>
@@ -9028,7 +9029,7 @@ fn gen_expr_ptr(
       }
     Expr::CharLit(value~, ..) =>
       arm64_movimm(emitter, dst.reinterpret_as_uint(), value.to_uint64())
-    Expr::StmtExpr(stmts~, loc~) =>
+    Expr::StmtExpr(stmts~, loc~, ..) =>
       gen_stmt_expr_with(
         emitter,
         alloc,
@@ -9047,7 +9048,7 @@ fn gen_expr_ptr(
       let sym = cstring_sym_or_add(cstrings, syms, value)
       emit_addr_global(emitter, syms, sym, dst)
     }
-    Expr::Ident(name~, id~, loc~) => {
+    Expr::Ident(name~, id~, loc~, ..) => {
       if is_func_name_ident(name) {
         if gen_func_name_addr(emitter, syms, cstrings, alloc, dst, loc, bag) {
           return
@@ -9113,7 +9114,7 @@ fn gen_expr_ptr(
         }
       }
     }
-    Expr::Member(base~, name~, id~, is_arrow~, loc~) => {
+    Expr::Member(base~, name~, id~, is_arrow~, loc~, ..) => {
       let addr = take_reg(pool) catch {
         err => {
           add_error(bag, loc, err.to_string())
@@ -9186,7 +9187,7 @@ fn gen_expr_ptr(
       }
       give_reg(pool, addr)
     }
-    Expr::Index(base~, index~, loc~) => {
+    Expr::Index(base~, index~, loc~, ..) => {
       let addr = take_reg(pool) catch {
         err => {
           add_error(bag, loc, err.to_string())
@@ -9228,7 +9229,7 @@ fn gen_expr_ptr(
       }
       give_reg(pool, addr)
     }
-    Expr::CompoundLiteral(ty~, init~, loc~) => {
+    Expr::CompoundLiteral(ty~, init~, loc~, ..) => {
       let addr = take_reg(pool) catch {
         err => {
           add_error(bag, loc, err.to_string())
@@ -9292,7 +9293,7 @@ fn gen_expr_ptr(
     }
     Expr::Unary(op=UnaryOp::Addr, expr=inner, ..) =>
       gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
-    Expr::Unary(op=UnaryOp::Deref, expr=inner, loc~) => {
+    Expr::Unary(op=UnaryOp::Deref, expr=inner, loc~, ..) => {
       gen_expr_ptr(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
       let ty = match deref_pointee_type(alloc.sem, inner, loc, bag) {
         None => return
@@ -9318,7 +9319,7 @@ fn gen_expr_ptr(
             0,
           )
     }
-    Expr::BuiltinVaArg(list~, ty~, loc~) => {
+    Expr::BuiltinVaArg(list~, ty~, loc~, ..) => {
       if !type_is_pointer_like(ty) {
         add_error(bag, loc, "codegen: expected pointer type for va_arg")
         return
@@ -9337,7 +9338,7 @@ fn gen_expr_ptr(
         ),
       )
     }
-    Expr::Unary(op~, expr=inner, loc~) =>
+    Expr::Unary(op~, expr=inner, loc~, ..) =>
       match op {
         UnaryOp::PreInc | UnaryOp::PreDec | UnaryOp::PostInc | UnaryOp::PostDec => {
           let ty = type_of_expr(alloc.sem, inner)
@@ -9524,7 +9525,7 @@ fn gen_expr_ptr(
         bag,
       )
     }
-    Expr::Binary(op~, left~, right~, loc~) =>
+    Expr::Binary(op~, left~, right~, loc~, ..) =>
       match op {
         BinaryOp::Comma => {
           gen_expr_discard(emitter, alloc, syms, pool, cstrings, left, bag)
@@ -9717,7 +9718,7 @@ fn gen_expr_ptr(
         }
         _ => add_error(bag, loc, "codegen: unsupported pointer expression")
       }
-    Expr::Cast(ty=to_ty, expr=inner, loc=cast_loc) => {
+    Expr::Cast(ty=to_ty, expr=inner, loc=cast_loc, ..) => {
       let inner_ty = type_of_expr(alloc.sem, inner)
       if type_is_pointer_like(inner_ty) {
         gen_expr_ptr(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
@@ -9726,13 +9727,13 @@ fn gen_expr_ptr(
         emit_int_cast(emitter, alloc.sem, inner_ty, to_ty, dst, cast_loc, bag)
       }
     }
-    Expr::Call(callee~, args~, loc~) => {
+    Expr::Call(callee~, args~, loc~, ..) => {
       gen_call_expr(emitter, alloc, syms, pool, cstrings, callee, args, loc, bag)
       if dst != 0 {
         emit_mov(emitter, true, dst, 0)
       }
     }
-    Expr::Conditional(cond~, then_expr~, else_expr~, loc~) => {
+    Expr::Conditional(cond~, then_expr~, else_expr~, loc~, ..) => {
       gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, cond, bag)
       let br_else = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
       gen_expr_ptr(emitter, alloc, syms, pool, cstrings, then_expr, dst, bag)
@@ -9834,13 +9835,13 @@ fn gen_expr_discard(
       match expr {
         Expr::Cast(expr=inner, ..) =>
           gen_expr_discard(emitter, alloc, syms, pool, cstrings, inner, bag)
-        Expr::Call(callee~, args~, loc~) =>
+        Expr::Call(callee~, args~, loc~, ..) =>
           gen_call_expr(emitter, alloc, syms, pool, cstrings, callee, args, loc, bag)
         Expr::Binary(op=BinaryOp::Comma, left~, right~, ..) => {
           gen_expr_discard(emitter, alloc, syms, pool, cstrings, left, bag)
           gen_expr_discard(emitter, alloc, syms, pool, cstrings, right, bag)
         }
-        Expr::Conditional(cond~, then_expr~, else_expr~, loc~) => {
+        Expr::Conditional(cond~, then_expr~, else_expr~, loc~, ..) => {
           gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, cond, bag)
           let br_else = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
           gen_expr_discard(emitter, alloc, syms, pool, cstrings, then_expr, bag)
@@ -9855,7 +9856,7 @@ fn gen_expr_discard(
             err => add_error(bag, loc, err.to_string())
           }
         }
-        Expr::StmtExpr(stmts~, loc~) =>
+        Expr::StmtExpr(stmts~, loc~, ..) =>
           gen_stmt_expr_with(
             emitter,
             alloc,
@@ -11687,7 +11688,7 @@ fn const_pointer_from_lvalue(
     Expr::Ident(name~, id~, ..) => Some((sym_for_ident(syms, name, id=id), 0))
     Expr::StringLit(value~, ..) =>
       Some((cstring_sym_or_add(cstrings, syms, value), 0))
-    Expr::Member(base~, name~, id~, is_arrow~, loc~) => {
+    Expr::Member(base~, name~, id~, is_arrow~, loc~, ..) => {
       let base_ptr = if is_arrow {
         const_pointer_from_expr(sem, syms, cstrings, base)
       } else {
@@ -11706,7 +11707,7 @@ fn const_pointer_from_lvalue(
           }
       }
     }
-    Expr::Index(base~, index~, loc~) => {
+    Expr::Index(base~, index~, loc~, ..) => {
       match const_int_from_expr(sem, index, expr_loc(index)) {
         None => None
         Some(idx) =>

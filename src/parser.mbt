@@ -12,6 +12,7 @@ struct Parser {
   typedef_overrides : Array[Array[(Int, CType?, Int)]]
   pending_typedef_scopes : Array[Bool]
   mut anon_tag_id : Int
+  mut next_expr_id : Int
   builtin_ids : BuiltinIds
 }
 
@@ -66,12 +67,20 @@ fn new_parser(pp : Preprocessor) -> Parser {
     typedef_overrides: [[]],
     pending_typedef_scopes: [],
     anon_tag_id: 0,
+    next_expr_id: 0,
     builtin_ids: {
       types_compatible_p: builtin_types_compatible_p,
       offsetof: builtin_offsetof,
       va_arg: builtin_va_arg,
     },
   }
+}
+
+///|
+fn new_expr_id(p : Parser) -> Int {
+  let id = p.next_expr_id + 1
+  p.next_expr_id = id
+  id
 }
 
 ///|
@@ -2650,7 +2659,14 @@ fn parse_expr_comma(p : Parser) -> Expr {
   while p.current.kind == Comma {
     let tok = advance_token(p)
     let right = parse_expr_eq(p)
-    expr = Expr::Binary(op=BinaryOp::Comma, left=expr, right~, loc=tok.loc)
+    expr =
+      Expr::Binary(
+        op=BinaryOp::Comma,
+        left=expr,
+        right~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
   }
   expr
 }
@@ -2662,57 +2678,123 @@ fn parse_expr_eq(p : Parser) -> Expr {
     Assign => {
       let tok = advance_token(p)
       let right = parse_expr_eq(p)
-      Expr::Binary(op=BinaryOp::Assign, left~, right~, loc=tok.loc)
+      Expr::Binary(
+        op=BinaryOp::Assign,
+        left~,
+        right~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     PlusAssign => {
       let tok = advance_token(p)
       let right = parse_expr_eq(p)
-      Expr::Binary(op=BinaryOp::AddAssign, left~, right~, loc=tok.loc)
+      Expr::Binary(
+        op=BinaryOp::AddAssign,
+        left~,
+        right~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     MinusAssign => {
       let tok = advance_token(p)
       let right = parse_expr_eq(p)
-      Expr::Binary(op=BinaryOp::SubAssign, left~, right~, loc=tok.loc)
+      Expr::Binary(
+        op=BinaryOp::SubAssign,
+        left~,
+        right~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     StarAssign => {
       let tok = advance_token(p)
       let right = parse_expr_eq(p)
-      Expr::Binary(op=BinaryOp::MulAssign, left~, right~, loc=tok.loc)
+      Expr::Binary(
+        op=BinaryOp::MulAssign,
+        left~,
+        right~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     SlashAssign => {
       let tok = advance_token(p)
       let right = parse_expr_eq(p)
-      Expr::Binary(op=BinaryOp::DivAssign, left~, right~, loc=tok.loc)
+      Expr::Binary(
+        op=BinaryOp::DivAssign,
+        left~,
+        right~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     PercentAssign => {
       let tok = advance_token(p)
       let right = parse_expr_eq(p)
-      Expr::Binary(op=BinaryOp::ModAssign, left~, right~, loc=tok.loc)
+      Expr::Binary(
+        op=BinaryOp::ModAssign,
+        left~,
+        right~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     ShiftLeftAssign => {
       let tok = advance_token(p)
       let right = parse_expr_eq(p)
-      Expr::Binary(op=BinaryOp::ShlAssign, left~, right~, loc=tok.loc)
+      Expr::Binary(
+        op=BinaryOp::ShlAssign,
+        left~,
+        right~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     ShiftRightAssign => {
       let tok = advance_token(p)
       let right = parse_expr_eq(p)
-      Expr::Binary(op=BinaryOp::ShrAssign, left~, right~, loc=tok.loc)
+      Expr::Binary(
+        op=BinaryOp::ShrAssign,
+        left~,
+        right~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     AmpAssign => {
       let tok = advance_token(p)
       let right = parse_expr_eq(p)
-      Expr::Binary(op=BinaryOp::BitAndAssign, left~, right~, loc=tok.loc)
+      Expr::Binary(
+        op=BinaryOp::BitAndAssign,
+        left~,
+        right~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     PipeAssign => {
       let tok = advance_token(p)
       let right = parse_expr_eq(p)
-      Expr::Binary(op=BinaryOp::BitOrAssign, left~, right~, loc=tok.loc)
+      Expr::Binary(
+        op=BinaryOp::BitOrAssign,
+        left~,
+        right~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     CaretAssign => {
       let tok = advance_token(p)
       let right = parse_expr_eq(p)
-      Expr::Binary(op=BinaryOp::BitXorAssign, left~, right~, loc=tok.loc)
+      Expr::Binary(
+        op=BinaryOp::BitXorAssign,
+        left~,
+        right~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     _ => left
   }
@@ -2728,7 +2810,13 @@ fn parse_expr_cond(p : Parser) -> Expr {
   let then_expr = parse_expr(p)
   expect(p, Colon, "expected ':' in conditional expression") |> ignore
   let else_expr = parse_expr_cond(p)
-  Expr::Conditional(cond~, then_expr~, else_expr~, loc=tok.loc)
+  Expr::Conditional(
+    cond~,
+    then_expr~,
+    else_expr~,
+    node_id=new_expr_id(p),
+    loc=tok.loc,
+  )
 }
 
 ///|
@@ -2766,7 +2854,7 @@ fn parse_expr_binary(p : Parser, min_prec : Int) -> Expr {
     }
     let tok = advance_token(p)
     let right = parse_expr_binary(p, prec + 1)
-    expr = Expr::Binary(op~, left=expr, right~, loc=tok.loc)
+    expr = Expr::Binary(op~, left=expr, right~, node_id=new_expr_id(p), loc=tok.loc)
   }
   expr
 }
@@ -2780,16 +2868,16 @@ fn parse_expr_unary(p : Parser) -> Expr {
       match parse_type_name(p) {
         None => {
           add_parse_error(p, tok.loc, "expected type name after sizeof")
-          return Expr::IntLit(value="0", loc=tok.loc)
+          return Expr::IntLit(value="0", node_id=new_expr_id(p), loc=tok.loc)
         }
         Some(ty) => {
           expect(p, RParen, "expected ')' after sizeof type") |> ignore
-          return Expr::SizeofType(ty~, loc=tok.loc)
+          return Expr::SizeofType(ty~, node_id=new_expr_id(p), loc=tok.loc)
         }
       }
     }
     let expr = parse_expr_unary(p)
-    return Expr::SizeofExpr(expr~, loc=tok.loc)
+    return Expr::SizeofExpr(expr~, node_id=new_expr_id(p), loc=tok.loc)
   }
   if p.current.kind == KwAlignof {
     let tok = advance_token(p)
@@ -2798,33 +2886,39 @@ fn parse_expr_unary(p : Parser) -> Expr {
       match parse_type_name(p) {
         None => {
           add_parse_error(p, tok.loc, "expected type name after alignof")
-          return Expr::IntLit(value="0", loc=tok.loc)
+          return Expr::IntLit(value="0", node_id=new_expr_id(p), loc=tok.loc)
         }
         Some(ty) => {
           expect(p, RParen, "expected ')' after alignof type") |> ignore
-          return Expr::AlignofType(ty~, loc=tok.loc)
+          return Expr::AlignofType(ty~, node_id=new_expr_id(p), loc=tok.loc)
         }
       }
     }
     let expr = parse_expr_unary(p)
-    return Expr::AlignofExpr(expr~, loc=tok.loc)
+    return Expr::AlignofExpr(expr~, node_id=new_expr_id(p), loc=tok.loc)
   }
   if peek_kind(p, 0) == LParen && is_type_start(p, peek_token_at(p, 1)) {
     let lparen = advance_token(p)
     match parse_type_name(p) {
       None => {
         add_parse_error(p, lparen.loc, "expected type name in cast")
-        return Expr::IntLit(value="0", loc=lparen.loc)
+        return Expr::IntLit(value="0", node_id=new_expr_id(p), loc=lparen.loc)
       }
       Some(ty) => {
         expect(p, RParen, "expected ')' after cast type") |> ignore
         if peek_kind(p, 0) == LBrace {
           let init = parse_initializer(p)
-          let literal = Expr::CompoundLiteral(ty~, init~, loc=lparen.loc)
+          let literal =
+            Expr::CompoundLiteral(
+              ty~,
+              init~,
+              node_id=new_expr_id(p),
+              loc=lparen.loc,
+            )
           return parse_postfix_tail(p, literal)
         }
         let expr = parse_expr_unary(p)
-        return Expr::Cast(ty~, expr~, loc=lparen.loc)
+        return Expr::Cast(ty~, expr~, node_id=new_expr_id(p), loc=lparen.loc)
       }
     }
   }
@@ -2832,42 +2926,42 @@ fn parse_expr_unary(p : Parser) -> Expr {
     PlusPlus => {
       let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      Expr::Unary(op=UnaryOp::PreInc, expr~, loc=tok.loc)
+      Expr::Unary(op=UnaryOp::PreInc, expr~, node_id=new_expr_id(p), loc=tok.loc)
     }
     MinusMinus => {
       let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      Expr::Unary(op=UnaryOp::PreDec, expr~, loc=tok.loc)
+      Expr::Unary(op=UnaryOp::PreDec, expr~, node_id=new_expr_id(p), loc=tok.loc)
     }
     Plus => {
       let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      Expr::Unary(op=UnaryOp::Plus, expr~, loc=tok.loc)
+      Expr::Unary(op=UnaryOp::Plus, expr~, node_id=new_expr_id(p), loc=tok.loc)
     }
     Minus => {
       let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      Expr::Unary(op=UnaryOp::Minus, expr~, loc=tok.loc)
+      Expr::Unary(op=UnaryOp::Minus, expr~, node_id=new_expr_id(p), loc=tok.loc)
     }
     Bang => {
       let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      Expr::Unary(op=UnaryOp::Not, expr~, loc=tok.loc)
+      Expr::Unary(op=UnaryOp::Not, expr~, node_id=new_expr_id(p), loc=tok.loc)
     }
     Tilde => {
       let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      Expr::Unary(op=UnaryOp::BitNot, expr~, loc=tok.loc)
+      Expr::Unary(op=UnaryOp::BitNot, expr~, node_id=new_expr_id(p), loc=tok.loc)
     }
     Amp => {
       let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      Expr::Unary(op=UnaryOp::Addr, expr~, loc=tok.loc)
+      Expr::Unary(op=UnaryOp::Addr, expr~, node_id=new_expr_id(p), loc=tok.loc)
     }
     Star => {
       let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      Expr::Unary(op=UnaryOp::Deref, expr~, loc=tok.loc)
+      Expr::Unary(op=UnaryOp::Deref, expr~, node_id=new_expr_id(p), loc=tok.loc)
     }
     _ => parse_expr_postfix(p)
   }
@@ -2887,14 +2981,16 @@ fn parse_postfix_tail(p : Parser, base : Expr) -> Expr {
       LParen => {
         let tok = advance_token(p)
         let args = parse_call_args(p)
-        expr = Expr::Call(callee=expr, args~, loc=tok.loc)
+        expr =
+          Expr::Call(callee=expr, args~, node_id=new_expr_id(p), loc=tok.loc)
         continue
       }
       LBracket => {
         let tok = advance_token(p)
         let index = parse_expr(p)
         expect(p, RBracket, "expected ']' after index") |> ignore
-        expr = Expr::Index(base=expr, index~, loc=tok.loc)
+        expr =
+          Expr::Index(base=expr, index~, node_id=new_expr_id(p), loc=tok.loc)
         continue
       }
       Dot => {
@@ -2903,7 +2999,15 @@ fn parse_postfix_tail(p : Parser, base : Expr) -> Expr {
           None => ("", 0)
           Some(tok) => (tok.lexeme, tok.id)
         }
-        expr = Expr::Member(base=expr, name~, id~, is_arrow=false, loc=tok.loc)
+        expr =
+          Expr::Member(
+            base=expr,
+            name~,
+            id~,
+            is_arrow=false,
+            node_id=new_expr_id(p),
+            loc=tok.loc,
+          )
         continue
       }
       Arrow => {
@@ -2912,17 +3016,37 @@ fn parse_postfix_tail(p : Parser, base : Expr) -> Expr {
           None => ("", 0)
           Some(tok) => (tok.lexeme, tok.id)
         }
-        expr = Expr::Member(base=expr, name~, id~, is_arrow=true, loc=tok.loc)
+        expr =
+          Expr::Member(
+            base=expr,
+            name~,
+            id~,
+            is_arrow=true,
+            node_id=new_expr_id(p),
+            loc=tok.loc,
+          )
         continue
       }
       PlusPlus => {
         let tok = advance_token(p)
-        expr = Expr::Unary(op=UnaryOp::PostInc, expr~, loc=tok.loc)
+        expr =
+          Expr::Unary(
+            op=UnaryOp::PostInc,
+            expr~,
+            node_id=new_expr_id(p),
+            loc=tok.loc,
+          )
         continue
       }
       MinusMinus => {
         let tok = advance_token(p)
-        expr = Expr::Unary(op=UnaryOp::PostDec, expr~, loc=tok.loc)
+        expr =
+          Expr::Unary(
+            op=UnaryOp::PostDec,
+            expr~,
+            node_id=new_expr_id(p),
+            loc=tok.loc,
+          )
         continue
       }
       _ => break
@@ -2954,10 +3078,16 @@ fn parse_call_args(p : Parser) -> Array[Expr] {
 fn parse_expr_primary(p : Parser) -> Expr {
   let tok = advance_token(p)
   match tok.kind {
-    IntLit => Expr::IntLit(value=tok.lexeme, loc=tok.loc)
-    FloatLit => Expr::FloatLit(value=tok.lexeme, loc=tok.loc)
+    IntLit =>
+      Expr::IntLit(value=tok.lexeme, node_id=new_expr_id(p), loc=tok.loc)
+    FloatLit =>
+      Expr::FloatLit(value=tok.lexeme, node_id=new_expr_id(p), loc=tok.loc)
     CharLit =>
-      Expr::CharLit(value=parse_char_literal_value(p, tok), loc=tok.loc)
+      Expr::CharLit(
+        value=parse_char_literal_value(p, tok),
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     StrLit => parse_string_literal_expr(p, tok)
     Ident =>
       if p.current.kind == LParen {
@@ -2989,7 +3119,12 @@ fn parse_expr_primary(p : Parser) -> Expr {
             RParen,
             "expected ')' after __builtin_types_compatible_p",
           ) |> ignore
-          Expr::BuiltinTypesCompatibleP(a~, b~, loc=tok.loc)
+          Expr::BuiltinTypesCompatibleP(
+            a~,
+            b~,
+            node_id=new_expr_id(p),
+            loc=tok.loc,
+          )
         } else if id == p.builtin_ids.offsetof {
           expect(p, LParen, "expected '(' after __builtin_offsetof") |> ignore
           let ty = match parse_type_name(p) {
@@ -3013,7 +3148,7 @@ fn parse_expr_primary(p : Parser) -> Expr {
             }
           }
           expect(p, RParen, "expected ')' after __builtin_offsetof") |> ignore
-          Expr::BuiltinOffsetof(ty~, path~, loc=tok.loc)
+          Expr::BuiltinOffsetof(ty~, path~, node_id=new_expr_id(p), loc=tok.loc)
         } else if id == p.builtin_ids.va_arg {
           expect(p, LParen, "expected '(' after __builtin_va_arg") |> ignore
           let list = parse_expr_eq(p)
@@ -3026,12 +3161,22 @@ fn parse_expr_primary(p : Parser) -> Expr {
             Some(v) => v
           }
           expect(p, RParen, "expected ')' after __builtin_va_arg") |> ignore
-          Expr::BuiltinVaArg(list~, ty~, loc=tok.loc)
+          Expr::BuiltinVaArg(list~, ty~, node_id=new_expr_id(p), loc=tok.loc)
         } else {
-          Expr::Ident(name=tok.lexeme, id=tok.id, loc=tok.loc)
+          Expr::Ident(
+            name=tok.lexeme,
+            id=tok.id,
+            node_id=new_expr_id(p),
+            loc=tok.loc,
+          )
         }
       } else {
-        Expr::Ident(name=tok.lexeme, id=tok.id, loc=tok.loc)
+        Expr::Ident(
+          name=tok.lexeme,
+          id=tok.id,
+          node_id=new_expr_id(p),
+          loc=tok.loc,
+        )
       }
     LParen =>
       if p.current.kind == LBrace {
@@ -3039,8 +3184,9 @@ fn parse_expr_primary(p : Parser) -> Expr {
         let block = parse_compound_stmt(p, lbrace.loc)
         expect(p, RParen, "expected ')' after statement expression") |> ignore
         match block {
-          Stmt::Compound(stmts~, ..) => Expr::StmtExpr(stmts~, loc=tok.loc)
-          _ => Expr::StmtExpr(stmts=[], loc=tok.loc)
+          Stmt::Compound(stmts~, ..) =>
+            Expr::StmtExpr(stmts~, node_id=new_expr_id(p), loc=tok.loc)
+          _ => Expr::StmtExpr(stmts=[], node_id=new_expr_id(p), loc=tok.loc)
         }
       } else {
         let expr = parse_expr(p)
@@ -3049,7 +3195,7 @@ fn parse_expr_primary(p : Parser) -> Expr {
       }
     _ => {
       add_parse_error(p, tok.loc, "unexpected token in expression")
-      Expr::IntLit(value="0", loc=tok.loc)
+      Expr::IntLit(value="0", node_id=new_expr_id(p), loc=tok.loc)
     }
   }
 }
@@ -3059,7 +3205,12 @@ fn parse_expr_primary(p : Parser) -> Expr {
 fn parse_string_literal_expr(p : Parser, first : Token) -> Expr {
   let (value, len) = decode_string_literal(p, first.lexeme, first.loc)
   if peek_token(p).kind != StrLit {
-    return Expr::StringLit(value=value, length=len + 1, loc=first.loc)
+    return Expr::StringLit(
+      value=value,
+      length=len + 1,
+      node_id=new_expr_id(p),
+      loc=first.loc,
+    )
   }
   let sb = StringBuilder::new(size_hint=first.lexeme.length())
   let mut byte_len = len
@@ -3070,7 +3221,12 @@ fn parse_string_literal_expr(p : Parser, first : Token) -> Expr {
     sb.write_string(part)
     byte_len = byte_len + part_len
   }
-  Expr::StringLit(value=sb.to_string(), length=byte_len + 1, loc=first.loc)
+  Expr::StringLit(
+    value=sb.to_string(),
+    length=byte_len + 1,
+    node_id=new_expr_id(p),
+    loc=first.loc,
+  )
 }
 
 ///|
@@ -3292,6 +3448,33 @@ fn expr_loc(expr : Expr) -> SrcLoc {
     Expr::Call(loc~, ..) => loc
     Expr::Index(loc~, ..) => loc
     Expr::Member(loc~, ..) => loc
+  }
+}
+
+///|
+fn expr_node_id(expr : Expr) -> Int {
+  match expr {
+    Expr::IntLit(node_id~, ..) => node_id
+    Expr::FloatLit(node_id~, ..) => node_id
+    Expr::CharLit(node_id~, ..) => node_id
+    Expr::StringLit(node_id~, ..) => node_id
+    Expr::Ident(node_id~, ..) => node_id
+    Expr::BuiltinTypesCompatibleP(node_id~, ..) => node_id
+    Expr::BuiltinOffsetof(node_id~, ..) => node_id
+    Expr::BuiltinVaArg(node_id~, ..) => node_id
+    Expr::Unary(node_id~, ..) => node_id
+    Expr::Cast(node_id~, ..) => node_id
+    Expr::CompoundLiteral(node_id~, ..) => node_id
+    Expr::StmtExpr(node_id~, ..) => node_id
+    Expr::SizeofExpr(node_id~, ..) => node_id
+    Expr::SizeofType(node_id~, ..) => node_id
+    Expr::AlignofExpr(node_id~, ..) => node_id
+    Expr::AlignofType(node_id~, ..) => node_id
+    Expr::Binary(node_id~, ..) => node_id
+    Expr::Conditional(node_id~, ..) => node_id
+    Expr::Call(node_id~, ..) => node_id
+    Expr::Index(node_id~, ..) => node_id
+    Expr::Member(node_id~, ..) => node_id
   }
 }
 

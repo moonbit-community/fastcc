@@ -116,9 +116,8 @@ test "parser tracks typedef struct name" {
   let pp = new_preprocessor(map, file, bag)
   let parser = new_parser(pp)
   ignore(parse_translation_unit_with(parser))
-  let scope0 = parser.type_scopes[0]
   let (_, type_id) = parser.pp.interner.intern_view_with_id("T"[:])
-  assert_true(scope0.contains(type_id))
+  assert_true(get_typedef_count(parser, type_id) > 0)
 }
 
 ///|
