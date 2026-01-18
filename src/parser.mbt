@@ -42,26 +42,16 @@ fn new_parser(pp : Preprocessor) -> Parser {
 
 ///|
 fn special_ident_kind(name : String) -> TokenKind? {
-  match name {
-    "void" => Some(KwVoid)
-    "_Bool" => Some(KwBool)
-    "char" => Some(KwChar)
-    "short" => Some(KwShort)
-    "int" => Some(KwInt)
-    "long" => Some(KwLong)
-    "float" => Some(KwFloat)
-    "double" => Some(KwDouble)
-    "_Float16" => Some(KwFloat)
-    "signed" => Some(KwSigned)
-    "unsigned" => Some(KwUnsigned)
-    "__const" | "__const__" => Some(KwConst)
-    "__volatile" | "__volatile__" => Some(KwVolatile)
-    "__restrict" | "__restrict__" => Some(KwRestrict)
-    "__inline" | "__inline__" => Some(KwInline)
-    "__signed" | "__signed__" => Some(KwSigned)
-    "__unsigned" | "__unsigned__" => Some(KwUnsigned)
-    "_Noreturn" => Some(KwNoreturn)
-    _ => None
+  let (kind, keyword_lexeme) = keyword_or_ident_view(name[:])
+  match keyword_lexeme {
+    None => None
+    Some(_) =>
+      match kind {
+        KwVoid | KwBool | KwChar | KwShort | KwInt | KwLong | KwFloat |
+        KwDouble | KwSigned | KwUnsigned | KwConst | KwVolatile |
+        KwRestrict | KwInline | KwNoreturn => Some(kind)
+        _ => None
+      }
   }
 }
 
@@ -2144,13 +2134,23 @@ fn parse_param_declarator(
 
 ///|
 fn parse_compound_stmt(p : Parser, loc : SrcLoc) -> Stmt {
-  push_typedef_scope(p)
+  let mut did_scope = false
   let stmts : Array[Stmt] = []
   while !is_at_end(p) && peek_token(p).kind != RBrace {
+    if !did_scope {
+      let tok = peek_token(p)
+      if !(tok.kind == Ident && peek_kind(p, 1) == Colon) &&
+        is_type_start(p, tok) {
+        push_typedef_scope(p)
+        did_scope = true
+      }
+    }
     stmts.push(parse_stmt(p))
   }
   expect(p, RBrace, "expected '}'") |> ignore
-  pop_typedef_scope(p)
+  if did_scope {
+    pop_typedef_scope(p)
+  }
   Stmt::Compound(stmts~, loc~)
 }
 
@@ -2374,7 +2374,11 @@ fn parse_do_while_stmt(p : Parser, loc : SrcLoc) -> Stmt {
 ///|
 fn parse_for_stmt(p : Parser, loc : SrcLoc) -> Stmt {
   expect(p, LParen, "expected '(' after for") |> ignore
-  push_typedef_scope(p)
+  let mut did_scope = false
+  if is_type_start(p, peek_token(p)) {
+    push_typedef_scope(p)
+    did_scope = true
+  }
   let init = parse_for_init(p)
   let cond = if match_token(p, Semicolon) is Some(_) {
     None
@@ -2391,7 +2395,9 @@ fn parse_for_stmt(p : Parser, loc : SrcLoc) -> Stmt {
     Some(step_expr)
   }
   let body = parse_stmt(p)
-  pop_typedef_scope(p)
+  if did_scope {
+    pop_typedef_scope(p)
+  }
   Stmt::For(init~, cond~, step~, body~, loc~)
 }
 

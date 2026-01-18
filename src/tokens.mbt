@@ -202,6 +202,8 @@ fn keyword_or_ident_view(name : StringView) -> (TokenKind, String?) {
       (KwTypedef, Some("typedef"))
     } else if name.equal("__asm__"[:]) {
       (KwAsm, Some("__asm__"))
+    } else if name.equal("__const"[:]) {
+      (KwConst, Some("__const"))
     } else {
       (Ident, None)
     }
@@ -220,6 +222,12 @@ fn keyword_or_ident_view(name : StringView) -> (TokenKind, String?) {
       (KwAlignof, Some("_Alignof"))
     } else if name.equal("__typeof"[:]) {
       (KwTypeof, Some("__typeof"))
+    } else if name.equal("__inline"[:]) {
+      (KwInline, Some("__inline"))
+    } else if name.equal("__signed"[:]) {
+      (KwSigned, Some("__signed"))
+    } else if name.equal("_Float16"[:]) {
+      (KwFloat, Some("_Float16"))
     } else {
       (Ident, None)
     }
@@ -228,12 +236,24 @@ fn keyword_or_ident_view(name : StringView) -> (TokenKind, String?) {
       (KwNoreturn, Some("_Noreturn"))
     } else if name.equal("__alignof"[:]) {
       (KwAlignof, Some("__alignof"))
+    } else if name.equal("__const__"[:]) {
+      (KwConst, Some("__const__"))
     } else {
       (Ident, None)
     }
   } else if len == 10 {
     if name.equal("__typeof__"[:]) {
       (KwTypeof, Some("__typeof__"))
+    } else if name.equal("__volatile"[:]) {
+      (KwVolatile, Some("__volatile"))
+    } else if name.equal("__restrict"[:]) {
+      (KwRestrict, Some("__restrict"))
+    } else if name.equal("__inline__"[:]) {
+      (KwInline, Some("__inline__"))
+    } else if name.equal("__signed__"[:]) {
+      (KwSigned, Some("__signed__"))
+    } else if name.equal("__unsigned"[:]) {
+      (KwUnsigned, Some("__unsigned"))
     } else {
       (Ident, None)
     }
@@ -242,6 +262,16 @@ fn keyword_or_ident_view(name : StringView) -> (TokenKind, String?) {
       (KwAlignof, Some("__alignof__"))
     } else if name.equal("__attribute"[:]) {
       (KwAttribute, Some("__attribute"))
+    } else {
+      (Ident, None)
+    }
+  } else if len == 12 {
+    if name.equal("__volatile__"[:]) {
+      (KwVolatile, Some("__volatile__"))
+    } else if name.equal("__restrict__"[:]) {
+      (KwRestrict, Some("__restrict__"))
+    } else if name.equal("__unsigned__"[:]) {
+      (KwUnsigned, Some("__unsigned__"))
     } else {
       (Ident, None)
     }

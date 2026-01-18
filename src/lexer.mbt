@@ -128,16 +128,6 @@ fn add_lex_error(lex : Lexer, loc : SrcLoc, message : String) -> Unit {
 }
 
 ///|
-fn is_ws(code : UInt16) -> Bool {
-  code == 32 ||
-  code == 9 ||
-  code == 10 ||
-  code == 13 ||
-  code == 12 ||
-  code == 11
-}
-
-///|
 fn is_ws_no_newline(code : UInt16) -> Bool {
   code == 32 || code == 9 || code == 13 || code == 12 || code == 11
 }
@@ -150,7 +140,19 @@ fn skip_ws(lex : Lexer) -> Unit {
       return
     }
     let code = lex.text[idx]
-    if is_ws(code) {
+    if is_ws_no_newline(code) {
+      let text = lex.text
+      let len = lex.text_len
+      let mut next = idx + 1
+      while next < len && is_ws_no_newline(text[next]) {
+        next = next + 1
+      }
+      let delta = next - idx
+      lex.index = next
+      lex.col = lex.col + delta
+      continue
+    }
+    if code == 10 {
       let _ = advance(lex)
       continue
     }
@@ -188,19 +190,48 @@ fn skip_ws(lex : Lexer) -> Unit {
 
 ///|
 fn skip_line_comment(lex : Lexer) -> Unit {
-  while true {
-    match advance_comment(lex) {
-      None => return
-      Some(code) =>
-        if code == 10 {
-          return
-        }
+  let idx = lex.index
+  let len = lex.text_len
+  if idx >= len {
+    return
+  }
+  let view = lex.text.view(start_offset=idx)
+  match view.find("\n"[:]) {
+    None => {
+      let delta = len - idx
+      lex.index = len
+      lex.col = lex.col + delta
+    }
+    Some(off) => {
+      if off > 0 {
+        lex.index = idx + off
+        lex.col = lex.col + off
+      }
+      let _ = advance_comment(lex)
     }
   }
 }
 
 ///|
 fn skip_block_comment(lex : Lexer, start_loc : SrcLoc) -> Unit {
+  let idx = lex.index
+  let len = lex.text_len
+  if idx < len {
+    let view = lex.text.view(start_offset=idx)
+    match view.find("*/"[:]) {
+      Some(end_off) =>
+        match view.find("\n"[:]) {
+          Some(nl_off) if nl_off < end_off => ()
+          _ => {
+            let delta = end_off + 2
+            lex.index = idx + delta
+            lex.col = lex.col + delta
+            return
+          }
+        }
+      None => ()
+    }
+  }
   let mut saw_star = false
   while true {
     match advance_comment(lex) {

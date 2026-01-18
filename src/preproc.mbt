@@ -56,6 +56,15 @@ fn make_builtin_token(kind : TokenKind, lexeme : String) -> Token {
 }
 
 ///|
+fn make_builtin_word_token(word : String) -> Token {
+  let (kind, keyword_lexeme) = keyword_or_ident_view(word[:])
+  match keyword_lexeme {
+    Some(lexeme) => make_builtin_token(kind, lexeme)
+    None => make_builtin_token(Ident, word)
+  }
+}
+
+///|
 fn define_macro(
   pp : Preprocessor,
   name : String,
@@ -72,7 +81,7 @@ fn define_macro(
 ///|
 fn define_words_macro(pp : Preprocessor, name : String, words : Array[String]) ->
   Unit {
-  let tokens = words.map(w => make_builtin_token(Ident, w))
+  let tokens = words.map(w => make_builtin_word_token(w))
   define_macro(pp, name, tokens)
 }
 
