@@ -50,6 +50,7 @@ struct FieldAccessInfo {
 struct LocalAlloc {
   sem : SemContext
   ret_ty : CType
+  mut ret_loc : Int?
   mut used_bytes : Int
   scopes : Array[FastMap[String, LocalSlot]]
   vla_scopes : Array[VlaScopeInfo]
@@ -76,6 +77,7 @@ fn new_local_alloc(sem : SemContext, ret_ty : CType, func_name : String) ->
   {
     sem,
     ret_ty,
+    ret_loc: None,
     used_bytes: 0,
     scopes: [],
     vla_scopes: [],
@@ -100,6 +102,7 @@ fn new_local_alloc_with_compound_slots(
   {
     sem,
     ret_ty,
+    ret_loc: None,
     used_bytes: 0,
     scopes: [],
     vla_scopes: [],
@@ -505,10 +508,22 @@ fn reserve_sret_slot(alloc : LocalAlloc, loc : SrcLoc, bag : DiagBag) -> Unit {
   if alloc.sret_offset is Some(_) {
     return
   }
-  let ret_loc = arm64_pcs(alloc.sem, 0, alloc.ret_ty, [], loc, bag).ret_loc
+  let ret_loc = cached_ret_loc(alloc, loc, bag)
   if ret_loc == 1 {
     let off = alloc_hidden_slot(alloc, 8, 8)
     alloc.sret_offset = Some(off)
+  }
+}
+
+///|
+fn cached_ret_loc(alloc : LocalAlloc, loc : SrcLoc, bag : DiagBag) -> Int {
+  match alloc.ret_loc {
+    Some(v) => v
+    None => {
+      let ret_loc = arm64_pcs(alloc.sem, 0, alloc.ret_ty, [], loc, bag).ret_loc
+      alloc.ret_loc = Some(ret_loc)
+      ret_loc
+    }
   }
 }
 
@@ -1618,8 +1633,18 @@ fn scalar_size_signed_or_error(
   ty : CType,
   loc : SrcLoc,
 ) -> (Int, Bool)? {
-  match strip_top_qualifiers_keep_attrs(ty) {
-    CType::Float(kind=CFloatKind::LongDouble) => return Some((8, false))
+  let mut base = strip_top_qualifiers_keep_attrs(ty)
+  while true {
+    match base {
+      CType::Attributed(base=inner, ..) => base = inner
+      _ => break
+    }
+  }
+  match base {
+    CType::Bool => return Some((1, false))
+    CType::Int(kind~, unsigned~) => return Some((int_size(kind), !unsigned))
+    CType::Float(kind~) => return Some((float_size(kind), false))
+    CType::Pointer(_) | CType::Function(..) => return Some((8, false))
     _ => ()
   }
   let (size, _) = match type_size_align_or_error(sem, ty, loc) {
@@ -10464,7 +10489,7 @@ fn gen_stmt(
                       if size == 0 {
                         ()
                       } else {
-                        let ret_loc = arm64_pcs(alloc.sem, 0, alloc.ret_ty, [], loc, bag).ret_loc
+                        let ret_loc = cached_ret_loc(alloc, loc, bag)
                         if ret_loc == 1 {
                           match alloc.sret_offset {
                             None => add_error(bag, loc, "codegen: missing sret slot")
