@@ -10,6 +10,14 @@ struct Parser {
   typedef_overrides : Array[Array[(Int, CType?)]]
   pending_typedef_scopes : Array[Bool]
   mut anon_tag_id : Int
+  builtin_ids : BuiltinIds
+}
+
+///|
+struct BuiltinIds {
+  types_compatible_p : Int
+  offsetof : Int
+  va_arg : Int
 }
 
 ///|
@@ -30,6 +38,11 @@ fn new_parser(pp : Preprocessor) -> Parser {
   }
   let current = next_pp_token(pp)
   let lookahead = next_pp_token(pp)
+  let (_, builtin_types_compatible_p) =
+    pp.interner.intern_view_with_id("__builtin_types_compatible_p"[:])
+  let (_, builtin_offsetof) =
+    pp.interner.intern_view_with_id("__builtin_offsetof"[:])
+  let (_, builtin_va_arg) = pp.interner.intern_view_with_id("__builtin_va_arg"[:])
   {
     pp,
     current,
@@ -41,6 +54,11 @@ fn new_parser(pp : Preprocessor) -> Parser {
     typedef_overrides: [[]],
     pending_typedef_scopes: [],
     anon_tag_id: 0,
+    builtin_ids: {
+      types_compatible_p: builtin_types_compatible_p,
+      offsetof: builtin_offsetof,
+      va_arg: builtin_va_arg,
+    },
   }
 }
 
@@ -2879,69 +2897,76 @@ fn parse_expr_primary(p : Parser) -> Expr {
       Expr::CharLit(value=parse_char_literal_value(p, tok), loc=tok.loc)
     StrLit => parse_string_literal_expr(p, tok)
     Ident =>
-      if tok.lexeme == "__builtin_types_compatible_p" && peek_token(p).kind ==
-        LParen {
-        expect(
-          p,
-          LParen,
-          "expected '(' after __builtin_types_compatible_p",
-        ) |> ignore
-        let a = match parse_type_name(p) {
-          None => {
-            add_parse_error(p, tok.loc, "expected type name in builtin")
-            default_int_type()
+      if p.current.kind == LParen {
+        let id = tok.id
+        if id == p.builtin_ids.types_compatible_p {
+          expect(
+            p,
+            LParen,
+            "expected '(' after __builtin_types_compatible_p",
+          ) |> ignore
+          let a = match parse_type_name(p) {
+            None => {
+              add_parse_error(p, tok.loc, "expected type name in builtin")
+              default_int_type()
+            }
+            Some(ty) => ty
           }
-          Some(ty) => ty
-        }
-        expect(p, Comma, "expected ',' in __builtin_types_compatible_p") |> ignore
-        let b = match parse_type_name(p) {
-          None => {
-            add_parse_error(p, tok.loc, "expected type name in builtin")
-            default_int_type()
+          expect(p, Comma, "expected ',' in __builtin_types_compatible_p")
+          |> ignore
+          let b = match parse_type_name(p) {
+            None => {
+              add_parse_error(p, tok.loc, "expected type name in builtin")
+              default_int_type()
+            }
+            Some(ty) => ty
           }
-          Some(ty) => ty
-        }
-        expect(p, RParen, "expected ')' after __builtin_types_compatible_p") |> ignore
-        Expr::BuiltinTypesCompatibleP(a~, b~, loc=tok.loc)
-      } else if tok.lexeme == "__builtin_offsetof" && peek_token(p).kind ==
-        LParen {
-        expect(p, LParen, "expected '(' after __builtin_offsetof") |> ignore
-        let ty = match parse_type_name(p) {
-          None => {
-            add_parse_error(p, tok.loc, "expected type name in __builtin_offsetof")
-            default_int_type()
+          expect(
+            p,
+            RParen,
+            "expected ')' after __builtin_types_compatible_p",
+          ) |> ignore
+          Expr::BuiltinTypesCompatibleP(a~, b~, loc=tok.loc)
+        } else if id == p.builtin_ids.offsetof {
+          expect(p, LParen, "expected '(' after __builtin_offsetof") |> ignore
+          let ty = match parse_type_name(p) {
+            None => {
+              add_parse_error(p, tok.loc, "expected type name in __builtin_offsetof")
+              default_int_type()
+            }
+            Some(v) => v
           }
-          Some(v) => v
-        }
-        expect(p, Comma, "expected ',' in __builtin_offsetof") |> ignore
-        let path : Array[String] = []
-        match expect_ident(p, "expected member name in __builtin_offsetof") {
-          None => ()
-          Some(id) => path.push(id.lexeme)
-        }
-        while p.current.kind == Dot {
-          advance_token(p) |> ignore
+          expect(p, Comma, "expected ',' in __builtin_offsetof") |> ignore
+          let path : Array[String] = []
           match expect_ident(p, "expected member name in __builtin_offsetof") {
-            None => break
+            None => ()
             Some(id) => path.push(id.lexeme)
           }
-        }
-        expect(p, RParen, "expected ')' after __builtin_offsetof") |> ignore
-        Expr::BuiltinOffsetof(ty~, path~, loc=tok.loc)
-      } else if tok.lexeme == "__builtin_va_arg" && peek_token(p).kind ==
-        LParen {
-        expect(p, LParen, "expected '(' after __builtin_va_arg") |> ignore
-        let list = parse_expr_eq(p)
-        expect(p, Comma, "expected ',' in __builtin_va_arg") |> ignore
-        let ty = match parse_type_name(p) {
-          None => {
-            add_parse_error(p, tok.loc, "expected type name in builtin")
-            default_int_type()
+          while p.current.kind == Dot {
+            advance_token(p) |> ignore
+            match expect_ident(p, "expected member name in __builtin_offsetof") {
+              None => break
+              Some(id) => path.push(id.lexeme)
+            }
           }
-          Some(v) => v
+          expect(p, RParen, "expected ')' after __builtin_offsetof") |> ignore
+          Expr::BuiltinOffsetof(ty~, path~, loc=tok.loc)
+        } else if id == p.builtin_ids.va_arg {
+          expect(p, LParen, "expected '(' after __builtin_va_arg") |> ignore
+          let list = parse_expr_eq(p)
+          expect(p, Comma, "expected ',' in __builtin_va_arg") |> ignore
+          let ty = match parse_type_name(p) {
+            None => {
+              add_parse_error(p, tok.loc, "expected type name in builtin")
+              default_int_type()
+            }
+            Some(v) => v
+          }
+          expect(p, RParen, "expected ')' after __builtin_va_arg") |> ignore
+          Expr::BuiltinVaArg(list~, ty~, loc=tok.loc)
+        } else {
+          Expr::Ident(name=tok.lexeme, id=tok.id, loc=tok.loc)
         }
-        expect(p, RParen, "expected ')' after __builtin_va_arg") |> ignore
-        Expr::BuiltinVaArg(list~, ty~, loc=tok.loc)
       } else {
         Expr::Ident(name=tok.lexeme, id=tok.id, loc=tok.loc)
       }
