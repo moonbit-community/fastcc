@@ -337,6 +337,7 @@ enum CType {
 ///|
 struct Field {
   name : String
+  id : Int
   ty : CType
   bit_width : Expr?
   attrs : Attributes
@@ -498,13 +499,13 @@ enum Expr {
   Conditional(cond~ : Expr, then_expr~ : Expr, else_expr~ : Expr, loc~ : SrcLoc)
   Call(callee~ : Expr, args~ : Array[Expr], loc~ : SrcLoc)
   Index(base~ : Expr, index~ : Expr, loc~ : SrcLoc)
-  Member(base~ : Expr, name~ : String, is_arrow~ : Bool, loc~ : SrcLoc)
+  Member(base~ : Expr, name~ : String, id~ : Int, is_arrow~ : Bool, loc~ : SrcLoc)
 } derive(Show, Eq, ToJson)
 
 ///|
 enum InitDesignator {
   Index(expr~ : Expr, loc~ : SrcLoc)
-  Field(name~ : String, loc~ : SrcLoc)
+  Field(name~ : String, id~ : Int, loc~ : SrcLoc)
 } derive(Show, Eq, ToJson)
 
 ///|

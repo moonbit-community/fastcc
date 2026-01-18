@@ -46,13 +46,13 @@ struct SemContext {
   union_defs : FastMap[String, RecordDef]
   union_defs_by_id : FastMap[Int, RecordDef]
   struct_member_cache : FastMap[String, FastMap[String, CType]]
-  struct_member_cache_by_id : FastMap[Int, FastMap[String, CType]]
+  struct_member_cache_by_id : FastMap[Int, FastMap[Int, CType]]
   union_member_cache : FastMap[String, FastMap[String, CType]]
-  union_member_cache_by_id : FastMap[Int, FastMap[String, CType]]
+  union_member_cache_by_id : FastMap[Int, FastMap[Int, CType]]
   struct_field_access_cache : FastMap[String, FastMap[String, FieldAccessInfo]]
-  struct_field_access_cache_by_id : FastMap[Int, FastMap[String, FieldAccessInfo]]
+  struct_field_access_cache_by_id : FastMap[Int, FastMap[Int, FieldAccessInfo]]
   union_field_access_cache : FastMap[String, FastMap[String, FieldAccessInfo]]
-  union_field_access_cache_by_id : FastMap[Int, FastMap[String, FieldAccessInfo]]
+  union_field_access_cache_by_id : FastMap[Int, FastMap[Int, FieldAccessInfo]]
   struct_size_cache : FastMap[String, (Int, Int)]
   struct_size_cache_by_id : FastMap[Int, (Int, Int)]
   union_size_cache : FastMap[String, (Int, Int)]
@@ -3160,8 +3160,8 @@ fn check_struct_initializer(
     let item = items[item_index]
     if item.designators.length() > 0 {
       match item.designators[0] {
-        InitDesignator::Field(name~, ..) =>
-          match find_field_index(ctx, fields, name) {
+        InitDesignator::Field(name~, id~, ..) =>
+          match find_field_index(ctx, fields, name, id) {
             None => ()
             Some(idx) => index = idx + 1
           }
@@ -3362,7 +3362,7 @@ fn resolve_designator_type(
             return None
           }
         }
-      InitDesignator::Field(name~, ..) =>
+      InitDesignator::Field(name~, id~, ..) =>
         match strip_top_qualifiers(current) {
           CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
             let fields = resolve_struct_fields(
@@ -3378,7 +3378,7 @@ fn resolve_designator_type(
                 return None
               }
               Some(list) =>
-                match find_field(ctx, list, name) {
+                match find_field(ctx, list, name, id) {
                   Some(field) => current = field.ty
                   None => {
                     add_sem_error(ctx, loc, "unknown field '\{name}'")
@@ -3401,7 +3401,7 @@ fn resolve_designator_type(
                 return None
               }
               Some(list) =>
-                match find_field(ctx, list, name) {
+                match find_field(ctx, list, name, id) {
                   Some(field) => current = field.ty
                   None => {
                     add_sem_error(ctx, loc, "unknown field '\{name}'")
@@ -3943,9 +3943,14 @@ fn resolve_struct_fields(
 }
 
 ///|
-fn find_field(ctx : SemContext, fields : Array[Field], name : String) -> Field? {
+fn find_field(
+  ctx : SemContext,
+  fields : Array[Field],
+  name : String,
+  id : Int,
+) -> Field? {
   for field in fields {
-    if field.name == name {
+    if (id > 0 && field.id == id) || field.name == name {
       return Some(field)
     }
     if field.name == "" {
@@ -3961,7 +3966,7 @@ fn find_field(ctx : SemContext, fields : Array[Field], name : String) -> Field? 
           match nested {
             None => ()
             Some(list) =>
-              match find_field(ctx, list, name) {
+              match find_field(ctx, list, name, id) {
                 Some(found) => return Some(found)
                 None => ()
               }
@@ -3978,7 +3983,7 @@ fn find_field(ctx : SemContext, fields : Array[Field], name : String) -> Field? 
           match nested {
             None => ()
             Some(list) =>
-              match find_field(ctx, list, name) {
+              match find_field(ctx, list, name, id) {
                 Some(found) => return Some(found)
                 None => ()
               }
@@ -3996,9 +4001,10 @@ fn find_field_index(
   ctx : SemContext,
   fields : Array[Field],
   name : String,
+  id : Int,
 ) -> Int? {
   for i = 0; i < fields.length(); i = i + 1 {
-    if fields[i].name == name {
+    if (id > 0 && fields[i].id == id) || fields[i].name == name {
       return Some(i)
     }
     if fields[i].name == "" {
@@ -4014,7 +4020,7 @@ fn find_field_index(
           match nested {
             None => ()
             Some(list) =>
-              match find_field(ctx, list, name) {
+              match find_field(ctx, list, name, id) {
                 Some(_) => return Some(i)
                 None => ()
               }
@@ -4031,7 +4037,7 @@ fn find_field_index(
           match nested {
             None => ()
             Some(list) =>
-              match find_field(ctx, list, name) {
+              match find_field(ctx, list, name, id) {
                 Some(_) => return Some(i)
                 None => ()
               }
@@ -4050,14 +4056,18 @@ fn collect_member_cache_from_fields(
   fields : Array[Field],
   qual : TypeQual,
   loc : SrcLoc,
-  cache : FastMap[String, CType],
+  cache_by_name : FastMap[String, CType],
+  cache_by_id : FastMap[Int, CType],
 ) -> Unit {
   for field in fields {
     let (field_qual, _) = split_top_qual(field.ty)
     let combined = merge_qual(qual, field_qual)
     if field.name != "" {
-      if !cache.contains(field.name) {
-        cache.set(field.name, apply_qualifiers(field.ty, qual))
+      if !cache_by_name.contains(field.name) {
+        cache_by_name.set(field.name, apply_qualifiers(field.ty, qual))
+      }
+      if field.id > 0 && !cache_by_id.contains(field.id) {
+        cache_by_id.set(field.id, apply_qualifiers(field.ty, qual))
       }
       continue
     }
@@ -4079,7 +4089,8 @@ fn collect_member_cache_from_fields(
               def_val.fields,
               combined,
               loc,
-              cache,
+              cache_by_name,
+              cache_by_id,
             )
         }
       }
@@ -4100,7 +4111,8 @@ fn collect_member_cache_from_fields(
               def_val.fields,
               combined,
               loc,
-              cache,
+              cache_by_name,
+              cache_by_id,
             )
         }
       }
@@ -4110,14 +4122,22 @@ fn collect_member_cache_from_fields(
 }
 
 ///|
-fn build_member_cache(
+fn build_member_caches(
   ctx : SemContext,
   fields : Array[Field],
   loc : SrcLoc,
-) -> FastMap[String, CType] {
-  let cache : FastMap[String, CType] = fast_map_new()
-  collect_member_cache_from_fields(ctx, fields, empty_qual(), loc, cache)
-  cache
+) -> (FastMap[String, CType], FastMap[Int, CType]) {
+  let cache_by_name : FastMap[String, CType] = fast_map_new()
+  let cache_by_id : FastMap[Int, CType] = fast_map_new()
+  collect_member_cache_from_fields(
+    ctx,
+    fields,
+    empty_qual(),
+    loc,
+    cache_by_name,
+    cache_by_id,
+  )
+  (cache_by_name, cache_by_id)
 }
 
 ///|
@@ -4126,6 +4146,7 @@ fn member_access_search(
   ty : CType,
   qual : TypeQual,
   name : String,
+  id : Int,
   loc : SrcLoc,
 ) -> CType? {
   match strip_top_qualifiers(ty) {
@@ -4144,11 +4165,11 @@ fn member_access_search(
           for field in def_val.fields {
             let (field_qual, _) = split_top_qual(field.ty)
             let combined = merge_qual(qual, field_qual)
-            if field.name == name {
+            if (id > 0 && field.id == id) || field.name == name {
               return Some(apply_qualifiers(field.ty, qual))
             }
             if field.name == "" {
-              match member_access_search(ctx, field.ty, combined, name, loc) {
+              match member_access_search(ctx, field.ty, combined, name, id, loc) {
                 Some(found) => return Some(found)
                 None => ()
               }
@@ -4173,11 +4194,11 @@ fn member_access_search(
           for field in def_val.fields {
             let (field_qual, _) = split_top_qual(field.ty)
             let combined = merge_qual(qual, field_qual)
-            if field.name == name {
+            if (id > 0 && field.id == id) || field.name == name {
               return Some(apply_qualifiers(field.ty, qual))
             }
             if field.name == "" {
-              match member_access_search(ctx, field.ty, combined, name, loc) {
+              match member_access_search(ctx, field.ty, combined, name, id, loc) {
                 Some(found) => return Some(found)
                 None => ()
               }
@@ -4196,6 +4217,7 @@ fn member_access_type(
   ctx : SemContext,
   base_ty : CType,
   name : String,
+  id : Int,
   is_arrow~ : Bool,
   loc : SrcLoc,
 ) -> CType? {
@@ -4225,36 +4247,47 @@ fn member_access_type(
         None => None
         Some(def_val) =>
           if tag != "" {
-            let cache = if tag_id != 0 {
-              match ctx.struct_member_cache_by_id.get(tag_id) {
+            if id > 0 && tag_id != 0 {
+              let cache = match ctx.struct_member_cache_by_id.get(tag_id) {
                 Some(existing) => existing
                 None => {
-                  let built = build_member_cache(ctx, def_val.fields, loc)
-                  ctx.struct_member_cache_by_id.set(tag_id, built)
-                  ctx.struct_member_cache.set(tag, built)
-                  built
+                  let (built_name, built_id) = build_member_caches(ctx, def_val.fields, loc)
+                  ctx.struct_member_cache_by_id.set(tag_id, built_id)
+                  ctx.struct_member_cache.set(tag, built_name)
+                  built_id
+                }
+              }
+              match cache.get(id) {
+                Some(ty) => Some(apply_qualifiers(ty, obj_qual))
+                None => {
+                  let msg = "unknown field '\{name}' in \{type_to_string(obj_base)}"
+                  add_sem_error(ctx, loc, msg)
+                  None
                 }
               }
             } else {
-              match ctx.struct_member_cache.get(tag) {
+              let cache = match ctx.struct_member_cache.get(tag) {
                 Some(existing) => existing
                 None => {
-                  let built = build_member_cache(ctx, def_val.fields, loc)
-                  ctx.struct_member_cache.set(tag, built)
-                  built
+                  let (built_name, built_id) = build_member_caches(ctx, def_val.fields, loc)
+                  ctx.struct_member_cache.set(tag, built_name)
+                  if tag_id != 0 {
+                    ctx.struct_member_cache_by_id.set(tag_id, built_id)
+                  }
+                  built_name
+                }
+              }
+              match cache.get(name) {
+                Some(ty) => Some(apply_qualifiers(ty, obj_qual))
+                None => {
+                  let msg = "unknown field '\{name}' in \{type_to_string(obj_base)}"
+                  add_sem_error(ctx, loc, msg)
+                  None
                 }
               }
             }
-            match cache.get(name) {
-              Some(ty) => Some(apply_qualifiers(ty, obj_qual))
-              None => {
-                let msg = "unknown field '\{name}' in \{type_to_string(obj_base)}"
-                add_sem_error(ctx, loc, msg)
-                None
-              }
-            }
           } else {
-            match member_access_search(ctx, obj_base, obj_qual, name, loc) {
+            match member_access_search(ctx, obj_base, obj_qual, name, id, loc) {
               Some(ty) => Some(ty)
               None => {
                 let msg = "unknown field '\{name}' in \{type_to_string(obj_base)}"
@@ -4278,36 +4311,47 @@ fn member_access_type(
         None => None
         Some(def_val) =>
           if tag != "" {
-            let cache = if tag_id != 0 {
-              match ctx.union_member_cache_by_id.get(tag_id) {
+            if id > 0 && tag_id != 0 {
+              let cache = match ctx.union_member_cache_by_id.get(tag_id) {
                 Some(existing) => existing
                 None => {
-                  let built = build_member_cache(ctx, def_val.fields, loc)
-                  ctx.union_member_cache_by_id.set(tag_id, built)
-                  ctx.union_member_cache.set(tag, built)
-                  built
+                  let (built_name, built_id) = build_member_caches(ctx, def_val.fields, loc)
+                  ctx.union_member_cache_by_id.set(tag_id, built_id)
+                  ctx.union_member_cache.set(tag, built_name)
+                  built_id
+                }
+              }
+              match cache.get(id) {
+                Some(ty) => Some(apply_qualifiers(ty, obj_qual))
+                None => {
+                  let msg = "unknown field '\{name}' in \{type_to_string(obj_base)}"
+                  add_sem_error(ctx, loc, msg)
+                  None
                 }
               }
             } else {
-              match ctx.union_member_cache.get(tag) {
+              let cache = match ctx.union_member_cache.get(tag) {
                 Some(existing) => existing
                 None => {
-                  let built = build_member_cache(ctx, def_val.fields, loc)
-                  ctx.union_member_cache.set(tag, built)
-                  built
+                  let (built_name, built_id) = build_member_caches(ctx, def_val.fields, loc)
+                  ctx.union_member_cache.set(tag, built_name)
+                  if tag_id != 0 {
+                    ctx.union_member_cache_by_id.set(tag_id, built_id)
+                  }
+                  built_name
+                }
+              }
+              match cache.get(name) {
+                Some(ty) => Some(apply_qualifiers(ty, obj_qual))
+                None => {
+                  let msg = "unknown field '\{name}' in \{type_to_string(obj_base)}"
+                  add_sem_error(ctx, loc, msg)
+                  None
                 }
               }
             }
-            match cache.get(name) {
-              Some(ty) => Some(apply_qualifiers(ty, obj_qual))
-              None => {
-                let msg = "unknown field '\{name}' in \{type_to_string(obj_base)}"
-                add_sem_error(ctx, loc, msg)
-                None
-              }
-            }
           } else {
-            match member_access_search(ctx, obj_base, obj_qual, name, loc) {
+            match member_access_search(ctx, obj_base, obj_qual, name, id, loc) {
               Some(ty) => Some(ty)
               None => {
                 let msg = "unknown field '\{name}' in \{type_to_string(obj_base)}"
@@ -4383,8 +4427,8 @@ fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
         Some(ty) => Some(ty)
         None => None
       }
-    Expr::Member(base~, name~, is_arrow~, loc~) =>
-      member_access_type(ctx, type_of_expr(ctx, base), name, is_arrow~, loc)
+    Expr::Member(base~, name~, id~, is_arrow~, loc~) =>
+      member_access_type(ctx, type_of_expr(ctx, base), name, id, is_arrow~, loc)
     Expr::Unary(op=UnaryOp::Deref, expr=inner, loc~) => {
       let inner_ty = type_of_expr(ctx, inner)
       match strip_top_qualifiers(inner_ty) {
@@ -4432,8 +4476,8 @@ fn type_of_lvalue_optional(ctx : SemContext, expr : Expr) -> CType? {
         Some(ty) => Some(ty)
         None => None
       }
-    Expr::Member(base~, name~, is_arrow~, loc~) =>
-      member_access_type(ctx, type_of_expr_impl(ctx, base), name, is_arrow~, loc)
+    Expr::Member(base~, name~, id~, is_arrow~, loc~) =>
+      member_access_type(ctx, type_of_expr_impl(ctx, base), name, id, is_arrow~, loc)
     Expr::Unary(op=UnaryOp::Deref, expr=inner, loc~) => {
       let inner_ty = type_of_expr_impl(ctx, inner)
       match strip_top_qualifiers(inner_ty) {
@@ -4900,12 +4944,12 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
         Some(ty) => decay_type(ty)
         None => default_int_type()
       }
-    Expr::Member(base~, name~, is_arrow~, loc~) => {
+    Expr::Member(base~, name~, id~, is_arrow~, loc~) => {
       let base_ty = type_of_expr(ctx, base)
       if !is_arrow && !expr_is_lvalue_simple(base) {
         record_agg_temp_for_type(ctx, base_ty, loc)
       }
-      match member_access_type(ctx, base_ty, name, is_arrow~, loc) {
+      match member_access_type(ctx, base_ty, name, id, is_arrow~, loc) {
         Some(ty) => decay_type(ty)
         None => default_int_type()
       }

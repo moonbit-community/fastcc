@@ -1617,11 +1617,11 @@ fn parse_designator_list(p : Parser) -> (Array[InitDesignator], SrcLoc) {
   while true {
     if match_token(p, Dot) is Some(dot_tok) {
       start_loc = dot_tok.loc
-      let name = match expect_ident(p, "expected field name") {
-        None => ""
-        Some(id) => id.lexeme
+      let (name, id) = match expect_ident(p, "expected field name") {
+        None => ("", 0)
+        Some(tok) => (tok.lexeme, tok.id)
       }
-      designators.push(InitDesignator::Field(name~, loc=dot_tok.loc))
+      designators.push(InitDesignator::Field(name~, id~, loc=dot_tok.loc))
       continue
     }
     if match_token(p, LBracket) is Some(lbrack) {
@@ -1636,7 +1636,7 @@ fn parse_designator_list(p : Parser) -> (Array[InitDesignator], SrcLoc) {
       start_loc = name_tok.loc
       expect(p, Colon, "expected ':' after designator") |> ignore
       designators.push(
-        InitDesignator::Field(name=name_tok.lexeme, loc=name_tok.loc),
+        InitDesignator::Field(name=name_tok.lexeme, id=name_tok.id, loc=name_tok.loc),
       )
       continue
     }
@@ -1964,6 +1964,7 @@ fn parse_struct_fields(p : Parser) -> Array[RecordItem] {
                 items.push(
                   RecordItem::Field({
                     name: field_decl.name,
+                    id: field_decl.id,
                     ty: adjusted_ty,
                     bit_width,
                     attrs: combined_attrs,
@@ -2898,20 +2899,20 @@ fn parse_postfix_tail(p : Parser, base : Expr) -> Expr {
       }
       Dot => {
         let tok = advance_token(p)
-        let name = match expect_ident(p, "expected field name") {
-          None => ""
-          Some(id) => id.lexeme
+        let (name, id) = match expect_ident(p, "expected field name") {
+          None => ("", 0)
+          Some(tok) => (tok.lexeme, tok.id)
         }
-        expr = Expr::Member(base=expr, name~, is_arrow=false, loc=tok.loc)
+        expr = Expr::Member(base=expr, name~, id~, is_arrow=false, loc=tok.loc)
         continue
       }
       Arrow => {
         let tok = advance_token(p)
-        let name = match expect_ident(p, "expected field name") {
-          None => ""
-          Some(id) => id.lexeme
+        let (name, id) = match expect_ident(p, "expected field name") {
+          None => ("", 0)
+          Some(tok) => (tok.lexeme, tok.id)
         }
-        expr = Expr::Member(base=expr, name~, is_arrow=true, loc=tok.loc)
+        expr = Expr::Member(base=expr, name~, id~, is_arrow=true, loc=tok.loc)
         continue
       }
       PlusPlus => {

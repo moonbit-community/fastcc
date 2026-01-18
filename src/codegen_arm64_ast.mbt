@@ -2314,7 +2314,7 @@ fn resolve_init_designator_offset_type(
             return None
           }
         }
-      InitDesignator::Field(name~, loc=des_loc) =>
+      InitDesignator::Field(name~, id~, loc=des_loc) =>
         match strip_top_qualifiers(current) {
           CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
             let fields = resolve_struct_fields(
@@ -2330,7 +2330,7 @@ fn resolve_init_designator_offset_type(
                 return None
               }
               Some(list) =>
-                match find_field(sem, list, name) {
+                match find_field(sem, list, name, id) {
                   None => {
                     add_error(bag, des_loc, "codegen: unknown field '\{name}'")
                     return None
@@ -2360,7 +2360,7 @@ fn resolve_init_designator_offset_type(
                 return None
               }
               Some(list) =>
-                match find_field(sem, list, name) {
+                match find_field(sem, list, name, id) {
                   None => {
                     add_error(bag, des_loc, "codegen: unknown field '\{name}'")
                     return None
@@ -2435,10 +2435,10 @@ fn resolve_init_designator_access_info(
             return None
           }
         }
-      InitDesignator::Field(name~, loc=des_loc) =>
+      InitDesignator::Field(name~, id~, loc=des_loc) =>
         match strip_top_qualifiers(current) {
           CType::Struct(..) | CType::Union(..) => {
-            match record_field_access_info(sem, current, name, des_loc) {
+            match record_field_access_info(sem, current, name, id, des_loc) {
               None => {
                 add_error(bag, des_loc, "codegen: unknown field '\{name}'")
                 return None
@@ -2815,8 +2815,8 @@ fn gen_initializer_to_addr(
             let item = items[item_idx]
             if item.designators.length() > 0 {
               match item.designators[0] {
-                InitDesignator::Field(name~, ..) =>
-                  match find_field_index(alloc.sem, list, name) {
+                InitDesignator::Field(name~, id~, ..) =>
+                  match find_field_index(alloc.sem, list, name, id) {
                     None => ()
                     Some(idx) => index = idx + 1
                   }
@@ -2953,7 +2953,13 @@ fn gen_initializer_to_addr(
                   }
                   if !used_elision {
                     if field.bit_width is Some(_) {
-                      match record_field_access_info(alloc.sem, ty, field.name, item.loc) {
+                      match record_field_access_info(
+                        alloc.sem,
+                        ty,
+                        field.name,
+                        field.id,
+                        item.loc,
+                      ) {
                         None => add_error(bag, item.loc, "codegen: missing bitfield info")
                         Some(info) => {
                           let info_at = {
@@ -3108,7 +3114,13 @@ fn gen_initializer_to_addr(
           } else if list.length() > 0 {
             let field = list[0]
             if field.bit_width is Some(_) {
-              match record_field_access_info(alloc.sem, ty, field.name, first.loc) {
+              match record_field_access_info(
+                alloc.sem,
+                ty,
+                field.name,
+                field.id,
+                first.loc,
+              ) {
                 None => add_error(bag, first.loc, "codegen: missing bitfield info")
                 Some(info) => {
                   let info_at = {
@@ -5149,7 +5161,7 @@ fn gen_lvalue_addr(
         ),
       )
     }
-    Expr::Member(base~, name~, is_arrow~, loc~) => {
+    Expr::Member(base~, name~, id~, is_arrow~, loc~) => {
       let base_ty = type_of_expr(alloc.sem, base)
       if is_arrow {
         gen_expr_ptr(emitter, alloc, syms, pool, cstrings, base, dst, bag)
@@ -5197,9 +5209,9 @@ fn gen_lvalue_addr(
       } else {
         base_ty
       }
-      let off = match eval_builtin_offsetof(alloc.sem, record_ty, [name], loc) {
+      let off = match record_field_access_info(alloc.sem, record_ty, name, id, loc) {
         None => 0
-        Some(v) => v
+        Some(info) => info.offset
       }
       if off != 0 {
         if off >= 0 && off <= 0xfff {
@@ -5243,6 +5255,7 @@ fn struct_field_access_info(
   def : RecordDef,
   struct_attrs : Attributes,
   name : String,
+  id : Int,
   loc : SrcLoc,
 ) -> FieldAccessInfo? {
   let fields = def.fields
@@ -5286,7 +5299,7 @@ fn struct_field_access_info(
           bit_unit_size = base_size
           bit_offset = 0
         }
-        if field.name == name {
+        if (id > 0 && field.id == id) || field.name == name {
           return Some({
             offset: size,
             ty: field.ty,
@@ -5345,7 +5358,7 @@ fn struct_field_access_info(
           Some(value) => adjusted_align = value
         }
         size = align_to(size, adjusted_align)
-        if field.name == name {
+        if (id > 0 && field.id == id) || field.name == name {
           return Some({
             offset: size,
             ty: field.ty,
@@ -5356,7 +5369,7 @@ fn struct_field_access_info(
         if field.name == "" {
           match strip_top_qualifiers(field.ty) {
             CType::Struct(..) | CType::Union(..) =>
-              match record_field_access_info(ctx, field.ty, name, loc) {
+              match record_field_access_info(ctx, field.ty, name, id, loc) {
                 None => ()
                 Some(inner) =>
                   return Some({
@@ -5382,6 +5395,7 @@ fn union_field_access_info(
   def : RecordDef,
   union_attrs : Attributes,
   name : String,
+  id : Int,
   loc : SrcLoc,
 ) -> FieldAccessInfo? {
   let fields = def.fields
@@ -5389,7 +5403,7 @@ fn union_field_access_info(
   for field in fields {
     match field.bit_width {
       Some(expr) => {
-        if field.name == name {
+        if (id > 0 && field.id == id) || field.name == name {
           let width = match const_int_from_expr(ctx, expr, field.loc) {
             Some(v) => v
             None => 0
@@ -5406,7 +5420,7 @@ fn union_field_access_info(
       }
       None => ()
     }
-    if field.name == name {
+    if (id > 0 && field.id == id) || field.name == name {
       return Some({
         offset: 0,
         ty: field.ty,
@@ -5417,7 +5431,7 @@ fn union_field_access_info(
     if field.name == "" {
       match strip_top_qualifiers(field.ty) {
         CType::Struct(..) | CType::Union(..) =>
-          match record_field_access_info(ctx, field.ty, name, loc) {
+          match record_field_access_info(ctx, field.ty, name, id, loc) {
             None => ()
             Some(inner) =>
               return Some({
@@ -5447,12 +5461,25 @@ fn add_field_access_entry(
 }
 
 ///|
+fn add_field_access_entry_by_id(
+  cache : FastMap[Int, FieldAccessInfo],
+  id : Int,
+  info : FieldAccessInfo,
+) -> Unit {
+  if id <= 0 || cache.contains(id) {
+    return
+  }
+  cache.set(id, info)
+}
+
+///|
 fn collect_struct_field_access_cache(
   ctx : SemContext,
   fields : Array[Field],
   attrs : Attributes,
   loc : SrcLoc,
   cache : FastMap[String, FieldAccessInfo],
+  cache_by_id : FastMap[Int, FieldAccessInfo],
 ) -> Unit {
   let mut size = 0
   let mut bit_unit_bits = 0
@@ -5493,12 +5520,14 @@ fn collect_struct_field_access_cache(
           bit_unit_size = base_size
           bit_offset = 0
         }
-        add_field_access_entry(cache, field.name, {
+        let info = {
           offset: size,
           ty: field.ty,
           bit_offset: Some(bit_offset),
           bit_width: Some(width),
-        })
+        }
+        add_field_access_entry(cache, field.name, info)
+        add_field_access_entry_by_id(cache_by_id, field.id, info)
         bit_offset = bit_offset + width
         if bit_offset == bit_unit_bits {
           size = size + bit_unit_size
@@ -5550,22 +5579,36 @@ fn collect_struct_field_access_cache(
           Some(value) => adjusted_align = value
         }
         size = align_to(size, adjusted_align)
-        add_field_access_entry(cache, field.name, {
+        let info = {
           offset: size,
           ty: field.ty,
           bit_offset: None,
           bit_width: None,
-        })
+        }
+        add_field_access_entry(cache, field.name, info)
+        add_field_access_entry_by_id(cache_by_id, field.id, info)
         if field.name == "" {
           match strip_top_qualifiers(field.ty) {
             CType::Struct(..) | CType::Union(..) => {
-              let nested = build_record_field_access_cache(ctx, field.ty, loc)
-              for nested_name, info in nested {
+              let (nested_by_name, nested_by_id) = build_record_field_access_caches(
+                ctx,
+                field.ty,
+                loc,
+              )
+              for nested_name, nested_info in nested_by_name {
                 add_field_access_entry(cache, nested_name, {
-                  offset: size + info.offset,
-                  ty: info.ty,
-                  bit_offset: info.bit_offset,
-                  bit_width: info.bit_width,
+                  offset: size + nested_info.offset,
+                  ty: nested_info.ty,
+                  bit_offset: nested_info.bit_offset,
+                  bit_width: nested_info.bit_width,
+                })
+              }
+              for nested_id, nested_info in nested_by_id {
+                add_field_access_entry_by_id(cache_by_id, nested_id, {
+                  offset: size + nested_info.offset,
+                  ty: nested_info.ty,
+                  bit_offset: nested_info.bit_offset,
+                  bit_width: nested_info.bit_width,
                 })
               }
             }
@@ -5584,6 +5627,7 @@ fn collect_union_field_access_cache(
   fields : Array[Field],
   loc : SrcLoc,
   cache : FastMap[String, FieldAccessInfo],
+  cache_by_id : FastMap[Int, FieldAccessInfo],
 ) -> Unit {
   for field in fields {
     match field.bit_width {
@@ -5593,33 +5637,49 @@ fn collect_union_field_access_cache(
           None => 0
         }
         if width > 0 {
-          add_field_access_entry(cache, field.name, {
+          let info = {
             offset: 0,
             ty: field.ty,
             bit_offset: Some(0),
             bit_width: Some(width),
-          })
+          }
+          add_field_access_entry(cache, field.name, info)
+          add_field_access_entry_by_id(cache_by_id, field.id, info)
         }
         continue
       }
       None => ()
     }
-    add_field_access_entry(cache, field.name, {
+    let info = {
       offset: 0,
       ty: field.ty,
       bit_offset: None,
       bit_width: None,
-    })
+    }
+    add_field_access_entry(cache, field.name, info)
+    add_field_access_entry_by_id(cache_by_id, field.id, info)
     if field.name == "" {
       match strip_top_qualifiers(field.ty) {
         CType::Struct(..) | CType::Union(..) => {
-          let nested = build_record_field_access_cache(ctx, field.ty, loc)
-          for nested_name, info in nested {
+          let (nested_by_name, nested_by_id) = build_record_field_access_caches(
+            ctx,
+            field.ty,
+            loc,
+          )
+          for nested_name, nested_info in nested_by_name {
             add_field_access_entry(cache, nested_name, {
-              offset: info.offset,
-              ty: info.ty,
-              bit_offset: info.bit_offset,
-              bit_width: info.bit_width,
+              offset: nested_info.offset,
+              ty: nested_info.ty,
+              bit_offset: nested_info.bit_offset,
+              bit_width: nested_info.bit_width,
+            })
+          }
+          for nested_id, nested_info in nested_by_id {
+            add_field_access_entry_by_id(cache_by_id, nested_id, {
+              offset: nested_info.offset,
+              ty: nested_info.ty,
+              bit_offset: nested_info.bit_offset,
+              bit_width: nested_info.bit_width,
             })
           }
         }
@@ -5630,29 +5690,31 @@ fn collect_union_field_access_cache(
 }
 
 ///|
-fn build_struct_field_access_cache(
+fn build_struct_field_access_caches(
   ctx : SemContext,
   def : RecordDef,
   struct_attrs : Attributes,
   loc : SrcLoc,
-) -> FastMap[String, FieldAccessInfo] {
-  let cache : FastMap[String, FieldAccessInfo] = fast_map_new()
+) -> (FastMap[String, FieldAccessInfo], FastMap[Int, FieldAccessInfo]) {
+  let cache_by_name : FastMap[String, FieldAccessInfo] = fast_map_new()
+  let cache_by_id : FastMap[Int, FieldAccessInfo] = fast_map_new()
   let attrs = merge_attrs(def.attrs, struct_attrs)
-  collect_struct_field_access_cache(ctx, def.fields, attrs, loc, cache)
-  cache
+  collect_struct_field_access_cache(ctx, def.fields, attrs, loc, cache_by_name, cache_by_id)
+  (cache_by_name, cache_by_id)
 }
 
 ///|
-fn build_union_field_access_cache(
+fn build_union_field_access_caches(
   ctx : SemContext,
   def : RecordDef,
   union_attrs : Attributes,
   loc : SrcLoc,
-) -> FastMap[String, FieldAccessInfo] {
-  let cache : FastMap[String, FieldAccessInfo] = fast_map_new()
+) -> (FastMap[String, FieldAccessInfo], FastMap[Int, FieldAccessInfo]) {
+  let cache_by_name : FastMap[String, FieldAccessInfo] = fast_map_new()
+  let cache_by_id : FastMap[Int, FieldAccessInfo] = fast_map_new()
   let _attrs = merge_attrs(def.attrs, union_attrs)
-  collect_union_field_access_cache(ctx, def.fields, loc, cache)
-  cache
+  collect_union_field_access_cache(ctx, def.fields, loc, cache_by_name, cache_by_id)
+  (cache_by_name, cache_by_id)
 }
 
 ///|
@@ -5660,6 +5722,7 @@ fn record_field_access_info(
   ctx : SemContext,
   record_ty : CType,
   name : String,
+  id : Int,
   loc : SrcLoc,
 ) -> FieldAccessInfo? {
   let resolved = resolve_type(ctx, record_ty, loc) |> strip_top_qualifiers
@@ -5682,29 +5745,43 @@ fn record_field_access_info(
             } else {
               ctx.struct_defs.contains(tag)
             }) {
-            let cache = if tag_id != 0 {
-              match ctx.struct_field_access_cache_by_id.get(tag_id) {
+            if id > 0 && tag_id != 0 {
+              let cache = match ctx.struct_field_access_cache_by_id.get(tag_id) {
                 Some(existing) => existing
                 None => {
-                  let built = build_struct_field_access_cache(ctx, def, struct_attrs, loc)
-                  ctx.struct_field_access_cache_by_id.set(tag_id, built)
-                  ctx.struct_field_access_cache.set(tag, built)
-                  built
+                  let (built_name, built_id) = build_struct_field_access_caches(
+                    ctx,
+                    def,
+                    struct_attrs,
+                    loc,
+                  )
+                  ctx.struct_field_access_cache_by_id.set(tag_id, built_id)
+                  ctx.struct_field_access_cache.set(tag, built_name)
+                  built_id
                 }
               }
+              cache.get(id)
             } else {
-              match ctx.struct_field_access_cache.get(tag) {
+              let cache = match ctx.struct_field_access_cache.get(tag) {
                 Some(existing) => existing
                 None => {
-                  let built = build_struct_field_access_cache(ctx, def, struct_attrs, loc)
-                  ctx.struct_field_access_cache.set(tag, built)
-                  built
+                  let (built_name, built_id) = build_struct_field_access_caches(
+                    ctx,
+                    def,
+                    struct_attrs,
+                    loc,
+                  )
+                  ctx.struct_field_access_cache.set(tag, built_name)
+                  if tag_id != 0 {
+                    ctx.struct_field_access_cache_by_id.set(tag_id, built_id)
+                  }
+                  built_name
                 }
               }
+              cache.get(name)
             }
-            cache.get(name)
           } else {
-            struct_field_access_info(ctx, def, struct_attrs, name, loc)
+            struct_field_access_info(ctx, def, struct_attrs, name, id, loc)
           }
       }
     CType::Union(name=tag, id=tag_id, fields=field_list, attrs=union_attrs) =>
@@ -5725,29 +5802,43 @@ fn record_field_access_info(
             } else {
               ctx.union_defs.contains(tag)
             }) {
-            let cache = if tag_id != 0 {
-              match ctx.union_field_access_cache_by_id.get(tag_id) {
+            if id > 0 && tag_id != 0 {
+              let cache = match ctx.union_field_access_cache_by_id.get(tag_id) {
                 Some(existing) => existing
                 None => {
-                  let built = build_union_field_access_cache(ctx, def, union_attrs, loc)
-                  ctx.union_field_access_cache_by_id.set(tag_id, built)
-                  ctx.union_field_access_cache.set(tag, built)
-                  built
+                  let (built_name, built_id) = build_union_field_access_caches(
+                    ctx,
+                    def,
+                    union_attrs,
+                    loc,
+                  )
+                  ctx.union_field_access_cache_by_id.set(tag_id, built_id)
+                  ctx.union_field_access_cache.set(tag, built_name)
+                  built_id
                 }
               }
+              cache.get(id)
             } else {
-              match ctx.union_field_access_cache.get(tag) {
+              let cache = match ctx.union_field_access_cache.get(tag) {
                 Some(existing) => existing
                 None => {
-                  let built = build_union_field_access_cache(ctx, def, union_attrs, loc)
-                  ctx.union_field_access_cache.set(tag, built)
-                  built
+                  let (built_name, built_id) = build_union_field_access_caches(
+                    ctx,
+                    def,
+                    union_attrs,
+                    loc,
+                  )
+                  ctx.union_field_access_cache.set(tag, built_name)
+                  if tag_id != 0 {
+                    ctx.union_field_access_cache_by_id.set(tag_id, built_id)
+                  }
+                  built_name
                 }
               }
+              cache.get(name)
             }
-            cache.get(name)
           } else {
-            union_field_access_info(ctx, def, union_attrs, name, loc)
+            union_field_access_info(ctx, def, union_attrs, name, id, loc)
           }
       }
     _ => None
@@ -5755,11 +5846,11 @@ fn record_field_access_info(
 }
 
 ///|
-fn build_record_field_access_cache(
+fn build_record_field_access_caches(
   ctx : SemContext,
   record_ty : CType,
   loc : SrcLoc,
-) -> FastMap[String, FieldAccessInfo] {
+) -> (FastMap[String, FieldAccessInfo], FastMap[Int, FieldAccessInfo]) {
   let resolved = resolve_type(ctx, record_ty, loc) |> strip_top_qualifiers
   match resolved {
     CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=struct_attrs) =>
@@ -5771,7 +5862,7 @@ fn build_record_field_access_cache(
         is_union=false,
         loc,
       ) {
-        None => fast_map_new()
+        None => (fast_map_new(), fast_map_new())
         Some(def) =>
           if tag != "" &&
             attrs_layout_empty(struct_attrs) &&
@@ -5780,23 +5871,30 @@ fn build_record_field_access_cache(
             } else {
               ctx.struct_defs.contains(tag)
             }) {
-            match (if tag_id != 0 {
+            let by_name = ctx.struct_field_access_cache.get(tag)
+            let by_id = if tag_id != 0 {
               ctx.struct_field_access_cache_by_id.get(tag_id)
             } else {
-              ctx.struct_field_access_cache.get(tag)
-            }) {
-              Some(existing) => existing
-              None => {
-                let built = build_struct_field_access_cache(ctx, def, struct_attrs, loc)
+              None
+            }
+            match (by_name, by_id) {
+              (Some(name_cache), Some(id_cache)) => (name_cache, id_cache)
+              _ => {
+                let (built_name, built_id) = build_struct_field_access_caches(
+                  ctx,
+                  def,
+                  struct_attrs,
+                  loc,
+                )
+                ctx.struct_field_access_cache.set(tag, built_name)
                 if tag_id != 0 {
-                  ctx.struct_field_access_cache_by_id.set(tag_id, built)
+                  ctx.struct_field_access_cache_by_id.set(tag_id, built_id)
                 }
-                ctx.struct_field_access_cache.set(tag, built)
-                built
+                (built_name, built_id)
               }
             }
           } else {
-            build_struct_field_access_cache(ctx, def, struct_attrs, loc)
+            build_struct_field_access_caches(ctx, def, struct_attrs, loc)
           }
       }
     CType::Union(name=tag, id=tag_id, fields=field_list, attrs=union_attrs) =>
@@ -5808,7 +5906,7 @@ fn build_record_field_access_cache(
         is_union=true,
         loc,
       ) {
-        None => fast_map_new()
+        None => (fast_map_new(), fast_map_new())
         Some(def) =>
           if tag != "" &&
             attrs_layout_empty(union_attrs) &&
@@ -5817,26 +5915,33 @@ fn build_record_field_access_cache(
             } else {
               ctx.union_defs.contains(tag)
             }) {
-            match (if tag_id != 0 {
+            let by_name = ctx.union_field_access_cache.get(tag)
+            let by_id = if tag_id != 0 {
               ctx.union_field_access_cache_by_id.get(tag_id)
             } else {
-              ctx.union_field_access_cache.get(tag)
-            }) {
-              Some(existing) => existing
-              None => {
-                let built = build_union_field_access_cache(ctx, def, union_attrs, loc)
+              None
+            }
+            match (by_name, by_id) {
+              (Some(name_cache), Some(id_cache)) => (name_cache, id_cache)
+              _ => {
+                let (built_name, built_id) = build_union_field_access_caches(
+                  ctx,
+                  def,
+                  union_attrs,
+                  loc,
+                )
+                ctx.union_field_access_cache.set(tag, built_name)
                 if tag_id != 0 {
-                  ctx.union_field_access_cache_by_id.set(tag_id, built)
+                  ctx.union_field_access_cache_by_id.set(tag_id, built_id)
                 }
-                ctx.union_field_access_cache.set(tag, built)
-                built
+                (built_name, built_id)
               }
             }
           } else {
-            build_union_field_access_cache(ctx, def, union_attrs, loc)
+            build_union_field_access_caches(ctx, def, union_attrs, loc)
           }
       }
-    _ => fast_map_new()
+    _ => (fast_map_new(), fast_map_new())
   }
 }
 
@@ -5845,6 +5950,7 @@ fn member_access_info(
   sem : SemContext,
   base : Expr,
   name : String,
+  id : Int,
   is_arrow : Bool,
   loc : SrcLoc,
 ) -> FieldAccessInfo? {
@@ -5857,7 +5963,7 @@ fn member_access_info(
   } else {
     base_ty
   }
-  record_field_access_info(sem, record_ty, name, loc)
+  record_field_access_info(sem, record_ty, name, id, loc)
 }
 
 ///|
@@ -5865,6 +5971,7 @@ fn member_access_info_from_base_type(
   sem : SemContext,
   base_ty : CType,
   name : String,
+  id : Int,
   is_arrow : Bool,
   loc : SrcLoc,
 ) -> FieldAccessInfo? {
@@ -5876,7 +5983,7 @@ fn member_access_info_from_base_type(
   } else {
     base_ty
   }
-  record_field_access_info(sem, record_ty, name, loc)
+  record_field_access_info(sem, record_ty, name, id, loc)
 }
 
 ///|
@@ -5885,8 +5992,8 @@ fn member_bitfield_info(
   expr : Expr,
 ) -> (Expr, Bool, FieldAccessInfo)? {
   match expr {
-    Expr::Member(base~, name~, is_arrow~, loc~) =>
-      match member_access_info(alloc.sem, base, name, is_arrow, loc) {
+    Expr::Member(base~, name~, id~, is_arrow~, loc~) =>
+      match member_access_info(alloc.sem, base, name, id, is_arrow, loc) {
         Some(info) =>
           match info.bit_width {
             Some(_) => Some((base, is_arrow, info))
@@ -7027,12 +7134,13 @@ fn gen_expr_int32(
       )
       give_reg(pool, addr)
     }
-    Expr::Member(base~, name~, is_arrow~, loc~) => {
+    Expr::Member(base~, name~, id~, is_arrow~, loc~) => {
       let base_ty = type_of_expr(alloc.sem, base)
       let info = member_access_info_from_base_type(
         alloc.sem,
         base_ty,
         name,
+        id,
         is_arrow,
         loc,
       )
@@ -9009,7 +9117,7 @@ fn gen_expr_ptr(
         }
       }
     }
-    Expr::Member(base~, name~, is_arrow~, loc~) => {
+    Expr::Member(base~, name~, id~, is_arrow~, loc~) => {
       let addr = take_reg(pool) catch {
         err => {
           add_error(bag, loc, err.to_string())
@@ -9021,6 +9129,7 @@ fn gen_expr_ptr(
         alloc.sem,
         base_ty,
         name,
+        id,
         is_arrow,
         loc,
       )
@@ -11582,7 +11691,7 @@ fn const_pointer_from_lvalue(
     Expr::Ident(name~, id~, ..) => Some((sym_for_ident(syms, name, id=id), 0))
     Expr::StringLit(value~, ..) =>
       Some((cstring_sym_or_add(cstrings, syms, value), 0))
-    Expr::Member(base~, name~, is_arrow~, loc~) => {
+    Expr::Member(base~, name~, id~, is_arrow~, loc~) => {
       let base_ptr = if is_arrow {
         const_pointer_from_expr(sem, syms, cstrings, base)
       } else {
@@ -11591,7 +11700,7 @@ fn const_pointer_from_lvalue(
       match base_ptr {
         None => None
         Some((sym, addend)) =>
-          match member_access_info(sem, base, name, is_arrow, loc) {
+          match member_access_info(sem, base, name, id, is_arrow, loc) {
             None => None
             Some(info) =>
               match info.bit_width {
@@ -11942,8 +12051,8 @@ fn fill_global_initializer_bytes(
                   }
               }
               match item.designators[0] {
-                InitDesignator::Field(name~, ..) =>
-                  match find_field_index(sem, list, name) {
+                InitDesignator::Field(name~, id~, ..) =>
+                  match find_field_index(sem, list, name, id) {
                     None => ()
                     Some(idx) => index = idx + 1
                   }
@@ -12013,7 +12122,7 @@ fn fill_global_initializer_bytes(
                   }
                   if !used_elision {
                     if field.bit_width is Some(_) {
-                      match record_field_access_info(sem, ty, field.name, item.loc) {
+                      match record_field_access_info(sem, ty, field.name, field.id, item.loc) {
                         None => add_error(bag, item.loc, "codegen: missing bitfield info")
                         Some(info) =>
                           match info.bit_width {
@@ -12148,7 +12257,7 @@ fn fill_global_initializer_bytes(
           } else if list.length() > 0 {
             let field = list[0]
             if field.bit_width is Some(_) {
-              match record_field_access_info(sem, ty, field.name, first.loc) {
+              match record_field_access_info(sem, ty, field.name, field.id, first.loc) {
                 None => add_error(bag, first.loc, "codegen: missing bitfield info")
                 Some(info) =>
                   match info.bit_width {
