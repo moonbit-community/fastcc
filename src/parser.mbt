@@ -4,10 +4,12 @@ struct Parser {
   mut current : Token
   mut lookahead : Token
   diags : DiagBag
-  type_scopes : Array[FastMap[Int, CType]]
   typedef_counts : Array[Int]
   typedef_values : Array[CType?]
-  typedef_overrides : Array[Array[(Int, CType?)]]
+  typedef_scope_levels : Array[Int]
+  typedef_scope_stack : Array[Int]
+  mut next_typedef_scope_id : Int
+  typedef_overrides : Array[Array[(Int, CType?, Int)]]
   pending_typedef_scopes : Array[Bool]
   mut anon_tag_id : Int
   builtin_ids : BuiltinIds
@@ -22,9 +24,11 @@ struct BuiltinIds {
 
 ///|
 fn new_parser(pp : Preprocessor) -> Parser {
-  let builtins : FastMap[Int, CType] = fast_map_new()
   let typedef_counts : Array[Int] = []
   let typedef_values : Array[CType?] = []
+  let typedef_scope_levels : Array[Int] = []
+  let typedef_scope_stack : Array[Int] = [1]
+  let next_typedef_scope_id = 2
   let builtin_defs = [
     ("__builtin_va_list", CType::Pointer(CType::Void)),
     ("_Float16", CType::Int(kind=CIntKind::Short, unsigned=true)),
@@ -32,10 +36,15 @@ fn new_parser(pp : Preprocessor) -> Parser {
   for def in builtin_defs {
     let (name, ty) = def
     let (_, id) = pp.interner.intern_view_with_id(name[:])
-    builtins.set(id, ty)
-    ensure_typedef_capacity_with(typedef_counts, typedef_values, id)
+    ensure_typedef_capacity_with(
+      typedef_counts,
+      typedef_values,
+      typedef_scope_levels,
+      id,
+    )
     typedef_counts[id - 1] = 1
     typedef_values[id - 1] = Some(ty)
+    typedef_scope_levels[id - 1] = 1
   }
   let current = next_pp_token(pp)
   let lookahead = next_pp_token(pp)
@@ -49,9 +58,11 @@ fn new_parser(pp : Preprocessor) -> Parser {
     current,
     lookahead,
     diags: pp.diags,
-    type_scopes: [builtins],
     typedef_counts,
     typedef_values,
+    typedef_scope_levels,
+    typedef_scope_stack,
+    next_typedef_scope_id,
     typedef_overrides: [[]],
     pending_typedef_scopes: [],
     anon_tag_id: 0,
@@ -3273,6 +3284,7 @@ fn expr_loc(expr : Expr) -> SrcLoc {
 fn ensure_typedef_capacity_with(
   counts : Array[Int],
   values : Array[CType?],
+  scope_levels : Array[Int],
   id : Int,
 ) -> Unit {
   if id <= 0 {
@@ -3282,13 +3294,19 @@ fn ensure_typedef_capacity_with(
   while idx < id {
     counts.push(0)
     values.push(None)
+    scope_levels.push(0)
     idx = idx + 1
   }
 }
 
 ///|
 fn ensure_typedef_capacity(p : Parser, id : Int) -> Unit {
-  ensure_typedef_capacity_with(p.typedef_counts, p.typedef_values, id)
+  ensure_typedef_capacity_with(
+    p.typedef_counts,
+    p.typedef_values,
+    p.typedef_scope_levels,
+    id,
+  )
 }
 
 ///|
@@ -3334,8 +3352,37 @@ fn set_typedef_value(p : Parser, id : Int, value : CType?) -> Unit {
 }
 
 ///|
+fn get_typedef_scope_level(p : Parser, id : Int) -> Int {
+  if id <= 0 {
+    return 0
+  }
+  if id <= p.typedef_scope_levels.length() {
+    p.typedef_scope_levels[id - 1]
+  } else {
+    0
+  }
+}
+
+///|
+fn set_typedef_scope_level(p : Parser, id : Int, level : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  ensure_typedef_capacity(p, id)
+  p.typedef_scope_levels[id - 1] = level
+}
+
+///|
+fn current_typedef_scope_id(p : Parser) -> Int {
+  let len = p.typedef_scope_stack.length()
+  if len == 0 { 0 } else { p.typedef_scope_stack[len - 1] }
+}
+
+///|
 fn push_typedef_scope(p : Parser) -> Unit {
-  p.type_scopes.push(fast_map_new())
+  let scope_id = p.next_typedef_scope_id
+  p.next_typedef_scope_id = scope_id + 1
+  p.typedef_scope_stack.push(scope_id)
   p.typedef_overrides.push([])
 }
 
@@ -3347,18 +3394,14 @@ fn pop_typedef_scope(p : Parser) -> Unit {
       let mut i = overrides.length()
       while i > 0 {
         i = i - 1
-        let (id, prev) = overrides[i]
+        let (id, prev, prev_scope) = overrides[i]
         set_typedef_value(p, id, prev)
+        set_typedef_scope_level(p, id, prev_scope)
+        dec_typedef_count(p, id)
       }
     }
   }
-  match p.type_scopes.pop() {
-    None => ()
-    Some(scope) =>
-      for id, _ in scope {
-        dec_typedef_count(p, id)
-      }
-  }
+  p.typedef_scope_stack.pop() |> ignore
 }
 
 ///|
@@ -3446,25 +3489,21 @@ fn typedef_ref_type(ty : CType) -> CType {
 
 ///|
 fn define_typedef(p : Parser, name : String, ty : CType) -> Unit {
-  if p.type_scopes.length() == 0 {
-    p.type_scopes.push(fast_map_new())
-    p.typedef_overrides.push([])
-  }
   let id = typedef_id_from_name(p, name)
   if id == 0 {
     return
   }
-  let idx = p.type_scopes.length() - 1
-  let scope = p.type_scopes[idx]
-  let already = scope.get(id) is Some(_)
+  let scope_id = current_typedef_scope_id(p)
+  let prev_scope = get_typedef_scope_level(p, id)
+  let already = prev_scope == scope_id
   let resolved = typedef_ref_type(ty)
-  scope.set(id, resolved)
-  p.type_scopes[idx] = scope
+  let idx = p.typedef_overrides.length() - 1
   if !already {
     let overrides = p.typedef_overrides[idx]
-    overrides.push((id, get_typedef_value(p, id)))
+    overrides.push((id, get_typedef_value(p, id), prev_scope))
     p.typedef_overrides[idx] = overrides
     set_typedef_value(p, id, Some(resolved))
+    set_typedef_scope_level(p, id, scope_id)
     inc_typedef_count(p, id)
   } else {
     set_typedef_value(p, id, Some(resolved))
