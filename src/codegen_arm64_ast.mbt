@@ -4037,7 +4037,7 @@ fn gen_call_direct(
   sret : SRetAddr?,
   loc : SrcLoc,
   bag : DiagBag,
-) -> Unit {
+) -> CType {
   let sig = alloc.sem.functions.get(name)
   let (fixed_count, is_varargs, ret_ty) = match sig {
     None => (
@@ -4097,6 +4097,7 @@ fn gen_call_direct(
     bag,
     emit_call_fn,
   )
+  ret_ty
 }
 
 ///|
@@ -4493,9 +4494,8 @@ fn gen_call_expr_impl(
       return
     }
     if lookup_local(alloc, name) is None && alloc.sem.functions.contains(name) {
-      gen_call_direct(emitter, alloc, syms, pool, cstrings, name, args, sret, loc, bag)
-      let call_ty = type_of_expr(alloc.sem, Expr::Call(callee~, args~, loc~))
-      match float_kind_of_type(call_ty) {
+      let ret_ty = gen_call_direct(emitter, alloc, syms, pool, cstrings, name, args, sret, loc, bag)
+      match float_kind_of_type(ret_ty) {
         Some(k) =>
           if k == CFloatKind::Double {
             emit_fmov_d_to_x(emitter, 0, 0)
@@ -4509,22 +4509,24 @@ fn gen_call_expr_impl(
   }
 
   // Indirect call via function pointer expression.
-  let call_ty = type_of_expr(alloc.sem, Expr::Call(callee~, args~, loc~))
   let callee_ty = type_of_expr(alloc.sem, callee)
   let mut param_tys : Array[CType] = []
   let mut is_varargs = false
+  let mut ret_ty = default_int_type()
   match strip_top_qualifiers(callee_ty) {
     CType::Pointer(inner) =>
       match strip_top_qualifiers(inner) {
-        CType::Function(return_type=_, params~, varargs~, ..) => {
+        CType::Function(return_type~, params~, varargs~, ..) => {
           param_tys = params
           is_varargs = varargs
+          ret_ty = return_type
         }
         _ => ()
       }
-    CType::Function(return_type=_, params~, varargs~, ..) => {
+    CType::Function(return_type~, params~, varargs~, ..) => {
       param_tys = params
       is_varargs = varargs
+      ret_ty = return_type
     }
     _ => ()
   }
@@ -4565,7 +4567,7 @@ fn gen_call_expr_impl(
     cstrings,
     args,
     arg_tys,
-    call_ty,
+    ret_ty,
     variadic_index,
     sret,
     loc,
@@ -4574,7 +4576,7 @@ fn gen_call_expr_impl(
   )
   give_reg(pool, fn_reg)
 
-  match float_kind_of_type(call_ty) {
+  match float_kind_of_type(ret_ty) {
     Some(k) =>
       if k == CFloatKind::Double {
         emit_fmov_d_to_x(emitter, 0, 0)
