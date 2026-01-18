@@ -35,7 +35,7 @@ struct Preprocessor {
   include_paths : Array[String]
   diags : DiagBag
   map : SourceMap
-  macros : FastMap[Int, Macro]
+  macros : Array[Macro?]
   pending : Array[Token]
   mut held : Token?
   cond_stack : Array[CondState]
@@ -90,7 +90,7 @@ fn define_macro(
   if id == 0 {
     return
   }
-  pp.macros.set(id, {
+  set_macro(pp, id, {
     params: [],
     is_variadic: false,
     is_function: false,
@@ -117,7 +117,7 @@ fn define_func_macro_zero(pp : Preprocessor, name : String) -> Unit {
     return
   }
   let param_id = macro_id_from_name(pp, "x")
-  pp.macros.set(id, {
+  set_macro(pp, id, {
     params: [param_id],
     is_variadic: true,
     is_function: true,
@@ -132,7 +132,7 @@ fn define_func_macro_empty(pp : Preprocessor, name : String) -> Unit {
     return
   }
   let param_id = macro_id_from_name(pp, "x")
-  pp.macros.set(id, {
+  set_macro(pp, id, {
     params: [param_id],
     is_variadic: true,
     is_function: true,
@@ -254,7 +254,7 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
     include_paths: [],
     diags,
     map,
-    macros: fast_map_new(),
+    macros: [],
     pending: [],
     held: None,
     cond_stack: [],
@@ -285,21 +285,9 @@ fn add_pp_error(pp : Preprocessor, loc : SrcLoc, message : String) -> Unit {
 }
 
 ///|
-fn is_keyword_kind(kind : TokenKind) -> Bool {
-  match kind {
-    KwIf | KwElse | KwWhile | KwFor | KwDo | KwContinue | KwBreak | KwReturn |
-    KwGoto | KwSwitch | KwCase | KwDefault | KwExtern | KwStatic | KwUnsigned |
-    KwSigned | KwConst | KwVolatile | KwRegister | KwAuto | KwInline |
-    KwRestrict | KwNoreturn | KwVoid | KwChar | KwInt | KwFloat | KwDouble |
-    KwBool | KwShort | KwLong | KwStruct | KwUnion | KwTypedef | KwEnum |
-    KwSizeof | KwAlignof | KwTypeof | KwAttribute | KwStaticAssert | KwAsm => true
-    _ => false
-  }
-}
-
 ///|
 fn is_macro_name_token(tok : Token) -> Bool {
-  tok.kind == Ident || is_keyword_kind(tok.kind)
+  tok.id > 0
 }
 
 ///|
@@ -313,13 +301,64 @@ fn macro_id_from_name(pp : Preprocessor, name : String) -> Int {
 
 ///|
 fn macro_id_from_token(pp : Preprocessor, tok : Token) -> Int {
-  if !is_macro_name_token(tok) {
-    return 0
-  }
   if tok.id > 0 {
     tok.id
   } else {
-    macro_id_from_name(pp, tok.lexeme)
+    let _ = pp
+    0
+  }
+}
+
+///|
+fn ensure_macro_capacity(pp : Preprocessor, id : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  let len = pp.macros.length()
+  if len >= id {
+    return
+  }
+  let mut i = len
+  while i < id {
+    pp.macros.push(None)
+    i = i + 1
+  }
+}
+
+///|
+fn get_macro(pp : Preprocessor, id : Int) -> Macro? {
+  if id <= 0 {
+    return None
+  }
+  let len = pp.macros.length()
+  if id <= len {
+    pp.macros[id - 1]
+  } else {
+    None
+  }
+}
+
+///|
+fn has_macro(pp : Preprocessor, id : Int) -> Bool {
+  get_macro(pp, id) is Some(_)
+}
+
+///|
+fn set_macro(pp : Preprocessor, id : Int, macro_def : Macro) -> Unit {
+  ensure_macro_capacity(pp, id)
+  if id > 0 {
+    pp.macros[id - 1] = Some(macro_def)
+  }
+}
+
+///|
+fn remove_macro(pp : Preprocessor, id : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  let len = pp.macros.length()
+  if id <= len {
+    pp.macros[id - 1] = None
   }
 }
 
@@ -1307,8 +1346,8 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
   let mut i = 0
   while i < len {
     let tok = tokens[i]
-    let is_macro_name = is_macro_name_token(tok)
-    let macro_id = if is_macro_name { macro_id_from_token(pp, tok) } else { 0 }
+    let macro_id = tok.id
+    let is_macro_name = macro_id > 0
     if is_macro_name {
       match builtin_macro_tokens(pp, tok) {
         Some(replacement) => {
@@ -1334,7 +1373,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
       tok.hidden.length() == 0 ||
       (macro_id != 0 && !hidden_contains(tok.hidden, macro_id))
     if is_macro_name && macro_id != 0 && hidden_ok {
-      match pp.macros.get(macro_id) {
+      match get_macro(pp, macro_id) {
         None => ()
         Some(macro_def) => {
           if is_expanding(pp, macro_id) {
@@ -1890,7 +1929,7 @@ fn macro_int_value(
   if id == 0 {
     return None
   }
-  match pp.macros.get(id) {
+  match get_macro(pp, id) {
     None => None
     Some(macro_def) => {
       if macro_def.is_function {
@@ -1979,7 +2018,7 @@ fn parse_defined(p : IfParser, loc : SrcLoc) -> PpValue {
         if !match_kind(p, RParen) {
           add_pp_error(p.pp, loc, "missing ')' after defined")
         }
-        return pp_bool_value(p.pp.macros.contains(macro_id_from_token(p.pp, tok)))
+        return pp_bool_value(has_macro(p.pp, macro_id_from_token(p.pp, tok)))
       }
       _ => {
         add_pp_error(p.pp, loc, "expected identifier after defined(")
@@ -1989,7 +2028,7 @@ fn parse_defined(p : IfParser, loc : SrcLoc) -> PpValue {
   }
   match advance_if(p) {
     Some(tok) if is_macro_name_token(tok) =>
-      pp_bool_value(p.pp.macros.contains(macro_id_from_token(p.pp, tok)))
+      pp_bool_value(has_macro(p.pp, macro_id_from_token(p.pp, tok)))
     _ => {
       add_pp_error(p.pp, loc, "expected identifier after defined")
       { value: 0, is_unsigned: false }
@@ -2313,7 +2352,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
       return
     }
     match parse_define_macro(pp, args[0], slice_tokens(args, 1), name_tok.loc) {
-      Some(macro_def) => pp.macros.set(macro_id, macro_def)
+      Some(macro_def) => set_macro(pp, macro_id, macro_def)
       None => ()
     }
     return
@@ -2326,7 +2365,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     }
     let macro_id = macro_id_from_token(pp, args[0])
     if macro_id != 0 {
-      pp.macros.remove(macro_id)
+      remove_macro(pp, macro_id)
     }
     return
   }
@@ -2339,7 +2378,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     let args = read_directive_tokens(pp)
     let cond = args.length() > 0 &&
       is_macro_name_token(args[0]) &&
-      pp.macros.contains(macro_id_from_token(pp, args[0]))
+      has_macro(pp, macro_id_from_token(pp, args[0]))
     push_cond(pp, cond)
     return
   }
@@ -2352,7 +2391,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     let args = read_directive_tokens(pp)
     let cond = args.length() > 0 &&
       is_macro_name_token(args[0]) &&
-      !pp.macros.contains(macro_id_from_token(pp, args[0]))
+      !has_macro(pp, macro_id_from_token(pp, args[0]))
     push_cond(pp, cond)
     return
   }
@@ -2483,8 +2522,8 @@ fn next_pp_token(pp : Preprocessor) -> Token {
     if !current_active(pp) {
       continue
     }
-    let is_macro_name = is_macro_name_token(tok)
-    let macro_id = if is_macro_name { macro_id_from_token(pp, tok) } else { 0 }
+    let macro_id = tok.id
+    let is_macro_name = macro_id > 0
     if is_macro_name {
       match builtin_macro_tokens(pp, tok) {
         Some(tokens) => {
@@ -2498,7 +2537,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
       tok.hidden.length() == 0 ||
       (macro_id != 0 && !hidden_contains(tok.hidden, macro_id))
     if is_macro_name && macro_id != 0 && hidden_ok {
-      match pp.macros.get(macro_id) {
+      match get_macro(pp, macro_id) {
         None => ()
         Some(macro_def) => {
           if is_expanding(pp, macro_id) {
