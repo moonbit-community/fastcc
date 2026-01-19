@@ -1197,6 +1197,44 @@ fn lookup_param_index(params : Array[Int], id : Int) -> Int? {
 }
 
 ///|
+fn lex_paste_tokens(
+  pp : Preprocessor,
+  text : String,
+  left : String,
+  right : String,
+  loc : SrcLoc,
+  hidden : Array[Int],
+) -> Array[Token] {
+  let file = { id: loc.file_id, path: ":paste:", text }
+  let lex = new_lexer(file, pp.diags, pp.interner, pp.keyword_ids)
+  let out : Array[Token] = []
+  while true {
+    let tok = next_token(lex)
+    match tok.kind {
+      Eof => break
+      _ =>
+        out.push({
+          kind: tok.kind,
+          lexeme: tok.lexeme,
+          id: tok.id,
+          loc,
+          line_start: false,
+          hidden,
+        })
+    }
+  }
+  if out.length() > 1 {
+    add_pp_error(
+      pp,
+      loc,
+      "warning: pasting \"" + left +
+      "\" and \"" + right +
+      "\" does not give a valid preprocessing token",
+    )
+  }
+  out
+}
+
 fn substitute_macro(
   pp : Preprocessor,
   macro_def : Macro,
@@ -1272,17 +1310,18 @@ fn substitute_macro(
         continue
       }
       let merged_lexeme = last.lexeme + next_tokens[0].lexeme
-      let (merged, merged_id) =
-        pp.interner.intern_view_with_id(merged_lexeme[:])
-      let merged_token = {
-        kind: Ident,
-        lexeme: merged,
-        id: merged_id,
+      let merged_hidden = merge_hidden(last.hidden, next_tokens[0].hidden)
+      let merged_tokens = lex_paste_tokens(
+        pp,
+        merged_lexeme,
+        last.lexeme,
+        next_tokens[0].lexeme,
         loc,
-        line_start: false,
-        hidden: merge_hidden(last.hidden, next_tokens[0].hidden),
+        merged_hidden,
+      )
+      for t in merged_tokens {
+        out.push(t)
       }
-      out.push(merged_token)
       if next_tokens.length() > 1 {
         for j = 1; j < next_tokens.length(); j = j + 1 {
           let t = next_tokens[j]

@@ -10,6 +10,8 @@ OUT_DIR="${ROOT_DIR}/target/bench"
 
 TINYCC_MBT_BIN="${TINYCC_MBT_BIN:-${ROOT_DIR}/_build/native/release/build/tinycc.exe}"
 TINYCC_REF_BIN="${TINYCC_REF_BIN:-${TINYCC_DIR}/tcc}"
+CLANG_BIN="${CLANG_BIN:-clang}"
+CLANG_FLAGS="${CLANG_FLAGS:-}"
 DATASET="${DATASET:-vc}" # vc | tinycc | tinycc_mbt_c
 APPLY_VC_PATCH="${APPLY_VC_PATCH:-1}"
 TINYCC_SOURCES="${TINYCC_SOURCES:-}"
@@ -19,7 +21,7 @@ BUILD_MBT="${BUILD_MBT:-1}"
 DETAIL="${DETAIL:-0}"
 
 export ROOT_DIR VC_FILE VC_PATCH TINYCC_DIR TINYCC_MBT_C_DIR OUT_DIR
-export TINYCC_MBT_BIN TINYCC_REF_BIN DATASET APPLY_VC_PATCH TINYCC_SOURCES
+export TINYCC_MBT_BIN TINYCC_REF_BIN CLANG_BIN CLANG_FLAGS DATASET APPLY_VC_PATCH TINYCC_SOURCES
 export REPEAT WARMUP DETAIL
 
 usage() {
@@ -37,6 +39,8 @@ Env vars:
   DETAIL=0|1        Collect per-phase timings from tinycc.mbt -bench (default: 0)
   TINYCC_MBT_BIN=path
   TINYCC_REF_BIN=path
+  CLANG_BIN=path
+  CLANG_FLAGS="..." Extra flags for clang (default: none)
 EOF
 }
 
@@ -56,6 +60,10 @@ if [[ ! -x "${TINYCC_MBT_BIN}" ]]; then
 fi
 if [[ ! -x "${TINYCC_REF_BIN}" ]]; then
   echo "error: refs/tinycc executable missing at ${TINYCC_REF_BIN}" >&2
+  exit 1
+fi
+if ! command -v "${CLANG_BIN}" >/dev/null 2>&1; then
+  echo "error: clang missing at ${CLANG_BIN}" >&2
   exit 1
 fi
 
@@ -83,6 +91,8 @@ detail = os.environ["DETAIL"] == "1"
 
 tinycc_mbt = os.environ["TINYCC_MBT_BIN"]
 tinycc_ref = os.environ["TINYCC_REF_BIN"]
+clang_bin = os.environ["CLANG_BIN"]
+clang_flags = os.environ.get("CLANG_FLAGS", "").split()
 
 def include_args(paths):
     args = []
@@ -228,11 +238,17 @@ print(f"Benchmarking {len(sources)} files (dataset={dataset}, repeat={repeat}, w
 mbt_args = ["-bench"] if detail else []
 mbt_time, mbt_phases = run_compile("tinycc_mbt", tinycc_mbt, mbt_args, detail)
 ref_time, _ = run_compile("tinycc_ref", tinycc_ref, ["-B", tinycc_dir], False)
+clang_time, _ = run_compile("clang", clang_bin, clang_flags, False)
 
-ratio = mbt_time / ref_time if ref_time > 0 else float("inf")
+ratio_mbt_ref = mbt_time / ref_time if ref_time > 0 else float("inf")
+ratio_mbt_clang = mbt_time / clang_time if clang_time > 0 else float("inf")
+ratio_ref_clang = ref_time / clang_time if clang_time > 0 else float("inf")
 print(f"tinycc.mbt total: {mbt_time:.3f}s")
 print(f"refs/tinycc total: {ref_time:.3f}s")
-print(f"ratio (mbt/ref): {ratio:.2f}x")
+print(f"clang total: {clang_time:.3f}s")
+print(f"ratio (mbt/ref): {ratio_mbt_ref:.2f}x")
+print(f"ratio (mbt/clang): {ratio_mbt_clang:.2f}x")
+print(f"ratio (ref/clang): {ratio_ref_clang:.2f}x")
 if detail:
     avg_parse = mbt_phases["parse_us"] / (1000.0 * repeat)
     avg_sem = mbt_phases["sem_us"] / (1000.0 * repeat)
