@@ -2231,7 +2231,7 @@ fn parse_param_declarator(
 ///|
 fn parse_compound_stmt(p : Parser, loc : SrcLoc) -> Stmt {
   p.pending_typedef_scopes.push(false)
-  let stmts : Array[Stmt] = []
+  let stmts : Array[Stmt] = Array::new(capacity=8)
   while true {
     match p.current.kind {
       Eof | RBrace => break
@@ -3051,7 +3051,7 @@ fn parse_postfix_tail(p : Parser, base : Expr) -> Expr {
 
 ///|
 fn parse_call_args(p : Parser) -> Array[Expr] {
-  let args : Array[Expr] = []
+  let args : Array[Expr] = Array::new(capacity=4)
   match p.current.kind {
     RParen => {
       advance_token(p) |> ignore
