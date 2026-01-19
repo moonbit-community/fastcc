@@ -1576,7 +1576,7 @@ fn parse_field_declarator(
 ///|
 fn parse_initializer(p : Parser) -> Initializer {
   if match_token(p, LBrace) is Some(lbrace) {
-    let items : Array[InitItem] = []
+    let items : Array[InitItem] = Array::new(capacity=4)
     if match_token(p, RBrace) is Some(_) {
       return Initializer::List(items~, loc=lbrace.loc)
     }
@@ -1601,7 +1601,7 @@ fn parse_initializer(p : Parser) -> Initializer {
 
 ///|
 fn parse_designator_list(p : Parser) -> (Array[InitDesignator], SrcLoc) {
-  let designators : Array[InitDesignator] = []
+  let designators : Array[InitDesignator] = Array::new(capacity=2)
   let mut start_loc = peek_token(p).loc
   while true {
     if match_token(p, Dot) is Some(dot_tok) {
@@ -2359,7 +2359,7 @@ fn parse_stmt(p : Parser) -> Stmt {
           }
           return Stmt::TagDef(ty=base, loc=semi.loc)
         } else {
-          let decls : Array[VarDecl] = []
+          let decls : Array[VarDecl] = Array::new(capacity=4)
           let mut decl_loc = tok.loc
           let mut saw_decl = false
           while true {
@@ -2547,7 +2547,7 @@ fn parse_for_init(p : Parser) -> Stmt? {
           }
           return Some(Stmt::TagDef(ty=base, loc=semi.loc))
         } else {
-          let decls : Array[VarDecl] = []
+          let decls : Array[VarDecl] = Array::new(capacity=4)
           let mut decl_loc = peek_token(p).loc
           let mut saw_decl = false
           while true {
