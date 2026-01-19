@@ -30,9 +30,9 @@ enum BuiltinCallKind {
 struct SemContext {
   diags : DiagBag
   globals : FastMap[String, CType]
-  globals_by_id : FastMap[Int, CType]
+  globals_by_id : Array[CType?]
   functions : FastMap[String, FuncSig]
-  functions_by_id : FastMap[Int, FuncSig]
+  functions_by_id : Array[FuncSig?]
   builtin_call_ids : FastMap[Int, BuiltinCallKind]
   builtin_sig_ids : FastMap[Int, FuncSig]
   atomic_template_ids : FastMap[Int, String]
@@ -68,7 +68,7 @@ struct SemContext {
   enum_defs : FastMap[String, Array[EnumItem]]
   enum_defs_by_id : FastMap[Int, Array[EnumItem]]
   enum_consts : FastMap[String, Int]
-  enum_consts_by_id : FastMap[Int, Int]
+  enum_consts_by_id : Array[Int?]
   enum_types : FastMap[String, CType]
   enum_types_by_id : FastMap[Int, CType]
   compound_literal_types : FastMap[String, CType]
@@ -113,9 +113,9 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
   {
     diags,
     globals: fast_map_new(),
-    globals_by_id: fast_map_new(),
+    globals_by_id: [],
     functions: fast_map_new(),
-    functions_by_id: fast_map_new(),
+    functions_by_id: [],
     builtin_call_ids: fast_map_new(),
     builtin_sig_ids: fast_map_new(),
     atomic_template_ids: fast_map_new(),
@@ -151,7 +151,7 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     enum_defs: fast_map_new(),
     enum_defs_by_id: fast_map_new(),
     enum_consts: fast_map_new(),
-    enum_consts_by_id: fast_map_new(),
+    enum_consts_by_id: [],
     enum_types: fast_map_new(),
     enum_types_by_id: fast_map_new(),
     compound_literal_types: fast_map_new(),
@@ -167,6 +167,132 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     current_agg_temp_align: 1,
     record_agg_temps: true,
   }
+}
+
+///|
+fn ensure_globals_by_id(ctx : SemContext, id : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  let len = ctx.globals_by_id.length()
+  if len >= id {
+    return
+  }
+  let mut i = len
+  while i < id {
+    ctx.globals_by_id.push(None)
+    i = i + 1
+  }
+}
+
+///|
+fn set_global_by_id(ctx : SemContext, id : Int, ty : CType) -> Unit {
+  if id <= 0 {
+    return
+  }
+  ensure_globals_by_id(ctx, id)
+  ctx.globals_by_id[id - 1] = Some(ty)
+}
+
+///|
+fn get_global_by_id(ctx : SemContext, id : Int) -> CType? {
+  if id <= 0 {
+    return None
+  }
+  if id <= ctx.globals_by_id.length() {
+    ctx.globals_by_id[id - 1]
+  } else {
+    None
+  }
+}
+
+///|
+fn has_global_by_id(ctx : SemContext, id : Int) -> Bool {
+  get_global_by_id(ctx, id) is Some(_)
+}
+
+///|
+fn ensure_functions_by_id(ctx : SemContext, id : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  let len = ctx.functions_by_id.length()
+  if len >= id {
+    return
+  }
+  let mut i = len
+  while i < id {
+    ctx.functions_by_id.push(None)
+    i = i + 1
+  }
+}
+
+///|
+fn set_function_by_id(ctx : SemContext, id : Int, sig : FuncSig) -> Unit {
+  if id <= 0 {
+    return
+  }
+  ensure_functions_by_id(ctx, id)
+  ctx.functions_by_id[id - 1] = Some(sig)
+}
+
+///|
+fn get_function_by_id(ctx : SemContext, id : Int) -> FuncSig? {
+  if id <= 0 {
+    return None
+  }
+  if id <= ctx.functions_by_id.length() {
+    ctx.functions_by_id[id - 1]
+  } else {
+    None
+  }
+}
+
+///|
+fn has_function_by_id(ctx : SemContext, id : Int) -> Bool {
+  get_function_by_id(ctx, id) is Some(_)
+}
+
+///|
+fn ensure_enum_consts_by_id(ctx : SemContext, id : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  let len = ctx.enum_consts_by_id.length()
+  if len >= id {
+    return
+  }
+  let mut i = len
+  while i < id {
+    ctx.enum_consts_by_id.push(None)
+    i = i + 1
+  }
+}
+
+///|
+fn set_enum_const_by_id(ctx : SemContext, id : Int, value : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  ensure_enum_consts_by_id(ctx, id)
+  ctx.enum_consts_by_id[id - 1] = Some(value)
+}
+
+///|
+fn get_enum_const_by_id(ctx : SemContext, id : Int) -> Int? {
+  if id <= 0 {
+    return None
+  }
+  if id <= ctx.enum_consts_by_id.length() {
+    ctx.enum_consts_by_id[id - 1]
+  } else {
+    None
+  }
+}
+
+///|
+fn has_enum_const_by_id(ctx : SemContext, id : Int) -> Bool {
+  get_enum_const_by_id(ctx, id) is Some(_)
 }
 
 ///|
@@ -252,7 +378,7 @@ fn lookup_local_only(ctx : SemContext, id : Int) -> CType? {
 ///|
 fn enum_const_value(ctx : SemContext, name : String, id : Int) -> Int? {
   if id > 0 {
-    match ctx.enum_consts_by_id.get(id) {
+    match get_enum_const_by_id(ctx, id) {
       Some(v) => return Some(v)
       None => return None
     }
@@ -263,7 +389,7 @@ fn enum_const_value(ctx : SemContext, name : String, id : Int) -> Int? {
 ///|
 fn enum_const_exists(ctx : SemContext, name : String, id : Int) -> Bool {
   if id > 0 {
-    return ctx.enum_consts_by_id.contains(id)
+    return has_enum_const_by_id(ctx, id)
   }
   ctx.enum_consts.contains(name)
 }
@@ -1737,7 +1863,7 @@ fn define_enum_const(
   }
   ctx.enum_consts.set(name, value)
   if id > 0 {
-    ctx.enum_consts_by_id.set(id, value)
+    set_enum_const_by_id(ctx, id, value)
   }
 }
 
@@ -2681,7 +2807,7 @@ fn add_function_sig(
   if id > 0 {
     match updated {
       None => ()
-      Some(resolved) => ctx.functions_by_id.set(id, resolved)
+      Some(resolved) => set_function_by_id(ctx, id, resolved)
     }
   }
   if is_def {
@@ -2785,8 +2911,8 @@ fn update_decl_type(
     }
   } else if ctx.globals.contains(name) {
     ctx.globals.set(name, ty)
-    if id > 0 && ctx.globals_by_id.contains(id) {
-      ctx.globals_by_id.set(id, ty)
+    if id > 0 && has_global_by_id(ctx, id) {
+      set_global_by_id(ctx, id, ty)
     }
   }
 }
@@ -6063,7 +6189,7 @@ fn declare_global(
   if id > 0 {
     match updated {
       None => ()
-      Some(resolved) => ctx.globals_by_id.set(id, resolved)
+      Some(resolved) => set_global_by_id(ctx, id, resolved)
     }
   }
 }
@@ -6123,10 +6249,10 @@ fn merge_global_decl_type(existing : CType, incoming : CType) -> CType {
 fn lookup_value(ctx : SemContext, name : String, id : Int) -> CType? {
   let mut found = if id > 0 { ctx.local_values.get(id) } else { None }
   if found is None {
-    found = if id > 0 { ctx.globals_by_id.get(id) } else { ctx.globals.get(name) }
+    found = if id > 0 { get_global_by_id(ctx, id) } else { ctx.globals.get(name) }
   }
   if found is None {
-    let sig = if id > 0 { ctx.functions_by_id.get(id) } else { ctx.functions.get(name) }
+    let sig = if id > 0 { get_function_by_id(ctx, id) } else { ctx.functions.get(name) }
     match sig {
       Some(sig) =>
         found = Some(

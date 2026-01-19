@@ -4200,7 +4200,7 @@ fn gen_call_direct(
   bag : DiagBag,
 ) -> CType {
   let sig = if id > 0 {
-    match alloc.sem.functions_by_id.get(id) {
+    match get_function_by_id(alloc.sem, id) {
       Some(found) => Some(found)
       None => alloc.sem.functions.get(name)
     }
@@ -4728,7 +4728,7 @@ fn gen_call_expr_impl(
       _ => ()
     }
     let has_func = if id > 0 {
-      alloc.sem.functions_by_id.contains(id)
+      has_function_by_id(alloc.sem, id)
     } else {
       alloc.sem.functions.contains(name)
     }
@@ -7101,8 +7101,7 @@ fn gen_expr_int32(
           emit_load_local_scalar(emitter, alloc.sem, slot.ty, dst, slot.offset, loc, bag)
         None => {
           let sym = sym_for_ident(syms, name, id=id)
-          let global_ty =
-            if id > 0 { alloc.sem.globals_by_id.get(id) } else { None }
+          let global_ty = if id > 0 { get_global_by_id(alloc.sem, id) } else { None }
           let ty = match global_ty {
             Some(gty) => decay_type(gty)
             None =>
@@ -9139,15 +9138,14 @@ fn gen_expr_ptr(
           let sym = sym_for_ident(syms, name, id=id)
           emit_addr_global(emitter, syms, sym, dst)
           let has_func = if id > 0 {
-            alloc.sem.functions_by_id.contains(id) || alloc.sem.functions.contains(name)
+            has_function_by_id(alloc.sem, id) || alloc.sem.functions.contains(name)
           } else {
             alloc.sem.functions.contains(name)
           }
           if has_func {
             return
           }
-          let global_ty =
-            if id > 0 { alloc.sem.globals_by_id.get(id) } else { None }
+          let global_ty = if id > 0 { get_global_by_id(alloc.sem, id) } else { None }
           let global_ty = match global_ty {
             Some(found) => Some(found)
             None => alloc.sem.globals.get(name)
@@ -12552,7 +12550,7 @@ fn codegen_arm64_object_bytes_with_sem(
       syms.externals.set(id, true)
     } else {
       let global_ty =
-        if var_decl.id > 0 { sem.globals_by_id.get(var_decl.id) } else { None }
+        if var_decl.id > 0 { get_global_by_id(sem, var_decl.id) } else { None }
       let var_ty = match global_ty {
         Some(t) => t
         None =>
