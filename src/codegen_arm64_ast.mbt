@@ -12911,6 +12911,23 @@ fn store_int_le(buf : Array[Int], offset : Int, size : Int, value : Int) -> Unit
 }
 
 ///|
+fn store_int64_le(
+  buf : Array[Int],
+  offset : Int,
+  size : Int,
+  value : Int64,
+) -> Unit {
+  ensure_bytes_len(buf, offset + size)
+  let mut v = value.reinterpret_as_uint64()
+  let mut i = 0
+  while i < size {
+    buf[offset + i] = (v & (0xff : UInt64)).to_int()
+    v = v >> 8
+    i = i + 1
+  }
+}
+
+///|
 fn store_uint64_le(buf : Array[Int], offset : Int, size : Int, bits : UInt64) -> Unit {
   ensure_bytes_len(buf, offset + size)
   let mut v = bits
@@ -13192,34 +13209,63 @@ fn fill_global_initializer_bytes(
               if type_is_pointer_like(ty) {
                 match const_pointer_from_expr(sem, syms, cstrings, expr) {
                   Some((sym, addend)) => {
-                    store_int_le(bytes, base_off, size, addend)
+                    let addend64 = addend.to_int64()
+                    if size > 4 {
+                      store_int64_le(bytes, base_off, size, addend64)
+                    } else {
+                      store_int_le(bytes, base_off, size, addend)
+                    }
                     relocs.push({
                       offset: base_off,
                       kind: R_AARCH64_POINTER,
                       sym,
-                      addend: addend.to_int64(),
+                      addend: addend64,
                     })
                   }
                   None =>
-                    match const_int_from_expr(sem, expr, loc) {
-                      Some(v) => store_int_le(bytes, base_off, size, v)
-                      None =>
-                        add_error(
-                          bag,
-                          loc,
-                          "codegen: non-constant pointer initializer",
-                        )
+                    if size > 4 {
+                      match const_int64_from_expr(sem, expr, loc) {
+                        Some(v) => store_int64_le(bytes, base_off, size, v)
+                        None =>
+                          add_error(
+                            bag,
+                            loc,
+                            "codegen: non-constant pointer initializer",
+                          )
+                      }
+                    } else {
+                      match const_int_from_expr(sem, expr, loc) {
+                        Some(v) => store_int_le(bytes, base_off, size, v)
+                        None =>
+                          add_error(
+                            bag,
+                            loc,
+                            "codegen: non-constant pointer initializer",
+                          )
+                      }
                     }
                 }
               } else {
-                match const_int_from_expr(sem, expr, loc) {
-                  None =>
-                    add_error(
-                      bag,
-                      loc,
-                      "codegen: non-constant scalar initializer",
-                    )
-                  Some(v) => store_int_le(bytes, base_off, size, v)
+                if size > 4 {
+                  match const_int64_from_expr(sem, expr, loc) {
+                    None =>
+                      add_error(
+                        bag,
+                        loc,
+                        "codegen: non-constant scalar initializer",
+                      )
+                    Some(v) => store_int64_le(bytes, base_off, size, v)
+                  }
+                } else {
+                  match const_int_from_expr(sem, expr, loc) {
+                    None =>
+                      add_error(
+                        bag,
+                        loc,
+                        "codegen: non-constant scalar initializer",
+                      )
+                    Some(v) => store_int_le(bytes, base_off, size, v)
+                  }
                 }
               }
           }

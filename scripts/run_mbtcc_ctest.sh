@@ -132,11 +132,17 @@ if [[ "${quickjs_enabled}" -eq 1 ]]; then
     echo "error: missing quickjs source at ${QUICKJS_C}"
     exit 1
   fi
+  quickjs_version_define="${QUICKJS_VERSION_DEFINE}"
+  case "$(basename "${QUICKJS_TINYCC_BIN}")" in
+    tcc|tcc_*)
+      quickjs_version_define='-DCONFIG_VERSION="2021-03-27"'
+      ;;
+  esac
   quickjs_args=(
     -I "${ROOT_DIR}/compat/include"
     -I "${QUICKJS_DIR}"
     -D_GNU_SOURCE
-    "${QUICKJS_VERSION_DEFINE}"
+    "${quickjs_version_define}"
   )
   quickjs_host_args=(
     -I "${QUICKJS_DIR}"
@@ -209,6 +215,16 @@ if [[ "${quickjs_enabled}" -eq 1 && "${quickjs_tests_enabled}" -eq 1 ]]; then
       fail=$((fail + 1))
     fi
   done
+
+  quickjs_link_bin="clang"
+  quickjs_link_desc="clang"
+  if [[ "$(uname -s)" == "Darwin" ]] && command -v file >/dev/null 2>&1; then
+    if file "${quickjs_c_obj}" | grep -q "ELF"; then
+      quickjs_link_bin="${QUICKJS_TINYCC_BIN}"
+      quickjs_link_desc="tcc"
+      quickjs_link_args=(-B "${ROOT_DIR}/refs/tinycc")
+    fi
+  fi
 
   qjsc_bin="${quickjs_build_dir}/qjsc"
   qjsc_host_obj_dir="${quickjs_build_dir}/qjsc_host"
@@ -290,15 +306,30 @@ if [[ "${quickjs_enabled}" -eq 1 && "${quickjs_tests_enabled}" -eq 1 ]]; then
     fi
   fi
   if [[ "${quickjs_build_failed}" -eq 0 ]]; then
-    if ! clang "${qjs_obj}" "${repl_obj}" "${quickjs_lib_objs[@]}" -o "${qjs_bin}" "${quickjs_libs[@]}" \
-      >"${quickjs_log_dir}/qjs_link.log" 2>&1; then
-      echo "FAILED: qjs link failed"
-      sed -n '1,160p' "${quickjs_log_dir}/qjs_link.log" || true
-      quickjs_build_failed=1
-      if [[ "${MODE}" != "allow-fail" ]]; then
-        exit 1
+    if [[ "${quickjs_link_desc}" == "tcc" ]]; then
+      if ! "${quickjs_link_bin}" "${quickjs_link_args[@]}" "${qjs_obj}" "${repl_obj}" "${quickjs_lib_objs[@]}" \
+        -o "${qjs_bin}" "${quickjs_libs[@]}" \
+        >"${quickjs_log_dir}/qjs_link.log" 2>&1; then
+        echo "FAILED: qjs link failed (${quickjs_link_desc})"
+        sed -n '1,160p' "${quickjs_log_dir}/qjs_link.log" || true
+        quickjs_build_failed=1
+        if [[ "${MODE}" != "allow-fail" ]]; then
+          exit 1
+        fi
+        fail=$((fail + 1))
       fi
-      fail=$((fail + 1))
+    else
+      if ! "${quickjs_link_bin}" "${qjs_obj}" "${repl_obj}" "${quickjs_lib_objs[@]}" \
+        -o "${qjs_bin}" "${quickjs_libs[@]}" \
+        >"${quickjs_log_dir}/qjs_link.log" 2>&1; then
+        echo "FAILED: qjs link failed (${quickjs_link_desc})"
+        sed -n '1,160p' "${quickjs_log_dir}/qjs_link.log" || true
+        quickjs_build_failed=1
+        if [[ "${MODE}" != "allow-fail" ]]; then
+          exit 1
+        fi
+        fail=$((fail + 1))
+      fi
     fi
   fi
 

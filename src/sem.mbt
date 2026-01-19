@@ -2339,6 +2339,187 @@ fn eval_const_expr_value(
 }
 
 ///|
+fn eval_const_expr_value_i64(
+  ctx : SemContext,
+  expr : Expr,
+  loc : SrcLoc,
+) -> (Int64, Bool) {
+  match expr {
+    Expr::IntLit(value~, ..) =>
+      (parse_uint64_value(value).reinterpret_as_int64(), true)
+    Expr::CharLit(value~, ..) => (value.to_int64(), true)
+    Expr::FloatLit(..) => {
+      add_sem_error(ctx, loc, "invalid constant expression")
+      (0, false)
+    }
+    Expr::StringLit(..) => {
+      add_sem_error(ctx, loc, "invalid constant expression")
+      (0, false)
+    }
+    Expr::Ident(name~, id~, ..) =>
+      match enum_const_value(ctx, name, id) {
+        Some(v) => (v.to_int64(), true)
+        None => {
+          add_sem_error(ctx, loc, "invalid constant expression")
+          (0, false)
+        }
+      }
+    Expr::BuiltinTypesCompatibleP(a~, b~, loc=type_loc, ..) => {
+      register_type_defs(ctx, a, type_loc)
+      register_type_defs(ctx, b, type_loc)
+      let lhs = resolve_type(ctx, a, type_loc)
+      let rhs = resolve_type(ctx, b, type_loc)
+      (if types_compatible_for_decl(lhs, rhs) { 1 } else { 0 }, true)
+    }
+    Expr::BuiltinOffsetof(ty~, path~, loc=type_loc, ..) => {
+      register_type_defs(ctx, ty, type_loc)
+      match eval_builtin_offsetof(ctx, ty, path, type_loc) {
+        None => (0, false)
+        Some(v) => (v.to_int64(), true)
+      }
+    }
+    Expr::BuiltinVaArg(..) => {
+      add_sem_error(ctx, loc, "invalid constant expression")
+      (0, false)
+    }
+    Expr::Unary(op~, expr~, ..) => {
+      let (v, ok) = eval_const_expr_value_i64(ctx, expr, loc)
+      if !ok {
+        return (0, false)
+      }
+      match op {
+        UnaryOp::Plus => (v, true)
+        UnaryOp::Minus => (0 - v, true)
+        UnaryOp::BitNot => (v ^ (-1 : Int64), true)
+        UnaryOp::Not => (if v == 0 { 1 } else { 0 }, true)
+        _ => {
+          add_sem_error(ctx, loc, "invalid constant expression")
+          (0, false)
+        }
+      }
+    }
+    Expr::Binary(op~, left~, right~, ..) => {
+      let (lhs, ok_lhs) = eval_const_expr_value_i64(ctx, left, loc)
+      let (rhs, ok_rhs) = eval_const_expr_value_i64(ctx, right, loc)
+      if !ok_lhs || !ok_rhs {
+        return (0, false)
+      }
+      match op {
+        BinaryOp::Add => (lhs + rhs, true)
+        BinaryOp::Sub => (lhs - rhs, true)
+        BinaryOp::Mul => (lhs * rhs, true)
+        BinaryOp::Div =>
+          if rhs == 0 {
+            add_sem_error(ctx, loc, "division by zero in constant expression")
+            (0, false)
+          } else {
+            (lhs / rhs, true)
+          }
+        BinaryOp::Mod =>
+          if rhs == 0 {
+            add_sem_error(ctx, loc, "division by zero in constant expression")
+            (0, false)
+          } else {
+            (lhs % rhs, true)
+          }
+        BinaryOp::Shl => (lhs << rhs.to_int(), true)
+        BinaryOp::Shr => (lhs >> rhs.to_int(), true)
+        BinaryOp::BitAnd => (lhs & rhs, true)
+        BinaryOp::BitOr => (lhs | rhs, true)
+        BinaryOp::BitXor => (lhs ^ rhs, true)
+        BinaryOp::Eq => (if lhs == rhs { 1 } else { 0 }, true)
+        BinaryOp::Ne => (if lhs != rhs { 1 } else { 0 }, true)
+        BinaryOp::Lt => (if lhs < rhs { 1 } else { 0 }, true)
+        BinaryOp::Le => (if lhs <= rhs { 1 } else { 0 }, true)
+        BinaryOp::Gt => (if lhs > rhs { 1 } else { 0 }, true)
+        BinaryOp::Ge => (if lhs >= rhs { 1 } else { 0 }, true)
+        BinaryOp::LogAnd => (if lhs != 0 && rhs != 0 { 1 } else { 0 }, true)
+        BinaryOp::LogOr => (if lhs != 0 || rhs != 0 { 1 } else { 0 }, true)
+        BinaryOp::Comma => (rhs, true)
+        _ => {
+          add_sem_error(ctx, loc, "invalid constant expression")
+          (0, false)
+        }
+      }
+    }
+    Expr::Conditional(cond~, then_expr~, else_expr~, ..) => {
+      let (cond_val, ok) = eval_const_expr_value_i64(ctx, cond, loc)
+      if !ok {
+        return (0, false)
+      }
+      if cond_val != 0 {
+        eval_const_expr_value_i64(ctx, then_expr, loc)
+      } else {
+        eval_const_expr_value_i64(ctx, else_expr, loc)
+      }
+    }
+    Expr::Cast(expr~, ..) => eval_const_expr_value_i64(ctx, expr, loc)
+    Expr::SizeofExpr(expr~, loc~, ..) => {
+      let ty = type_for_sizeof(ctx, expr)
+      match strip_top_qualifiers(ty) {
+        CType::Array(size=None, size_expr=Some(_), ..) => (0, false)
+        _ =>
+      match type_size_align(ctx, ty, loc) {
+        None => (0, false)
+        Some((size, _)) => (size.to_int64(), true)
+      }
+      }
+    }
+    Expr::SizeofType(ty~, loc~, ..) => {
+      register_type_defs(ctx, ty, loc)
+      match strip_top_qualifiers(resolve_type(ctx, ty, loc)) {
+        CType::Array(size=None, size_expr=Some(_), ..) => (0, false)
+        _ =>
+      match type_size_align(ctx, ty, loc) {
+        None => (0, false)
+        Some((size, _)) => (size.to_int64(), true)
+      }
+      }
+    }
+    Expr::AlignofExpr(expr~, loc~, ..) => {
+      let ty = type_for_sizeof(ctx, expr)
+      match type_size_align(ctx, ty, loc) {
+        None => (0, false)
+        Some((_, align)) => (align.to_int64(), true)
+      }
+    }
+    Expr::AlignofType(ty~, loc~, ..) => {
+      register_type_defs(ctx, ty, loc)
+      match type_size_align(ctx, ty, loc) {
+        None => (0, false)
+        Some((_, align)) => (align.to_int64(), true)
+      }
+    }
+    Expr::Call(callee=Expr::Ident(name~, id~, ..), args~, loc=call_loc, ..) =>
+      match builtin_call_kind(ctx, name, id) {
+        Some(BuiltinCallKind::ChooseExpr) if args.length() == 3 => {
+          let (cond_val, ok) = eval_const_expr_value_i64(ctx, args[0], call_loc)
+          if !ok {
+            return (0, false)
+          }
+          if cond_val != 0 {
+            eval_const_expr_value_i64(ctx, args[1], call_loc)
+          } else {
+            eval_const_expr_value_i64(ctx, args[2], call_loc)
+          }
+        }
+        Some(BuiltinCallKind::Expect) if args.length() == 2 =>
+          eval_const_expr_value_i64(ctx, args[0], call_loc)
+        Some(BuiltinCallKind::ConstantP) if args.length() == 1 =>
+          (if is_constant_expr_for_builtin(ctx, args[0]) { 1 } else { 0 }, true)
+        _ => {
+          add_sem_error(ctx, loc, "invalid constant expression")
+          (0, false)
+        }
+      }
+    _ => {
+      add_sem_error(ctx, loc, "invalid constant expression")
+      (0, false)
+    }
+  }
+}
+
+///|
 fn eval_const_expr(ctx : SemContext, expr : Expr, loc : SrcLoc) -> Int {
   let (value, _) = eval_const_expr_value(ctx, expr, loc)
   value
@@ -3559,6 +3740,16 @@ fn next_init_field(fields : Array[Field], start : Int) -> (Field, Int)? {
 ///|
 fn const_int_from_expr(ctx : SemContext, expr : Expr, loc : SrcLoc) -> Int? {
   let (value, ok) = eval_const_expr_value(ctx, expr, loc)
+  if ok {
+    Some(value)
+  } else {
+    None
+  }
+}
+
+///|
+fn const_int64_from_expr(ctx : SemContext, expr : Expr, loc : SrcLoc) -> Int64? {
+  let (value, ok) = eval_const_expr_value_i64(ctx, expr, loc)
   if ok {
     Some(value)
   } else {
