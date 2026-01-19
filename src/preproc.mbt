@@ -446,34 +446,36 @@ fn next_input_token(pp : Preprocessor) -> Token {
       }
       None => {
         let tok = next_token(pp.lexer)
-        if tok.kind == Eof && pp.lexer_stack.length() > 0 {
-          match pp.lexer_stack.pop() {
-            Some(prev) => pp.lexer = prev
-            None => ()
+        match tok.kind {
+          Eof if pp.lexer_stack.length() > 0 => {
+            match pp.lexer_stack.pop() {
+              Some(prev) => pp.lexer = prev
+              None => ()
+            }
+            match pp.held_stack.pop() {
+              Some(prev_held) => pp.held = prev_held
+              None => ()
+            }
+            match pp.path_stack.pop() {
+              Some(prev_path) => pp.current_path = prev_path
+              None => ()
+            }
+            match pp.dir_stack.pop() {
+              Some(prev_dir) => pp.current_dir = prev_dir
+              None => ()
+            }
+            match pp.logical_path_stack.pop() {
+              Some(prev_path) => pp.logical_path = prev_path
+              None => ()
+            }
+            match pp.line_adjust_stack.pop() {
+              Some(prev_adjust) => pp.line_adjust = prev_adjust
+              None => ()
+            }
+            continue
           }
-          match pp.held_stack.pop() {
-            Some(prev_held) => pp.held = prev_held
-            None => ()
-          }
-          match pp.path_stack.pop() {
-            Some(prev_path) => pp.current_path = prev_path
-            None => ()
-          }
-          match pp.dir_stack.pop() {
-            Some(prev_dir) => pp.current_dir = prev_dir
-            None => ()
-          }
-          match pp.logical_path_stack.pop() {
-            Some(prev_path) => pp.logical_path = prev_path
-            None => ()
-          }
-          match pp.line_adjust_stack.pop() {
-            Some(prev_adjust) => pp.line_adjust = prev_adjust
-            None => ()
-          }
-          continue
+          _ => return tok
         }
-        return tok
       }
     }
   } else {
@@ -493,11 +495,19 @@ fn read_directive_tokens(pp : Preprocessor) -> Array[Token] {
   let out : Array[Token] = []
   while true {
     let tok = next_input_token(pp)
-    if tok.kind == Eof || tok.line_start {
-      pp.held = Some(tok)
-      break
+    match tok.kind {
+      Eof => {
+        pp.held = Some(tok)
+        break
+      }
+      _ => {
+        if tok.line_start {
+          pp.held = Some(tok)
+          break
+        }
+        out.push(tok)
+      }
     }
-    out.push(tok)
   }
   out
 }
@@ -2585,12 +2595,13 @@ fn next_pp_token(pp : Preprocessor) -> Token {
     } else {
       tok = next_input_token(pp)
     }
-    if tok.kind == Eof {
-      return tok
-    }
-    if tok.kind == Hash && tok.line_start && !from_pending {
-      handle_directive(pp, tok)
-      continue
+    match tok.kind {
+      Eof => return tok
+      Hash if tok.line_start && !from_pending => {
+        handle_directive(pp, tok)
+        continue
+      }
+      _ => ()
     }
     if !current_active(pp) {
       continue
@@ -2618,9 +2629,12 @@ fn next_pp_token(pp : Preprocessor) -> Token {
           }
           if macro_def.is_function {
             let next_tok = next_raw_token(pp)
-            if next_tok.kind != LParen {
-              push_back(pp, next_tok)
-              return tok
+            match next_tok.kind {
+              LParen => ()
+              _ => {
+                push_back(pp, next_tok)
+                return tok
+              }
             }
             match read_macro_args(pp, tok.loc) {
               None => return tok
