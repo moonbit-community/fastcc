@@ -103,12 +103,37 @@ test "preprocess include search path" {
 }
 
 ///|
+test "preprocess empty function-like macro expansion" {
+  let (toks, bag) = pp_tokens("#define DEF(x)\nDEF(1)\nint ok;")
+  if has_errors(bag) {
+    let messages = bag.diags.map(d => d.message)
+    @json.inspect(messages)
+  }
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
+}
+
+///|
+test "preprocess quickjs opcode header with empty DEF" {
+  let text = "#define DEF(id, size, n_pop, n_push, f)\n#include \"quickjs-opcode.h\"\nint ok;"
+  let (toks, bag) = pp_tokens_with_paths(text, ["refs/quickjs"])
+  if has_errors(bag) {
+    let messages = bag.diags.map(d => d.message)
+    @json.inspect(messages)
+  }
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
+}
+
+///|
 test "preprocess _Float16 builtin macro" {
   let (toks, bag) = pp_tokens("_Float16 x;")
   assert_true(!has_errors(bag))
   let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
   @json.inspect(items, content=[
-    "Ident:short", "Ident:unsigned", "Ident:int", "Ident:x", "Semicolon:;",
+    "KwShort:short", "KwUnsigned:unsigned", "KwInt:int", "Ident:x", "Semicolon:;",
   ])
 }
 
@@ -119,14 +144,14 @@ test "preprocess _Float16 prototype tokens" {
   let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
   @json.inspect(items, content=[
     "KwExtern:extern",
-    "Ident:short",
-    "Ident:unsigned",
-    "Ident:int",
+    "KwShort:short",
+    "KwUnsigned:unsigned",
+    "KwInt:int",
     "Ident:foo",
     "LParen:(",
-    "Ident:short",
-    "Ident:unsigned",
-    "Ident:int",
+    "KwShort:short",
+    "KwUnsigned:unsigned",
+    "KwInt:int",
     "RParen:)",
     "Semicolon:;",
   ])
@@ -186,7 +211,7 @@ test "preprocess gcc style version check" {
   let args = slice_tokens(directive_tokens, 1)
   let expanded = expand_if_tokens(pp, args)
   let gcc_id = macro_id_from_name(pp, "__GNUC__")
-  let has_gcc = gcc_id != 0 && pp.macros.contains(gcc_id)
+  let has_gcc = gcc_id != 0 && has_macro(pp, gcc_id)
   let cond = eval_if_expr(pp, expanded, directive_tokens[0].loc)
   let simple_file = add_file(map, "<simple>", "#if 1 && (0 && 0 || 1)\n")
   let simple_pp = new_preprocessor(map, simple_file, new_diag_bag())

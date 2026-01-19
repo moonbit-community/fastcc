@@ -59,6 +59,7 @@ struct LocalAlloc {
   local_id_values : FastMap[Int, LocalSlot]
   local_id_overrides : Array[Array[(Int, LocalSlot?)]]
   func_name : String
+  labels : LabelCtx
   compound_literal_slots : FastMap[String, Int]
   mut agg_temp_offset : Int?
   mut agg_temp_size : Int
@@ -88,6 +89,7 @@ fn new_local_alloc(sem : SemContext, ret_ty : CType, func_name : String) ->
     local_id_values: fast_map_new(),
     local_id_overrides: [],
     func_name,
+    labels: new_label_ctx(),
     compound_literal_slots: fast_map_new(),
     agg_temp_offset: None,
     agg_temp_size: 0,
@@ -115,6 +117,7 @@ fn new_local_alloc_with_compound_slots(
     local_id_values: fast_map_new(),
     local_id_overrides: [],
     func_name,
+    labels: new_label_ctx(),
     compound_literal_slots,
     agg_temp_offset: None,
     agg_temp_size: 0,
@@ -881,6 +884,7 @@ fn infer_array_size_from_init_items(items : Array[InitItem]) -> Int {
   for item in items {
     let mut idx = next_index
     let mut has_index = false
+    let mut range_end : Int? = None
     if item.designators.length() > 0 {
       match item.designators[0] {
         InitDesignator::Index(expr~, ..) =>
@@ -891,15 +895,25 @@ fn infer_array_size_from_init_items(items : Array[InitItem]) -> Int {
               has_index = true
             }
           }
+        InitDesignator::IndexRange(start~, end~, ..) =>
+          match (const_i64_from_expr(start), const_i64_from_expr(end)) {
+            (Some(start_val), Some(end_val)) => {
+              idx = start_val.to_int()
+              has_index = true
+              range_end = Some(end_val.to_int())
+            }
+            _ => ()
+          }
         _ => ()
       }
     }
-    if idx >= 0 && idx > max_index {
-      max_index = idx
+    let last_idx = range_end.unwrap_or(idx)
+    if last_idx >= 0 && last_idx > max_index {
+      max_index = last_idx
     }
     if has_index {
-      if idx >= 0 {
-        next_index = idx + 1
+      if last_idx >= 0 {
+        next_index = last_idx + 1
       }
     } else {
       next_index = next_index + 1
@@ -1041,6 +1055,7 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt, walk_exprs : Bool) -> Unit {
     Stmt::ExprStmt(expr~, ..) => layout_expr(alloc, expr, walk_exprs)
     Stmt::Asm(_) |
     Stmt::Goto(name=_, loc=_) |
+    Stmt::GotoExpr(..) |
     Stmt::Break(_) |
     Stmt::Continue(_) |
     Stmt::TagDef(ty=_, loc=_) |
@@ -1069,13 +1084,14 @@ fn reserve_compound_literal_slot(
   ty : CType,
   init : Initializer,
   loc : SrcLoc,
+  node_id : Int,
 ) -> Unit {
-  let key = compound_literal_key(loc)
+  let key = compound_literal_key(loc, node_id)
   match alloc.compound_literal_slots.get(key) {
     Some(_) => return
     None => ()
   }
-  let resolved = compound_literal_type(alloc.sem, ty, init, loc)
+  let resolved = compound_literal_type(alloc.sem, ty, init, loc, node_id)
   let size_align = match alloc.sem.compound_literal_sizes.get(key) {
     Some(value) => Some(value)
     None => type_size_align_or_error(alloc.sem, resolved, loc)
@@ -1107,8 +1123,8 @@ fn reserve_compound_literals_initializer(
 ///|
 fn reserve_compound_literals_expr(alloc : LocalAlloc, expr : Expr) -> Unit {
   match expr {
-    Expr::CompoundLiteral(ty~, init~, loc~, ..) => {
-      reserve_compound_literal_slot(alloc, ty, init, loc)
+    Expr::CompoundLiteral(ty~, init~, node_id~, loc~, ..) => {
+      reserve_compound_literal_slot(alloc, ty, init, loc, node_id)
       reserve_compound_literals_initializer(alloc, init)
     }
     Expr::Unary(expr=inner, ..) => reserve_compound_literals_expr(alloc, inner)
@@ -1217,7 +1233,7 @@ fn reserve_compound_literals_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
     }
     Stmt::ExprStmt(expr~, ..) => reserve_compound_literals_expr(alloc, expr)
     Stmt::TagDef(..) | Stmt::StaticAssert(_) | Stmt::Empty(..) | Stmt::Goto(..) |
-    Stmt::Break(..) | Stmt::Continue(..) => ()
+    Stmt::GotoExpr(..) | Stmt::Break(..) | Stmt::Continue(..) => ()
   }
 }
 
@@ -2314,6 +2330,10 @@ fn resolve_init_designator_offset_type(
             return None
           }
         }
+      InitDesignator::IndexRange(loc=des_loc, ..) => {
+        add_error(bag, des_loc, "codegen: array range designator must be expanded")
+        return None
+      }
       InitDesignator::Field(name~, id~, loc=des_loc) =>
         match strip_top_qualifiers(current) {
           CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
@@ -2379,6 +2399,30 @@ fn resolve_init_designator_offset_type(
 }
 
 ///|
+fn designators_with_range_index(
+  designators : Array[InitDesignator],
+  idx : Int,
+) -> Array[InitDesignator] {
+  let result : Array[InitDesignator] = Array::new(capacity=designators.length())
+  let mut replaced = false
+  for des in designators {
+    match des {
+      InitDesignator::IndexRange(loc=des_loc, ..) =>
+        if !replaced {
+          let expr =
+            Expr::IntLit(value=idx.to_string(), node_id=0, loc=des_loc)
+          result.push(InitDesignator::Index(expr=expr, loc=des_loc))
+          replaced = true
+        } else {
+          result.push(des)
+        }
+      _ => result.push(des)
+    }
+  }
+  result
+}
+
+///|
 fn resolve_init_designator_access_info(
   sem : SemContext,
   ty : CType,
@@ -2431,6 +2475,10 @@ fn resolve_init_designator_access_info(
             return None
           }
         }
+      InitDesignator::IndexRange(loc=des_loc, ..) => {
+        add_error(bag, des_loc, "codegen: array range designator must be expanded")
+        return None
+      }
       InitDesignator::Field(name~, id~, loc=des_loc) =>
         match strip_top_qualifiers(current) {
           CType::Struct(..) | CType::Union(..) => {
@@ -2733,21 +2781,135 @@ fn gen_initializer_to_addr(
           for item in items {
             let mut idx = next_index
             let mut has_index = false
+            let mut range_pos = -1
+            let mut range_start : Int? = None
+            let mut range_end : Int? = None
+            let mut range_loc = item.loc
             if item.designators.length() > 0 {
               match item.designators[0] {
                 InitDesignator::Index(expr~, loc=des_loc) =>
-                  match const_i64_from_expr(expr) {
+                  match const_int_from_expr(alloc.sem, expr, des_loc) {
                     None => ()
                     Some(v) => {
-                      idx = v.to_int()
+                      idx = v
                       has_index = true
                       if idx < 0 || idx >= n {
                         add_error(bag, des_loc, "codegen: array designator out of bounds")
                       }
                     }
                   }
+                InitDesignator::IndexRange(start~, end~, loc=des_loc) =>
+                  match (
+                    const_int_from_expr(alloc.sem, start, des_loc),
+                    const_int_from_expr(alloc.sem, end, des_loc),
+                  ) {
+                    (Some(start_val), Some(end_val)) => {
+                      idx = start_val
+                      has_index = true
+                      range_start = Some(start_val)
+                      range_end = Some(end_val)
+                      range_loc = des_loc
+                      if idx < 0 || idx >= n {
+                        add_error(bag, des_loc, "codegen: array designator out of bounds")
+                      }
+                    }
+                    _ => {
+                      add_error(
+                        bag,
+                        des_loc,
+                        "codegen: array designator must be constant",
+                      )
+                    }
+                  }
                 _ => ()
               }
+              let mut i = 0
+              while i < item.designators.length() {
+                match item.designators[i] {
+                  InitDesignator::IndexRange(start~, end~, loc=des_loc) => {
+                    range_pos = i
+                    range_loc = des_loc
+                    if range_start is None {
+                        range_start = const_int_from_expr(alloc.sem, start, des_loc)
+                        range_end = const_int_from_expr(alloc.sem, end, des_loc)
+                    }
+                    break
+                  }
+                  _ => ()
+                }
+                i = i + 1
+              }
+            }
+            if range_pos >= 0 {
+              if range_pos != item.designators.length() - 1 {
+                add_error(bag, range_loc, "codegen: array range designator must be last")
+              } else {
+                match (range_start, range_end) {
+                  (Some(start_idx), Some(end_idx)) => {
+                    if end_idx < start_idx {
+                      add_error(bag, range_loc, "codegen: array designator range is empty")
+                    } else {
+                      if range_pos == 0 &&
+                        (start_idx < 0 || end_idx < 0 || start_idx >= n || end_idx >= n) {
+                        add_error(bag, range_loc, "codegen: array designator out of bounds")
+                      }
+                      let mut cur = start_idx
+                      while cur <= end_idx {
+                        if range_pos == 0 && (cur < 0 || cur >= n) {
+                          cur = cur + 1
+                          continue
+                        }
+                        let designators = designators_with_range_index(
+                          item.designators,
+                          cur,
+                        )
+                        let (target_ty, rel_off) = match resolve_init_designator_offset_type(
+                          alloc.sem,
+                          ty,
+                          designators,
+                          item.loc,
+                          bag,
+                        ) {
+                          None => (elem_ty, cur * elem_size)
+                          Some((t, o)) => (t, o)
+                        }
+                        gen_initializer_to_addr(
+                          emitter,
+                          alloc,
+                          syms,
+                          pool,
+                          cstrings,
+                          base_reg,
+                          base_off + rel_off,
+                          target_ty,
+                          item.value,
+                          bag,
+                        )
+                        cur = cur + 1
+                      }
+                    }
+                  }
+                  _ =>
+                    add_error(
+                      bag,
+                      range_loc,
+                      "codegen: array designator must be constant",
+                    )
+                }
+              }
+              if range_pos == 0 {
+                match range_end {
+                  Some(end_idx) if end_idx >= 0 => next_index = end_idx + 1
+                  _ => ()
+                }
+              } else if has_index {
+                if idx >= 0 {
+                  next_index = idx + 1
+                }
+              } else {
+                next_index = next_index + 1
+              }
+              continue
             }
             if !has_index {
               if idx >= n {
@@ -4368,6 +4530,68 @@ fn emit_blr(emitter : Arm64Emitter, reg : Int) -> Unit {
 }
 
 ///|
+fn emit_br(emitter : Arm64Emitter, reg : Int) -> Unit {
+  emit32(
+    emitter,
+    (0xd61f0000 : Int)
+    .lor(reg << 5)
+    .reinterpret_as_uint(),
+  )
+}
+
+///|
+fn encode_adr(rd : Int, diff : Int) -> UInt? {
+  let max = 1 << 20
+  if diff < -max || diff >= max {
+    return None
+  }
+  let immlo = diff & 0x3
+  let immhi = (diff >> 2) & 0x7ffff
+  Some(
+    (0x10000000 : Int)
+    .lor(immlo << 29)
+    .lor(immhi << 5)
+    .lor(rd)
+    .reinterpret_as_uint(),
+  )
+}
+
+///|
+fn emit_adr(
+  emitter : Arm64Emitter,
+  rd : Int,
+  diff : Int,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  match encode_adr(rd, diff) {
+    Some(insn) => emit32(emitter, insn)
+    None => add_error(bag, loc, "codegen: label address out of range")
+  }
+}
+
+///|
+fn patch_adr(
+  emitter : Arm64Emitter,
+  at : Int,
+  target : Int,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  let idx = at >> 2
+  if idx < 0 || idx >= emitter.code.length() {
+    add_error(bag, loc, "codegen: invalid label address patch")
+    return
+  }
+  let rd = emitter.code[idx].reinterpret_as_int() & 0x1f
+  let diff = target - at
+  match encode_adr(rd, diff) {
+    Some(insn) => emitter.code[idx] = insn
+    None => add_error(bag, loc, "codegen: label address out of range")
+  }
+}
+
+///|
 fn gen_call_with_layout(
   emitter : Arm64Emitter,
   alloc : LocalAlloc,
@@ -4692,6 +4916,208 @@ fn gen_call_with_layout(
 }
 
 ///|
+fn gen_builtin_frame_address(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  pool : RegPool,
+  args : Array[Expr],
+  is_return : Bool,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  if args.length() != 1 {
+    let name = if is_return { "__builtin_return_address" } else { "__builtin_frame_address" }
+    add_error(bag, loc, "\{name} expects 1 argument")
+    return
+  }
+  let level = match const_int_from_expr(alloc.sem, args[0], loc) {
+    None => {
+      add_error(bag, loc, "codegen: builtin expects constant integer level")
+      return
+    }
+    Some(v) => v
+  }
+  if level < 0 {
+    let name = if is_return { "__builtin_return_address" } else { "__builtin_frame_address" }
+    add_error(bag, loc, "\{name} only takes non-negative integers")
+    return
+  }
+  let tmp = take_reg(pool) catch {
+    err => {
+      add_error(bag, loc, err.to_string())
+      return
+    }
+  }
+  emit_mov(emitter, true, tmp, 29)
+  let mut i = 0
+  while i < level {
+    arm64_ldrx(
+      emitter,
+      false,
+      3,
+      tmp.reinterpret_as_uint(),
+      tmp.reinterpret_as_uint(),
+      0,
+    )
+    i = i + 1
+  }
+  if is_return {
+    arm64_ldrx(
+      emitter,
+      false,
+      3,
+      tmp.reinterpret_as_uint(),
+      tmp.reinterpret_as_uint(),
+      8,
+    )
+  }
+  emit_mov(emitter, true, 0, tmp)
+  give_reg(pool, tmp)
+}
+
+///|
+fn gen_atomic_builtin_call(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : CstringPool,
+  name : String,
+  id : Int,
+  args : Array[Expr],
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Bool {
+  let template = match atomic_builtin_template_from_ident(alloc.sem, name, id) {
+    None => return false
+    Some(v) => v
+  }
+  let mut dot_index = 0
+  while dot_index < template.length() && template[dot_index] != '.' {
+    dot_index = dot_index + 1
+  }
+  if dot_index >= template.length() - 1 {
+    return false
+  }
+  let arg_spec_len = dot_index
+  if args.length() != arg_spec_len {
+    add_error(bag, loc, "\{name} expects \{arg_spec_len} arguments")
+  }
+  let mut atom_type : CType? = None
+  let mut atom_size = 0
+  let call_args : Array[Expr] = Array::new(capacity=arg_spec_len)
+  let call_arg_tys : Array[CType] = Array::new(capacity=arg_spec_len)
+  let mut save_arg : Expr? = None
+  let mut i = 0
+  while i < arg_spec_len && i < args.length() {
+    let spec = template[i]
+    let arg = args[i]
+    match spec {
+      'a' | 'A' => {
+        let ptr_ty = type_of_expr(alloc.sem, arg)
+        match strip_top_qualifiers(ptr_ty) {
+          CType::Pointer(pointee) => {
+            if atom_type is None {
+              atom_type = Some(pointee)
+              match type_size_align(alloc.sem, pointee, loc) {
+                None => ()
+                Some((size, _)) => atom_size = size
+              }
+            }
+          }
+          _ => add_error(bag, loc, "\{name} expects pointer argument")
+        }
+        call_args.push(arg)
+        call_arg_tys.push(ptr_ty)
+      }
+      'p' => {
+        call_args.push(arg)
+        call_arg_tys.push(type_of_expr(alloc.sem, arg))
+      }
+      'l' => {
+        let deref = Expr::Unary(
+          op=UnaryOp::Deref,
+          expr=arg,
+          node_id=0,
+          loc=expr_loc(arg),
+        )
+        call_args.push(deref)
+        let ty = match atom_type {
+          Some(at) => at
+          None => type_of_expr(alloc.sem, deref)
+        }
+        call_arg_tys.push(ty)
+      }
+      's' => save_arg = Some(arg)
+      'v' => {
+        call_args.push(arg)
+        let ty = match atom_type {
+          Some(at) => at
+          None => type_of_expr(alloc.sem, arg)
+        }
+        call_arg_tys.push(ty)
+      }
+      'm' => {
+        call_args.push(arg)
+        call_arg_tys.push(default_int_type())
+      }
+      'b' => {
+        call_args.push(arg)
+        call_arg_tys.push(CType::Bool)
+      }
+      _ => ()
+    }
+    i = i + 1
+  }
+  if atom_size <= 0 {
+    add_error(bag, loc, "codegen: atomic builtin requires 1/2/4/8-byte target type")
+    return true
+  }
+  let helper_name = "\{name}_\{atom_size}"
+  let ret_ty = match atomic_builtin_return_type(alloc.sem, name, id, args, loc) {
+    Some(t) => t
+    None => default_int_type()
+  }
+  let sym = sym_for_ident(syms, helper_name)
+  let emit_call_fn = fn() { emit_call(emitter, sym) }
+  gen_call_with_layout(
+    emitter,
+    alloc,
+    syms,
+    pool,
+    cstrings,
+    call_args,
+    call_arg_tys,
+    ret_ty,
+    0,
+    None,
+    loc,
+    bag,
+    emit_call_fn,
+    layout=None,
+  )
+  match save_arg {
+    None => ()
+    Some(dest) => {
+      let addr = take_reg(pool) catch {
+        err => {
+          add_error(bag, loc, err.to_string())
+          return true
+        }
+      }
+      gen_expr_ptr(emitter, alloc, syms, pool, cstrings, dest, addr, bag)
+      let store_ty = match atom_type {
+        Some(at) => at
+        None => ret_ty
+      }
+      emit_store_scalar_at(emitter, alloc.sem, store_ty, 0, addr, 0, loc, bag)
+      give_reg(pool, addr)
+    }
+  }
+  true
+}
+
+///|
 fn gen_call_expr_impl(
   emitter : Arm64Emitter,
   alloc : LocalAlloc,
@@ -4763,7 +5189,29 @@ fn gen_call_expr_impl(
         return
       }
       Some(BuiltinCallKind::VaEnd) => return
+      Some(BuiltinCallKind::FrameAddress) => {
+        gen_builtin_frame_address(emitter, alloc, pool, args, false, loc, bag)
+        return
+      }
+      Some(BuiltinCallKind::ReturnAddress) => {
+        gen_builtin_frame_address(emitter, alloc, pool, args, true, loc, bag)
+        return
+      }
       _ => ()
+    }
+    if gen_atomic_builtin_call(
+      emitter,
+      alloc,
+      syms,
+      pool,
+      cstrings,
+      name,
+      id,
+      args,
+      loc,
+      bag,
+    ) {
+      return
     }
     let has_func = if id > 0 {
       has_function_by_id(alloc.sem, id)
@@ -5104,17 +5552,18 @@ fn gen_compound_literal_addr_with_type(
   ty : CType,
   init : Initializer,
   loc : SrcLoc,
+  node_id : Int,
   dst : Int,
   bag : DiagBag,
 ) -> CType? {
-  let key = compound_literal_key(loc)
+  let key = compound_literal_key(loc, node_id)
   match alloc.compound_literal_slots.get(key) {
     None => {
       add_error(bag, loc, "codegen: missing compound literal slot")
       None
     }
     Some(off) => {
-      let resolved = compound_literal_type(alloc.sem, ty, init, loc)
+      let resolved = compound_literal_type(alloc.sem, ty, init, loc, node_id)
       let size_align = match alloc.sem.compound_literal_sizes.get(key) {
         Some(value) => Some(value)
         None => type_size_align_or_error(alloc.sem, resolved, loc)
@@ -5193,7 +5642,7 @@ fn gen_lvalue_addr(
         }
       }
     }
-    Expr::CompoundLiteral(ty~, init~, loc~, ..) => {
+    Expr::CompoundLiteral(ty~, init~, node_id~, loc~, ..) => {
       ignore(
         gen_compound_literal_addr_with_type(
           emitter,
@@ -5204,6 +5653,7 @@ fn gen_lvalue_addr(
           ty,
           init,
           loc,
+          node_id,
           dst,
           bag,
         ),
@@ -5852,7 +6302,18 @@ fn record_field_access_info(
                   built_id
                 }
               }
-              cache.get(id)
+              match cache.get(id) {
+                Some(info) => Some(info)
+                None =>
+                  if name == "" {
+                    None
+                  } else {
+                    match ctx.struct_field_access_cache.get(tag) {
+                      Some(by_name) => by_name.get(name)
+                      None => None
+                    }
+                  }
+              }
             } else {
               let cache = match ctx.struct_field_access_cache.get(tag) {
                 Some(existing) => existing
@@ -5909,7 +6370,18 @@ fn record_field_access_info(
                   built_id
                 }
               }
-              cache.get(id)
+              match cache.get(id) {
+                Some(info) => Some(info)
+                None =>
+                  if name == "" {
+                    None
+                  } else {
+                    match ctx.union_field_access_cache.get(tag) {
+                      Some(by_name) => by_name.get(name)
+                      None => None
+                    }
+                  }
+              }
             } else {
               let cache = match ctx.union_field_access_cache.get(tag) {
                 Some(existing) => existing
@@ -7347,7 +7819,7 @@ fn gen_expr_int32(
       }
       give_reg(pool, addr)
     }
-    Expr::CompoundLiteral(ty~, init~, loc~, ..) => {
+    Expr::CompoundLiteral(ty~, init~, node_id~, loc~, ..) => {
       let addr = take_reg(pool) catch {
         err => {
           add_error(bag, loc, err.to_string())
@@ -7363,6 +7835,7 @@ fn gen_expr_int32(
         ty,
         init,
         loc,
+        node_id,
         addr,
         bag,
       ) {
@@ -9142,6 +9615,19 @@ fn gen_expr_ptr(
       let sym = cstring_sym_or_add(cstrings, syms, value)
       emit_addr_global(emitter, syms, sym, dst)
     }
+    Expr::LabelAddr(name~, loc~, ..) =>
+      match alloc.labels.addrs.get(name) {
+        Some(addr) =>
+          emit_adr(emitter, dst, addr - emitter_pc(emitter), loc, bag)
+        None => {
+          let at = emitter_pc(emitter)
+          emit32(
+            emitter,
+            (0x10000000 : Int).lor(dst).reinterpret_as_uint(),
+          )
+          record_label_addr_patch(alloc.labels, name, at)
+        }
+      }
     Expr::Ident(name~, id~, loc~, ..) => {
       if is_func_name_ident(name) {
         if gen_func_name_addr(emitter, syms, cstrings, alloc, dst, loc, bag) {
@@ -9322,7 +9808,7 @@ fn gen_expr_ptr(
       }
       give_reg(pool, addr)
     }
-    Expr::CompoundLiteral(ty~, init~, loc~, ..) => {
+    Expr::CompoundLiteral(ty~, init~, node_id~, loc~, ..) => {
       let addr = take_reg(pool) catch {
         err => {
           add_error(bag, loc, err.to_string())
@@ -9338,6 +9824,7 @@ fn gen_expr_ptr(
         ty,
         init,
         loc,
+        node_id,
         addr,
         bag,
       ) {
@@ -10024,6 +10511,7 @@ fn stmt_loc(stmt : Stmt) -> SrcLoc {
     Stmt::Default(loc=loc, ..) => loc
     Stmt::Label(loc=loc, ..) => loc
     Stmt::Goto(loc=loc, ..) => loc
+    Stmt::GotoExpr(loc=loc, ..) => loc
     Stmt::Break(loc~) => loc
     Stmt::Continue(loc~) => loc
     Stmt::Return(loc=loc, ..) => loc
@@ -10054,11 +10542,44 @@ struct SwitchChains {
 struct LabelCtx {
   addrs : FastMap[String, Int]
   chains : FastMap[String, Int]
+  addr_patches : FastMap[String, Array[Int]]
 }
 
 ///|
 fn new_label_ctx() -> LabelCtx {
-  { addrs: fast_map_new(), chains: fast_map_new() }
+  { addrs: fast_map_new(), chains: fast_map_new(), addr_patches: fast_map_new() }
+}
+
+///|
+fn record_label_addr_patch(labels : LabelCtx, name : String, at : Int) -> Unit {
+  match labels.addr_patches.get(name) {
+    None => {
+      let entries : Array[Int] = []
+      entries.push(at)
+      labels.addr_patches.set(name, entries)
+    }
+    Some(entries) => entries.push(at)
+  }
+}
+
+///|
+fn patch_label_addr_uses(
+  emitter : Arm64Emitter,
+  labels : LabelCtx,
+  name : String,
+  addr : Int,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  match labels.addr_patches.get(name) {
+    None => ()
+    Some(entries) => {
+      for at in entries {
+        patch_adr(emitter, at, addr, loc, bag)
+      }
+      labels.addr_patches.remove(name)
+    }
+  }
 }
 
 ///|
@@ -10079,7 +10600,7 @@ fn gen_stmt_expr_with(
   let loops : Array[LoopChains] = []
   let switches : Array[SwitchChains] = []
   let breakables : Array[Int] = []
-  let labels = new_label_ctx()
+  let labels = alloc.labels
   let mut chain = 0
   let len = stmts.length()
   if len == 0 {
@@ -10970,6 +11491,12 @@ fn gen_stmt(
       }
       return_chain
     }
+    Stmt::GotoExpr(expr~, ..) => {
+      emit_vla_leave(emitter, alloc, 0)
+      gen_expr_ptr(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
+      emit_br(emitter, 0)
+      return_chain
+    }
     Stmt::Label(name~, body~, loc~) => {
       let addr = emitter_pc(emitter)
       match labels.addrs.get(name) {
@@ -10987,6 +11514,7 @@ fn gen_stmt(
       }
       labels.addrs.set(name, addr)
       labels.chains.set(name, 0)
+      patch_label_addr_uses(emitter, labels, name, addr, loc, bag)
       match current_scope_vla_loc(alloc) {
         None => ()
         Some(off) => emit_vla_sp_restore(emitter, off)
@@ -11619,7 +12147,6 @@ fn gen_func_def(
   let loops : Array[LoopChains] = []
   let switches : Array[SwitchChains] = []
   let breakables : Array[Int] = []
-  let labels = new_label_ctx()
   let return_chain = gen_stmt(
     emitter,
     alloc,
@@ -11628,7 +12155,7 @@ fn gen_func_def(
     loops,
     switches,
     breakables,
-    labels,
+    alloc.labels,
     cstrings,
     func.body,
     bag,
@@ -12013,6 +12540,10 @@ fn fill_global_initializer_bytes(
           for item in items {
             let mut idx = next_index
             let mut has_index = false
+            let mut range_pos = -1
+            let mut range_start : Int? = None
+            let mut range_end : Int? = None
+            let mut range_loc = item.loc
             if item.designators.length() > 0 {
               match item.designators[0] {
                 InitDesignator::Index(expr~, loc=des_loc) =>
@@ -12026,8 +12557,121 @@ fn fill_global_initializer_bytes(
                       }
                     }
                   }
+                InitDesignator::IndexRange(start~, end~, loc=des_loc) =>
+                  match (const_int_from_expr(sem, start, des_loc), const_int_from_expr(sem, end, des_loc)) {
+                    (Some(start_val), Some(end_val)) => {
+                      idx = start_val
+                      has_index = true
+                      range_start = Some(start_val)
+                      range_end = Some(end_val)
+                      range_loc = des_loc
+                      if idx < 0 || idx >= n {
+                        add_error(bag, des_loc, "codegen: array designator out of bounds")
+                      }
+                    }
+                    _ =>
+                      add_error(
+                        bag,
+                        des_loc,
+                        "codegen: array designator must be constant",
+                      )
+                  }
                 _ => ()
               }
+              let mut i = 0
+              while i < item.designators.length() {
+                match item.designators[i] {
+                  InitDesignator::IndexRange(start~, end~, loc=des_loc) => {
+                    range_pos = i
+                    range_loc = des_loc
+                    if range_start is None {
+                      range_start =
+                        match const_int_from_expr(sem, start, des_loc) {
+                          Some(v) => Some(v)
+                          None => None
+                        }
+                      range_end =
+                        match const_int_from_expr(sem, end, des_loc) {
+                          Some(v) => Some(v)
+                          None => None
+                        }
+                    }
+                    break
+                  }
+                  _ => ()
+                }
+                i = i + 1
+              }
+            }
+            if range_pos >= 0 {
+              if range_pos != item.designators.length() - 1 {
+                add_error(bag, range_loc, "codegen: array range designator must be last")
+              } else {
+                match (range_start, range_end) {
+                  (Some(start_idx), Some(end_idx)) => {
+                    if end_idx < start_idx {
+                      add_error(bag, range_loc, "codegen: array designator range is empty")
+                    } else {
+                      if range_pos == 0 &&
+                        (start_idx < 0 || end_idx < 0 || start_idx >= n || end_idx >= n) {
+                        add_error(bag, range_loc, "codegen: array designator out of bounds")
+                      }
+                      let mut cur = start_idx
+                      while cur <= end_idx {
+                        if range_pos == 0 && (cur < 0 || cur >= n) {
+                          cur = cur + 1
+                          continue
+                        }
+                        let designators = designators_with_range_index(
+                          item.designators,
+                          cur,
+                        )
+                        let (target_ty, rel_off) = match resolve_init_designator_offset_type(
+                          sem,
+                          ty,
+                          designators,
+                          item.loc,
+                          bag,
+                        ) {
+                          None => (elem_ty, cur * elem_size)
+                          Some((t, o)) => (t, o)
+                        }
+                        fill_global_initializer_bytes(
+                          sem,
+                          syms,
+                          cstrings,
+                          target_ty,
+                          item.value,
+                          bytes,
+                          relocs,
+                          base_off + rel_off,
+                          bag,
+                        )
+                        cur = cur + 1
+                      }
+                    }
+                  }
+                  _ =>
+                    add_error(
+                      bag,
+                      range_loc,
+                      "codegen: array designator must be constant",
+                    )
+                }
+              }
+              if range_pos == 0 {
+                match range_end {
+                  Some(end_idx) if end_idx >= 0 => next_index = end_idx + 1
+                  _ => ()
+                }
+              } else if has_index {
+                if idx >= 0 {
+                  next_index = idx + 1
+                }
+              } else {
+                next_index = next_index + 1
+              }
+              continue
             }
             if !has_index && idx >= n {
               // TCC accepts excess array initializers and truncates them.

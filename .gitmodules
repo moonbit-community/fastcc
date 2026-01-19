@@ -7,3 +7,6 @@
 [submodule "refs/vc"]
 	path = refs/vc
 	url = https://github.com/vlang/vc.git
+[submodule "refs/quickjs"]
+	path = refs/quickjs
+	url = https://github.com/bellard/quickjs.git

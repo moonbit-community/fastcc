@@ -30,6 +30,7 @@ enum TokenKind {
   KwInline
   KwNoreturn
   KwRestrict
+  KwAtomic
   KwVoid
   KwChar
   KwInt
@@ -164,6 +165,7 @@ fn init_keyword_ids(interner : StringInterner) -> KeywordIds {
   let (_, kw_du_signed) = interner.intern_view_with_id("__signed"[:])
   let (_, kw_u_float16) = interner.intern_view_with_id("_Float16"[:])
   let (_, kw_u_noreturn) = interner.intern_view_with_id("_Noreturn"[:])
+  let (_, kw_u_atomic) = interner.intern_view_with_id("_Atomic"[:])
   let (_, kw_du_alignof) = interner.intern_view_with_id("__alignof"[:])
   let (_, kw_du_const_du) = interner.intern_view_with_id("__const__"[:])
   let (_, kw_du_typeof_du) = interner.intern_view_with_id("__typeof__"[:])
@@ -228,6 +230,7 @@ fn init_keyword_ids(interner : StringInterner) -> KeywordIds {
   kind_by_id[kw_du_signed] = Some(KwSigned)
   kind_by_id[kw_u_float16] = Some(KwFloat)
   kind_by_id[kw_u_noreturn] = Some(KwNoreturn)
+  kind_by_id[kw_u_atomic] = Some(KwAtomic)
   kind_by_id[kw_du_alignof] = Some(KwAlignof)
   kind_by_id[kw_du_const_du] = Some(KwConst)
   kind_by_id[kw_du_typeof_du] = Some(KwTypeof)

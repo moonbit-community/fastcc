@@ -31,6 +31,7 @@ void *calloc(size_t nmemb, size_t size);
 void *realloc(void *ptr, size_t size);
 void *aligned_alloc(size_t alignment, size_t size);
 void free(void *ptr);
+void *alloca(size_t size);
 
 void *bsearch(const void *key, const void *base, size_t nmemb, size_t size, int (*cmp)(const void *, const void *));
 void qsort(void *base, size_t nmemb, size_t size, int (*cmp)(const void *, const void *));

@@ -8,6 +8,7 @@ test "cli parses -I/-c/-o and input" {
   assert_eq(cfg.inputs, ["in.c"])
   assert_eq(cfg.output, Some("out.o"))
   assert_true(cfg.compile_only)
+  assert_eq(cfg.macro_actions, [])
 }
 
 ///|
@@ -26,6 +27,7 @@ test "cli ignores common warning/debug flags" {
   }
   assert_true(cfg.compile_only)
   assert_eq(cfg.inputs, ["in.c"])
+  assert_eq(cfg.macro_actions, [])
 }
 
 ///|
@@ -35,6 +37,7 @@ test "cli supports multiple input files" {
     _ => fail("expected args")
   }
   assert_eq(cfg.inputs, ["a.c", "b.c"])
+  assert_eq(cfg.macro_actions, [])
 }
 
 ///|
@@ -44,4 +47,31 @@ test "cli parses -isystem" {
     _ => fail("expected args")
   }
   assert_eq(cfg.include_paths, ["sysinc"])
+  assert_eq(cfg.macro_actions, [])
+}
+
+///|
+test "cli parses -D and -U" {
+  let cfg = match parse_cli_args([
+    "prog",
+    "-D",
+    "FOO",
+    "-DBAR=2",
+    "-DBAZ=",
+    "-U",
+    "FOO",
+    "-UQUX",
+    "-c",
+    "in.c",
+  ]) {
+    CliParse::Run(v) => v
+    _ => fail("expected args")
+  }
+  assert_eq(cfg.macro_actions, [
+    CliMacroAction::Define(name="FOO", value=None),
+    CliMacroAction::Define(name="BAR", value=Some("2")),
+    CliMacroAction::Define(name="BAZ", value=Some("")),
+    CliMacroAction::Undef(name="FOO"),
+    CliMacroAction::Undef(name="QUX"),
+  ])
 }

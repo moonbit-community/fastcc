@@ -3,6 +3,7 @@ struct TypeQual {
   is_const : Bool
   is_volatile : Bool
   is_restrict : Bool
+  is_atomic : Bool
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -485,6 +486,7 @@ enum Expr {
   CharLit(value~ : Int, node_id~ : Int, loc~ : SrcLoc)
   StringLit(value~ : String, length~ : Int, node_id~ : Int, loc~ : SrcLoc)
   Ident(name~ : String, id~ : Int, node_id~ : Int, loc~ : SrcLoc)
+  LabelAddr(name~ : String, id~ : Int, node_id~ : Int, loc~ : SrcLoc)
   BuiltinTypesCompatibleP(a~ : CType, b~ : CType, node_id~ : Int, loc~ : SrcLoc)
   BuiltinOffsetof(ty~ : CType, path~ : Array[String], node_id~ : Int, loc~ : SrcLoc)
   BuiltinVaArg(list~ : Expr, ty~ : CType, node_id~ : Int, loc~ : SrcLoc)
@@ -519,6 +521,7 @@ enum Expr {
 ///|
 enum InitDesignator {
   Index(expr~ : Expr, loc~ : SrcLoc)
+  IndexRange(start~ : Expr, end~ : Expr, loc~ : SrcLoc)
   Field(name~ : String, id~ : Int, loc~ : SrcLoc)
 } derive(Show, Eq, ToJson)
 
@@ -567,6 +570,7 @@ enum Stmt {
   Default(body~ : Stmt, loc~ : SrcLoc)
   Label(name~ : String, body~ : Stmt, loc~ : SrcLoc)
   Goto(name~ : String, loc~ : SrcLoc)
+  GotoExpr(expr~ : Expr, loc~ : SrcLoc)
   Break(loc~ : SrcLoc)
   Continue(loc~ : SrcLoc)
   Return(value~ : Expr?, loc~ : SrcLoc)

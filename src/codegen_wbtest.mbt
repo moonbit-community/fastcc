@@ -131,6 +131,41 @@ test "codegen emits arm64 main return 0 object" {
 }
 
 ///|
+test "codegen handles compound literal designators in function" {
+  let (unit, bag) = parse_text(
+    "typedef union U { int int32; void *ptr; } U;\n" +
+    "typedef struct S { U u; long tag; } S;\n" +
+    "#define MK(tag, val) (S){ (U){ .int32 = val }, tag }\n" +
+    "S f(int x){ return MK(1, x); }",
+  )
+  assert_true(!has_errors(bag))
+  check_translation_unit(unit, bag) |> ignore
+  assert_true(!has_errors(bag))
+  let bytes = match codegen_arm64_object_bytes(unit, bag) {
+    None => fail("expected object bytes")
+    Some(b) => b
+  }
+  assert_true(!has_errors(bag))
+  assert_true(bytes.length() > 0)
+}
+
+///|
+test "codegen accepts enum range designator in array init" {
+  let (unit, bag) = parse_text(
+    "enum { OP_COUNT = 2 }; void f(){ int t[4] = { [OP_COUNT ... 3] = 1 }; }",
+  )
+  assert_true(!has_errors(bag))
+  check_translation_unit(unit, bag) |> ignore
+  assert_true(!has_errors(bag))
+  let bytes = match codegen_arm64_object_bytes(unit, bag) {
+    None => fail("expected object bytes")
+    Some(b) => b
+  }
+  assert_true(!has_errors(bag))
+  assert_true(bytes.length() > 0)
+}
+
+///|
 test "codegen emits call relocation for return f()" {
   let (unit, bag) = parse_text("int f(){return 0;} int main(){return f();}")
   assert_true(!has_errors(bag))
@@ -152,6 +187,54 @@ test "codegen emits call relocation for return f()" {
     (call_off - text_offset).reinterpret_as_uint(),
   )
   assert_eq(read_u32_le_at(bytes, reloff + 4), (0x2d000001 : UInt))
+}
+
+///|
+test "codegen handles __builtin_frame_address and __builtin_return_address" {
+  let (unit, bag) = parse_text(
+    "int f(){ return __builtin_frame_address(0) != 0 && __builtin_return_address(0) != 0; }",
+  )
+  assert_true(!has_errors(bag))
+  check_translation_unit(unit, bag) |> ignore
+  assert_true(!has_errors(bag))
+  let bytes = match codegen_arm64_object_bytes(unit, bag) {
+    None => fail("expected object bytes")
+    Some(b) => b
+  }
+  assert_true(!has_errors(bag))
+  assert_true(bytes.length() > 0)
+}
+
+///|
+test "codegen handles __atomic_exchange builtin helper" {
+  let (unit, bag) = parse_text(
+    "int x; int out; void f(){ int v = 1; __atomic_exchange(&x, &v, &out, 0); }",
+  )
+  assert_true(!has_errors(bag))
+  check_translation_unit(unit, bag) |> ignore
+  assert_true(!has_errors(bag))
+  let bytes = match codegen_arm64_object_bytes(unit, bag) {
+    None => fail("expected object bytes")
+    Some(b) => b
+  }
+  assert_true(!has_errors(bag))
+  assert_true(bytes.length() > 0)
+}
+
+///|
+test "codegen accepts float constant initializers" {
+  let (unit, bag) = parse_text(
+    "double a = 0.0/0.0; double b = 1.0/0.0; float c = 0.0f/0.0f;",
+  )
+  assert_true(!has_errors(bag))
+  check_translation_unit(unit, bag) |> ignore
+  assert_true(!has_errors(bag))
+  let bytes = match codegen_arm64_object_bytes(unit, bag) {
+    None => fail("expected object bytes")
+    Some(b) => b
+  }
+  assert_true(!has_errors(bag))
+  assert_true(bytes.length() > 0)
 }
 
 ///|

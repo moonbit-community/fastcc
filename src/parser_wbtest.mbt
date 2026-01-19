@@ -16,6 +16,23 @@ fn check_text(text : String) -> (TranslationUnit, DiagBag) {
 }
 
 ///|
+fn check_text_with_paths(
+  text : String,
+  paths : Array[String],
+) -> (TranslationUnit, DiagBag) {
+  let bag = new_diag_bag()
+  let map = new_source_map()
+  let file = add_file(map, "<test>", text)
+  let pp = new_preprocessor(map, file, bag)
+  for path in paths {
+    add_include_path(pp, path)
+  }
+  let unit = parse_translation_unit(pp)
+  check_translation_unit(unit, bag) |> ignore
+  (unit, bag)
+}
+
+///|
 fn struct_size_align_from_text(
   text : String,
   name : String,
@@ -49,6 +66,33 @@ test "parse function with return" {
 ///|
 test "sem accepts local declarations" {
   let (_, bag) = check_text("int main(){int x = 1; return x;}")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts compat header macros and declarations" {
+  let text =
+    "#include <stdint.h>\n" +
+    "#include <math.h>\n" +
+    "#include <string.h>\n" +
+    "#include <stdlib.h>\n" +
+    "#include <errno.h>\n" +
+    "int f(const char *s, size_t n){\n" +
+    "  int x = INT32_MIN;\n" +
+    "  double y = INFINITY;\n" +
+    "  void *p = memchr(s, 'a', n);\n" +
+    "  void *q = alloca(16);\n" +
+    "  return x < 0 && y > 0 && (p == 0 || p != 0) && q != 0 && ETIMEDOUT > 0;\n" +
+    "}\n"
+  let (_, bag) = check_text_with_paths(text, ["compat/include"])
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts typeof in statement expression" {
+  let (_, bag) = check_text(
+    "int f(int *ptr){ __typeof__(ptr) x = ({ __typeof__(ptr) p = ptr; p; }); return x == ptr; }",
+  )
   assert_true(!has_errors(bag))
 }
 
@@ -252,6 +296,19 @@ test "sem accepts builtin choose_expr without typechecking dead branch" {
 }
 
 ///|
+test "parse paren pointer declarator with attribute" {
+  let (unit, bag) = parse_text(
+    "int (__attribute__((unused)) *fp)(void);",
+  )
+  assert_true(!has_errors(bag))
+  guard unit.decls.length() == 1 else { fail("expected one declaration") }
+  match unit.decls[0] {
+    Decl::Var(decl) => assert_eq(decl.name, "fp")
+    _ => fail("expected variable declaration")
+  }
+}
+
+///|
 test "sem accepts builtin types_compatible_p in _Static_assert" {
   let (_, bag) = check_text(
     "_Static_assert(__builtin_types_compatible_p(int, int) == 1, \"ok\"); _Static_assert(__builtin_types_compatible_p(int, char) == 0, \"ok\"); int main(){return 0;}",
@@ -323,6 +380,14 @@ test "sem rejects negative frame address level" {
 test "sem accepts __atomic builtins" {
   let (_, bag) = check_text(
     "int x; int main(){ int v=1; int out=0; int expected=0; int desired=2; __atomic_store(&x, &v, 0); int r = __atomic_load(&x, &out, 0); int old = __atomic_exchange(&x, &desired, &out, 0); _Bool ok = __atomic_compare_exchange(&x, &expected, &desired, 0, 0, 0); int f = __atomic_fetch_add(&x, 1, 0); int g = __atomic_add_fetch(&x, 1, 0); return r + old + f + g + ok; }",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts _Atomic type qualifiers" {
+  let (_, bag) = check_text(
+    "typedef _Atomic(int) atomic_int; _Atomic int a; int _Atomic b; _Atomic(int *) p; int * _Atomic q; int main(){ return a + b + (p != 0) + (q != 0); }",
   )
   assert_true(!has_errors(bag))
 }
@@ -862,6 +927,32 @@ test "sem rejects control flow outside context" {
   assert_true(has_errors(bag3))
   let (_, bag4) = check_text("int main(){goto missing;}")
   assert_true(has_errors(bag4))
+}
+
+///|
+test "sem accepts computed goto" {
+  let (_, bag) = check_text(
+    "int main(){void *p = &&label; goto *p; label: return 0;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem rejects computed goto non-pointer" {
+  let (_, bag) = check_text("int main(){int x=0; goto *x;}")
+  assert_true(has_errors(bag))
+}
+
+///|
+test "sem accepts range designator initializer" {
+  let (_, bag) = check_text("int a[4] = { [1 ... 2] = 7 };")
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem rejects empty range designator" {
+  let (_, bag) = check_text("int a[4] = { [2 ... 1] = 7 };")
+  assert_true(has_errors(bag))
 }
 
 ///|

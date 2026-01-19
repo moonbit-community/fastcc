@@ -2902,8 +2902,8 @@ fn apply_inferred_array_size(ty : CType, size : Int) -> CType {
 }
 
 ///|
-fn compound_literal_key(loc : SrcLoc) -> String {
-  "\{loc.file_id}:\{loc.offset}"
+fn compound_literal_key(loc : SrcLoc, node_id : Int) -> String {
+  "\{loc.file_id}:\{node_id}:\{loc.offset}"
 }
 
 ///|
@@ -2912,8 +2912,9 @@ fn compound_literal_type(
   ty : CType,
   init : Initializer,
   loc : SrcLoc,
+  node_id : Int,
 ) -> CType {
-  let key = compound_literal_key(loc)
+  let key = compound_literal_key(loc, node_id)
   match ctx.compound_literal_types.get(key) {
     Some(resolved) => resolved
     None => {
@@ -2982,6 +2983,7 @@ fn record_stmt_expr(ctx : SemContext) -> Unit {
 fn record_compound_literal(
   ctx : SemContext,
   loc : SrcLoc,
+  node_id : Int,
   ty : CType,
 ) -> Unit {
   if !ctx.record_agg_temps {
@@ -2991,7 +2993,7 @@ fn record_compound_literal(
     None => ()
     Some(name) => {
       ctx.func_has_compound_literal.set(name, true)
-      let key = compound_literal_key(loc)
+      let key = compound_literal_key(loc, node_id)
       let keys = match ctx.func_compound_literals.get(name) {
         None => []
         Some(list) => list
@@ -3240,6 +3242,7 @@ fn check_initializer_list(
       for item in items {
         let mut index = next_index
         let mut has_index = false
+        let mut range_end : Int? = None
         let target = if item.designators.length() > 0 {
           match item.designators[0] {
             InitDesignator::Index(expr~, loc=des_loc) =>
@@ -3250,6 +3253,21 @@ fn check_initializer_list(
                   has_index = true
                 }
               }
+            InitDesignator::IndexRange(start~, end~, loc=des_loc) => {
+              let start_val = const_int_from_expr(ctx, start, des_loc)
+              let end_val = const_int_from_expr(ctx, end, des_loc)
+              match (start_val, end_val) {
+                (Some(start_idx), Some(end_idx)) => {
+                  index = start_idx
+                  has_index = true
+                  range_end = Some(end_idx)
+                  if end_idx < start_idx {
+                    add_sem_error(ctx, des_loc, "array designator range is empty")
+                  }
+                }
+                _ => ()
+              }
+            }
             _ => ()
           }
           resolve_designator_type(ctx, ty, item.designators, item.loc)
@@ -3264,6 +3282,17 @@ fn check_initializer_list(
         if has_index {
           if size is None && index < 0 {
             add_sem_error(ctx, item.loc, "array designator out of bounds")
+          } else {
+            match size {
+              None => ()
+              Some(n) => {
+                let end_idx = range_end.unwrap_or(index)
+                if index < 0 || end_idx < 0 || index >= n || end_idx >= n {
+                  // TCC accepts excess array initializers and truncates them.
+                  ()
+                }
+              }
+            }
           }
         } else {
           match size {
@@ -3275,12 +3304,13 @@ fn check_initializer_list(
               }
           }
         }
-        if index >= 0 && index > max_index {
-          max_index = index
+        let range_last = range_end.unwrap_or(index)
+        if range_last >= 0 && range_last > max_index {
+          max_index = range_last
         }
         if has_index {
-          if index >= 0 {
-            next_index = index + 1
+          if range_last >= 0 {
+            next_index = range_last + 1
           }
         } else {
           next_index = next_index + 1
@@ -3540,6 +3570,36 @@ fn resolve_designator_type(
             return None
           }
         }
+      InitDesignator::IndexRange(start~, end~, loc=des_loc) =>
+        match strip_top_qualifiers(current) {
+          CType::Array(elem~, size~, ..) => {
+            let start_val = const_int_from_expr(ctx, start, des_loc)
+            let end_val = const_int_from_expr(ctx, end, des_loc)
+            match (start_val, end_val) {
+              (Some(start_idx), Some(end_idx)) =>
+                if end_idx < start_idx {
+                  add_sem_error(ctx, loc, "array designator range is empty")
+                }
+              _ => ()
+            }
+            match size {
+              None => ()
+              Some(n) =>
+                match (start_val, end_val) {
+                  (Some(start_idx), Some(end_idx)) =>
+                    if start_idx < 0 || end_idx < 0 || start_idx >= n || end_idx >= n {
+                      add_sem_error(ctx, loc, "array designator out of bounds")
+                    }
+                  _ => ()
+                }
+            }
+            current = elem
+          }
+          _ => {
+            add_sem_error(ctx, loc, "array designator on non-array type")
+            return None
+          }
+        }
       InitDesignator::Field(name~, id~, ..) =>
         match strip_top_qualifiers(current) {
           CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
@@ -3720,6 +3780,12 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
       check_stmt(ctx, body, return_type)
     }
     Stmt::Goto(name~, loc~) => ctx.labels_used.push((name, loc))
+    Stmt::GotoExpr(expr~, loc~) => {
+      let expr_ty = type_of_expr(ctx, expr)
+      if !is_pointer_type(expr_ty) {
+        add_sem_error(ctx, loc, "computed goto expects pointer")
+      }
+    }
     Stmt::Break(loc~) =>
       if ctx.loop_depth == 0 && ctx.switch_depth == 0 {
         add_sem_error(ctx, loc, "cannot break outside of loop or switch")
@@ -4393,7 +4459,18 @@ fn find_field_index_cached(
                   built_id
                 }
               }
-              cache.get(id)
+              match cache.get(id) {
+                Some(idx) => Some(idx)
+                None =>
+                  if name == "" {
+                    None
+                  } else {
+                    match ctx.struct_field_index_cache.get(tag) {
+                      Some(by_name) => by_name.get(name)
+                      None => None
+                    }
+                  }
+              }
             } else {
               let cache = match ctx.struct_field_index_cache.get(tag) {
                 Some(existing) => existing
@@ -4439,7 +4516,18 @@ fn find_field_index_cached(
                   built_id
                 }
               }
-              cache.get(id)
+              match cache.get(id) {
+                Some(idx) => Some(idx)
+                None =>
+                  if name == "" {
+                    None
+                  } else {
+                    match ctx.union_field_index_cache.get(tag) {
+                      Some(by_name) => by_name.get(name)
+                      None => None
+                    }
+                  }
+              }
             } else {
               let cache = match ctx.union_field_index_cache.get(tag) {
                 Some(existing) => existing
@@ -4851,9 +4939,9 @@ fn type_of_lvalue(ctx : SemContext, expr : Expr) -> CType? {
         }
       }
     }
-    Expr::CompoundLiteral(ty~, init~, loc~, ..) => {
-      let resolved = compound_literal_type(ctx, ty, init, loc)
-      record_compound_literal(ctx, loc, resolved)
+    Expr::CompoundLiteral(ty~, init~, node_id~, loc~, ..) => {
+      let resolved = compound_literal_type(ctx, ty, init, loc, node_id)
+      record_compound_literal(ctx, loc, node_id, resolved)
       Some(resolved)
     }
     Expr::StmtExpr(stmts~, loc~, ..) =>
@@ -4900,9 +4988,9 @@ fn type_of_lvalue_optional(ctx : SemContext, expr : Expr) -> CType? {
         }
       }
     }
-    Expr::CompoundLiteral(ty~, init~, loc~, ..) => {
-      let resolved = compound_literal_type(ctx, ty, init, loc)
-      record_compound_literal(ctx, loc, resolved)
+    Expr::CompoundLiteral(ty~, init~, node_id~, loc~, ..) => {
+      let resolved = compound_literal_type(ctx, ty, init, loc, node_id)
+      record_compound_literal(ctx, loc, node_id, resolved)
       Some(resolved)
     }
     Expr::StmtExpr(stmts~, loc~, ..) =>
@@ -5055,6 +5143,13 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
           default_int_type()
         }
       }
+    Expr::LabelAddr(name~, loc~, ..) => {
+      if ctx.current_func_name is None {
+        add_sem_error(ctx, loc, "label address used outside of function")
+      }
+      ctx.labels_used.push((name, loc))
+      void_pointer_type()
+    }
     Expr::BuiltinTypesCompatibleP(a~, b~, loc~, ..) => {
       register_type_defs(ctx, a, loc)
       register_type_defs(ctx, b, loc)
@@ -5070,9 +5165,9 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
       register_type_defs(ctx, ty, loc)
       resolve_type(ctx, ty, loc)
     }
-    Expr::CompoundLiteral(ty~, init~, loc~, ..) => {
-      let resolved = compound_literal_type(ctx, ty, init, loc)
-      record_compound_literal(ctx, loc, resolved)
+    Expr::CompoundLiteral(ty~, init~, node_id~, loc~, ..) => {
+      let resolved = compound_literal_type(ctx, ty, init, loc, node_id)
+      record_compound_literal(ctx, loc, node_id, resolved)
       decay_type(resolved)
     }
     Expr::StmtExpr(stmts~, loc~, ..) => stmt_expr_result_type(ctx, stmts, loc)
@@ -5419,14 +5514,9 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
             }
             let cond = eval_const_expr(ctx, args[0], loc)
             if cond != 0 {
-              let chosen = type_of_expr(ctx, args[1])
-              ignore(type_of_expr(ctx, args[2]))
-              return chosen
-            } else {
-              let chosen = type_of_expr(ctx, args[2])
-              ignore(type_of_expr(ctx, args[1]))
-              return chosen
+              return type_of_expr(ctx, args[1])
             }
+            return type_of_expr(ctx, args[2])
           }
           Some(BuiltinCallKind::Expect) => {
             if args.length() != 2 {
@@ -5591,33 +5681,12 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
 
 ///|
 fn has_builtin_prefix(name : String) -> Bool {
-  let len = name.length()
-  len >= 10 &&
-    name[0] == 95 &&
-    name[1] == 95 &&
-    name[2] == 98 &&
-    name[3] == 117 &&
-    name[4] == 105 &&
-    name[5] == 108 &&
-    name[6] == 116 &&
-    name[7] == 105 &&
-    name[8] == 110 &&
-    name[9] == 95
+  name.has_prefix("__builtin_")
 }
 
 ///|
 fn has_atomic_prefix(name : String) -> Bool {
-  let len = name.length()
-  len >= 9 &&
-    name[0] == 95 &&
-    name[1] == 95 &&
-    name[2] == 97 &&
-    name[3] == 116 &&
-    name[4] == 111 &&
-    name[5] == 109 &&
-    name[6] == 105 &&
-    name[7] == 99 &&
-    name[8] == 95
+  name.has_prefix("__atomic_")
 }
 
 ///|
@@ -6382,6 +6451,9 @@ fn qual_to_string(qual : TypeQual) -> String {
   }
   if qual.is_restrict {
     parts.push("restrict")
+  }
+  if qual.is_atomic {
+    parts.push("_Atomic")
   }
   if parts.length() == 0 {
     ""

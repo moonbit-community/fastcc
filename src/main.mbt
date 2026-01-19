@@ -5,7 +5,14 @@ struct CliConfig {
   output : String?
   compile_only : Bool
   bench : Bool
+  macro_actions : Array[CliMacroAction]
 }
+
+///|
+enum CliMacroAction {
+  Define(name~ : String, value~ : String?)
+  Undef(name~ : String)
+} derive(Show, Eq, ToJson)
 
 ///|
 enum CliParse {
@@ -16,7 +23,27 @@ enum CliParse {
 
 ///|
 fn print_usage() -> Unit {
-  println("usage: tinycc.mbt [-c] [-bench] [-o OUT] [-I PATH]... [-isystem PATH]... FILE...")
+  println(
+    "usage: tinycc.mbt [-c] [-bench] [-o OUT] [-I PATH]... [-isystem PATH]... [-D NAME[=VALUE]]... [-U NAME]... FILE...",
+  )
+}
+
+///|
+fn split_define_spec(spec : String) -> (String, String?)? {
+  if spec == "" {
+    return None
+  }
+  let len = spec.length()
+  let mut i = 0
+  while i < len {
+    if spec[i] == 61 {
+      let name = slice_string(spec, 0, i)
+      let value = slice_string(spec, i + 1, len)
+      return Some((name, Some(value)))
+    }
+    i = i + 1
+  }
+  Some((spec, None))
 }
 
 ///|
@@ -25,6 +52,7 @@ fn parse_cli_args(
 ) -> CliParse {
   let include_paths : Array[String] = []
   let inputs : Array[String] = []
+  let macro_actions : Array[CliMacroAction] = []
   let mut output : String? = None
   let mut compile_only = false
   let mut bench = false
@@ -76,6 +104,76 @@ fn parse_cli_args(
       i = i + 1
       continue
     }
+    if arg == "-D" {
+      if i + 1 >= args.length() {
+        println("error: missing argument for -D")
+        print_usage()
+        return CliParse::Error
+      }
+      match split_define_spec(args[i + 1]) {
+        None => {
+          println("error: empty macro name in -D")
+          print_usage()
+          return CliParse::Error
+        }
+        Some((name, value)) =>
+          if name == "" {
+            println("error: empty macro name in -D")
+            print_usage()
+            return CliParse::Error
+          } else {
+            macro_actions.push(CliMacroAction::Define(name~, value~))
+          }
+      }
+      i = i + 2
+      continue
+    }
+    if arg.has_prefix("-D") && arg.length() > 2 {
+      match split_define_spec(slice_string(arg, 2, arg.length())) {
+        None => {
+          println("error: empty macro name in -D")
+          print_usage()
+          return CliParse::Error
+        }
+        Some((name, value)) =>
+          if name == "" {
+            println("error: empty macro name in -D")
+            print_usage()
+            return CliParse::Error
+          } else {
+            macro_actions.push(CliMacroAction::Define(name~, value~))
+          }
+      }
+      i = i + 1
+      continue
+    }
+    if arg == "-U" {
+      if i + 1 >= args.length() {
+        println("error: missing argument for -U")
+        print_usage()
+        return CliParse::Error
+      }
+      let name = args[i + 1]
+      if name == "" {
+        println("error: empty macro name in -U")
+        print_usage()
+        return CliParse::Error
+      }
+      macro_actions.push(CliMacroAction::Undef(name=name))
+      i = i + 2
+      continue
+    }
+    if arg.has_prefix("-U") && arg.length() > 2 {
+      let name = slice_string(arg, 2, arg.length())
+      if name == "" {
+        println("error: empty macro name in -U")
+        print_usage()
+        return CliParse::Error
+      }
+      macro_actions.push(CliMacroAction::Undef(name~))
+      i = i + 1
+      continue
+    }
     if arg.has_prefix("-W") || arg.has_prefix("-w") {
       i = i + 1
       continue
@@ -117,7 +215,14 @@ fn parse_cli_args(
     println("error: -o requires exactly one input file")
     return CliParse::Error
   }
-  CliParse::Run({ include_paths, inputs, output, compile_only, bench })
+  CliParse::Run({
+    include_paths,
+    inputs,
+    output,
+    compile_only,
+    bench,
+    macro_actions,
+  })
 }
 
 ///|
@@ -241,6 +346,39 @@ fn format_diag_for_cli(map : SourceMap, d : Diag) -> String {
 }
 
 ///|
+fn lex_cli_macro_tokens(pp : Preprocessor, value : String) -> Array[Token] {
+  if value == "" {
+    return []
+  }
+  let file = add_file(pp.map, "<cmdline>", value)
+  let lex = new_lexer(file, pp.diags, pp.interner, pp.keyword_ids)
+  let tokens : Array[Token] = []
+  while true {
+    let tok = next_token(lex)
+    if tok.kind == Eof {
+      break
+    }
+    tokens.push(tok)
+  }
+  normalize_macro_tokens(tokens)
+}
+
+///|
+fn apply_cli_macros(pp : Preprocessor, actions : Array[CliMacroAction]) -> Unit {
+  for action in actions {
+    match action {
+      CliMacroAction::Define(name~, value~) =>
+        match value {
+          None => define_int_macro(pp, name, 1)
+          Some(v) => define_macro(pp, name, lex_cli_macro_tokens(pp, v))
+        }
+      CliMacroAction::Undef(name~) =>
+        remove_macro(pp, macro_id_from_name(pp, name))
+    }
+  }
+}
+
+///|
 fn main {
   touch_unused_symbols()
   match parse_cli_args(@env.args()) {
@@ -265,6 +403,7 @@ fn main {
             for p in cfg.include_paths {
               add_include_path(pp, p)
             }
+            apply_cli_macros(pp, cfg.macro_actions)
             if !cfg.compile_only {
               let toks = dump_tokens(pp, 32)
               for t in toks {

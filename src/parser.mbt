@@ -3,6 +3,8 @@ struct Parser {
   pp : Preprocessor
   mut current : Token
   mut lookahead : Token
+  mut buffer : Array[Token]
+  mut buffer_pos : Int
   diags : DiagBag
   typedef_counts : Array[Int]
   typedef_values : Array[CType?]
@@ -58,6 +60,8 @@ fn new_parser(pp : Preprocessor) -> Parser {
     pp,
     current,
     lookahead,
+    buffer: [],
+    buffer_pos: 0,
     diags: pp.diags,
     typedef_counts,
     typedef_values,
@@ -101,6 +105,7 @@ fn special_ident_kind(tok : Token, ids : KeywordIds) -> TokenKind? {
         | KwConst
         | KwVolatile
         | KwRestrict
+        | KwAtomic
         | KwInline
         | KwNoreturn => Some(kind)
         _ => None
@@ -436,7 +441,7 @@ fn parse_old_style_param_decls(
 
 ///|
 fn empty_qual() -> TypeQual {
-  { is_const: false, is_volatile: false, is_restrict: false }
+  { is_const: false, is_volatile: false, is_restrict: false, is_atomic: false }
 }
 
 ///|
@@ -445,12 +450,13 @@ fn merge_qual(a : TypeQual, b : TypeQual) -> TypeQual {
     is_const: a.is_const || b.is_const,
     is_volatile: a.is_volatile || b.is_volatile,
     is_restrict: a.is_restrict || b.is_restrict,
+    is_atomic: a.is_atomic || b.is_atomic,
   }
 }
 
 ///|
 fn qual_is_empty(qual : TypeQual) -> Bool {
-  !qual.is_const && !qual.is_volatile && !qual.is_restrict
+  !qual.is_const && !qual.is_volatile && !qual.is_restrict && !qual.is_atomic
 }
 
 ///|
@@ -459,17 +465,38 @@ fn with_const(qual : TypeQual) -> TypeQual {
     is_const: true,
     is_volatile: qual.is_volatile,
     is_restrict: qual.is_restrict,
+    is_atomic: qual.is_atomic,
   }
 }
 
 ///|
 fn with_volatile(qual : TypeQual) -> TypeQual {
-  { is_const: qual.is_const, is_volatile: true, is_restrict: qual.is_restrict }
+  {
+    is_const: qual.is_const,
+    is_volatile: true,
+    is_restrict: qual.is_restrict,
+    is_atomic: qual.is_atomic,
+  }
 }
 
 ///|
 fn with_restrict(qual : TypeQual) -> TypeQual {
-  { is_const: qual.is_const, is_volatile: qual.is_volatile, is_restrict: true }
+  {
+    is_const: qual.is_const,
+    is_volatile: qual.is_volatile,
+    is_restrict: true,
+    is_atomic: qual.is_atomic,
+  }
+}
+
+///|
+fn with_atomic(qual : TypeQual) -> TypeQual {
+  {
+    is_const: qual.is_const,
+    is_volatile: qual.is_volatile,
+    is_restrict: qual.is_restrict,
+    is_atomic: true,
+  }
 }
 
 ///|
@@ -518,6 +545,11 @@ fn parse_type_qualifiers(p : Parser) -> TypeQual {
       }
       KwRestrict => {
         qual = with_restrict(qual)
+        ignore(advance_token(p))
+        continue
+      }
+      KwAtomic => {
+        qual = with_atomic(qual)
         ignore(advance_token(p))
         continue
       }
@@ -627,6 +659,31 @@ fn parse_type_specifiers(
         attrs = merge_attrs(attrs, attrs_with(noreturn=true))
         ignore(advance_token(p))
         saw_any = true
+        continue
+      }
+      KwAtomic => {
+        ignore(advance_token(p))
+        saw_any = true
+        if match_token(p, LParen) is Some(_) {
+          match parse_type_name(p) {
+            None => {
+              add_parse_error(p, tok.loc, "expected type name in _Atomic")
+              return None
+            }
+            Some(ty) => {
+              expect(p, RParen, "expected ')' after _Atomic type") |> ignore
+              if base is Some(_) {
+                add_parse_error(p, tok.loc, "multiple type specifiers")
+              } else {
+                base = Some(ty)
+                start_loc = tok.loc
+              }
+              qual = with_atomic(qual)
+            }
+          }
+        } else {
+          qual = with_atomic(qual)
+        }
         continue
       }
       KwConst => {
@@ -908,6 +965,7 @@ fn is_type_spec_start(p : Parser) -> Bool {
     | KwConst
     | KwVolatile
     | KwRestrict
+    | KwAtomic
     | KwSigned
     | KwUnsigned
     | KwAttribute
@@ -1615,9 +1673,21 @@ fn parse_designator_list(p : Parser) -> (Array[InitDesignator], SrcLoc) {
     }
     if match_token(p, LBracket) is Some(lbrack) {
       start_loc = lbrack.loc
-      let index = parse_expr_cond(p)
+      let start = parse_expr_cond(p)
+      let end_expr =
+        if match_token(p, Ellipsis) is Some(_) {
+          Some(parse_expr_cond(p))
+        } else {
+          None
+        }
       expect(p, RBracket, "expected ']' after designator") |> ignore
-      designators.push(InitDesignator::Index(expr=index, loc=lbrack.loc))
+      match end_expr {
+        None => designators.push(InitDesignator::Index(expr=start, loc=lbrack.loc))
+        Some(end) =>
+          designators.push(
+            InitDesignator::IndexRange(start~, end~, loc=lbrack.loc),
+          )
+      }
       continue
     }
     if peek_token(p).kind == Ident && peek_kind(p, 1) == Colon {
@@ -1827,6 +1897,9 @@ fn parse_declarator_suffix(
 fn parse_array_size(p : Parser) -> (Int?, Expr?) {
   if peek_token(p).kind == RBracket {
     return (None, None)
+  }
+  if peek_token(p).kind == KwStatic {
+    ignore(advance_token(p))
   }
   let loc = peek_token(p).loc
   let expr = parse_expr_cond(p)
@@ -2314,12 +2387,19 @@ fn parse_stmt(p : Parser) -> Stmt {
     }
     KwGoto => {
       let goto_tok = advance_token(p)
-      let name = match expect_ident(p, "expected label after goto") {
-        None => ""
-        Some(tok) => tok.lexeme
+      if p.current.kind == Star {
+        ignore(advance_token(p))
+        let expr = parse_expr(p)
+        expect(p, Semicolon, "expected ';' after goto") |> ignore
+        return Stmt::GotoExpr(expr~, loc=goto_tok.loc)
+      } else {
+        let name = match expect_ident(p, "expected label after goto") {
+          None => ""
+          Some(tok) => tok.lexeme
+        }
+        expect(p, Semicolon, "expected ';' after goto") |> ignore
+        return Stmt::Goto(name~, loc=goto_tok.loc)
       }
-      expect(p, Semicolon, "expected ';' after goto") |> ignore
-      return Stmt::Goto(name~, loc=goto_tok.loc)
     }
     KwReturn => {
       let ret_tok = advance_token(p)
@@ -2917,6 +2997,20 @@ fn parse_expr_unary(p : Parser) -> Expr {
     }
   }
   match p.current.kind {
+    AmpAmp => {
+      let tok = advance_token(p)
+      let name_tok = expect_ident(p, "expected label identifier after &&")
+      match name_tok {
+        None => Expr::IntLit(value="0", node_id=new_expr_id(p), loc=tok.loc)
+        Some(label_tok) =>
+          Expr::LabelAddr(
+            name=label_tok.lexeme,
+            id=label_tok.id,
+            node_id=new_expr_id(p),
+            loc=tok.loc,
+          )
+      }
+    }
     PlusPlus => {
       let tok = advance_token(p)
       let expr = parse_expr_unary(p)
@@ -3425,6 +3519,7 @@ fn is_type_start(p : Parser, tok : Token) -> Bool {
     KwConst => true
     KwVolatile => true
     KwRestrict => true
+    KwAtomic => true
     KwExtern => true
     KwStatic => true
     KwAuto => true
@@ -3433,6 +3528,7 @@ fn is_type_start(p : Parser, tok : Token) -> Bool {
     KwStruct => true
     KwUnion => true
     KwEnum => true
+    KwTypeof => true
     KwTypedef => true
     Ident => has_typedef(p, tok)
     _ => false
@@ -3447,6 +3543,7 @@ fn expr_loc(expr : Expr) -> SrcLoc {
     Expr::CharLit(loc~, ..) => loc
     Expr::StringLit(loc~, ..) => loc
     Expr::Ident(loc~, ..) => loc
+    Expr::LabelAddr(loc~, ..) => loc
     Expr::BuiltinTypesCompatibleP(loc~, ..) => loc
     Expr::BuiltinOffsetof(loc~, ..) => loc
     Expr::BuiltinVaArg(loc~, ..) => loc
@@ -3474,6 +3571,7 @@ fn expr_node_id(expr : Expr) -> Int {
     Expr::CharLit(node_id~, ..) => node_id
     Expr::StringLit(node_id~, ..) => node_id
     Expr::Ident(node_id~, ..) => node_id
+    Expr::LabelAddr(node_id~, ..) => node_id
     Expr::BuiltinTypesCompatibleP(node_id~, ..) => node_id
     Expr::BuiltinOffsetof(node_id~, ..) => node_id
     Expr::BuiltinVaArg(node_id~, ..) => node_id
@@ -3749,7 +3847,17 @@ fn peek_token(p : Parser) -> Token {
 
 ///|
 fn peek_token_at(p : Parser, offset : Int) -> Token {
-  if offset <= 0 { p.current } else { p.lookahead }
+  if offset <= 0 {
+    return p.current
+  }
+  if offset == 1 {
+    return p.lookahead
+  }
+  let target = p.buffer_pos + (offset - 2)
+  while p.buffer.length() <= target {
+    p.buffer.push(next_pp_token(p.pp))
+  }
+  p.buffer[target]
 }
 
 ///|
@@ -3761,7 +3869,16 @@ fn peek_kind(p : Parser, offset : Int) -> TokenKind {
 fn advance_token(p : Parser) -> Token {
   let tok = p.current
   p.current = p.lookahead
-  p.lookahead = next_pp_token(p.pp)
+  if p.buffer_pos < p.buffer.length() {
+    p.lookahead = p.buffer[p.buffer_pos]
+    p.buffer_pos = p.buffer_pos + 1
+    if p.buffer_pos == p.buffer.length() {
+      p.buffer = []
+      p.buffer_pos = 0
+    }
+  } else {
+    p.lookahead = next_pp_token(p.pp)
+  }
   tok
 }
 
