@@ -33,9 +33,9 @@ struct SemContext {
   globals_by_id : Array[CType?]
   functions : FastMap[String, FuncSig]
   functions_by_id : Array[FuncSig?]
-  builtin_call_ids : FastMap[Int, BuiltinCallKind]
-  builtin_sig_ids : FastMap[Int, FuncSig]
-  atomic_template_ids : FastMap[Int, String]
+  builtin_call_ids : Array[BuiltinCallKind?]
+  builtin_sig_ids : Array[FuncSig?]
+  atomic_template_ids : Array[String?]
   function_defs : FastMap[String, Bool]
   locals : Array[FastMap[Int, CType]]
   local_values : FastMap[Int, CType]
@@ -116,9 +116,9 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     globals_by_id: [],
     functions: fast_map_new(),
     functions_by_id: [],
-    builtin_call_ids: fast_map_new(),
-    builtin_sig_ids: fast_map_new(),
-    atomic_template_ids: fast_map_new(),
+    builtin_call_ids: [],
+    builtin_sig_ids: [],
+    atomic_template_ids: [],
     function_defs: fast_map_new(),
     locals: [],
     local_values: fast_map_new(),
@@ -5642,7 +5642,7 @@ fn builtin_call_kind(
   id : Int,
 ) -> BuiltinCallKind? {
   if id != 0 {
-    match ctx.builtin_call_ids.get(id) {
+    match get_opt_by_id(ctx.builtin_call_ids, id) {
       Some(kind) => return Some(kind)
       None => ()
     }
@@ -5665,7 +5665,7 @@ fn builtin_call_kind(
   match kind {
     Some(value) => {
       if id != 0 {
-        ctx.builtin_call_ids.set(id, value)
+        set_opt_by_id(ctx.builtin_call_ids, id, value)
       }
       Some(value)
     }
@@ -5680,7 +5680,7 @@ fn builtin_func_sig_from_ident(
   id : Int,
 ) -> FuncSig? {
   if id != 0 {
-    match ctx.builtin_sig_ids.get(id) {
+    match get_opt_by_id(ctx.builtin_sig_ids, id) {
       Some(sig) => return Some(sig)
       None => ()
     }
@@ -5692,7 +5692,7 @@ fn builtin_func_sig_from_ident(
   match sig {
     Some(value) => {
       if id != 0 {
-        ctx.builtin_sig_ids.set(id, value)
+        set_opt_by_id(ctx.builtin_sig_ids, id, value)
       }
       Some(value)
     }
@@ -5707,7 +5707,7 @@ fn atomic_builtin_template_from_ident(
   id : Int,
 ) -> String? {
   if id != 0 {
-    match ctx.atomic_template_ids.get(id) {
+    match get_opt_by_id(ctx.atomic_template_ids, id) {
       Some(template) => return Some(template)
       None => ()
     }
@@ -5719,7 +5719,7 @@ fn atomic_builtin_template_from_ident(
   match template {
     Some(value) => {
       if id != 0 {
-        ctx.atomic_template_ids.set(id, value)
+        set_opt_by_id(ctx.atomic_template_ids, id, value)
       }
       Some(value)
     }
