@@ -803,38 +803,52 @@ fn parse_macro_params(
   let mut is_variadic = false
   while i < args.length() {
     let tok = args[i]
-    if tok.kind == RParen {
-      i = i + 1
-      let replacement = slice_tokens(args, i)
-      return Some((params, is_variadic, replacement))
-    }
-    if tok.kind == Ellipsis {
-      is_variadic = true
-      let varargs_id = macro_id_from_name(pp, "__VA_ARGS__")
-      params.push(varargs_id)
-      i = i + 1
-      continue
-    }
-    if tok.kind != Ident {
-      add_pp_error(pp, loc, "invalid macro parameter")
-      return None
-    }
-    let param_id = macro_id_from_token(pp, tok)
-    if param_id == 0 {
-      add_pp_error(pp, loc, "invalid macro parameter")
-      return None
-    }
-    params.push(param_id)
-    i = i + 1
-    if i < args.length() && args[i].kind == Comma {
-      i = i + 1
-      if i < args.length() && args[i].kind == Ellipsis {
+    match tok.kind {
+      RParen => {
+        i = i + 1
+        let replacement = slice_tokens(args, i)
+        return Some((params, is_variadic, replacement))
+      }
+      Ellipsis => {
         is_variadic = true
         let varargs_id = macro_id_from_name(pp, "__VA_ARGS__")
         params.push(varargs_id)
         i = i + 1
+        continue
       }
-      continue
+      Ident => {
+        let param_id = macro_id_from_token(pp, tok)
+        if param_id == 0 {
+          add_pp_error(pp, loc, "invalid macro parameter")
+          return None
+        }
+        params.push(param_id)
+        i = i + 1
+        if i < args.length() {
+          match args[i].kind {
+            Comma => {
+              i = i + 1
+              if i < args.length() {
+                match args[i].kind {
+                  Ellipsis => {
+                    is_variadic = true
+                    let varargs_id = macro_id_from_name(pp, "__VA_ARGS__")
+                    params.push(varargs_id)
+                    i = i + 1
+                  }
+                  _ => ()
+                }
+              }
+              continue
+            }
+            _ => ()
+          }
+        }
+      }
+      _ => {
+        add_pp_error(pp, loc, "invalid macro parameter")
+        return None
+      }
     }
   }
   add_pp_error(pp, loc, "unterminated macro parameter list")
@@ -869,59 +883,61 @@ fn read_macro_args(pp : Preprocessor, loc : SrcLoc) -> Array[Array[Token]]? {
   let mut depth_bracket = 0
   while true {
     let tok = next_raw_token(pp)
-    if tok.kind == Eof {
-      add_pp_error(pp, loc, "unterminated macro invocation")
-      return None
-    }
-    if tok.kind == LParen {
-      depth_paren = depth_paren + 1
-      current.push(tok)
-      continue
-    }
-    if tok.kind == RParen {
-      if depth_paren == 0 && depth_brace == 0 && depth_bracket == 0 {
-        if current.length() > 0 || args.length() > 0 {
-          args.push(current)
+    match tok.kind {
+      Eof => {
+        add_pp_error(pp, loc, "unterminated macro invocation")
+        return None
+      }
+      LParen => {
+        depth_paren = depth_paren + 1
+        current.push(tok)
+        continue
+      }
+      RParen => {
+        if depth_paren == 0 && depth_brace == 0 && depth_bracket == 0 {
+          if current.length() > 0 || args.length() > 0 {
+            args.push(current)
+          }
+          return Some(args)
         }
-        return Some(args)
+        depth_paren = depth_paren - 1
+        current.push(tok)
+        continue
       }
-      depth_paren = depth_paren - 1
-      current.push(tok)
-      continue
-    }
-    if tok.kind == LBrace {
-      depth_brace = depth_brace + 1
-      current.push(tok)
-      continue
-    }
-    if tok.kind == RBrace {
-      if depth_brace > 0 {
-        depth_brace = depth_brace - 1
+      LBrace => {
+        depth_brace = depth_brace + 1
+        current.push(tok)
+        continue
       }
-      current.push(tok)
-      continue
-    }
-    if tok.kind == LBracket {
-      depth_bracket = depth_bracket + 1
-      current.push(tok)
-      continue
-    }
-    if tok.kind == RBracket {
-      if depth_bracket > 0 {
-        depth_bracket = depth_bracket - 1
+      RBrace => {
+        if depth_brace > 0 {
+          depth_brace = depth_brace - 1
+        }
+        current.push(tok)
+        continue
       }
-      current.push(tok)
-      continue
+      LBracket => {
+        depth_bracket = depth_bracket + 1
+        current.push(tok)
+        continue
+      }
+      RBracket => {
+        if depth_bracket > 0 {
+          depth_bracket = depth_bracket - 1
+        }
+        current.push(tok)
+        continue
+      }
+      Comma =>
+        if depth_paren == 0 && depth_brace == 0 && depth_bracket == 0 {
+          args.push(current)
+          current = []
+          continue
+        } else {
+          current.push(tok)
+        }
+      _ => current.push(tok)
     }
-    if tok.kind == Comma &&
-      depth_paren == 0 &&
-      depth_brace == 0 &&
-      depth_bracket == 0 {
-      args.push(current)
-      current = []
-      continue
-    }
-    current.push(tok)
   }
   None
 }
