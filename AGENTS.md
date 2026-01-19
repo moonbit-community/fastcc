@@ -6,7 +6,8 @@ This project's goal is to rewrite refs/tinycc in MoonBit. Please keep implementa
 
 ## Rules
 
-- If fix bug, consider add tests to avoid regression in future
+- If fix bug, add tests to avoid regression in future
+- Keep refs/quickjs compile check in the test pipeline (scripts/run_mbtcc_ctest.sh) to avoid regressions
 
 ## Quick Reference
 
@@ -44,4 +45,3 @@ bd sync               # Sync with git
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
-

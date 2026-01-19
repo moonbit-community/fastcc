@@ -10,6 +10,11 @@ TINYCC_BUILD_TARGET="${TINYCC_BUILD_TARGET:-${ROOT_DIR}/src}"
 SELFHOST="${SELFHOST:-0}"
 SELFHOST_BIN="${SELFHOST_BIN:-${ROOT_DIR}/target/selfhost/tcc_selfhost}"
 SELFHOST_OBJ="${SELFHOST_OBJ:-${ROOT_DIR}/target/selfhost/tcc_all.o}"
+QUICKJS="${QUICKJS:-1}"
+QUICKJS_DIR="${ROOT_DIR}/refs/quickjs"
+QUICKJS_C="${QUICKJS_DIR}/quickjs.c"
+QUICKJS_OBJ="${TMP_DIR}/quickjs_mbt.o"
+QUICKJS_VERSION_DEFINE='-DCONFIG_VERSION="\"2021-03-27\""'
 
 FILTER="${FILTER:-}"
 MODE="${MODE:-strict}" # strict | allow-fail
@@ -25,6 +30,7 @@ Env vars:
   SELFHOST=1       Build refs/tinycc with tinycc.mbt and run tests via tcc_selfhost.
   TINYCC_BIN=path  Bootstrap compiler path (used to build tcc_selfhost in SELFHOST mode).
   SELFHOST_BIN=path  Override tcc_selfhost path.
+  QUICKJS=0|1      Compile refs/quickjs/quickjs.c with tinycc.mbt (default: 1).
 
 This runs mbtcc's C file tests (refs/mbtcc/ctest/*.c) against tinycc.mbt:
   - expected output: gcc
@@ -79,6 +85,36 @@ if [[ "${use_selfhost}" -eq 1 ]]; then
   TEST_TINYCC_BIN="${SELFHOST_BIN}"
 fi
 
+fail=0
+total=0
+
+quickjs_enabled=0
+if [[ "${QUICKJS}" == "1" || "${QUICKJS}" == "true" ]]; then
+  quickjs_enabled=1
+fi
+if [[ "${quickjs_enabled}" -eq 1 ]]; then
+  if [[ ! -f "${QUICKJS_C}" ]]; then
+    echo "error: missing quickjs source at ${QUICKJS_C}"
+    exit 1
+  fi
+  quickjs_args=(
+    -I "${ROOT_DIR}/compat/include"
+    -I "${QUICKJS_DIR}"
+    -D_GNU_SOURCE
+    "${QUICKJS_VERSION_DEFINE}"
+  )
+  quickjs_log="${TMP_DIR}/quickjs_compile.log"
+  echo "Compiling quickjs.c with ${TEST_TINYCC_BIN}"
+  if ! "${TEST_TINYCC_BIN}" "${quickjs_args[@]}" -c "${QUICKJS_C}" -o "${QUICKJS_OBJ}" >"${quickjs_log}" 2>&1; then
+    echo "FAILED: quickjs compile failed"
+    sed -n '1,160p' "${quickjs_log}" || true
+    if [[ "${MODE}" != "allow-fail" ]]; then
+      exit 1
+    fi
+    fail=$((fail + 1))
+  fi
+fi
+
 support_o="${TMP_DIR}/ctest_support.o"
 if [[ -f "${SUPPORT_C}" ]]; then
   if ! clang -w -c "${SUPPORT_C}" -o "${support_o}" 2>"${TMP_DIR}/ctest_support.clang.log"; then
@@ -103,9 +139,6 @@ if [[ "${tests_count}" -eq 0 ]]; then
   echo "error: no tests selected"
   exit 1
 fi
-
-fail=0
-total=0
 
 echo "Running mbtcc ctest (count=${tests_count})"
 while IFS= read -r c_file; do
