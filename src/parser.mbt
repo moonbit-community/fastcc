@@ -2232,8 +2232,11 @@ fn parse_param_declarator(
 fn parse_compound_stmt(p : Parser, loc : SrcLoc) -> Stmt {
   p.pending_typedef_scopes.push(false)
   let stmts : Array[Stmt] = []
-  while !is_at_end(p) && peek_token(p).kind != RBrace {
-    stmts.push(parse_stmt(p))
+  while true {
+    match p.current.kind {
+      Eof | RBrace => break
+      _ => stmts.push(parse_stmt(p))
+    }
   }
   expect(p, RBrace, "expected '}'") |> ignore
   let did_scope = p.pending_typedef_scopes.pop().unwrap_or(false)
@@ -2450,11 +2453,12 @@ fn parse_if_stmt(p : Parser, loc : SrcLoc) -> Stmt {
   let cond = parse_expr(p)
   expect(p, RParen, "expected ')' after if condition") |> ignore
   let then_branch = parse_stmt(p)
-  let else_branch = if p.current.kind == KwElse {
-    advance_token(p) |> ignore
-    Some(parse_stmt(p))
-  } else {
-    None
+  let else_branch = match p.current.kind {
+    KwElse => {
+      advance_token(p) |> ignore
+      Some(parse_stmt(p))
+    }
+    _ => None
   }
   Stmt::If(cond~, then_branch~, else_branch~, loc~)
 }
@@ -3137,11 +3141,16 @@ fn parse_expr_primary(p : Parser) -> Expr {
               None => ()
               Some(id) => path.push(id.lexeme)
             }
-            while p.current.kind == Dot {
-              advance_token(p) |> ignore
-              match expect_ident(p, "expected member name in __builtin_offsetof") {
-                None => break
-                Some(id) => path.push(id.lexeme)
+            while true {
+              match p.current.kind {
+                Dot => {
+                  advance_token(p) |> ignore
+                  match expect_ident(p, "expected member name in __builtin_offsetof") {
+                    None => break
+                    Some(id) => path.push(id.lexeme)
+                  }
+                }
+                _ => break
               }
             }
             expect(p, RParen, "expected ')' after __builtin_offsetof") |> ignore
@@ -3182,19 +3191,22 @@ fn parse_expr_primary(p : Parser) -> Expr {
           )
       }
     LParen =>
-      if p.current.kind == LBrace {
-        let lbrace = advance_token(p)
-        let block = parse_compound_stmt(p, lbrace.loc)
-        expect(p, RParen, "expected ')' after statement expression") |> ignore
-        match block {
-          Stmt::Compound(stmts~, ..) =>
-            Expr::StmtExpr(stmts~, node_id=new_expr_id(p), loc=tok.loc)
-          _ => Expr::StmtExpr(stmts=[], node_id=new_expr_id(p), loc=tok.loc)
+      match p.current.kind {
+        LBrace => {
+          let lbrace = advance_token(p)
+          let block = parse_compound_stmt(p, lbrace.loc)
+          expect(p, RParen, "expected ')' after statement expression") |> ignore
+          match block {
+            Stmt::Compound(stmts~, ..) =>
+              Expr::StmtExpr(stmts~, node_id=new_expr_id(p), loc=tok.loc)
+            _ => Expr::StmtExpr(stmts=[], node_id=new_expr_id(p), loc=tok.loc)
+          }
         }
-      } else {
-        let expr = parse_expr(p)
-        expect(p, RParen, "expected ')'") |> ignore
-        expr
+        _ => {
+          let expr = parse_expr(p)
+          expect(p, RParen, "expected ')'") |> ignore
+          expr
+        }
       }
     _ => {
       add_parse_error(p, tok.loc, "unexpected token in expression")
@@ -3784,15 +3796,19 @@ fn expect_ident(p : Parser, message : String) -> Token? {
 
 ///|
 fn is_at_end(p : Parser) -> Bool {
-  peek_token(p).kind == Eof
+  match peek_token(p).kind {
+    Eof => true
+    _ => false
+  }
 }
 
 ///|
 fn synchronize(p : Parser) -> Unit {
   while !is_at_end(p) {
     let tok = advance_token(p)
-    if tok.kind == Semicolon || tok.kind == RBrace {
-      return
+    match tok.kind {
+      Semicolon | RBrace => return
+      _ => ()
     }
   }
 }
