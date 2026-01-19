@@ -1215,8 +1215,7 @@ fn struct_size_align(
         } else if !packed {
           let a8 = field_align * 8
           let max_units = if field_align > 0 {
-            let effective_size = if base_size == 8 && width <= 32 { 4 } else { base_size }
-            effective_size / field_align
+            base_size / field_align
           } else {
             0
           }
@@ -2679,8 +2678,7 @@ fn struct_field_offset_and_type(
         } else if !packed {
           let a8 = field_align * 8
           let max_units = if field_align > 0 {
-            let effective_size = if base_size == 8 && width <= 32 { 4 } else { base_size }
-            effective_size / field_align
+            base_size / field_align
           } else {
             0
           }
