@@ -10885,9 +10885,26 @@ fn gen_expr_ptr(
               return
             }
           gen_expr_ptr(emitter, alloc, syms, pool, cstrings, ptr_expr, dst, bag)
+          let mut base_reg = dst
+          let mut saved_reg : Int? = None
+          if expr_may_call(int_expr) && dst < 19 {
+            let tmp = take_reg(pool) catch {
+              err => {
+                add_error(bag, loc, err.to_string())
+                return
+              }
+            }
+            emit_mov(emitter, true, tmp, dst)
+            base_reg = tmp
+            saved_reg = Some(tmp)
+          }
           let idx = take_reg(pool) catch {
             err => {
               add_error(bag, loc, err.to_string())
+              match saved_reg {
+                Some(r) => give_reg(pool, r)
+                None => ()
+              }
               return
             }
           }
@@ -10937,11 +10954,15 @@ fn gen_expr_ptr(
             emitter,
             (base : Int)
             .lor(dst)
-            .lor(dst << 5)
+            .lor(base_reg << 5)
             .lor(idx << 16)
             .reinterpret_as_uint(),
           )
           give_reg(pool, idx)
+          match saved_reg {
+            Some(r) => give_reg(pool, r)
+            None => ()
+          }
         }
         _ => add_error(bag, loc, "codegen: unsupported pointer expression")
       }
