@@ -472,200 +472,209 @@ fn lex_string_literal(
 
 ///|
 fn lex_punct(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
-  match advance(lex) {
-    None => make_token(Eof, "", loc, line_start)
-    Some(code) => {
-      let text = lex.text
-      let len = lex.text_len
-      if code == 40 {
-        return make_token(LParen, "(", loc, line_start)
-      }
-      if code == 41 {
-        return make_token(RParen, ")", loc, line_start)
-      }
-      if code == 123 {
-        return make_token(LBrace, "{", loc, line_start)
-      }
-      if code == 125 {
-        return make_token(RBrace, "}", loc, line_start)
-      }
-      if code == 91 {
-        return make_token(LBracket, "[", loc, line_start)
-      }
-      if code == 93 {
-        return make_token(RBracket, "]", loc, line_start)
-      }
-      if code == 59 {
-        return make_token(Semicolon, ";", loc, line_start)
-      }
-      if code == 44 {
-        return make_token(Comma, ",", loc, line_start)
-      }
-      if code == 58 {
-        return make_token(Colon, ":", loc, line_start)
-      }
-      if code == 63 {
-        return make_token(Question, "?", loc, line_start)
-      }
-      if code == 35 {
-        if lex.index < len && text[lex.index] == 35 {
-          let _ = advance(lex)
-          return make_token(HashHash, "##", loc, line_start)
-        }
-        return make_token(Hash, "#", loc, line_start)
-      }
-      if code == 46 {
-        if lex.index + 1 < len &&
-          text[lex.index] == 46 &&
-          text[lex.index + 1] == 46 {
-          let _ = advance(lex)
-          let _ = advance(lex)
-          return make_token(Ellipsis, "...", loc, line_start)
-        }
-        return make_token(Dot, ".", loc, line_start)
-      }
-      if code == 45 {
-        if lex.index < len {
-          let next = text[lex.index]
-          if next == 62 {
-            let _ = advance(lex)
-            return make_token(Arrow, "->", loc, line_start)
-          }
-          if next == 45 {
-            let _ = advance(lex)
-            return make_token(MinusMinus, "--", loc, line_start)
-          }
-          if next == 61 {
-            let _ = advance(lex)
-            return make_token(MinusAssign, "-=", loc, line_start)
-          }
-        }
-        return make_token(Minus, "-", loc, line_start)
-      }
-      if code == 43 {
-        if lex.index < len {
-          let next = text[lex.index]
-          if next == 43 {
-            let _ = advance(lex)
-            return make_token(PlusPlus, "++", loc, line_start)
-          }
-          if next == 61 {
-            let _ = advance(lex)
-            return make_token(PlusAssign, "+=", loc, line_start)
-          }
-        }
-        return make_token(Plus, "+", loc, line_start)
-      }
-      if code == 42 {
-        if lex.index < len && text[lex.index] == 61 {
-          let _ = advance(lex)
-          return make_token(StarAssign, "*=", loc, line_start)
-        }
-        return make_token(Star, "*", loc, line_start)
-      }
-      if code == 47 {
-        if lex.index < len && text[lex.index] == 61 {
-          let _ = advance(lex)
-          return make_token(SlashAssign, "/=", loc, line_start)
-        }
-        return make_token(Slash, "/", loc, line_start)
-      }
-      if code == 37 {
-        if lex.index < len && text[lex.index] == 61 {
-          let _ = advance(lex)
-          return make_token(PercentAssign, "%=", loc, line_start)
-        }
-        return make_token(Percent, "%", loc, line_start)
-      }
-      if code == 61 {
-        if lex.index < len && text[lex.index] == 61 {
-          let _ = advance(lex)
-          return make_token(Eq, "==", loc, line_start)
-        }
-        return make_token(Assign, "=", loc, line_start)
-      }
-      if code == 33 {
-        if lex.index < len && text[lex.index] == 61 {
-          let _ = advance(lex)
-          return make_token(Ne, "!=", loc, line_start)
-        }
-        return make_token(Bang, "!", loc, line_start)
-      }
-      if code == 60 {
-        if lex.index < len && text[lex.index] == 60 {
-          let _ = advance(lex)
-          if lex.index < len && text[lex.index] == 61 {
-            let _ = advance(lex)
-            return make_token(ShiftLeftAssign, "<<=", loc, line_start)
-          }
-          return make_token(ShiftLeft, "<<", loc, line_start)
-        }
-        if lex.index < len && text[lex.index] == 61 {
-          let _ = advance(lex)
-          return make_token(Le, "<=", loc, line_start)
-        }
-        return make_token(Lt, "<", loc, line_start)
-      }
-      if code == 62 {
-        if lex.index < len && text[lex.index] == 62 {
-          let _ = advance(lex)
-          if lex.index < len && text[lex.index] == 61 {
-            let _ = advance(lex)
-            return make_token(ShiftRightAssign, ">>=", loc, line_start)
-          }
-          return make_token(ShiftRight, ">>", loc, line_start)
-        }
-        if lex.index < len && text[lex.index] == 61 {
-          let _ = advance(lex)
-          return make_token(Ge, ">=", loc, line_start)
-        }
-        return make_token(Gt, ">", loc, line_start)
-      }
-      if code == 38 {
-        if lex.index < len {
-          let next = text[lex.index]
-          if next == 38 {
-            let _ = advance(lex)
-            return make_token(AmpAmp, "&&", loc, line_start)
-          }
-          if next == 61 {
-            let _ = advance(lex)
-            return make_token(AmpAssign, "&=", loc, line_start)
-          }
-        }
-        return make_token(Amp, "&", loc, line_start)
-      }
-      if code == 124 {
-        if lex.index < len {
-          let next = text[lex.index]
-          if next == 124 {
-            let _ = advance(lex)
-            return make_token(PipePipe, "||", loc, line_start)
-          }
-          if next == 61 {
-            let _ = advance(lex)
-            return make_token(PipeAssign, "|=", loc, line_start)
-          }
-        }
-        return make_token(Pipe, "|", loc, line_start)
-      }
-      if code == 94 {
-        if lex.index < len && text[lex.index] == 61 {
-          let _ = advance(lex)
-          return make_token(CaretAssign, "^=", loc, line_start)
-        }
-        return make_token(Caret, "^", loc, line_start)
-      }
-      if code == 126 {
-        return make_token(Tilde, "~", loc, line_start)
-      }
-      add_lex_error(lex, loc, "unexpected character")
-      make_token(
-        Invalid,
-        slice_to_string(lex.text, loc.offset, lex.index),
-        loc,
-        line_start,
-      )
-    }
+  let idx = lex.index
+  if idx >= lex.text_len {
+    return make_token(Eof, "", loc, line_start)
   }
+  let text = lex.text
+  let len = lex.text_len
+  let code = text[idx]
+  lex.index = idx + 1
+  if code == 10 {
+    lex.line = lex.line + 1
+    lex.col = 1
+    lex.line_start = true
+  } else {
+    lex.col = lex.col + 1
+    lex.line_start = false
+  }
+  if code == 40 {
+    return make_token(LParen, "(", loc, line_start)
+  }
+  if code == 41 {
+    return make_token(RParen, ")", loc, line_start)
+  }
+  if code == 123 {
+    return make_token(LBrace, "{", loc, line_start)
+  }
+  if code == 125 {
+    return make_token(RBrace, "}", loc, line_start)
+  }
+  if code == 91 {
+    return make_token(LBracket, "[", loc, line_start)
+  }
+  if code == 93 {
+    return make_token(RBracket, "]", loc, line_start)
+  }
+  if code == 59 {
+    return make_token(Semicolon, ";", loc, line_start)
+  }
+  if code == 44 {
+    return make_token(Comma, ",", loc, line_start)
+  }
+  if code == 58 {
+    return make_token(Colon, ":", loc, line_start)
+  }
+  if code == 63 {
+    return make_token(Question, "?", loc, line_start)
+  }
+  if code == 35 {
+    if lex.index < len && text[lex.index] == 35 {
+      let _ = advance(lex)
+      return make_token(HashHash, "##", loc, line_start)
+    }
+    return make_token(Hash, "#", loc, line_start)
+  }
+  if code == 46 {
+    if lex.index + 1 < len &&
+      text[lex.index] == 46 &&
+      text[lex.index + 1] == 46 {
+      let _ = advance(lex)
+      let _ = advance(lex)
+      return make_token(Ellipsis, "...", loc, line_start)
+    }
+    return make_token(Dot, ".", loc, line_start)
+  }
+  if code == 45 {
+    if lex.index < len {
+      let next = text[lex.index]
+      if next == 62 {
+        let _ = advance(lex)
+        return make_token(Arrow, "->", loc, line_start)
+      }
+      if next == 45 {
+        let _ = advance(lex)
+        return make_token(MinusMinus, "--", loc, line_start)
+      }
+      if next == 61 {
+        let _ = advance(lex)
+        return make_token(MinusAssign, "-=", loc, line_start)
+      }
+    }
+    return make_token(Minus, "-", loc, line_start)
+  }
+  if code == 43 {
+    if lex.index < len {
+      let next = text[lex.index]
+      if next == 43 {
+        let _ = advance(lex)
+        return make_token(PlusPlus, "++", loc, line_start)
+      }
+      if next == 61 {
+        let _ = advance(lex)
+        return make_token(PlusAssign, "+=", loc, line_start)
+      }
+    }
+    return make_token(Plus, "+", loc, line_start)
+  }
+  if code == 42 {
+    if lex.index < len && text[lex.index] == 61 {
+      let _ = advance(lex)
+      return make_token(StarAssign, "*=", loc, line_start)
+    }
+    return make_token(Star, "*", loc, line_start)
+  }
+  if code == 47 {
+    if lex.index < len && text[lex.index] == 61 {
+      let _ = advance(lex)
+      return make_token(SlashAssign, "/=", loc, line_start)
+    }
+    return make_token(Slash, "/", loc, line_start)
+  }
+  if code == 37 {
+    if lex.index < len && text[lex.index] == 61 {
+      let _ = advance(lex)
+      return make_token(PercentAssign, "%=", loc, line_start)
+    }
+    return make_token(Percent, "%", loc, line_start)
+  }
+  if code == 61 {
+    if lex.index < len && text[lex.index] == 61 {
+      let _ = advance(lex)
+      return make_token(Eq, "==", loc, line_start)
+    }
+    return make_token(Assign, "=", loc, line_start)
+  }
+  if code == 33 {
+    if lex.index < len && text[lex.index] == 61 {
+      let _ = advance(lex)
+      return make_token(Ne, "!=", loc, line_start)
+    }
+    return make_token(Bang, "!", loc, line_start)
+  }
+  if code == 60 {
+    if lex.index < len && text[lex.index] == 60 {
+      let _ = advance(lex)
+      if lex.index < len && text[lex.index] == 61 {
+        let _ = advance(lex)
+        return make_token(ShiftLeftAssign, "<<=", loc, line_start)
+      }
+      return make_token(ShiftLeft, "<<", loc, line_start)
+    }
+    if lex.index < len && text[lex.index] == 61 {
+      let _ = advance(lex)
+      return make_token(Le, "<=", loc, line_start)
+    }
+    return make_token(Lt, "<", loc, line_start)
+  }
+  if code == 62 {
+    if lex.index < len && text[lex.index] == 62 {
+      let _ = advance(lex)
+      if lex.index < len && text[lex.index] == 61 {
+        let _ = advance(lex)
+        return make_token(ShiftRightAssign, ">>=", loc, line_start)
+      }
+      return make_token(ShiftRight, ">>", loc, line_start)
+    }
+    if lex.index < len && text[lex.index] == 61 {
+      let _ = advance(lex)
+      return make_token(Ge, ">=", loc, line_start)
+    }
+    return make_token(Gt, ">", loc, line_start)
+  }
+  if code == 38 {
+    if lex.index < len {
+      let next = text[lex.index]
+      if next == 38 {
+        let _ = advance(lex)
+        return make_token(AmpAmp, "&&", loc, line_start)
+      }
+      if next == 61 {
+        let _ = advance(lex)
+        return make_token(AmpAssign, "&=", loc, line_start)
+      }
+    }
+    return make_token(Amp, "&", loc, line_start)
+  }
+  if code == 124 {
+    if lex.index < len {
+      let next = text[lex.index]
+      if next == 124 {
+        let _ = advance(lex)
+        return make_token(PipePipe, "||", loc, line_start)
+      }
+      if next == 61 {
+        let _ = advance(lex)
+        return make_token(PipeAssign, "|=", loc, line_start)
+      }
+    }
+    return make_token(Pipe, "|", loc, line_start)
+  }
+  if code == 94 {
+    if lex.index < len && text[lex.index] == 61 {
+      let _ = advance(lex)
+      return make_token(CaretAssign, "^=", loc, line_start)
+    }
+    return make_token(Caret, "^", loc, line_start)
+  }
+  if code == 126 {
+    return make_token(Tilde, "~", loc, line_start)
+  }
+  add_lex_error(lex, loc, "unexpected character")
+  make_token(
+    Invalid,
+    slice_to_string(lex.text, loc.offset, lex.index),
+    loc,
+    line_start,
+  )
 }
