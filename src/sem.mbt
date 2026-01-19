@@ -42,35 +42,35 @@ struct SemContext {
   local_overrides : Array[Array[(Int, CType?)]]
   type_aliases : FastMap[String, CType]
   struct_defs : FastMap[String, RecordDef]
-  struct_defs_by_id : FastMap[Int, RecordDef]
+  struct_defs_by_id : Array[RecordDef?]
   union_defs : FastMap[String, RecordDef]
-  union_defs_by_id : FastMap[Int, RecordDef]
+  union_defs_by_id : Array[RecordDef?]
   struct_member_cache : FastMap[String, FastMap[String, CType]]
-  struct_member_cache_by_id : FastMap[Int, FastMap[Int, CType]]
+  struct_member_cache_by_id : Array[FastMap[Int, CType]?]
   union_member_cache : FastMap[String, FastMap[String, CType]]
-  union_member_cache_by_id : FastMap[Int, FastMap[Int, CType]]
+  union_member_cache_by_id : Array[FastMap[Int, CType]?]
   struct_field_access_cache : FastMap[String, FastMap[String, FieldAccessInfo]]
-  struct_field_access_cache_by_id : FastMap[Int, FastMap[Int, FieldAccessInfo]]
+  struct_field_access_cache_by_id : Array[FastMap[Int, FieldAccessInfo]?]
   union_field_access_cache : FastMap[String, FastMap[String, FieldAccessInfo]]
-  union_field_access_cache_by_id : FastMap[Int, FastMap[Int, FieldAccessInfo]]
+  union_field_access_cache_by_id : Array[FastMap[Int, FieldAccessInfo]?]
   struct_field_index_cache : FastMap[String, FastMap[String, Int]]
-  struct_field_index_cache_by_id : FastMap[Int, FastMap[Int, Int]]
+  struct_field_index_cache_by_id : Array[FastMap[Int, Int]?]
   union_field_index_cache : FastMap[String, FastMap[String, Int]]
-  union_field_index_cache_by_id : FastMap[Int, FastMap[Int, Int]]
+  union_field_index_cache_by_id : Array[FastMap[Int, Int]?]
   struct_size_cache : FastMap[String, (Int, Int)]
-  struct_size_cache_by_id : FastMap[Int, (Int, Int)]
+  struct_size_cache_by_id : Array[(Int, Int)?]
   union_size_cache : FastMap[String, (Int, Int)]
-  union_size_cache_by_id : FastMap[Int, (Int, Int)]
+  union_size_cache_by_id : Array[(Int, Int)?]
   func_compound_literals : FastMap[String, Array[String]]
   compound_literal_sizes : FastMap[String, (Int, Int)]
   func_has_compound_literal : FastMap[String, Bool]
   func_has_stmt_expr : FastMap[String, Bool]
   enum_defs : FastMap[String, Array[EnumItem]]
-  enum_defs_by_id : FastMap[Int, Array[EnumItem]]
+  enum_defs_by_id : Array[Array[EnumItem]?]
   enum_consts : FastMap[String, Int]
   enum_consts_by_id : Array[Int?]
   enum_types : FastMap[String, CType]
-  enum_types_by_id : FastMap[Int, CType]
+  enum_types_by_id : Array[CType?]
   compound_literal_types : FastMap[String, CType]
   expr_type_cache : Array[CType?]
   func_agg_temps : FastMap[String, (Int, Int)]
@@ -125,35 +125,35 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     local_overrides: [],
     type_aliases,
     struct_defs: fast_map_new(),
-    struct_defs_by_id: fast_map_new(),
+    struct_defs_by_id: [],
     union_defs: fast_map_new(),
-    union_defs_by_id: fast_map_new(),
+    union_defs_by_id: [],
     struct_member_cache: fast_map_new(),
-    struct_member_cache_by_id: fast_map_new(),
+    struct_member_cache_by_id: [],
     union_member_cache: fast_map_new(),
-    union_member_cache_by_id: fast_map_new(),
+    union_member_cache_by_id: [],
     struct_field_access_cache: fast_map_new(),
-    struct_field_access_cache_by_id: fast_map_new(),
+    struct_field_access_cache_by_id: [],
     union_field_access_cache: fast_map_new(),
-    union_field_access_cache_by_id: fast_map_new(),
+    union_field_access_cache_by_id: [],
     struct_field_index_cache: fast_map_new(),
-    struct_field_index_cache_by_id: fast_map_new(),
+    struct_field_index_cache_by_id: [],
     union_field_index_cache: fast_map_new(),
-    union_field_index_cache_by_id: fast_map_new(),
+    union_field_index_cache_by_id: [],
     struct_size_cache: fast_map_new(),
-    struct_size_cache_by_id: fast_map_new(),
+    struct_size_cache_by_id: [],
     union_size_cache: fast_map_new(),
-    union_size_cache_by_id: fast_map_new(),
+    union_size_cache_by_id: [],
     func_compound_literals: fast_map_new(),
     compound_literal_sizes: fast_map_new(),
     func_has_compound_literal: fast_map_new(),
     func_has_stmt_expr: fast_map_new(),
     enum_defs: fast_map_new(),
-    enum_defs_by_id: fast_map_new(),
+    enum_defs_by_id: [],
     enum_consts: fast_map_new(),
     enum_consts_by_id: [],
     enum_types: fast_map_new(),
-    enum_types_by_id: fast_map_new(),
+    enum_types_by_id: [],
     compound_literal_types: fast_map_new(),
     expr_type_cache: [],
     func_agg_temps: fast_map_new(),
@@ -167,6 +167,48 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     current_agg_temp_align: 1,
     record_agg_temps: true,
   }
+}
+
+///|
+fn[T] ensure_opt_array_capacity(arr : Array[T?], id : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  let len = arr.length()
+  if len >= id {
+    return
+  }
+  let mut i = len
+  while i < id {
+    arr.push(None)
+    i = i + 1
+  }
+}
+
+///|
+fn[T] get_opt_by_id(arr : Array[T?], id : Int) -> T? {
+  if id <= 0 {
+    return None
+  }
+  if id <= arr.length() {
+    arr[id - 1]
+  } else {
+    None
+  }
+}
+
+///|
+fn[T] set_opt_by_id(arr : Array[T?], id : Int, value : T) -> Unit {
+  if id <= 0 {
+    return
+  }
+  ensure_opt_array_capacity(arr, id)
+  arr[id - 1] = Some(value)
+}
+
+///|
+fn[T] has_opt_by_id(arr : Array[T?], id : Int) -> Bool {
+  get_opt_by_id(arr, id) is Some(_)
 }
 
 ///|
@@ -635,7 +677,7 @@ fn enum_type_for_arith(ctx : SemContext, ty : CType) -> CType {
   match strip_top_qualifiers(ty) {
     CType::Enum(name~, id~, ..) =>
       if id != 0 {
-        match ctx.enum_types_by_id.get(id) {
+        match get_opt_by_id(ctx.enum_types_by_id, id) {
           Some(base) => base
           None => default_int_type()
         }
@@ -813,7 +855,7 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
     CType::Pointer(_) => Some((8, 8))
     CType::Enum(name~, id~, items~) => {
       let enum_ty = if id != 0 {
-        match ctx.enum_types_by_id.get(id) {
+        match get_opt_by_id(ctx.enum_types_by_id, id) {
           Some(base) => Some(base)
           None =>
             match items {
@@ -828,7 +870,7 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
                 } else {
                   let base = enum_type_from_items(ctx, list)
                   if name != "" {
-                    ctx.enum_types_by_id.set(id, base)
+                    set_opt_by_id(ctx.enum_types_by_id, id, base)
                     ctx.enum_types.set(name, base)
                   }
                   Some(base)
@@ -907,11 +949,11 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
           let merged = merge_attrs(def.attrs, struct_attrs)
           if tag != "" && attrs_is_empty(struct_attrs) {
             if tag_id != 0 {
-              match ctx.struct_size_cache_by_id.get(tag_id) {
+              match get_opt_by_id(ctx.struct_size_cache_by_id, tag_id) {
                 Some(value) => Some(value)
                 None => {
                   let value = struct_size_align(ctx, def.fields, merged, loc)
-                  ctx.struct_size_cache_by_id.set(tag_id, value)
+                  set_opt_by_id(ctx.struct_size_cache_by_id, tag_id, value)
                   Some(value)
                 }
               }
@@ -944,11 +986,11 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
           let merged = merge_attrs(def.attrs, struct_attrs)
           if tag != "" && attrs_is_empty(struct_attrs) {
             if tag_id != 0 {
-              match ctx.union_size_cache_by_id.get(tag_id) {
+              match get_opt_by_id(ctx.union_size_cache_by_id, tag_id) {
                 Some(value) => Some(value)
                 None => {
                   let value = union_size_align(ctx, def.fields, merged, loc)
-                  ctx.union_size_cache_by_id.set(tag_id, value)
+                  set_opt_by_id(ctx.union_size_cache_by_id, tag_id, value)
                   Some(value)
                 }
               }
@@ -1040,7 +1082,7 @@ fn ensure_struct_fields(
     None =>
       if is_union {
         if tag_id != 0 {
-          match ctx.union_defs_by_id.get(tag_id) {
+          match get_opt_by_id(ctx.union_defs_by_id, tag_id) {
             Some(def) if def.fields.length() > 0 => Some(def)
             _ => {
               add_sem_error(ctx, loc, "incomplete union '\{tag}'")
@@ -1058,7 +1100,7 @@ fn ensure_struct_fields(
         }
       } else {
         if tag_id != 0 {
-          match ctx.struct_defs_by_id.get(tag_id) {
+          match get_opt_by_id(ctx.struct_defs_by_id, tag_id) {
             Some(def) if def.fields.length() > 0 => Some(def)
             _ => {
               add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
@@ -1600,7 +1642,7 @@ fn register_struct_def(
   }
   if is_union {
     if id != 0 {
-      if ctx.struct_defs_by_id.contains(id) {
+      if has_opt_by_id(ctx.struct_defs_by_id, id) {
         add_sem_error(ctx, loc, "redefinition of '\{name}'")
         return
       }
@@ -1609,7 +1651,7 @@ fn register_struct_def(
       return
     }
   } else if id != 0 {
-    if ctx.union_defs_by_id.contains(id) {
+    if has_opt_by_id(ctx.union_defs_by_id, id) {
       add_sem_error(ctx, loc, "redefinition of '\{name}'")
       return
     }
@@ -1634,7 +1676,7 @@ fn register_struct_def(
   }
   if is_union {
     let existing = if id != 0 {
-      ctx.union_defs_by_id.get(id)
+      get_opt_by_id(ctx.union_defs_by_id, id)
     } else {
       ctx.union_defs.get(name)
     }
@@ -1642,7 +1684,7 @@ fn register_struct_def(
       None => {
         ctx.union_defs.set(name, incoming)
         if id != 0 {
-          ctx.union_defs_by_id.set(id, incoming)
+          set_opt_by_id(ctx.union_defs_by_id, id, incoming)
         }
         validate_fields(incoming)
       }
@@ -1655,7 +1697,7 @@ fn register_struct_def(
             }
             ctx.union_defs.set(name, merged)
             if id != 0 {
-              ctx.union_defs_by_id.set(id, merged)
+              set_opt_by_id(ctx.union_defs_by_id, id, merged)
             }
           } else {
             add_sem_error(ctx, loc, "redefinition of '\{name}'")
@@ -1667,7 +1709,7 @@ fn register_struct_def(
           }
           ctx.union_defs.set(name, merged)
           if id != 0 {
-            ctx.union_defs_by_id.set(id, merged)
+            set_opt_by_id(ctx.union_defs_by_id, id, merged)
           }
           validate_fields(merged)
         } else {
@@ -1677,13 +1719,13 @@ fn register_struct_def(
           }
           ctx.union_defs.set(name, merged)
           if id != 0 {
-            ctx.union_defs_by_id.set(id, merged)
+            set_opt_by_id(ctx.union_defs_by_id, id, merged)
           }
         }
     }
   } else {
     let existing = if id != 0 {
-      ctx.struct_defs_by_id.get(id)
+      get_opt_by_id(ctx.struct_defs_by_id, id)
     } else {
       ctx.struct_defs.get(name)
     }
@@ -1691,7 +1733,7 @@ fn register_struct_def(
       None => {
         ctx.struct_defs.set(name, incoming)
         if id != 0 {
-          ctx.struct_defs_by_id.set(id, incoming)
+          set_opt_by_id(ctx.struct_defs_by_id, id, incoming)
         }
         validate_fields(incoming)
       }
@@ -1704,7 +1746,7 @@ fn register_struct_def(
             }
             ctx.struct_defs.set(name, merged)
             if id != 0 {
-              ctx.struct_defs_by_id.set(id, merged)
+              set_opt_by_id(ctx.struct_defs_by_id, id, merged)
             }
           } else {
             add_sem_error(ctx, loc, "redefinition of '\{name}'")
@@ -1716,7 +1758,7 @@ fn register_struct_def(
           }
           ctx.struct_defs.set(name, merged)
           if id != 0 {
-            ctx.struct_defs_by_id.set(id, merged)
+            set_opt_by_id(ctx.struct_defs_by_id, id, merged)
           }
           validate_fields(merged)
         } else {
@@ -1726,7 +1768,7 @@ fn register_struct_def(
           }
           ctx.struct_defs.set(name, merged)
           if id != 0 {
-            ctx.struct_defs_by_id.set(id, merged)
+            set_opt_by_id(ctx.struct_defs_by_id, id, merged)
           }
         }
     }
@@ -1786,7 +1828,7 @@ fn register_enum_def(
     Some(val) => val
   }
   let existing = if id != 0 {
-    ctx.enum_defs_by_id.get(id)
+    get_opt_by_id(ctx.enum_defs_by_id, id)
   } else {
     ctx.enum_defs.get(name)
   }
@@ -1794,7 +1836,7 @@ fn register_enum_def(
     None => {
       ctx.enum_defs.set(name, incoming)
       if id != 0 {
-        ctx.enum_defs_by_id.set(id, incoming)
+        set_opt_by_id(ctx.enum_defs_by_id, id, incoming)
       }
     }
     Some(existing) =>
@@ -1803,7 +1845,7 @@ fn register_enum_def(
       } else if existing.length() == 0 && incoming.length() > 0 {
         ctx.enum_defs.set(name, incoming)
         if id != 0 {
-          ctx.enum_defs_by_id.set(id, incoming)
+          set_opt_by_id(ctx.enum_defs_by_id, id, incoming)
         }
       }
   }
@@ -1833,15 +1875,14 @@ fn register_enum_def(
       value = current + 1
     }
     if has_value {
-    let base = enum_int_type_from_range(min_value, max_value)
-    ctx.enum_types.set(name, base)
-    if id != 0 {
-      ctx.enum_types_by_id.set(id, base)
+      let base = enum_int_type_from_range(min_value, max_value)
+      ctx.enum_types.set(name, base)
+      if id != 0 {
+        set_opt_by_id(ctx.enum_types_by_id, id, base)
+      }
     }
   }
 }
-}
-
 ///|
 fn define_enum_const(
   ctx : SemContext,
@@ -3005,7 +3046,7 @@ fn require_complete_object_type(
             let base = enum_type_from_items(ctx, list)
             if tag != "" {
               if tag_id != 0 {
-                ctx.enum_types_by_id.set(tag_id, base)
+                set_opt_by_id(ctx.enum_types_by_id, tag_id, base)
               } else {
                 ctx.enum_types.set(tag, base)
               }
@@ -3013,7 +3054,7 @@ fn require_complete_object_type(
           }
         None =>
           if tag_id != 0 {
-            if !ctx.enum_types_by_id.contains(tag_id) {
+            if !has_opt_by_id(ctx.enum_types_by_id, tag_id) {
               add_sem_error(ctx, loc, "incomplete enum '\{tag}'")
             }
           } else if !ctx.enum_types.contains(tag) {
@@ -4077,8 +4118,12 @@ fn lookup_struct_def(
   is_union~ : Bool,
 ) -> RecordDef? {
   if id != 0 {
-    let defs = if is_union { ctx.union_defs_by_id } else { ctx.struct_defs_by_id }
-    match defs.get(id) {
+    let def = if is_union {
+      get_opt_by_id(ctx.union_defs_by_id, id)
+    } else {
+      get_opt_by_id(ctx.struct_defs_by_id, id)
+    }
+    match def {
       None => None
       Some(def) => if def.fields.length() == 0 { None } else { Some(def) }
     }
@@ -4334,16 +4379,16 @@ fn find_field_index_cached(
         Some(def) =>
           if tag != "" &&
             (if tag_id != 0 {
-              ctx.struct_defs_by_id.contains(tag_id)
+              has_opt_by_id(ctx.struct_defs_by_id, tag_id)
             } else {
               ctx.struct_defs.contains(tag)
             }) {
             if id > 0 && tag_id != 0 {
-              let cache = match ctx.struct_field_index_cache_by_id.get(tag_id) {
+              let cache = match get_opt_by_id(ctx.struct_field_index_cache_by_id, tag_id) {
                 Some(existing) => existing
                 None => {
                   let (built_name, built_id) = build_field_index_caches(ctx, def.fields, loc)
-                  ctx.struct_field_index_cache_by_id.set(tag_id, built_id)
+                  set_opt_by_id(ctx.struct_field_index_cache_by_id, tag_id, built_id)
                   ctx.struct_field_index_cache.set(tag, built_name)
                   built_id
                 }
@@ -4356,7 +4401,7 @@ fn find_field_index_cached(
                   let (built_name, built_id) = build_field_index_caches(ctx, def.fields, loc)
                   ctx.struct_field_index_cache.set(tag, built_name)
                   if tag_id != 0 {
-                    ctx.struct_field_index_cache_by_id.set(tag_id, built_id)
+                    set_opt_by_id(ctx.struct_field_index_cache_by_id, tag_id, built_id)
                   }
                   built_name
                 }
@@ -4380,16 +4425,16 @@ fn find_field_index_cached(
         Some(def) =>
           if tag != "" &&
             (if tag_id != 0 {
-              ctx.union_defs_by_id.contains(tag_id)
+              has_opt_by_id(ctx.union_defs_by_id, tag_id)
             } else {
               ctx.union_defs.contains(tag)
             }) {
             if id > 0 && tag_id != 0 {
-              let cache = match ctx.union_field_index_cache_by_id.get(tag_id) {
+              let cache = match get_opt_by_id(ctx.union_field_index_cache_by_id, tag_id) {
                 Some(existing) => existing
                 None => {
                   let (built_name, built_id) = build_field_index_caches(ctx, def.fields, loc)
-                  ctx.union_field_index_cache_by_id.set(tag_id, built_id)
+                  set_opt_by_id(ctx.union_field_index_cache_by_id, tag_id, built_id)
                   ctx.union_field_index_cache.set(tag, built_name)
                   built_id
                 }
@@ -4402,7 +4447,7 @@ fn find_field_index_cached(
                   let (built_name, built_id) = build_field_index_caches(ctx, def.fields, loc)
                   ctx.union_field_index_cache.set(tag, built_name)
                   if tag_id != 0 {
-                    ctx.union_field_index_cache_by_id.set(tag_id, built_id)
+                    set_opt_by_id(ctx.union_field_index_cache_by_id, tag_id, built_id)
                   }
                   built_name
                 }
@@ -4615,11 +4660,11 @@ fn member_access_type(
         Some(def_val) =>
           if tag != "" {
             if id > 0 && tag_id != 0 {
-              let cache = match ctx.struct_member_cache_by_id.get(tag_id) {
+              let cache = match get_opt_by_id(ctx.struct_member_cache_by_id, tag_id) {
                 Some(existing) => existing
                 None => {
                   let (built_name, built_id) = build_member_caches(ctx, def_val.fields, loc)
-                  ctx.struct_member_cache_by_id.set(tag_id, built_id)
+                  set_opt_by_id(ctx.struct_member_cache_by_id, tag_id, built_id)
                   ctx.struct_member_cache.set(tag, built_name)
                   built_id
                 }
@@ -4639,7 +4684,7 @@ fn member_access_type(
                   let (built_name, built_id) = build_member_caches(ctx, def_val.fields, loc)
                   ctx.struct_member_cache.set(tag, built_name)
                   if tag_id != 0 {
-                    ctx.struct_member_cache_by_id.set(tag_id, built_id)
+                    set_opt_by_id(ctx.struct_member_cache_by_id, tag_id, built_id)
                   }
                   built_name
                 }
@@ -4679,11 +4724,11 @@ fn member_access_type(
         Some(def_val) =>
           if tag != "" {
             if id > 0 && tag_id != 0 {
-              let cache = match ctx.union_member_cache_by_id.get(tag_id) {
+              let cache = match get_opt_by_id(ctx.union_member_cache_by_id, tag_id) {
                 Some(existing) => existing
                 None => {
                   let (built_name, built_id) = build_member_caches(ctx, def_val.fields, loc)
-                  ctx.union_member_cache_by_id.set(tag_id, built_id)
+                  set_opt_by_id(ctx.union_member_cache_by_id, tag_id, built_id)
                   ctx.union_member_cache.set(tag, built_name)
                   built_id
                 }
@@ -4703,7 +4748,7 @@ fn member_access_type(
                   let (built_name, built_id) = build_member_caches(ctx, def_val.fields, loc)
                   ctx.union_member_cache.set(tag, built_name)
                   if tag_id != 0 {
-                    ctx.union_member_cache_by_id.set(tag_id, built_id)
+                    set_opt_by_id(ctx.union_member_cache_by_id, tag_id, built_id)
                   }
                   built_name
                 }

@@ -5795,12 +5795,12 @@ fn record_field_access_info(
           if tag != "" &&
             attrs_layout_empty(struct_attrs) &&
             (if tag_id != 0 {
-              ctx.struct_defs_by_id.contains(tag_id)
+              has_opt_by_id(ctx.struct_defs_by_id, tag_id)
             } else {
               ctx.struct_defs.contains(tag)
             }) {
             if id > 0 && tag_id != 0 {
-              let cache = match ctx.struct_field_access_cache_by_id.get(tag_id) {
+              let cache = match get_opt_by_id(ctx.struct_field_access_cache_by_id, tag_id) {
                 Some(existing) => existing
                 None => {
                   let (built_name, built_id) = build_struct_field_access_caches(
@@ -5809,7 +5809,7 @@ fn record_field_access_info(
                     struct_attrs,
                     loc,
                   )
-                  ctx.struct_field_access_cache_by_id.set(tag_id, built_id)
+                  set_opt_by_id(ctx.struct_field_access_cache_by_id, tag_id, built_id)
                   ctx.struct_field_access_cache.set(tag, built_name)
                   built_id
                 }
@@ -5827,7 +5827,7 @@ fn record_field_access_info(
                   )
                   ctx.struct_field_access_cache.set(tag, built_name)
                   if tag_id != 0 {
-                    ctx.struct_field_access_cache_by_id.set(tag_id, built_id)
+                    set_opt_by_id(ctx.struct_field_access_cache_by_id, tag_id, built_id)
                   }
                   built_name
                 }
@@ -5852,12 +5852,12 @@ fn record_field_access_info(
           if tag != "" &&
             attrs_layout_empty(union_attrs) &&
             (if tag_id != 0 {
-              ctx.union_defs_by_id.contains(tag_id)
+              has_opt_by_id(ctx.union_defs_by_id, tag_id)
             } else {
               ctx.union_defs.contains(tag)
             }) {
             if id > 0 && tag_id != 0 {
-              let cache = match ctx.union_field_access_cache_by_id.get(tag_id) {
+              let cache = match get_opt_by_id(ctx.union_field_access_cache_by_id, tag_id) {
                 Some(existing) => existing
                 None => {
                   let (built_name, built_id) = build_union_field_access_caches(
@@ -5866,7 +5866,7 @@ fn record_field_access_info(
                     union_attrs,
                     loc,
                   )
-                  ctx.union_field_access_cache_by_id.set(tag_id, built_id)
+                  set_opt_by_id(ctx.union_field_access_cache_by_id, tag_id, built_id)
                   ctx.union_field_access_cache.set(tag, built_name)
                   built_id
                 }
@@ -5884,7 +5884,7 @@ fn record_field_access_info(
                   )
                   ctx.union_field_access_cache.set(tag, built_name)
                   if tag_id != 0 {
-                    ctx.union_field_access_cache_by_id.set(tag_id, built_id)
+                    set_opt_by_id(ctx.union_field_access_cache_by_id, tag_id, built_id)
                   }
                   built_name
                 }
@@ -5921,13 +5921,13 @@ fn build_record_field_access_caches(
           if tag != "" &&
             attrs_layout_empty(struct_attrs) &&
             (if tag_id != 0 {
-              ctx.struct_defs_by_id.contains(tag_id)
+              has_opt_by_id(ctx.struct_defs_by_id, tag_id)
             } else {
               ctx.struct_defs.contains(tag)
             }) {
             let by_name = ctx.struct_field_access_cache.get(tag)
             let by_id = if tag_id != 0 {
-              ctx.struct_field_access_cache_by_id.get(tag_id)
+              get_opt_by_id(ctx.struct_field_access_cache_by_id, tag_id)
             } else {
               None
             }
@@ -5942,7 +5942,7 @@ fn build_record_field_access_caches(
                 )
                 ctx.struct_field_access_cache.set(tag, built_name)
                 if tag_id != 0 {
-                  ctx.struct_field_access_cache_by_id.set(tag_id, built_id)
+                  set_opt_by_id(ctx.struct_field_access_cache_by_id, tag_id, built_id)
                 }
                 (built_name, built_id)
               }
@@ -5965,13 +5965,13 @@ fn build_record_field_access_caches(
           if tag != "" &&
             attrs_layout_empty(union_attrs) &&
             (if tag_id != 0 {
-              ctx.union_defs_by_id.contains(tag_id)
+              has_opt_by_id(ctx.union_defs_by_id, tag_id)
             } else {
               ctx.union_defs.contains(tag)
             }) {
             let by_name = ctx.union_field_access_cache.get(tag)
             let by_id = if tag_id != 0 {
-              ctx.union_field_access_cache_by_id.get(tag_id)
+              get_opt_by_id(ctx.union_field_access_cache_by_id, tag_id)
             } else {
               None
             }
@@ -5986,7 +5986,7 @@ fn build_record_field_access_caches(
                 )
                 ctx.union_field_access_cache.set(tag, built_name)
                 if tag_id != 0 {
-                  ctx.union_field_access_cache_by_id.set(tag_id, built_id)
+                  set_opt_by_id(ctx.union_field_access_cache_by_id, tag_id, built_id)
                 }
                 (built_name, built_id)
               }
