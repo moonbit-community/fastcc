@@ -94,9 +94,13 @@ tinycc_ref = os.environ["TINYCC_REF_BIN"]
 clang_bin = os.environ["CLANG_BIN"]
 clang_flags = os.environ.get("CLANG_FLAGS", "").split()
 
-def include_args(paths):
+compat_include = os.path.join(root, "compat", "include")
+
+def include_args(paths, compat_after):
     args = []
     for path in paths:
+        if compat_after and path == compat_include:
+            continue
         args.extend(["-I", path])
     return args
 
@@ -196,7 +200,7 @@ def run_compile(label, compiler, extra_args, capture_phases):
             out_obj = os.path.join(rep_dir, f"{group}_{base}.o")
             cmd = [
                 compiler,
-                *include_args(item["includes"]),
+                *include_args(item["includes"], label == "clang"),
                 "-c",
                 source,
                 "-o", out_obj,
