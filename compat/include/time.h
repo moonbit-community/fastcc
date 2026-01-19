@@ -33,7 +33,9 @@ double difftime(time_t end, time_t beginning);
 clock_t clock(void);
 char *ctime(const time_t *timep);
 struct tm *localtime(const time_t *timep);
+struct tm *localtime_r(const time_t *timep, struct tm *result);
 struct tm *gmtime(const time_t *timep);
+struct tm *gmtime_r(const time_t *timep, struct tm *result);
 size_t strftime(char *s, size_t max, const char *fmt, const struct tm *tm);
 
 int nanosleep(const struct timespec *req, struct timespec *rem);

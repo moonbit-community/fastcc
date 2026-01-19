@@ -937,6 +937,34 @@ fn arm64_ldrx(
   off : UInt64,
 ) -> Unit {
   let sz = sz_
+  if sg && sz == 2 {
+    let mask32 : UInt = (0xfff : UInt) << sz
+    let mask32_not_u64 = mask32.lnot().to_uint64()
+    if (off & mask32_not_u64) == 0 {
+      let insn = (0xb9800000 : UInt64)
+        .lor(dst.to_uint64())
+        .lor(bas.to_uint64() << 5)
+        .lor(off << (10 - sz))
+        .to_uint()
+      emit32(emitter, insn)
+    } else if off < (256 : UInt64) || (0 : UInt64) - off <= (256 : UInt64) {
+      let insn = (0xb8800000 : UInt64)
+        .lor(dst.to_uint64())
+        .lor(bas.to_uint64() << 5)
+        .lor((off & (0x1ff : UInt64)) << 12)
+        .to_uint()
+      emit32(emitter, insn)
+    } else {
+      arm64_movimm(emitter, (30 : UInt), off)
+      let insn = (0xb8a06800 : UInt64)
+        .lor(dst.to_uint64())
+        .lor(bas.to_uint64() << 5)
+        .lor((30 : UInt64) << 16)
+        .to_uint()
+      emit32(emitter, insn)
+    }
+    return
+  }
   let sg1 = if sz >= 2 { false } else { sg }
   let sg_bit : UInt64 = if sg1 { 1 } else { 0 }
   let mask32 : UInt = (0xfff : UInt) << sz

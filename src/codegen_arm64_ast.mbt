@@ -44,6 +44,7 @@ struct FieldAccessInfo {
   ty : CType
   bit_offset : Int?
   bit_width : Int?
+  bit_unit_size : Int?
 }
 
 ///|
@@ -1509,6 +1510,116 @@ fn emit_int_cast(
 }
 
 ///|
+fn emit_cast_value(
+  emitter : Arm64Emitter,
+  sem : SemContext,
+  from_ty : CType,
+  to_ty : CType,
+  reg : Int,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  let from_float = float_kind_of_type(from_ty)
+  let to_float = float_kind_of_type(to_ty)
+  match (from_float, to_float) {
+    (Some(from_kind_raw), Some(to_kind_raw)) => {
+      let from_kind = normalize_float_kind(from_kind_raw)
+      let to_kind = normalize_float_kind(to_kind_raw)
+      if from_kind == to_kind {
+        return
+      }
+      if from_kind == CFloatKind::Float && to_kind == CFloatKind::Double {
+        emit_fmov_w_to_s(emitter, 0, reg)
+        emit32(emitter, (0x1e22c000 : UInt))
+        emit_fmov_d_to_x(emitter, reg, 0)
+      } else if from_kind == CFloatKind::Double && to_kind == CFloatKind::Float {
+        emit_fmov_x_to_d(emitter, 0, reg)
+        emit32(emitter, (0x1e624000 : UInt))
+        emit_fmov_s_to_w(emitter, reg, 0)
+      } else {
+        add_error(bag, loc, "codegen: unsupported float conversion")
+      }
+    }
+    (Some(from_kind_raw), None) => {
+      if !is_int_like(to_ty) && !type_is_pointer_like(to_ty) {
+        return
+      }
+      if !float_kind_supported(from_kind_raw) {
+        add_error(bag, loc, "codegen: unsupported float type")
+        return
+      }
+      if from_kind_raw == CFloatKind::Double {
+        emit_fmov_x_to_d(emitter, 0, reg)
+      } else {
+        emit_fmov_w_to_s(emitter, 0, reg)
+      }
+      let to_unsigned = match strip_top_qualifiers_keep_attrs(to_ty) {
+        CType::Int(unsigned~, ..) => unsigned
+        _ => false
+      }
+      let is64 = match scalar_size_signed_or_error(sem, to_ty, loc) {
+        None => false
+        Some((size, _)) => size == 8
+      }
+      let mut inst : Int = 0x1e380000
+      if to_unsigned {
+        inst = inst.lor(0x00010000)
+      }
+      if is64 {
+        inst = inst.lor(0x80000000)
+      }
+      if from_kind_raw != CFloatKind::Float {
+        inst = inst.lor(0x00400000)
+      }
+      emit32(
+        emitter,
+        inst
+        .lor(reg)
+        .lor(0 << 5)
+        .reinterpret_as_uint(),
+      )
+      emit_int_cast(emitter, sem, to_ty, to_ty, reg, loc, bag)
+    }
+    (None, Some(to_kind_raw)) => {
+      if !float_kind_supported(to_kind_raw) {
+        add_error(bag, loc, "codegen: unsupported float type")
+        return
+      }
+      let is_unsigned = match strip_top_qualifiers_keep_attrs(from_ty) {
+        CType::Int(unsigned~, ..) => unsigned
+        _ => false
+      }
+      let norm_target = normalize_float_kind(to_kind_raw)
+      if norm_target == CFloatKind::Float {
+        let base : Int = if is_unsigned { 0x1e230000 } else { 0x1e220000 }
+        emit32(
+          emitter,
+          base
+          .lor(0)
+          .lor(reg << 5)
+          .reinterpret_as_uint(),
+        )
+        emit_fmov_s_to_w(emitter, reg, 0)
+      } else {
+        let base : Int = if is_unsigned { 0x1e630000 } else { 0x1e620000 }
+        emit32(
+          emitter,
+          base
+          .lor(0)
+          .lor(reg << 5)
+          .reinterpret_as_uint(),
+        )
+        emit_fmov_d_to_x(emitter, reg, 0)
+      }
+    }
+    (None, None) =>
+      if is_int_like(to_ty) || type_is_pointer_like(to_ty) {
+        emit_int_cast(emitter, sem, from_ty, to_ty, reg, loc, bag)
+      }
+  }
+}
+
+///|
 const ARM64_COND_EQ : Int = 0
 
 ///|
@@ -2439,6 +2550,7 @@ fn resolve_init_designator_access_info(
   let mut result_ty = ty
   let mut bit_off : Int? = None
   let mut bit_width : Int? = None
+  let mut bit_unit_size : Int? = None
   for i = 0; i < designators.length(); i = i + 1 {
     let des = designators[i]
     let is_last = i == designators.length() - 1
@@ -2469,6 +2581,7 @@ fn resolve_init_designator_access_info(
             result_ty = elem
             bit_off = None
             bit_width = None
+            bit_unit_size = None
           }
           _ => {
             add_error(bag, des_loc, "codegen: array designator on non-array")
@@ -2493,6 +2606,7 @@ fn resolve_init_designator_access_info(
                 if is_last {
                   bit_off = info.bit_offset
                   bit_width = info.bit_width
+                  bit_unit_size = info.bit_unit_size
                 } else {
                   if info.bit_width is Some(_) {
                     add_error(bag, des_loc, "codegen: designator into bitfield")
@@ -2500,6 +2614,7 @@ fn resolve_init_designator_access_info(
                   }
                   bit_off = None
                   bit_width = None
+                  bit_unit_size = None
                 }
                 current = strip_top_qualifiers(info.ty)
               }
@@ -2517,6 +2632,7 @@ fn resolve_init_designator_access_info(
     ty: result_ty,
     bit_offset: bit_off,
     bit_width: bit_width,
+    bit_unit_size: bit_unit_size,
   })
 }
 
@@ -2996,6 +3112,7 @@ fn gen_initializer_to_addr(
                         ty: info.ty,
                         bit_offset: info.bit_offset,
                         bit_width: info.bit_width,
+                        bit_unit_size: info.bit_unit_size,
                       }
                       match item.value {
                         Initializer::Expr(expr~, ..) => {
@@ -3125,6 +3242,7 @@ fn gen_initializer_to_addr(
                             ty: info.ty,
                             bit_offset: info.bit_offset,
                             bit_width: info.bit_width,
+                            bit_unit_size: info.bit_unit_size,
                           }
                           match item.value {
                             Initializer::Expr(expr~, ..) => {
@@ -3219,6 +3337,7 @@ fn gen_initializer_to_addr(
                       ty: info.ty,
                       bit_offset: info.bit_offset,
                       bit_width: info.bit_width,
+                      bit_unit_size: info.bit_unit_size,
                     }
                     match first.value {
                       Initializer::Expr(expr~, ..) => {
@@ -3286,6 +3405,7 @@ fn gen_initializer_to_addr(
                     ty: info.ty,
                     bit_offset: info.bit_offset,
                     bit_width: info.bit_width,
+                    bit_unit_size: info.bit_unit_size,
                   }
                   match first.value {
                     Initializer::Expr(expr~, ..) => {
@@ -5375,6 +5495,15 @@ fn gen_call_expr_impl(
       }
     None => ()
   }
+  if float_kind_of_type(ret_ty) is None && is_int_like(ret_ty) {
+    match scalar_size_signed_or_error(alloc.sem, ret_ty, loc) {
+      Some((size, _)) =>
+        if size > 0 && size < 8 {
+          emit_int_cast(emitter, alloc.sem, ret_ty, ret_ty, 0, loc, bag)
+        }
+      None => ()
+    }
+  }
 }
 
 ///|
@@ -5853,10 +5982,9 @@ fn struct_field_access_info(
 ) -> FieldAccessInfo? {
   let fields = def.fields
   let attrs = merge_attrs(def.attrs, struct_attrs)
+  let (struct_size, _) = struct_size_align(ctx, fields, attrs, loc)
   let mut size = 0
-  let mut bit_unit_bits = 0
-  let mut bit_offset = 0
-  let mut bit_unit_size = 0
+  let mut bit_pos = 0
   for field in fields {
     let packed = attrs.packed || field.attrs.packed
     let field_align_override = attr_align_value(ctx, field.attrs, field.loc)
@@ -5871,49 +5999,65 @@ fn struct_field_access_info(
           None => (0, 1)
           Some(v) => v
         }
-        let unit_bits = base_size * 8
-        let mut field_align = if packed { 1 } else { base_align }
+        let mut field_align = base_align
         match field_align_override {
           None => ()
           Some(value) => field_align = value
         }
         if width == 0 {
-          size = align_to(size, field_align)
-          bit_unit_bits = 0
-          bit_offset = 0
-          bit_unit_size = 0
+          let used_bytes = (bit_pos + 7) / 8
+          size = align_to(size + used_bytes, field_align)
+          bit_pos = 0
           continue
         }
-        if bit_unit_bits == 0 ||
-          bit_unit_bits != unit_bits ||
-          width > unit_bits - bit_offset {
-          size = align_to(size, field_align)
-          bit_unit_bits = unit_bits
-          bit_unit_size = base_size
-          bit_offset = 0
+        if packed && width != 0 {
+          field_align = 1
+        }
+        match field_align_override {
+          None => ()
+          Some(value) => field_align = value
+        }
+        if field_align_override is Some(_) {
+          let used_bytes = (bit_pos + 7) / 8
+          size = align_to(size + used_bytes, field_align)
+          bit_pos = 0
+        } else if !packed {
+          let a8 = field_align * 8
+          let max_units = if field_align > 0 {
+            let effective_size = if base_size == 8 && width <= 32 { 4 } else { base_size }
+            effective_size / field_align
+          } else {
+            0
+          }
+          if a8 > 0 {
+            let ofs = ((size * 8 + bit_pos) % a8 + width + a8 - 1) / a8
+            if ofs > max_units {
+              let used_bytes = (bit_pos + 7) / 8
+              size = align_to(size + used_bytes, field_align)
+              bit_pos = 0
+            }
+          }
+        }
+        while bit_pos >= field_align * 8 {
+          size = size + field_align
+          bit_pos = bit_pos - field_align * 8
         }
         if (id > 0 && field.id == id) || field.name == name {
-          return Some({
+          let info = {
             offset: size,
             ty: field.ty,
-            bit_offset: Some(bit_offset),
+            bit_offset: Some(bit_pos),
             bit_width: Some(width),
-          })
+            bit_unit_size: None,
+          }
+          return Some(adjust_bitfield_access_info(ctx, struct_size, info, loc))
         }
-        bit_offset = bit_offset + width
-        if bit_offset == bit_unit_bits {
-          size = size + bit_unit_size
-          bit_unit_bits = 0
-          bit_unit_size = 0
-          bit_offset = 0
-        }
+        bit_pos = bit_pos + width
       }
       None => {
-        if bit_unit_bits != 0 {
-          size = size + bit_unit_size
-          bit_unit_bits = 0
-          bit_unit_size = 0
-          bit_offset = 0
+        if bit_pos != 0 {
+          size = size + (bit_pos + 7) / 8
+          bit_pos = 0
         }
         let (field_size, field_align) = match strip_top_qualifiers_keep_attrs(field.ty) {
           CType::Array(elem~, size=None, size_expr=size_expr, ..) =>
@@ -5957,6 +6101,7 @@ fn struct_field_access_info(
             ty: field.ty,
             bit_offset: None,
             bit_width: None,
+            bit_unit_size: None,
           })
         }
         if field.name == "" {
@@ -5970,6 +6115,7 @@ fn struct_field_access_info(
                     ty: inner.ty,
                     bit_offset: inner.bit_offset,
                     bit_width: inner.bit_width,
+                    bit_unit_size: inner.bit_unit_size,
                   })
               }
             _ => ()
@@ -5992,7 +6138,8 @@ fn union_field_access_info(
   loc : SrcLoc,
 ) -> FieldAccessInfo? {
   let fields = def.fields
-  let _attrs = merge_attrs(def.attrs, union_attrs)
+  let attrs = merge_attrs(def.attrs, union_attrs)
+  let (union_size, _) = union_size_align(ctx, fields, attrs, loc)
   for field in fields {
     match field.bit_width {
       Some(expr) => {
@@ -6002,12 +6149,14 @@ fn union_field_access_info(
             None => 0
           }
           if width > 0 {
-            return Some({
+            let info = {
               offset: 0,
               ty: field.ty,
               bit_offset: Some(0),
               bit_width: Some(width),
-            })
+              bit_unit_size: None,
+            }
+            return Some(adjust_bitfield_access_info(ctx, union_size, info, loc))
           }
         }
       }
@@ -6019,6 +6168,7 @@ fn union_field_access_info(
         ty: field.ty,
         bit_offset: None,
         bit_width: None,
+        bit_unit_size: None,
       })
     }
     if field.name == "" {
@@ -6032,6 +6182,7 @@ fn union_field_access_info(
                 ty: inner.ty,
                 bit_offset: inner.bit_offset,
                 bit_width: inner.bit_width,
+                bit_unit_size: inner.bit_unit_size,
               })
           }
         _ => ()
@@ -6074,10 +6225,9 @@ fn collect_struct_field_access_cache(
   cache : FastMap[String, FieldAccessInfo],
   cache_by_id : FastMap[Int, FieldAccessInfo],
 ) -> Unit {
+  let (struct_size, _) = struct_size_align(ctx, fields, attrs, loc)
   let mut size = 0
-  let mut bit_unit_bits = 0
-  let mut bit_offset = 0
-  let mut bit_unit_size = 0
+  let mut bit_pos = 0
   for field in fields {
     let packed = attrs.packed || field.attrs.packed
     let field_align_override = attr_align_value(ctx, field.attrs, field.loc)
@@ -6092,49 +6242,64 @@ fn collect_struct_field_access_cache(
           None => (0, 1)
           Some(v) => v
         }
-        let unit_bits = base_size * 8
-        let mut field_align = if packed { 1 } else { base_align }
+        let mut field_align = base_align
         match field_align_override {
           None => ()
           Some(value) => field_align = value
         }
         if width == 0 {
-          size = align_to(size, field_align)
-          bit_unit_bits = 0
-          bit_offset = 0
-          bit_unit_size = 0
+          let used_bytes = (bit_pos + 7) / 8
+          size = align_to(size + used_bytes, field_align)
+          bit_pos = 0
           continue
         }
-        if bit_unit_bits == 0 ||
-          bit_unit_bits != unit_bits ||
-          width > unit_bits - bit_offset {
-          size = align_to(size, field_align)
-          bit_unit_bits = unit_bits
-          bit_unit_size = base_size
-          bit_offset = 0
+        if packed && width != 0 {
+          field_align = 1
         }
-        let info = {
+        match field_align_override {
+          None => ()
+          Some(value) => field_align = value
+        }
+        if field_align_override is Some(_) {
+          let used_bytes = (bit_pos + 7) / 8
+          size = align_to(size + used_bytes, field_align)
+          bit_pos = 0
+        } else if !packed {
+          let a8 = field_align * 8
+          let max_units = if field_align > 0 {
+            let effective_size = if base_size == 8 && width <= 32 { 4 } else { base_size }
+            effective_size / field_align
+          } else {
+            0
+          }
+          if a8 > 0 {
+            let ofs = ((size * 8 + bit_pos) % a8 + width + a8 - 1) / a8
+            if ofs > max_units {
+              let used_bytes = (bit_pos + 7) / 8
+              size = align_to(size + used_bytes, field_align)
+              bit_pos = 0
+            }
+          }
+        }
+        while bit_pos >= field_align * 8 {
+          size = size + field_align
+          bit_pos = bit_pos - field_align * 8
+        }
+        let info = adjust_bitfield_access_info(ctx, struct_size, {
           offset: size,
           ty: field.ty,
-          bit_offset: Some(bit_offset),
+          bit_offset: Some(bit_pos),
           bit_width: Some(width),
-        }
+          bit_unit_size: None,
+        }, loc)
         add_field_access_entry(cache, field.name, info)
         add_field_access_entry_by_id(cache_by_id, field.id, info)
-        bit_offset = bit_offset + width
-        if bit_offset == bit_unit_bits {
-          size = size + bit_unit_size
-          bit_unit_bits = 0
-          bit_unit_size = 0
-          bit_offset = 0
-        }
+        bit_pos = bit_pos + width
       }
       None => {
-        if bit_unit_bits != 0 {
-          size = size + bit_unit_size
-          bit_unit_bits = 0
-          bit_unit_size = 0
-          bit_offset = 0
+        if bit_pos != 0 {
+          size = size + (bit_pos + 7) / 8
+          bit_pos = 0
         }
         let (field_size, field_align) = match strip_top_qualifiers_keep_attrs(field.ty) {
           CType::Array(elem~, size=None, size_expr=size_expr, ..) =>
@@ -6177,6 +6342,7 @@ fn collect_struct_field_access_cache(
           ty: field.ty,
           bit_offset: None,
           bit_width: None,
+          bit_unit_size: None,
         }
         add_field_access_entry(cache, field.name, info)
         add_field_access_entry_by_id(cache_by_id, field.id, info)
@@ -6194,6 +6360,7 @@ fn collect_struct_field_access_cache(
                   ty: nested_info.ty,
                   bit_offset: nested_info.bit_offset,
                   bit_width: nested_info.bit_width,
+                  bit_unit_size: nested_info.bit_unit_size,
                 })
               }
               for nested_id, nested_info in nested_by_id {
@@ -6202,6 +6369,7 @@ fn collect_struct_field_access_cache(
                   ty: nested_info.ty,
                   bit_offset: nested_info.bit_offset,
                   bit_width: nested_info.bit_width,
+                  bit_unit_size: nested_info.bit_unit_size,
                 })
               }
             }
@@ -6218,10 +6386,12 @@ fn collect_struct_field_access_cache(
 fn collect_union_field_access_cache(
   ctx : SemContext,
   fields : Array[Field],
+  attrs : Attributes,
   loc : SrcLoc,
   cache : FastMap[String, FieldAccessInfo],
   cache_by_id : FastMap[Int, FieldAccessInfo],
 ) -> Unit {
+  let (union_size, _) = union_size_align(ctx, fields, attrs, loc)
   for field in fields {
     match field.bit_width {
       Some(expr) => {
@@ -6230,12 +6400,13 @@ fn collect_union_field_access_cache(
           None => 0
         }
         if width > 0 {
-          let info = {
+          let info = adjust_bitfield_access_info(ctx, union_size, {
             offset: 0,
             ty: field.ty,
             bit_offset: Some(0),
             bit_width: Some(width),
-          }
+            bit_unit_size: None,
+          }, loc)
           add_field_access_entry(cache, field.name, info)
           add_field_access_entry_by_id(cache_by_id, field.id, info)
         }
@@ -6248,6 +6419,7 @@ fn collect_union_field_access_cache(
       ty: field.ty,
       bit_offset: None,
       bit_width: None,
+      bit_unit_size: None,
     }
     add_field_access_entry(cache, field.name, info)
     add_field_access_entry_by_id(cache_by_id, field.id, info)
@@ -6265,6 +6437,7 @@ fn collect_union_field_access_cache(
               ty: nested_info.ty,
               bit_offset: nested_info.bit_offset,
               bit_width: nested_info.bit_width,
+              bit_unit_size: nested_info.bit_unit_size,
             })
           }
           for nested_id, nested_info in nested_by_id {
@@ -6273,6 +6446,7 @@ fn collect_union_field_access_cache(
               ty: nested_info.ty,
               bit_offset: nested_info.bit_offset,
               bit_width: nested_info.bit_width,
+              bit_unit_size: nested_info.bit_unit_size,
             })
           }
         }
@@ -6305,8 +6479,8 @@ fn build_union_field_access_caches(
 ) -> (FastMap[String, FieldAccessInfo], FastMap[Int, FieldAccessInfo]) {
   let cache_by_name : FastMap[String, FieldAccessInfo] = fast_map_new()
   let cache_by_id : FastMap[Int, FieldAccessInfo] = fast_map_new()
-  let _attrs = merge_attrs(def.attrs, union_attrs)
-  collect_union_field_access_cache(ctx, def.fields, loc, cache_by_name, cache_by_id)
+  let attrs = merge_attrs(def.attrs, union_attrs)
+  collect_union_field_access_cache(ctx, def.fields, attrs, loc, cache_by_name, cache_by_id)
   (cache_by_name, cache_by_id)
 }
 
@@ -6727,6 +6901,87 @@ fn gen_member_addr_with_info(
 }
 
 ///|
+fn bitfield_access_size_for_bytes(bytes : Int) -> Int {
+  if bytes <= 1 {
+    1
+  } else if bytes <= 2 {
+    2
+  } else if bytes <= 4 {
+    4
+  } else {
+    8
+  }
+}
+
+///|
+fn adjust_bitfield_access_info(
+  ctx : SemContext,
+  struct_size : Int,
+  info : FieldAccessInfo,
+  loc : SrcLoc,
+) -> FieldAccessInfo {
+  match info.bit_width {
+    None => info
+    Some(width) => {
+      let bit_off = match info.bit_offset {
+        None => 0
+        Some(v) => v
+      }
+      let (base_size, _base_align) = match type_size_align(ctx, info.ty, loc) {
+        None => return info
+        Some(v) => v
+      }
+      if base_size > 0 {
+        let unit_bits = base_size * 8
+        if bit_off + width <= unit_bits && info.offset + base_size <= struct_size {
+          return {
+            offset: info.offset,
+            ty: info.ty,
+            bit_offset: Some(bit_off),
+            bit_width: Some(width),
+            bit_unit_size: Some(base_size),
+          }
+        }
+      }
+      let overall = info.offset * 8 + bit_off
+      let mut last_cx = -1
+      let mut size = 1
+      let mut align = 1
+      let mut bit_pos = 0
+      let mut cx = 0
+      while true {
+        let candidate_cx = ((overall >> 3) & -align)
+        bit_pos = overall - candidate_cx * 8
+        if candidate_cx == last_cx {
+          cx = candidate_cx
+          break
+        }
+        let bytes_needed = (bit_pos + width + 7) / 8
+        size = bitfield_access_size_for_bytes(bytes_needed)
+        align = size
+        last_cx = candidate_cx
+      }
+      if bit_pos + width <= size * 8 && cx + size <= struct_size {
+        return {
+          offset: cx,
+          ty: info.ty,
+          bit_offset: Some(bit_pos),
+          bit_width: Some(width),
+          bit_unit_size: Some(size),
+        }
+      }
+      {
+        offset: info.offset,
+        ty: info.ty,
+        bit_offset: Some(bit_off),
+        bit_width: Some(width),
+        bit_unit_size: None,
+      }
+    }
+  }
+}
+
+///|
 fn emit_and_reg(emitter : Arm64Emitter, is64 : Bool, dst : Int, lhs : Int, rhs : Int) -> Unit {
   let base : Int = if is64 { 0x8a000000 } else { 0x0a000000 }
   emit32(
@@ -6753,6 +7008,259 @@ fn emit_or_reg(emitter : Arm64Emitter, is64 : Bool, dst : Int, lhs : Int, rhs : 
 }
 
 ///|
+fn emit_bitfield_load_packed(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  pool : RegPool,
+  addr_reg : Int,
+  info : FieldAccessInfo,
+  dst : Int,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  let width = match info.bit_width {
+    None => 0
+    Some(v) => v
+  }
+  let bit_off = match info.bit_offset {
+    None => 0
+    Some(v) => v
+  }
+  if width <= 0 {
+    arm64_movimm(emitter, dst.reinterpret_as_uint(), 0)
+    return
+  }
+  let (_decl_size, signed) = match scalar_size_signed_or_error(alloc.sem, info.ty, loc) {
+    None => return
+    Some(v) => v
+  }
+  let is64 = _decl_size == 8 || width > 32
+  let l = if is64 { 1 } else { 0 }
+  let unit_bits = if is64 { 64 } else { 32 }
+  arm64_movimm(emitter, dst.reinterpret_as_uint(), 0)
+  let tmp = take_reg(pool) catch {
+    err => {
+      add_error(bag, loc, err.to_string())
+      return
+    }
+  }
+  let mut remaining = width
+  let mut bits_collected = 0
+  let mut bit_in = bit_off & 7
+  let mut byte_off = bit_off / 8
+  while remaining > 0 {
+    arm64_ldrx(
+      emitter,
+      false,
+      0,
+      tmp.reinterpret_as_uint(),
+      addr_reg.reinterpret_as_uint(),
+      (info.offset + byte_off).to_int64().reinterpret_as_uint64(),
+    )
+    if bit_in > 0 {
+      arm64_gen_opic(
+        emitter,
+        TOK_SHR,
+        l,
+        false,
+        bit_in.to_uint64(),
+        tmp,
+        tmp,
+      ) |> ignore
+    }
+    let n = if remaining < 8 - bit_in { remaining } else { 8 - bit_in }
+    if n < 8 {
+      let mask : UInt64 = ((1 : UInt64) << n) - (1 : UInt64)
+      if !arm64_gen_opic(emitter, TOK_AND, l, false, mask, tmp, tmp) {
+        let mask_reg = take_reg(pool) catch {
+          err => {
+            add_error(bag, loc, err.to_string())
+            give_reg(pool, tmp)
+            return
+          }
+        }
+        arm64_movimm(emitter, mask_reg.reinterpret_as_uint(), mask)
+        emit_and_reg(emitter, is64, tmp, tmp, mask_reg)
+        give_reg(pool, mask_reg)
+      }
+    }
+    if bits_collected > 0 {
+      arm64_gen_opic(
+        emitter,
+        TOK_SHL,
+        l,
+        false,
+        bits_collected.to_uint64(),
+        tmp,
+        tmp,
+      ) |> ignore
+    }
+    emit_or_reg(emitter, is64, dst, dst, tmp)
+    remaining = remaining - n
+    bits_collected = bits_collected + n
+    bit_in = 0
+    byte_off = byte_off + 1
+  }
+  give_reg(pool, tmp)
+  if signed && width < unit_bits {
+    let shift = unit_bits - width
+    arm64_gen_opic(
+      emitter,
+      TOK_SHL,
+      l,
+      false,
+      shift.to_uint64(),
+      dst,
+      dst,
+    ) |> ignore
+    arm64_gen_opic(
+      emitter,
+      TOK_SAR,
+      l,
+      false,
+      shift.to_uint64(),
+      dst,
+      dst,
+    ) |> ignore
+  }
+}
+
+///|
+fn emit_bitfield_store_packed(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  pool : RegPool,
+  addr_reg : Int,
+  info : FieldAccessInfo,
+  value_reg : Int,
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  let width = match info.bit_width {
+    None => 0
+    Some(v) => v
+  }
+  let bit_off = match info.bit_offset {
+    None => 0
+    Some(v) => v
+  }
+  if width <= 0 {
+    return
+  }
+  let (decl_size, _) = match scalar_size_signed_or_error(alloc.sem, info.ty, loc) {
+    None => return
+    Some(v) => v
+  }
+  let is64 = decl_size == 8 || width > 32
+  let l = if is64 { 1 } else { 0 }
+  let tmp = take_reg(pool) catch {
+    err => {
+      add_error(bag, loc, err.to_string())
+      return
+    }
+  }
+  let chunk = take_reg(pool) catch {
+    err => {
+      add_error(bag, loc, err.to_string())
+      give_reg(pool, tmp)
+      return
+    }
+  }
+  let mut remaining = width
+  let mut bits_used = 0
+  let mut bit_in = bit_off & 7
+  let mut byte_off = bit_off / 8
+  while remaining > 0 {
+    let n = if remaining < 8 - bit_in { remaining } else { 8 - bit_in }
+    emit_mov(emitter, is64, chunk, value_reg)
+    if bits_used > 0 {
+      arm64_gen_opic(
+        emitter,
+        TOK_SHR,
+        l,
+        false,
+        bits_used.to_uint64(),
+        chunk,
+        chunk,
+      ) |> ignore
+    }
+    if bit_in > 0 {
+      arm64_gen_opic(
+        emitter,
+        TOK_SHL,
+        l,
+        false,
+        bit_in.to_uint64(),
+        chunk,
+        chunk,
+      ) |> ignore
+    }
+    let mask : UInt64 = (((1 : UInt64) << n) - (1 : UInt64)) << bit_in
+    if n < 8 {
+      if !arm64_gen_opic(emitter, TOK_AND, l, false, mask, chunk, chunk) {
+        let mask_reg = take_reg(pool) catch {
+          err => {
+            add_error(bag, loc, err.to_string())
+            give_reg(pool, chunk)
+            give_reg(pool, tmp)
+            return
+          }
+        }
+        arm64_movimm(emitter, mask_reg.reinterpret_as_uint(), mask)
+        emit_and_reg(emitter, is64, chunk, chunk, mask_reg)
+        give_reg(pool, mask_reg)
+      }
+    }
+    if n == 8 && bit_in == 0 {
+      arm64_strx(
+        emitter,
+        0,
+        chunk.reinterpret_as_uint(),
+        addr_reg.reinterpret_as_uint(),
+        (info.offset + byte_off).to_int64().reinterpret_as_uint64(),
+      )
+    } else {
+      arm64_ldrx(
+        emitter,
+        false,
+        0,
+        tmp.reinterpret_as_uint(),
+        addr_reg.reinterpret_as_uint(),
+        (info.offset + byte_off).to_int64().reinterpret_as_uint64(),
+      )
+      let inv_mask : UInt64 = (0xff : UInt64) & mask.lnot()
+      if !arm64_gen_opic(emitter, TOK_AND, l, false, inv_mask, tmp, tmp) {
+        let mask_reg = take_reg(pool) catch {
+          err => {
+            add_error(bag, loc, err.to_string())
+            give_reg(pool, chunk)
+            give_reg(pool, tmp)
+            return
+          }
+        }
+        arm64_movimm(emitter, mask_reg.reinterpret_as_uint(), inv_mask)
+        emit_and_reg(emitter, is64, tmp, tmp, mask_reg)
+        give_reg(pool, mask_reg)
+      }
+      emit_or_reg(emitter, is64, tmp, tmp, chunk)
+      arm64_strx(
+        emitter,
+        0,
+        tmp.reinterpret_as_uint(),
+        addr_reg.reinterpret_as_uint(),
+        (info.offset + byte_off).to_int64().reinterpret_as_uint64(),
+      )
+    }
+    remaining = remaining - n
+    bits_used = bits_used + n
+    bit_in = 0
+    byte_off = byte_off + 1
+  }
+  give_reg(pool, chunk)
+  give_reg(pool, tmp)
+}
+
+///|
 fn emit_bitfield_load(
   emitter : Arm64Emitter,
   alloc : LocalAlloc,
@@ -6775,8 +7283,15 @@ fn emit_bitfield_load(
     arm64_movimm(emitter, dst.reinterpret_as_uint(), 0)
     return
   }
-  let (unit_size, signed) = match scalar_size_signed_or_error(alloc.sem, info.ty, loc) {
+  let (_decl_size, signed) = match scalar_size_signed_or_error(alloc.sem, info.ty, loc) {
     None => return
+    Some(v) => v
+  }
+  let unit_size = match info.bit_unit_size {
+    None => {
+      emit_bitfield_load_packed(emitter, alloc, pool, addr_reg, info, dst, loc, bag)
+      return
+    }
     Some(v) => v
   }
   let unit_bits = unit_size * 8
@@ -6870,8 +7385,15 @@ fn emit_bitfield_store(
   if width <= 0 {
     return
   }
-  let (unit_size, _) = match scalar_size_signed_or_error(alloc.sem, info.ty, loc) {
+  let (_decl_size, _) = match scalar_size_signed_or_error(alloc.sem, info.ty, loc) {
     None => return
+    Some(v) => v
+  }
+  let unit_size = match info.bit_unit_size {
+    None => {
+      emit_bitfield_store_packed(emitter, alloc, pool, addr_reg, info, value_reg, loc, bag)
+      return
+    }
     Some(v) => v
   }
   let unit_bits = unit_size * 8
@@ -6999,17 +7521,42 @@ fn store_lvalue_scalar(
   bag : DiagBag,
 ) -> Unit {
   let loc = expr_loc(lvalue)
+  let (value_size, _) = match scalar_size_signed_or_error(alloc.sem, value_ty, loc) {
+    None => return
+    Some(v) => v
+  }
+  let mut saved_reg : Int? = None
+  let mut store_reg = value_reg
+  if expr_may_call(lvalue) {
+    let tmp = take_reg(pool) catch {
+      err => {
+        add_error(bag, loc, err.to_string())
+        return
+      }
+    }
+    emit_mov(emitter, value_size == 8, tmp, value_reg)
+    saved_reg = Some(tmp)
+    store_reg = tmp
+  }
   match member_bitfield_info(alloc, lvalue) {
     Some((base, is_arrow, info)) => {
       let addr = take_reg(pool) catch {
         err => {
           add_error(bag, loc, err.to_string())
+          match saved_reg {
+            Some(r) => give_reg(pool, r)
+            None => ()
+          }
           return
         }
       }
       gen_member_base_addr(emitter, alloc, syms, pool, cstrings, base, is_arrow, addr, bag)
-      emit_bitfield_store(emitter, alloc, pool, addr, info, value_reg, loc, bag)
+      emit_bitfield_store(emitter, alloc, pool, addr, info, store_reg, loc, bag)
       give_reg(pool, addr)
+      match saved_reg {
+        Some(r) => give_reg(pool, r)
+        None => ()
+      }
       return
     }
     None => ()
@@ -7022,7 +7569,7 @@ fn store_lvalue_scalar(
             emitter,
             alloc.sem,
             slot.ty,
-            value_reg,
+            store_reg,
             slot.offset,
             loc,
             bag,
@@ -7031,13 +7578,13 @@ fn store_lvalue_scalar(
           let sym = sym_for_ident(syms, name, id=id)
           let addr_reg : Int = 16
           emit_addr_global(emitter, syms, sym, addr_reg)
-          let (size, _) = match scalar_size_signed_or_error(alloc.sem, value_ty, loc) {
-            None => return
-            Some(v) => v
-          }
-          let sz = match arm64_sz_from_size(size) {
+          let sz = match arm64_sz_from_size(value_size) {
             None => {
               add_error(bag, loc, "codegen: unsupported scalar size")
+              match saved_reg {
+                Some(r) => give_reg(pool, r)
+                None => ()
+              }
               return
             }
             Some(v) => v
@@ -7045,7 +7592,7 @@ fn store_lvalue_scalar(
           arm64_strx(
             emitter,
             sz,
-            value_reg.reinterpret_as_uint(),
+            store_reg.reinterpret_as_uint(),
             addr_reg.reinterpret_as_uint(),
             0,
           )
@@ -7055,21 +7602,22 @@ fn store_lvalue_scalar(
       let addr = take_reg(pool) catch {
         err => {
           add_error(bag, loc, err.to_string())
+          match saved_reg {
+            Some(r) => give_reg(pool, r)
+            None => ()
+          }
           return
         }
       }
       gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, lvalue, addr, bag)
-      let (size, _) = match scalar_size_signed_or_error(alloc.sem, value_ty, loc) {
-        None => {
-          give_reg(pool, addr)
-          return
-        }
-        Some(v) => v
-      }
-      let sz = match arm64_sz_from_size(size) {
+      let sz = match arm64_sz_from_size(value_size) {
         None => {
           add_error(bag, loc, "codegen: unsupported scalar size")
           give_reg(pool, addr)
+          match saved_reg {
+            Some(r) => give_reg(pool, r)
+            None => ()
+          }
           return
         }
         Some(v) => v
@@ -7077,12 +7625,16 @@ fn store_lvalue_scalar(
       arm64_strx(
         emitter,
         sz,
-        value_reg.reinterpret_as_uint(),
+        store_reg.reinterpret_as_uint(),
         addr.reinterpret_as_uint(),
         0,
       )
       give_reg(pool, addr)
     }
+  }
+  match saved_reg {
+    Some(r) => give_reg(pool, r)
+    None => ()
   }
 }
 
@@ -8358,7 +8910,19 @@ fn gen_expr_int32(
             _ =>
               match left {
                 Expr::Ident(name=_, ..) => {
-                  gen_expr_any(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+                  let rhs_ty = type_of_expr(alloc.sem, right)
+                  gen_expr_any_with_type(
+                    emitter,
+                    alloc,
+                    syms,
+                    pool,
+                    cstrings,
+                    right,
+                    rhs_ty,
+                    dst,
+                    bag,
+                  )
+                  emit_cast_value(emitter, alloc.sem, rhs_ty, lhs_ty, dst, loc, bag)
                   store_lvalue_scalar(
                     emitter,
                     alloc,
@@ -8372,7 +8936,19 @@ fn gen_expr_int32(
                   )
                 }
                 Expr::Unary(op=UnaryOp::Deref, ..) | Expr::Index(..) | Expr::Member(..) => {
-                  gen_expr_any(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+                  let rhs_ty = type_of_expr(alloc.sem, right)
+                  gen_expr_any_with_type(
+                    emitter,
+                    alloc,
+                    syms,
+                    pool,
+                    cstrings,
+                    right,
+                    rhs_ty,
+                    dst,
+                    bag,
+                  )
+                  emit_cast_value(emitter, alloc.sem, rhs_ty, lhs_ty, dst, loc, bag)
                   store_lvalue_scalar(
                     emitter,
                     alloc,
@@ -8873,7 +9449,15 @@ fn gen_expr_int32(
                   bag,
                   expr_ty=left_ty,
                 )
-                emit_cmp(emitter, false, dst, 31)
+                let left_is64 = match scalar_size_signed_or_error(
+                  alloc.sem,
+                  left_ty,
+                  expr_loc(left),
+                ) {
+                  None => false
+                  Some((size, _)) => size == 8
+                }
+                emit_cmp(emitter, left_is64, dst, 31)
               }
             }
           }
@@ -8925,7 +9509,15 @@ fn gen_expr_int32(
                   bag,
                   expr_ty=right_ty,
                 )
-                emit_cmp(emitter, false, dst, 31)
+                let right_is64 = match scalar_size_signed_or_error(
+                  alloc.sem,
+                  right_ty,
+                  expr_loc(right),
+                ) {
+                  None => false
+                  Some((size, _)) => size == 8
+                }
+                emit_cmp(emitter, right_is64, dst, 31)
               }
             }
           }
@@ -9929,6 +10521,10 @@ fn gen_expr_ptr(
       let ty = match deref_pointee_type(alloc.sem, inner, loc, bag) {
         None => return
         Some(t) => t
+      }
+      match strip_top_qualifiers(ty) {
+        CType::Array(..) | CType::Function(..) => return
+        _ => ()
       }
       let (size, signed) = match scalar_size_signed_or_error(alloc.sem, ty, loc) {
         None => return
@@ -12352,6 +12948,44 @@ fn store_bitfield_int_le(
 }
 
 ///|
+fn store_bitfield_init_le(
+  buf : Array[Int],
+  base_off : Int,
+  info : FieldAccessInfo,
+  width : Int,
+  value : Int,
+) -> Unit {
+  let bit_off = match info.bit_offset {
+    None => 0
+    Some(v) => v
+  }
+  match info.bit_unit_size {
+    Some(unit_size) =>
+      store_bitfield_int_le(
+        buf,
+        base_off + info.offset,
+        unit_size,
+        bit_off,
+        width,
+        value,
+      )
+    None => {
+      let byte_off = bit_off / 8
+      let inner_bit = bit_off - byte_off * 8
+      let bytes_needed = (inner_bit + width + 7) / 8
+      store_bitfield_int_le(
+        buf,
+        base_off + info.offset + byte_off,
+        bytes_needed,
+        inner_bit,
+        width,
+        value,
+      )
+    }
+  }
+}
+
+///|
 fn const_pointer_from_lvalue(
   sem : SemContext,
   syms : SymTable,
@@ -12798,10 +13432,6 @@ fn fill_global_initializer_bytes(
                 Some(info) =>
                   match info.bit_width {
                     Some(width) => {
-                      let (unit_size, _) = match type_size_align_or_error(sem, info.ty, item.loc) {
-                        None => return
-                        Some(v) => v
-                      }
                       match item.value {
                         Initializer::Expr(expr~, ..) =>
                           match const_int_from_expr(sem, expr, item.loc) {
@@ -12812,11 +13442,10 @@ fn fill_global_initializer_bytes(
                                 "codegen: non-constant bitfield initializer",
                               )
                             Some(v) =>
-                              store_bitfield_int_le(
+                              store_bitfield_init_le(
                                 bytes,
-                                base_off + info.offset,
-                                unit_size,
-                                info.bit_offset.unwrap_or(0),
+                                base_off,
+                                info,
                                 width,
                                 v,
                               )
@@ -12916,10 +13545,6 @@ fn fill_global_initializer_bytes(
                           match info.bit_width {
                             None => ()
                             Some(width) => {
-                              let (unit_size, _) = match type_size_align_or_error(sem, info.ty, item.loc) {
-                                None => return
-                                Some(v) => v
-                              }
                               match item.value {
                                 Initializer::Expr(expr~, ..) =>
                                   match const_int_from_expr(sem, expr, item.loc) {
@@ -12930,11 +13555,10 @@ fn fill_global_initializer_bytes(
                                         "codegen: non-constant bitfield initializer",
                                       )
                                     Some(v) =>
-                                      store_bitfield_int_le(
+                                      store_bitfield_init_le(
                                         bytes,
-                                        base_off + info.offset,
-                                        unit_size,
-                                        info.bit_offset.unwrap_or(0),
+                                        base_off,
+                                        info,
                                         width,
                                         v,
                                       )
@@ -13002,10 +13626,6 @@ fn fill_global_initializer_bytes(
               Some(info) =>
                 match info.bit_width {
                   Some(width) => {
-                    let (unit_size, _) = match type_size_align_or_error(sem, info.ty, first.loc) {
-                      None => return
-                      Some(v) => v
-                    }
                     match first.value {
                       Initializer::Expr(expr~, ..) =>
                         match const_int_from_expr(sem, expr, first.loc) {
@@ -13016,11 +13636,10 @@ fn fill_global_initializer_bytes(
                               "codegen: non-constant bitfield initializer",
                             )
                           Some(v) =>
-                            store_bitfield_int_le(
+                            store_bitfield_init_le(
                               bytes,
-                              base_off + info.offset,
-                              unit_size,
-                              info.bit_offset.unwrap_or(0),
+                              base_off,
+                              info,
                               width,
                               v,
                             )
@@ -13051,29 +13670,24 @@ fn fill_global_initializer_bytes(
                   match info.bit_width {
                     None => ()
                     Some(width) => {
-                      let (unit_size, _) = match type_size_align_or_error(sem, info.ty, first.loc) {
-                        None => return
-                        Some(v) => v
-                      }
                       match first.value {
                         Initializer::Expr(expr~, ..) =>
                           match const_int_from_expr(sem, expr, first.loc) {
                             None =>
                               add_error(
-                                bag,
-                                first.loc,
-                                "codegen: non-constant bitfield initializer",
-                              )
-                            Some(v) =>
-                              store_bitfield_int_le(
+                              bag,
+                              first.loc,
+                              "codegen: non-constant bitfield initializer",
+                            )
+                          Some(v) =>
+                              store_bitfield_init_le(
                                 bytes,
-                                base_off + info.offset,
-                                unit_size,
-                                info.bit_offset.unwrap_or(0),
+                                base_off,
+                                info,
                                 width,
                                 v,
                               )
-                          }
+                        }
                         _ =>
                           add_error(bag, first.loc, "codegen: bitfield initializer must be scalar")
                       }

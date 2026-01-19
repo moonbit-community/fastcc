@@ -1173,9 +1173,7 @@ fn struct_size_align(
 ) -> (Int, Int) {
   let mut size = 0
   let mut align = 1
-  let mut bit_unit_bits = 0
-  let mut bit_offset = 0
-  let mut bit_unit_size = 0
+  let mut bit_pos = 0
   for i = 0; i < fields.length(); i = i + 1 {
     let field = fields[i]
     let packed = attrs.packed || field.attrs.packed
@@ -1191,42 +1189,56 @@ fn struct_size_align(
           None => (0, 1)
           Some(v) => v
         }
-        let unit_bits = base_size * 8
-        let mut field_align = if packed { 1 } else { base_align }
+        let mut field_align = base_align
+        match field_align_override {
+          None => ()
+          Some(value) => field_align = value
+        }
+        if width == 0 {
+          let used_bytes = (bit_pos + 7) / 8
+          size = align_to(size + used_bytes, field_align)
+          bit_pos = 0
+          continue
+        }
+        if packed && width != 0 {
+          field_align = 1
+        }
         match field_align_override {
           None => ()
           Some(value) => field_align = value
         }
         align = if field_align > align { field_align } else { align }
-        if width == 0 {
-          size = align_to(size, field_align)
-          bit_unit_bits = 0
-          bit_offset = 0
-          bit_unit_size = 0
-          continue
+        if field_align_override is Some(_) {
+          let used_bytes = (bit_pos + 7) / 8
+          size = align_to(size + used_bytes, field_align)
+          bit_pos = 0
+        } else if !packed {
+          let a8 = field_align * 8
+          let max_units = if field_align > 0 {
+            let effective_size = if base_size == 8 && width <= 32 { 4 } else { base_size }
+            effective_size / field_align
+          } else {
+            0
+          }
+          if a8 > 0 {
+            let ofs = ((size * 8 + bit_pos) % a8 + width + a8 - 1) / a8
+            if ofs > max_units {
+              let used_bytes = (bit_pos + 7) / 8
+              size = align_to(size + used_bytes, field_align)
+              bit_pos = 0
+            }
+          }
         }
-        if bit_unit_bits == 0 ||
-          bit_unit_bits != unit_bits ||
-          width > unit_bits - bit_offset {
-          size = align_to(size, field_align)
-          bit_unit_bits = unit_bits
-          bit_unit_size = base_size
-          bit_offset = 0
+        while bit_pos >= field_align * 8 {
+          size = size + field_align
+          bit_pos = bit_pos - field_align * 8
         }
-        bit_offset = bit_offset + width
-        if bit_offset == bit_unit_bits {
-          size = size + bit_unit_size
-          bit_unit_bits = 0
-          bit_unit_size = 0
-          bit_offset = 0
-        }
+        bit_pos = bit_pos + width
       }
       None => {
-        if bit_unit_bits != 0 {
-          size = size + bit_unit_size
-          bit_unit_bits = 0
-          bit_unit_size = 0
-          bit_offset = 0
+        if bit_pos != 0 {
+          size = size + (bit_pos + 7) / 8
+          bit_pos = 0
         }
         let (field_size, field_align) = match strip_top_qualifiers_keep_attrs(field.ty) {
           CType::Array(elem~, size=None, size_expr=size_expr, ..) =>
@@ -1276,8 +1288,8 @@ fn struct_size_align(
       }
     }
   }
-  if bit_unit_bits != 0 {
-    size = size + bit_unit_size
+  if bit_pos != 0 {
+    size = size + (bit_pos + 7) / 8
   }
   let mut final_align = align
   match attr_align_value(ctx, attrs, loc) {
@@ -1302,11 +1314,19 @@ fn union_size_align(
     let field_align_override = attr_align_value(ctx, field.attrs, field.loc)
     let base = strip_top_qualifiers_keep_attrs(field.ty)
     let (field_size, field_align) = match field.bit_width {
-      Some(_) =>
-        match type_size_align(ctx, base, loc) {
+      Some(expr) => {
+        let width = match const_int_from_expr(ctx, expr, field.loc) {
+          Some(v) => v
+          None => 0
+        }
+        let size_bits = if width > 0 { width } else { 0 }
+        let size_bytes = (size_bits + 7) / 8
+        let (_, base_align) = match type_size_align(ctx, base, loc) {
           None => (0, 1)
           Some(v) => v
         }
+        (size_bytes, base_align)
+      }
       None =>
         match strip_top_qualifiers_keep_attrs(field.ty) {
           CType::Array(elem~, size=None, size_expr=size_expr, ..) =>
@@ -1910,12 +1930,7 @@ fn define_enum_const(
 
 ///|
 fn parse_int_value(text : String) -> Int {
-  let trimmed = trim_int_literal(text)
-  try @strconv.parse_int(trimmed, base=0) catch {
-    _ => 0
-  } noraise {
-    v => v
-  }
+  parse_uint64_value(text).reinterpret_as_int64().to_int()
 }
 
 ///|
@@ -2442,9 +2457,7 @@ fn struct_field_offset_and_type(
   let fields = def.fields
   let attrs = merge_attrs(def.attrs, struct_attrs)
   let mut size = 0
-  let mut bit_unit_bits = 0
-  let mut bit_offset = 0
-  let mut bit_unit_size = 0
+  let mut bit_pos = 0
   for i = 0; i < fields.length(); i = i + 1 {
     let field = fields[i]
     let packed = attrs.packed || field.attrs.packed
@@ -2460,44 +2473,58 @@ fn struct_field_offset_and_type(
           None => (0, 1)
           Some(v) => v
         }
-        let unit_bits = base_size * 8
-        let mut field_align = if packed { 1 } else { base_align }
+        let mut field_align = base_align
         match field_align_override {
           None => ()
           Some(value) => field_align = value
         }
         if width == 0 {
-          size = align_to(size, field_align)
-          bit_unit_bits = 0
-          bit_offset = 0
-          bit_unit_size = 0
+          let used_bytes = (bit_pos + 7) / 8
+          size = align_to(size + used_bytes, field_align)
+          bit_pos = 0
           continue
         }
-        if bit_unit_bits == 0 ||
-          bit_unit_bits != unit_bits ||
-          width > unit_bits - bit_offset {
-          size = align_to(size, field_align)
-          bit_unit_bits = unit_bits
-          bit_unit_size = base_size
-          bit_offset = 0
+        if packed && width != 0 {
+          field_align = 1
+        }
+        match field_align_override {
+          None => ()
+          Some(value) => field_align = value
+        }
+        if field_align_override is Some(_) {
+          let used_bytes = (bit_pos + 7) / 8
+          size = align_to(size + used_bytes, field_align)
+          bit_pos = 0
+        } else if !packed {
+          let a8 = field_align * 8
+          let max_units = if field_align > 0 {
+            let effective_size = if base_size == 8 && width <= 32 { 4 } else { base_size }
+            effective_size / field_align
+          } else {
+            0
+          }
+          if a8 > 0 {
+            let ofs = ((size * 8 + bit_pos) % a8 + width + a8 - 1) / a8
+            if ofs > max_units {
+              let used_bytes = (bit_pos + 7) / 8
+              size = align_to(size + used_bytes, field_align)
+              bit_pos = 0
+            }
+          }
+        }
+        while bit_pos >= field_align * 8 {
+          size = size + field_align
+          bit_pos = bit_pos - field_align * 8
         }
         if field.name == name {
           return Some((size, field.ty, true))
         }
-        bit_offset = bit_offset + width
-        if bit_offset == bit_unit_bits {
-          size = size + bit_unit_size
-          bit_unit_bits = 0
-          bit_unit_size = 0
-          bit_offset = 0
-        }
+        bit_pos = bit_pos + width
       }
       None => {
-        if bit_unit_bits != 0 {
-          size = size + bit_unit_size
-          bit_unit_bits = 0
-          bit_unit_size = 0
-          bit_offset = 0
+        if bit_pos != 0 {
+          size = size + (bit_pos + 7) / 8
+          bit_pos = 0
         }
         let (field_size, field_align) = match strip_top_qualifiers_keep_attrs(field.ty) {
           CType::Array(elem~, size=None, size_expr=size_expr, ..) =>
@@ -5434,9 +5461,15 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
           }
           arithmetic_result_type(ctx, lhs_ty, rhs_ty)
         }
+        BinaryOp::Shl | BinaryOp::Shr => {
+          let lhs_ty = type_of_expr(ctx, left)
+          let rhs_ty = type_of_expr(ctx, right)
+          if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
+            add_sem_error(ctx, loc, "binary operator expects int operands")
+          }
+          promote_int_type(ctx, lhs_ty)
+        }
         BinaryOp::Mod
-        | BinaryOp::Shl
-        | BinaryOp::Shr
         | BinaryOp::BitAnd
         | BinaryOp::BitXor
         | BinaryOp::BitOr => {

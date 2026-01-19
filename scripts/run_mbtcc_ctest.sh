@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 CTEST_DIR="${ROOT_DIR}/refs/mbtcc/ctest"
+LOCAL_CTEST_DIR="${ROOT_DIR}/tests/mbtcc/ctest"
 TMP_DIR="${ROOT_DIR}/target/mbtcc-ctest"
 SUPPORT_C="${ROOT_DIR}/tests/mbtcc/ctest_support.c"
 BOOTSTRAP_TINYCC_BIN="${TINYCC_BIN:-${ROOT_DIR}/_build/native/release/build/tinycc.exe}"
@@ -10,6 +11,7 @@ TINYCC_BUILD_TARGET="${TINYCC_BUILD_TARGET:-${ROOT_DIR}/src}"
 SELFHOST="${SELFHOST:-0}"
 SELFHOST_BIN="${SELFHOST_BIN:-${ROOT_DIR}/target/selfhost/tcc_selfhost}"
 SELFHOST_OBJ="${SELFHOST_OBJ:-${ROOT_DIR}/target/selfhost/tcc_all.o}"
+QUICKJS_TINYCC_BIN="${QUICKJS_TINYCC_BIN:-${BOOTSTRAP_TINYCC_BIN}}"
 QUICKJS="${QUICKJS:-1}"
 QUICKJS_DIR="${ROOT_DIR}/refs/quickjs"
 QUICKJS_C="${QUICKJS_DIR}/quickjs.c"
@@ -35,8 +37,10 @@ Env vars:
   QUICKJS=0|1      Compile refs/quickjs/quickjs.c with tinycc.mbt (default: 1).
   QUICKJS_TESTS=0|1     Run quickjs JS smoke tests using a qjs built by tinycc.mbt (default: 1).
   QUICKJS_TEST_LIST=... Space-separated test list (paths relative to refs/quickjs).
+  QUICKJS_TINYCC_BIN=path  Compiler used for quickjs build (default: bootstrap tinycc.mbt).
 
 This runs mbtcc's C file tests (refs/mbtcc/ctest/*.c) against tinycc.mbt:
+  - also includes local tests in tests/mbtcc/ctest (if present)
   - expected output: gcc
   - actual output: tinycc.mbt (-c -> .o) + clang link -> run
 EOF
@@ -113,8 +117,8 @@ if [[ "${quickjs_enabled}" -eq 1 ]]; then
     "${QUICKJS_VERSION_DEFINE}"
   )
   quickjs_log="${TMP_DIR}/quickjs_compile.log"
-  echo "Compiling quickjs.c with ${TEST_TINYCC_BIN}"
-  if ! "${TEST_TINYCC_BIN}" "${quickjs_args[@]}" -c "${QUICKJS_C}" -o "${QUICKJS_OBJ}" >"${quickjs_log}" 2>&1; then
+  echo "Compiling quickjs.c with ${QUICKJS_TINYCC_BIN}"
+  if ! "${QUICKJS_TINYCC_BIN}" "${quickjs_args[@]}" -c "${QUICKJS_C}" -o "${QUICKJS_OBJ}" >"${quickjs_log}" 2>&1; then
     echo "FAILED: quickjs compile failed"
     sed -n '1,160p' "${quickjs_log}" || true
     if [[ "${MODE}" != "allow-fail" ]]; then
@@ -144,7 +148,7 @@ if [[ "${quickjs_enabled}" -eq 1 && "${quickjs_tests_enabled}" -eq 1 ]]; then
   quickjs_c_obj="${QUICKJS_OBJ}"
   if [[ ! -f "${quickjs_c_obj}" ]]; then
     quickjs_c_obj="${quickjs_obj_dir}/quickjs.o"
-    if ! "${TEST_TINYCC_BIN}" "${quickjs_args[@]}" -c "${QUICKJS_C}" -o "${quickjs_c_obj}" \
+    if ! "${QUICKJS_TINYCC_BIN}" "${quickjs_args[@]}" -c "${QUICKJS_C}" -o "${quickjs_c_obj}" \
       >"${quickjs_log_dir}/quickjs_compile.log" 2>&1; then
       echo "FAILED: quickjs.c compile failed"
       sed -n '1,160p' "${quickjs_log_dir}/quickjs_compile.log" || true
@@ -167,7 +171,7 @@ if [[ "${quickjs_enabled}" -eq 1 && "${quickjs_tests_enabled}" -eq 1 ]]; then
   for src in "${quickjs_lib_sources[@]}"; do
     obj="${quickjs_obj_dir}/$(basename "${src}" .c).o"
     quickjs_lib_objs+=("${obj}")
-    if ! "${TEST_TINYCC_BIN}" "${quickjs_args[@]}" -c "${src}" -o "${obj}" \
+    if ! "${QUICKJS_TINYCC_BIN}" "${quickjs_args[@]}" -c "${src}" -o "${obj}" \
       >"${quickjs_log_dir}/$(basename "${src}" .c).log" 2>&1; then
       echo "FAILED: quickjs compile failed ($(basename "${src}"))"
       sed -n '1,160p' "${quickjs_log_dir}/$(basename "${src}" .c).log" || true
@@ -237,7 +241,7 @@ if [[ "${quickjs_enabled}" -eq 1 && "${quickjs_tests_enabled}" -eq 1 ]]; then
   repl_obj="${quickjs_obj_dir}/repl.o"
   qjs_bin="${quickjs_build_dir}/qjs"
   if [[ "${quickjs_build_failed}" -eq 0 ]]; then
-    if ! "${TEST_TINYCC_BIN}" "${quickjs_args[@]}" -c "${QUICKJS_DIR}/qjs.c" -o "${qjs_obj}" \
+    if ! "${QUICKJS_TINYCC_BIN}" "${quickjs_args[@]}" -c "${QUICKJS_DIR}/qjs.c" -o "${qjs_obj}" \
       >"${quickjs_log_dir}/qjs_compile.log" 2>&1; then
       echo "FAILED: qjs compile failed"
       sed -n '1,160p' "${quickjs_log_dir}/qjs_compile.log" || true
@@ -247,7 +251,7 @@ if [[ "${quickjs_enabled}" -eq 1 && "${quickjs_tests_enabled}" -eq 1 ]]; then
       fi
       fail=$((fail + 1))
     fi
-    if ! "${TEST_TINYCC_BIN}" "${quickjs_args[@]}" -c "${repl_c}" -o "${repl_obj}" \
+    if ! "${QUICKJS_TINYCC_BIN}" "${quickjs_args[@]}" -c "${repl_c}" -o "${repl_obj}" \
       >"${quickjs_log_dir}/repl_compile.log" 2>&1; then
       echo "FAILED: repl.c compile failed"
       sed -n '1,160p' "${quickjs_log_dir}/repl_compile.log" || true
@@ -316,7 +320,11 @@ else
 fi
 
 tests_file="${TMP_DIR}/tests.txt"
-find "${CTEST_DIR}" -maxdepth 1 -type f -name '*.c' -print | sort >"${tests_file}"
+ctest_dirs=("${CTEST_DIR}")
+if [[ -d "${LOCAL_CTEST_DIR}" ]]; then
+  ctest_dirs+=("${LOCAL_CTEST_DIR}")
+fi
+find "${ctest_dirs[@]}" -maxdepth 1 -type f -name '*.c' -print | sort >"${tests_file}"
 if [[ -n "${FILTER}" ]]; then
   grep -E "${FILTER}" "${tests_file}" >"${tests_file}.filtered" || true
   mv "${tests_file}.filtered" "${tests_file}"

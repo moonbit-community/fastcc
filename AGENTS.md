@@ -8,6 +8,7 @@ This project's goal is to rewrite refs/tinycc in MoonBit. Please keep implementa
 
 - If fix bug, add tests to avoid regression in future
 - Keep refs/quickjs compile + smoke tests in the test pipeline (scripts/run_mbtcc_ctest.sh) to avoid regressions
+- Run quickjs JS tests (QUICKJS_TESTS=1 with QUICKJS_TEST_LIST) in the pipeline to validate tinycc.mbt-built quickjs behavior
 
 ## Quick Reference
 

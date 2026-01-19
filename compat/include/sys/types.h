@@ -6,24 +6,42 @@
 
 typedef unsigned long size_t;
 typedef long ssize_t;
-typedef long off_t;
 typedef long time_t;
+#if defined(__APPLE__)
+typedef int64_t off_t;
+typedef int32_t suseconds_t;
+typedef uint32_t useconds_t;
+typedef uint16_t mode_t;
+typedef int32_t pid_t;
+typedef uint32_t uid_t;
+typedef uint32_t gid_t;
+#else
+typedef long off_t;
 typedef long suseconds_t;
 typedef long useconds_t;
 typedef unsigned int mode_t;
 typedef int pid_t;
 typedef unsigned int uid_t;
 typedef unsigned int gid_t;
+#endif
 typedef unsigned int uint;
 typedef unsigned long ulong;
 typedef unsigned short ushort;
 typedef unsigned char uchar;
 
+#if defined(__APPLE__)
+typedef int32_t blksize_t;
+typedef int64_t blkcnt_t;
+typedef int32_t dev_t;
+typedef uint64_t ino_t;
+typedef uint16_t nlink_t;
+#else
 typedef long blksize_t;
 typedef long blkcnt_t;
 typedef long dev_t;
 typedef unsigned long ino_t;
 typedef unsigned long nlink_t;
+#endif
 
 #ifndef _TCC_COMPAT_FD_SET_DEFINED
 #define _TCC_COMPAT_FD_SET_DEFINED
