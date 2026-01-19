@@ -19,6 +19,8 @@ QUICKJS_OBJ="${TMP_DIR}/quickjs_mbt.o"
 QUICKJS_VERSION_DEFINE='-DCONFIG_VERSION="\"2021-03-27\""'
 QUICKJS_TESTS="${QUICKJS_TESTS:-1}"
 QUICKJS_TEST_LIST="${QUICKJS_TEST_LIST:-tests/test_closure.js tests/test_language.js tests/test_builtin.js tests/test_loop.js tests/test_bigint.js tests/test_cyclic_import.js tests/test_std.js}"
+TINYCC_ARM64_ASM_PATCH="${ROOT_DIR}/patches/refs-tinycc/arm64-asm-hints.patch"
+tinycc_patch_backup=""
 
 FILTER="${FILTER:-}"
 MODE="${MODE:-strict}" # strict | allow-fail
@@ -55,6 +57,27 @@ command -v moon >/dev/null || { echo "error: moon not found"; exit 1; }
 command -v gcc >/dev/null || { echo "error: gcc not found"; exit 1; }
 command -v clang >/dev/null || { echo "error: clang not found"; exit 1; }
 
+apply_tinycc_patch() {
+  if [[ ! -f "${TINYCC_ARM64_ASM_PATCH}" ]]; then
+    return
+  fi
+  if git -C "${ROOT_DIR}/refs/tinycc" apply --check "${TINYCC_ARM64_ASM_PATCH}" >/dev/null 2>&1; then
+    tinycc_patch_backup="${TMP_DIR}/arm64-asm.c.bak"
+    cp "${ROOT_DIR}/refs/tinycc/arm64-asm.c" "${tinycc_patch_backup}"
+    git -C "${ROOT_DIR}/refs/tinycc" apply "${TINYCC_ARM64_ASM_PATCH}"
+  elif git -C "${ROOT_DIR}/refs/tinycc" apply --reverse --check "${TINYCC_ARM64_ASM_PATCH}" >/dev/null 2>&1; then
+    : # already applied
+  else
+    echo "warning: unable to apply tinycc arm64 asm patch"
+  fi
+}
+
+cleanup_tinycc_patch() {
+  if [[ -n "${tinycc_patch_backup}" && -f "${tinycc_patch_backup}" ]]; then
+    mv "${tinycc_patch_backup}" "${ROOT_DIR}/refs/tinycc/arm64-asm.c"
+  fi
+}
+
 # Build tinycc native executable once up front (bootstrap compiler).
 echo "Building tinycc executable (${BOOTSTRAP_TINYCC_BIN})"
 moon build --release --target native "${TINYCC_BUILD_TARGET}"
@@ -75,17 +98,21 @@ TEST_TINYCC_BIN="${BOOTSTRAP_TINYCC_BIN}"
 if [[ "${use_selfhost}" -eq 1 ]]; then
   echo "Building selfhost tinycc (${SELFHOST_BIN})"
   mkdir -p "$(dirname "${SELFHOST_BIN}")"
+  apply_tinycc_patch
   if ! "${BOOTSTRAP_TINYCC_BIN}" -I "${ROOT_DIR}/compat/include" -I "${ROOT_DIR}/refs/tinycc" -I "${ROOT_DIR}/refs/tinycc/include" \
     -c "${ROOT_DIR}/refs/tinycc/tcc.c" -o "${SELFHOST_OBJ}" >"${TMP_DIR}/selfhost_build.log" 2>&1; then
     echo "error: failed to build refs/tinycc object"
     sed -n '1,160p' "${TMP_DIR}/selfhost_build.log" || true
+    cleanup_tinycc_patch
     exit 1
   fi
   if ! clang "${SELFHOST_OBJ}" -o "${SELFHOST_BIN}" -lm >"${TMP_DIR}/selfhost_link.log" 2>&1; then
     echo "error: failed to link refs/tinycc binary"
     sed -n '1,160p' "${TMP_DIR}/selfhost_link.log" || true
+    cleanup_tinycc_patch
     exit 1
   fi
+  cleanup_tinycc_patch
   if [[ ! -x "${SELFHOST_BIN}" ]]; then
     echo "error: selfhost tinycc missing at ${SELFHOST_BIN}"
     exit 1

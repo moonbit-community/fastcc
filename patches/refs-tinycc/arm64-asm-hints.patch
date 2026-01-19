@@ -1,0 +1,53 @@
+diff --git a/arm64-asm.c b/arm64-asm.c
+index aa7e1ce4..b7fbd7eb 100644
+--- a/arm64-asm.c
++++ b/arm64-asm.c
+@@ -24,6 +24,28 @@ static void asm_error(void)
+     tcc_error("ARM asm not implemented.");
+ }
+ 
++static int asm_emit_hint(const char *op)
++{
++    uint32_t insn;
++    if (!strcmp(op, "nop")) {
++        insn = 0xd503201f;
++    } else if (!strcmp(op, "yield")) {
++        insn = 0xd503203f;
++    } else if (!strcmp(op, "wfe")) {
++        insn = 0xd503205f;
++    } else if (!strcmp(op, "wfi")) {
++        insn = 0xd503207f;
++    } else if (!strcmp(op, "sev")) {
++        insn = 0xd503209f;
++    } else if (!strcmp(op, "sevl")) {
++        insn = 0xd50320bf;
++    } else {
++        return 0;
++    }
++    gen_le32(insn);
++    return 1;
++}
++
+ /* XXX: make it faster ? */
+ ST_FUNC void g(int c)
+ {
+@@ -59,7 +81,9 @@ ST_FUNC void gen_expr32(ExprValue *pe)
+ 
+ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
+ {
+-    asm_error();
++    const char *op = get_tok_str(opcode, NULL);
++    if (!op || !asm_emit_hint(op))
++        asm_error();
+ }
+ 
+ ST_FUNC void subst_asm_operand(CString *add_str, SValue *sv, int modifier)
+@@ -84,6 +108,8 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
+ 
+ ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str)
+ {
++    if (!strcmp(str, "memory") || !strcmp(str, "cc"))
++        return;
+     asm_error();
+ }
+ 
