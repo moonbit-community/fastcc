@@ -75,3 +75,9 @@ test "cli parses -D and -U" {
     CliMacroAction::Undef(name="QUX"),
   ])
 }
+
+///|
+test "bench timer symbol is available" {
+  let now = bench_now_ns()
+  assert_true(now >= 0UL)
+}

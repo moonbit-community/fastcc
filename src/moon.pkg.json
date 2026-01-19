@@ -7,5 +7,9 @@
   ],
   "native-stub": [
     "bench_timer.c"
-  ]
+  ],
+  "targets": {
+    "bench_timer_native.mbt": ["native"],
+    "bench_timer_stub.mbt": ["not", "native"]
+  }
 }

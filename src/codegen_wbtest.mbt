@@ -238,6 +238,22 @@ test "codegen accepts float constant initializers" {
 }
 
 ///|
+test "codegen handles aggregate temp in switch default" {
+  let (unit, bag) = parse_text(
+    "struct S { int x; }; int f(int v){ switch(v){ default: return (struct S){1}.x; } }",
+  )
+  assert_true(!has_errors(bag))
+  check_translation_unit(unit, bag) |> ignore
+  assert_true(!has_errors(bag))
+  let bytes = match codegen_arm64_object_bytes(unit, bag) {
+    None => fail("expected object bytes")
+    Some(b) => b
+  }
+  assert_true(!has_errors(bag))
+  assert_true(bytes.length() > 0)
+}
+
+///|
 test "codegen emits conditional branch for if/else" {
   let (unit, bag) = parse_text(
     "int main(){int a=1; if(a) return 3; else return 4;}",
