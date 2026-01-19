@@ -259,7 +259,14 @@ fn init_builtin_macros(pp : Preprocessor) -> Unit {
 fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
   Preprocessor {
   let (date_literal, time_literal) = init_datetime_literals()
-  let interner = new_string_interner_with_capacity()
+  let text_len = file.text.length()
+  let mut interner_capacity = text_len / 128
+  if interner_capacity < 4096 {
+    interner_capacity = 4096
+  } else if interner_capacity > 65536 {
+    interner_capacity = 65536
+  }
+  let interner = new_string_interner_with_capacity(capacity=interner_capacity)
   let keyword_ids = init_keyword_ids(interner)
   let (_, line_macro_id) = interner.intern_view_with_id("__LINE__"[:])
   let (_, file_macro_id) = interner.intern_view_with_id("__FILE__"[:])
