@@ -2,6 +2,7 @@
 #define _TCC_COMPAT_MATH_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #ifndef __builtin_huge_val
 #define __builtin_huge_val() 1e500
@@ -84,7 +85,13 @@ float ldexpf(float x, int exp);
 
 int isnan(double x);
 int isinf(double x);
-int finite(double x);
+static inline int finite(double x) { return !isnan(x) && !isinf(x); }
 #define isfinite(x) finite(x)
+static inline int tcc_signbit_double(double x) {
+  union { double d; uint64_t u; } v;
+  v.d = x;
+  return (int)(v.u >> 63);
+}
+#define signbit(x) tcc_signbit_double((double)(x))
 
 #endif /* _TCC_COMPAT_MATH_H */

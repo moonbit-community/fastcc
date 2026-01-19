@@ -309,6 +309,19 @@ test "parse paren pointer declarator with attribute" {
 }
 
 ///|
+test "parse paren declarator without inner pointer" {
+  let (unit, bag) = parse_text(
+    "typedef int *(Func)(int);",
+  )
+  assert_true(!has_errors(bag))
+  guard unit.decls.length() == 1 else { fail("expected one declaration") }
+  match unit.decls[0] {
+    Decl::Typedef(name="Func", ..) => ()
+    _ => fail("expected typedef declaration")
+  }
+}
+
+///|
 test "sem accepts builtin types_compatible_p in _Static_assert" {
   let (_, bag) = check_text(
     "_Static_assert(__builtin_types_compatible_p(int, int) == 1, \"ok\"); _Static_assert(__builtin_types_compatible_p(int, char) == 0, \"ok\"); int main(){return 0;}",

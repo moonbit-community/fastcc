@@ -26,6 +26,7 @@ struct timespec {
 
 #define CLOCKS_PER_SEC 1000000
 #define CLOCK_REALTIME 0
+#define CLOCK_MONOTONIC 6
 
 time_t time(time_t *tloc);
 double difftime(time_t end, time_t beginning);
@@ -36,5 +37,6 @@ struct tm *gmtime(const time_t *timep);
 size_t strftime(char *s, size_t max, const char *fmt, const struct tm *tm);
 
 int nanosleep(const struct timespec *req, struct timespec *rem);
+int clock_gettime(int clock_id, struct timespec *tp);
 
 #endif /* _TCC_COMPAT_TIME_H */

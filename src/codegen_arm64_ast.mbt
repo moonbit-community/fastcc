@@ -3789,6 +3789,53 @@ fn gen_builtin_va_copy(
 }
 
 ///|
+fn gen_builtin_alloca(
+  emitter : Arm64Emitter,
+  alloc : LocalAlloc,
+  syms : SymTable,
+  pool : RegPool,
+  cstrings : CstringPool,
+  args : Array[Expr],
+  loc : SrcLoc,
+  bag : DiagBag,
+) -> Unit {
+  if args.length() != 1 {
+    add_error(bag, loc, "__builtin_alloca expects 1 argument")
+    return
+  }
+  let size_reg = take_reg(pool) catch {
+    err => {
+      add_error(bag, loc, err.to_string())
+      return
+    }
+  }
+  gen_expr_int32(emitter, alloc, syms, pool, cstrings, args[0], size_reg, bag)
+
+  // Round allocation up to 16 to preserve AArch64 stack alignment.
+  emit32(
+    emitter,
+    (0x91000000 : Int)
+    .lor(size_reg)
+    .lor(size_reg << 5)
+    .lor(15 << 10)
+    .reinterpret_as_uint(),
+  )
+  emit32(
+    emitter,
+    (0x927cec00 : Int)
+    .lor(size_reg)
+    .lor(size_reg << 5)
+    .reinterpret_as_uint(),
+  )
+  emit32(
+    emitter,
+    (0xcb2063ff : Int).lor(size_reg << 16).reinterpret_as_uint(),
+  )
+  emit32(emitter, (0x910003e0 : Int).lor(0).reinterpret_as_uint())
+  give_reg(pool, size_reg)
+}
+
+///|
 fn gen_builtin_va_arg_load(
   emitter : Arm64Emitter,
   alloc : LocalAlloc,
@@ -5131,6 +5178,10 @@ fn gen_call_expr_impl(
   bag : DiagBag,
 ) -> Unit {
   if callee is Expr::Ident(name~, id~, ..) {
+    if name == "__builtin_alloca" || name == "alloca" {
+      gen_builtin_alloca(emitter, alloc, syms, pool, cstrings, args, loc, bag)
+      return
+    }
     match builtin_call_kind(alloc.sem, name, id) {
       Some(BuiltinCallKind::Expect) => {
         if args.length() != 2 {

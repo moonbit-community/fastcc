@@ -15,6 +15,8 @@ QUICKJS_DIR="${ROOT_DIR}/refs/quickjs"
 QUICKJS_C="${QUICKJS_DIR}/quickjs.c"
 QUICKJS_OBJ="${TMP_DIR}/quickjs_mbt.o"
 QUICKJS_VERSION_DEFINE='-DCONFIG_VERSION="\"2021-03-27\""'
+QUICKJS_TESTS="${QUICKJS_TESTS:-1}"
+QUICKJS_TEST_LIST="${QUICKJS_TEST_LIST:-tests/test_closure.js tests/test_language.js tests/test_builtin.js tests/test_loop.js tests/test_bigint.js tests/test_cyclic_import.js tests/test_std.js}"
 
 FILTER="${FILTER:-}"
 MODE="${MODE:-strict}" # strict | allow-fail
@@ -31,6 +33,8 @@ Env vars:
   TINYCC_BIN=path  Bootstrap compiler path (used to build tcc_selfhost in SELFHOST mode).
   SELFHOST_BIN=path  Override tcc_selfhost path.
   QUICKJS=0|1      Compile refs/quickjs/quickjs.c with tinycc.mbt (default: 1).
+  QUICKJS_TESTS=0|1     Run quickjs JS smoke tests using a qjs built by tinycc.mbt (default: 1).
+  QUICKJS_TEST_LIST=... Space-separated test list (paths relative to refs/quickjs).
 
 This runs mbtcc's C file tests (refs/mbtcc/ctest/*.c) against tinycc.mbt:
   - expected output: gcc
@@ -103,6 +107,11 @@ if [[ "${quickjs_enabled}" -eq 1 ]]; then
     -D_GNU_SOURCE
     "${QUICKJS_VERSION_DEFINE}"
   )
+  quickjs_host_args=(
+    -I "${QUICKJS_DIR}"
+    -D_GNU_SOURCE
+    "${QUICKJS_VERSION_DEFINE}"
+  )
   quickjs_log="${TMP_DIR}/quickjs_compile.log"
   echo "Compiling quickjs.c with ${TEST_TINYCC_BIN}"
   if ! "${TEST_TINYCC_BIN}" "${quickjs_args[@]}" -c "${QUICKJS_C}" -o "${QUICKJS_OBJ}" >"${quickjs_log}" 2>&1; then
@@ -112,6 +121,185 @@ if [[ "${quickjs_enabled}" -eq 1 ]]; then
       exit 1
     fi
     fail=$((fail + 1))
+  fi
+fi
+
+quickjs_tests_enabled=0
+if [[ "${QUICKJS_TESTS}" == "1" || "${QUICKJS_TESTS}" == "true" ]]; then
+  quickjs_tests_enabled=1
+fi
+if [[ "${quickjs_enabled}" -eq 1 && "${quickjs_tests_enabled}" -eq 1 ]]; then
+  quickjs_build_dir="${TMP_DIR}/quickjs"
+  quickjs_obj_dir="${quickjs_build_dir}/obj"
+  quickjs_log_dir="${quickjs_build_dir}/logs"
+  mkdir -p "${quickjs_obj_dir}" "${quickjs_log_dir}"
+
+  quickjs_libs=(-lm -lpthread)
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    quickjs_libs+=(-ldl)
+  fi
+
+  quickjs_build_failed=0
+  quickjs_lib_objs=()
+  quickjs_c_obj="${QUICKJS_OBJ}"
+  if [[ ! -f "${quickjs_c_obj}" ]]; then
+    quickjs_c_obj="${quickjs_obj_dir}/quickjs.o"
+    if ! "${TEST_TINYCC_BIN}" "${quickjs_args[@]}" -c "${QUICKJS_C}" -o "${quickjs_c_obj}" \
+      >"${quickjs_log_dir}/quickjs_compile.log" 2>&1; then
+      echo "FAILED: quickjs.c compile failed"
+      sed -n '1,160p' "${quickjs_log_dir}/quickjs_compile.log" || true
+      quickjs_build_failed=1
+      if [[ "${MODE}" != "allow-fail" ]]; then
+        exit 1
+      fi
+      fail=$((fail + 1))
+    fi
+  fi
+  quickjs_lib_objs+=("${quickjs_c_obj}")
+
+  quickjs_lib_sources=(
+    "${QUICKJS_DIR}/dtoa.c"
+    "${QUICKJS_DIR}/libregexp.c"
+    "${QUICKJS_DIR}/libunicode.c"
+    "${QUICKJS_DIR}/cutils.c"
+    "${QUICKJS_DIR}/quickjs-libc.c"
+  )
+  for src in "${quickjs_lib_sources[@]}"; do
+    obj="${quickjs_obj_dir}/$(basename "${src}" .c).o"
+    quickjs_lib_objs+=("${obj}")
+    if ! "${TEST_TINYCC_BIN}" "${quickjs_args[@]}" -c "${src}" -o "${obj}" \
+      >"${quickjs_log_dir}/$(basename "${src}" .c).log" 2>&1; then
+      echo "FAILED: quickjs compile failed ($(basename "${src}"))"
+      sed -n '1,160p' "${quickjs_log_dir}/$(basename "${src}" .c).log" || true
+      quickjs_build_failed=1
+      if [[ "${MODE}" != "allow-fail" ]]; then
+        exit 1
+      fi
+      fail=$((fail + 1))
+    fi
+  done
+
+  qjsc_bin="${quickjs_build_dir}/qjsc"
+  qjsc_host_obj_dir="${quickjs_build_dir}/qjsc_host"
+  mkdir -p "${qjsc_host_obj_dir}"
+  qjsc_host_objs=()
+  quickjs_host_sources=(
+    "${QUICKJS_C}"
+    "${QUICKJS_DIR}/dtoa.c"
+    "${QUICKJS_DIR}/libregexp.c"
+    "${QUICKJS_DIR}/libunicode.c"
+    "${QUICKJS_DIR}/cutils.c"
+    "${QUICKJS_DIR}/quickjs-libc.c"
+    "${QUICKJS_DIR}/qjsc.c"
+  )
+  for src in "${quickjs_host_sources[@]}"; do
+    obj="${qjsc_host_obj_dir}/$(basename "${src}" .c).o"
+    qjsc_host_objs+=("${obj}")
+    if ! clang -c "${src}" -o "${obj}" "${quickjs_host_args[@]}" \
+      >"${quickjs_log_dir}/qjsc_host_$(basename "${src}" .c).log" 2>&1; then
+      echo "FAILED: qjsc host compile failed ($(basename "${src}"))"
+      sed -n '1,160p' "${quickjs_log_dir}/qjsc_host_$(basename "${src}" .c).log" || true
+      quickjs_build_failed=1
+      if [[ "${MODE}" != "allow-fail" ]]; then
+        exit 1
+      fi
+      fail=$((fail + 1))
+    fi
+  done
+  if [[ "${quickjs_build_failed}" -eq 0 ]]; then
+    if ! clang "${qjsc_host_objs[@]}" -o "${qjsc_bin}" "${quickjs_libs[@]}" \
+      >"${quickjs_log_dir}/qjsc_link.log" 2>&1; then
+      echo "FAILED: qjsc link failed"
+      sed -n '1,160p' "${quickjs_log_dir}/qjsc_link.log" || true
+      quickjs_build_failed=1
+      if [[ "${MODE}" != "allow-fail" ]]; then
+        exit 1
+      fi
+      fail=$((fail + 1))
+    fi
+  fi
+
+  repl_c="${quickjs_build_dir}/repl.c"
+  if [[ "${quickjs_build_failed}" -eq 0 ]]; then
+    if ! "${qjsc_bin}" -s -c -o "${repl_c}" -m "${QUICKJS_DIR}/repl.js" \
+      >"${quickjs_log_dir}/repl_gen.log" 2>&1; then
+      echo "FAILED: repl.c generation failed"
+      sed -n '1,160p' "${quickjs_log_dir}/repl_gen.log" || true
+      quickjs_build_failed=1
+      if [[ "${MODE}" != "allow-fail" ]]; then
+        exit 1
+      fi
+      fail=$((fail + 1))
+    fi
+  fi
+
+  qjs_obj="${quickjs_obj_dir}/qjs.o"
+  repl_obj="${quickjs_obj_dir}/repl.o"
+  qjs_bin="${quickjs_build_dir}/qjs"
+  if [[ "${quickjs_build_failed}" -eq 0 ]]; then
+    if ! "${TEST_TINYCC_BIN}" "${quickjs_args[@]}" -c "${QUICKJS_DIR}/qjs.c" -o "${qjs_obj}" \
+      >"${quickjs_log_dir}/qjs_compile.log" 2>&1; then
+      echo "FAILED: qjs compile failed"
+      sed -n '1,160p' "${quickjs_log_dir}/qjs_compile.log" || true
+      quickjs_build_failed=1
+      if [[ "${MODE}" != "allow-fail" ]]; then
+        exit 1
+      fi
+      fail=$((fail + 1))
+    fi
+    if ! "${TEST_TINYCC_BIN}" "${quickjs_args[@]}" -c "${repl_c}" -o "${repl_obj}" \
+      >"${quickjs_log_dir}/repl_compile.log" 2>&1; then
+      echo "FAILED: repl.c compile failed"
+      sed -n '1,160p' "${quickjs_log_dir}/repl_compile.log" || true
+      quickjs_build_failed=1
+      if [[ "${MODE}" != "allow-fail" ]]; then
+        exit 1
+      fi
+      fail=$((fail + 1))
+    fi
+  fi
+  if [[ "${quickjs_build_failed}" -eq 0 ]]; then
+    if ! clang "${qjs_obj}" "${repl_obj}" "${quickjs_lib_objs[@]}" -o "${qjs_bin}" "${quickjs_libs[@]}" \
+      >"${quickjs_log_dir}/qjs_link.log" 2>&1; then
+      echo "FAILED: qjs link failed"
+      sed -n '1,160p' "${quickjs_log_dir}/qjs_link.log" || true
+      quickjs_build_failed=1
+      if [[ "${MODE}" != "allow-fail" ]]; then
+        exit 1
+      fi
+      fail=$((fail + 1))
+    fi
+  fi
+
+  if [[ "${quickjs_build_failed}" -eq 0 ]]; then
+    echo "Running quickjs tests"
+    pushd "${QUICKJS_DIR}" >/dev/null
+    for test_file in ${QUICKJS_TEST_LIST}; do
+      test_name="$(basename "${test_file}")"
+      test_log="${quickjs_log_dir}/${test_name}.log"
+      if [[ "${test_name}" == "test_builtin.js" ]]; then
+        if ! "${qjs_bin}" --std "${test_file}" >"${test_log}" 2>&1; then
+          echo "FAILED: quickjs test ${test_name}"
+          sed -n '1,160p' "${test_log}" || true
+          if [[ "${MODE}" != "allow-fail" ]]; then
+            popd >/dev/null
+            exit 1
+          fi
+          fail=$((fail + 1))
+        fi
+      else
+        if ! "${qjs_bin}" "${test_file}" >"${test_log}" 2>&1; then
+          echo "FAILED: quickjs test ${test_name}"
+          sed -n '1,160p' "${test_log}" || true
+          if [[ "${MODE}" != "allow-fail" ]]; then
+            popd >/dev/null
+            exit 1
+          fi
+          fail=$((fail + 1))
+        fi
+      fi
+    done
+    popd >/dev/null
   fi
 fi
 

@@ -131,6 +131,20 @@ test "codegen emits arm64 main return 0 object" {
 }
 
 ///|
+test "codegen handles __builtin_alloca" {
+  let (unit, bag) = parse_text(
+    "int f(int n){ void *p = __builtin_alloca(n); return p != 0; }",
+  )
+  assert_true(!has_errors(bag))
+  check_translation_unit(unit, bag) |> ignore
+  assert_true(!has_errors(bag))
+  match codegen_arm64_object_bytes(unit, bag) {
+    None => fail("expected object bytes")
+    Some(_bytes) => ()
+  }
+}
+
+///|
 test "codegen handles compound literal designators in function" {
   let (unit, bag) = parse_text(
     "typedef union U { int int32; void *ptr; } U;\n" +

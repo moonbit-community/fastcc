@@ -2,6 +2,7 @@
 #define _TCC_COMPAT_SYS_STAT_H
 
 #include <sys/types.h>
+#include <time.h>
 
 #define S_IFMT  0170000
 #define S_IFIFO 0010000
@@ -32,6 +33,8 @@
 #define S_IROTH 0004
 #define S_IWOTH 0002
 #define S_IXOTH 0001
+#define S_ISUID 0004000
+#define S_ISGID 0002000
 
 struct stat {
   dev_t st_dev;
@@ -42,9 +45,13 @@ struct stat {
   gid_t st_gid;
   dev_t st_rdev;
   off_t st_size;
+  blkcnt_t st_blocks;
   time_t st_atime;
   time_t st_mtime;
   time_t st_ctime;
+  struct timespec st_atimespec;
+  struct timespec st_mtimespec;
+  struct timespec st_ctimespec;
 };
 
 int stat(const char *path, struct stat *buf);

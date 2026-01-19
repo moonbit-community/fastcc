@@ -15,6 +15,7 @@
 
 #define _SC_PAGESIZE 29
 #define _SC_NPROCESSORS_ONLN 83
+#define _SC_OPEN_MAX 5
 
 int access(const char *path, int mode);
 int unlink(const char *path);
@@ -37,5 +38,7 @@ pid_t fork(void);
 int execv(const char *path, char *const argv[]);
 int execlp(const char *file, const char *arg, ...);
 pid_t getpid(void);
+
+extern int optind;
 
 #endif /* _TCC_COMPAT_UNISTD_H */

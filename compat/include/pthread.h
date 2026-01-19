@@ -18,6 +18,7 @@ typedef struct { int __opaque; } pthread_once_t;
 #define PTHREAD_COND_INITIALIZER {0}
 #define PTHREAD_RWLOCK_INITIALIZER {0}
 #define PTHREAD_ONCE_INIT {0}
+#define PTHREAD_CREATE_DETACHED 2
 
 int pthread_create(
   pthread_t *thread,

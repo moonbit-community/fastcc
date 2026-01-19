@@ -1501,7 +1501,7 @@ fn parse_declarator(p : Parser, base : CType) -> Declarator? {
   //   void *(*fp)(void)
   let (ty0, pointer_attrs) = parse_pointer_chain(p, base)
   let mut attrs = merge_attrs(pointer_attrs, parse_attributes(p))
-  if is_paren_pointer_declarator(p) {
+  if peek_kind(p, 0) == LParen {
     match parse_paren_pointer_declarator(p, ty0) {
       None => None
       Some(decl) =>
@@ -1575,7 +1575,7 @@ fn parse_field_declarator(
   // Like parse_declarator, but the name may be omitted (anonymous fields).
   let (ty0, pointer_attrs) = parse_pointer_chain(p, base)
   let mut attrs = merge_attrs(pointer_attrs, parse_attributes(p))
-  if is_paren_pointer_declarator(p) {
+  if peek_kind(p, 0) == LParen {
     expect(p, LParen, "expected '(' in declarator") |> ignore
     let quals : Array[TypeQual] = []
     let mut inner_attrs = parse_attributes(p)

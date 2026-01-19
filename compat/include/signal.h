@@ -4,6 +4,7 @@
 #include <sys/types.h>
 
 typedef unsigned long sigset_t;
+typedef void (*sig_t)(int);
 typedef void (*sighandler_t)(int);
 
 typedef struct siginfo {
@@ -40,9 +41,18 @@ struct sigaction {
 #define SIGALRM 14
 #define SIGTERM 15
 #define SIGINT  2
+#define SIGQUIT 3
 #define SIGHUP  1
 #define SIGTRAP 5
 #define SIGILL  4
+#define SIGSTOP 17
+#define SIGTSTP 18
+#define SIGCONT 19
+#define SIGCHLD 20
+#define SIGTTIN 21
+#define SIGTTOU 22
+#define SIGUSR1 30
+#define SIGUSR2 31
 
 #define SIG_BLOCK   0
 #define SIG_UNBLOCK 1

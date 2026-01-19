@@ -25,9 +25,29 @@ struct termios {
 #define TCSADRAIN 1
 #define TCSAFLUSH 2
 
+#define IGNBRK  0x00000001
+#define BRKINT  0x00000002
+#define PARMRK  0x00000008
+#define ISTRIP  0x00000020
+#define INLCR   0x00000040
+#define IGNCR   0x00000080
+#define ICRNL   0x00000100
+#define IXON    0x00000200
+
+#define OPOST   0x00000001
+
 #define ICANON 0x0002
 #define ECHO 0x0008
 #define ISIG 0x0001
+#define ECHONL 0x00000010
+#define IEXTEN 0x00000400
+
+#define CSIZE  0x00000300
+#define PARENB 0x00001000
+#define CS8    0x00000300
+
+#define VMIN  16
+#define VTIME 17
 
 int tcgetattr(int fd, struct termios *termios_p);
 int tcsetattr(int fd, int optional_actions, const struct termios *termios_p);
