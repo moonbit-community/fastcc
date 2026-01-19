@@ -3605,15 +3605,11 @@ fn typedef_id_from_name(p : Parser, name : String) -> Int {
 }
 
 ///|
-fn typedef_id_from_token(p : Parser, tok : Token) -> Int {
+fn typedef_id_from_token(_p : Parser, tok : Token) -> Int {
   if tok.kind != Ident {
     return 0
   }
-  if tok.id > 0 {
-    tok.id
-  } else {
-    typedef_id_from_name(p, tok.lexeme)
-  }
+  if tok.id > 0 { tok.id } else { 0 }
 }
 
 ///|

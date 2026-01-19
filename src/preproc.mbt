@@ -20,6 +20,17 @@ struct IncludeSpec {
 }
 
 ///|
+struct PreprocBuiltinIds {
+  line_macro : Int
+  file_macro : Int
+  date_macro : Int
+  time_macro : Int
+  defined : Int
+  has_include : Int
+  has_include_next : Int
+}
+
+///|
 struct Preprocessor {
   mut lexer : Lexer
   lexer_stack : Array[Lexer]
@@ -46,6 +57,7 @@ struct Preprocessor {
   interner : StringInterner
   keyword_ids : KeywordIds
   hidden_singletons : FastMap[Int, Array[Int]]
+  builtin_ids : PreprocBuiltinIds
 }
 
 ///|
@@ -235,6 +247,14 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
   let (date_literal, time_literal) = init_datetime_literals()
   let interner = new_string_interner_with_capacity()
   let keyword_ids = init_keyword_ids(interner)
+  let (_, line_macro_id) = interner.intern_view_with_id("__LINE__"[:])
+  let (_, file_macro_id) = interner.intern_view_with_id("__FILE__"[:])
+  let (_, date_macro_id) = interner.intern_view_with_id("__DATE__"[:])
+  let (_, time_macro_id) = interner.intern_view_with_id("__TIME__"[:])
+  let (_, defined_id) = interner.intern_view_with_id("defined"[:])
+  let (_, has_include_id) = interner.intern_view_with_id("__has_include"[:])
+  let (_, has_include_next_id) =
+    interner.intern_view_with_id("__has_include_next"[:])
   let pp = {
     lexer: new_lexer(file, diags, interner, keyword_ids),
     lexer_stack: [],
@@ -261,6 +281,15 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
     interner,
     keyword_ids,
     hidden_singletons: fast_map_new(),
+    builtin_ids: {
+      line_macro: line_macro_id,
+      file_macro: file_macro_id,
+      date_macro: date_macro_id,
+      time_macro: time_macro_id,
+      defined: defined_id,
+      has_include: has_include_id,
+      has_include_next: has_include_next_id,
+    },
   }
   init_builtin_macros(pp)
   pp
@@ -999,21 +1028,25 @@ fn make_int_literal_token(value : Int, loc : SrcLoc) -> Token {
 
 ///|
 fn builtin_macro_tokens(pp : Preprocessor, tok : Token) -> Array[Token]? {
-  match tok.lexeme {
-    "__LINE__" =>
-      Some([make_int_literal_token(logical_line(pp, tok.loc), tok.loc)])
-    "__FILE__" => {
-      let path = if pp.logical_path == "" {
-        pp.current_path
-      } else {
-        pp.logical_path
-      }
-      Some([make_string_literal(path, tok.loc)])
-    }
-    "__DATE__" => Some([make_string_literal(pp.date_literal, tok.loc)])
-    "__TIME__" => Some([make_string_literal(pp.time_literal, tok.loc)])
-    _ => None
+  let id = tok.id
+  if id == pp.builtin_ids.line_macro {
+    return Some([make_int_literal_token(logical_line(pp, tok.loc), tok.loc)])
   }
+  if id == pp.builtin_ids.file_macro {
+    let path = if pp.logical_path == "" {
+      pp.current_path
+    } else {
+      pp.logical_path
+    }
+    return Some([make_string_literal(path, tok.loc)])
+  }
+  if id == pp.builtin_ids.date_macro {
+    return Some([make_string_literal(pp.date_literal, tok.loc)])
+  }
+  if id == pp.builtin_ids.time_macro {
+    return Some([make_string_literal(pp.time_literal, tok.loc)])
+  }
+  None
 }
 
 ///|
@@ -1109,24 +1142,21 @@ fn substitute_macro(
     if tok.kind == Hash && i + 1 < macro_def.replacement.length() {
       let next_tok = macro_def.replacement[i + 1]
       if next_tok.kind == Ident {
-        let param_id =
-          if next_tok.id > 0 {
-            next_tok.id
-          } else {
-            macro_id_from_name(pp, next_tok.lexeme)
-          }
-        match lookup_param_index(params, param_id) {
-          Some(idx) => {
-            let arg_tokens = if idx < raw_args.length() {
-              raw_args[idx]
-            } else {
-              []
+        let param_id = next_tok.id
+        if param_id > 0 {
+          match lookup_param_index(params, param_id) {
+            Some(idx) => {
+              let arg_tokens = if idx < raw_args.length() {
+                raw_args[idx]
+              } else {
+                []
+              }
+              out.push(make_string_literal(stringize_tokens(arg_tokens), loc))
+              i = i + 2
+              continue
             }
-            out.push(make_string_literal(stringize_tokens(arg_tokens), loc))
-            i = i + 2
-            continue
+            None => ()
           }
-          None => ()
         }
       }
     }
@@ -1144,22 +1174,21 @@ fn substitute_macro(
       let mut next_from_param = false
       let next_tok = macro_def.replacement[i + 1]
       if next_tok.kind == Ident {
-        let param_id =
-          if next_tok.id > 0 {
-            next_tok.id
-          } else {
-            macro_id_from_name(pp, next_tok.lexeme)
-          }
-        match lookup_param_index(params, param_id) {
-          Some(idx) => {
-            next_tokens = if idx < raw_args.length() {
-              raw_args[idx]
-            } else {
-              []
+        let param_id = next_tok.id
+        if param_id > 0 {
+          match lookup_param_index(params, param_id) {
+            Some(idx) => {
+              next_tokens = if idx < raw_args.length() {
+                raw_args[idx]
+              } else {
+                []
+              }
+              next_from_param = true
             }
-            next_from_param = true
+            None => next_tokens = [next_tok]
           }
-          None => next_tokens = [next_tok]
+        } else {
+          next_tokens = [next_tok]
         }
       } else {
         next_tokens = [next_tok]
@@ -1202,33 +1231,30 @@ fn substitute_macro(
       continue
     }
     if tok.kind == Ident {
-      let param_id =
-        if tok.id > 0 {
-          tok.id
-        } else {
-          macro_id_from_name(pp, tok.lexeme)
+      let param_id = tok.id
+      if param_id > 0 {
+        match lookup_param_index(params, param_id) {
+          Some(idx) => {
+            let arg_tokens = if idx < expanded_args.length() {
+              expanded_args[idx]
+            } else {
+              []
+            }
+            for t in arg_tokens {
+              out.push({
+                kind: t.kind,
+                lexeme: t.lexeme,
+                id: t.id,
+                loc: t.loc,
+                line_start: false,
+                hidden: t.hidden,
+              })
+            }
+            i = i + 1
+            continue
+          }
+          None => ()
         }
-      match lookup_param_index(params, param_id) {
-        Some(idx) => {
-        let arg_tokens = if idx < expanded_args.length() {
-          expanded_args[idx]
-        } else {
-          []
-        }
-        for t in arg_tokens {
-          out.push({
-            kind: t.kind,
-            lexeme: t.lexeme,
-            id: t.id,
-            loc: t.loc,
-            line_start: false,
-            hidden: t.hidden,
-          })
-        }
-          i = i + 1
-          continue
-        }
-        None => ()
       }
     }
     out.push({
@@ -1403,9 +1429,10 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                       continue
                     }
                     Some(norm_raw) => {
-                      if tok.lexeme == "__has_include" ||
-                        tok.lexeme == "__has_include_next" {
-                        let include_next = tok.lexeme == "__has_include_next"
+                      if tok.id == pp.builtin_ids.has_include ||
+                        tok.id == pp.builtin_ids.has_include_next {
+                        let include_next =
+                          tok.id == pp.builtin_ids.has_include_next
                         let arg_tokens = if norm_raw.length() > 0 {
                           expand_tokens(pp, norm_raw[0])
                         } else {
@@ -1591,7 +1618,7 @@ fn normalize_macro_tokens(tokens : Array[Token]) -> Array[Token] {
 fn expand_if_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
   let mut has_defined = false
   for tok in tokens {
-    if tok.kind == Ident && tok.lexeme == "defined" {
+    if tok.kind == Ident && tok.id == pp.builtin_ids.defined {
       has_defined = true
       break
     }
@@ -1605,7 +1632,7 @@ fn expand_if_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
   let mut i = 0
   while i < len {
     let tok = tokens[i]
-    if tok.kind == Ident && tok.lexeme == "defined" {
+    if tok.kind == Ident && tok.id == pp.builtin_ids.defined {
       if segment.length() > 0 {
         let expanded = expand_tokens(pp, segment)
         for t in expanded {
@@ -1960,7 +1987,7 @@ fn parse_primary(p : IfParser, loc : SrcLoc) -> PpValue {
         return parse_pp_int_literal(p.pp, tok.lexeme, tok.loc)
       }
       if tok.kind == Ident {
-        if tok.lexeme == "defined" {
+        if tok.id == p.pp.builtin_ids.defined {
           return parse_defined(p, loc)
         }
         match macro_int_value(p.pp, tok, tok.loc) {
