@@ -3187,8 +3187,8 @@ struct SymTable {
   name_to_id : FastMap[String, Int]
   externals : FastMap[Int, Bool]
   link_cache : FastMap[String, String]
-  ident_syms : FastMap[Int, Sym]
-  call_layout_cache : FastMap[Int, Arm64PcsLayout]
+  ident_syms : Array[Sym?]
+  call_layout_cache : Array[Arm64PcsLayout?]
 }
 
 ///|
@@ -3199,8 +3199,42 @@ fn new_symtab_with_capacity(capacity : Int) -> SymTable {
     name_to_id: fast_map_new(capacity=cap),
     externals: fast_map_new(capacity=cap),
     link_cache: fast_map_new(capacity=cap),
-    ident_syms: fast_map_new(capacity=cap),
-    call_layout_cache: fast_map_new(capacity=cap),
+    ident_syms: Array::new(capacity=cap),
+    call_layout_cache: Array::new(capacity=cap),
+  }
+}
+
+///|
+fn ensure_ident_syms_capacity(tab : SymTable, id : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  let idx = id - 1
+  let len = tab.ident_syms.length()
+  if idx < len {
+    return
+  }
+  let mut i = len
+  while i <= idx {
+    tab.ident_syms.push(None)
+    i = i + 1
+  }
+}
+
+///|
+fn ensure_call_layout_capacity(tab : SymTable, id : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  let idx = id - 1
+  let len = tab.call_layout_cache.length()
+  if idx < len {
+    return
+  }
+  let mut i = len
+  while i <= idx {
+    tab.call_layout_cache.push(None)
+    i = i + 1
   }
 }
 
@@ -3226,12 +3260,14 @@ fn link_name(name : String) -> String {
 ///|
 fn sym_for_ident(tab : SymTable, name : String, id? : Int = 0) -> Sym {
   if id > 0 {
-    match tab.ident_syms.get(id) {
+    ensure_ident_syms_capacity(tab, id)
+    let idx = id - 1
+    match tab.ident_syms[idx] {
       Some(sym) => sym
       None => {
         let link = link_name(name)
         let sym = sym_for_name(tab, link)
-        tab.ident_syms.set(id, sym)
+        tab.ident_syms[idx] = Some(sym)
         sym
       }
     }
@@ -4284,7 +4320,9 @@ fn gen_call_direct(
   let emit_call_fn = fn() { emit_call(emitter, sym) }
   let mut cached_layout : Arm64PcsLayout? = None
   if use_sig_params && id > 0 {
-    match syms.call_layout_cache.get(id) {
+    ensure_call_layout_capacity(syms, id)
+    let idx = id - 1
+    match syms.call_layout_cache[idx] {
       Some(layout) => cached_layout = Some(layout)
       None => {
         let layout = arm64_pcs(
@@ -4295,7 +4333,7 @@ fn gen_call_direct(
           loc,
           bag,
         )
-        syms.call_layout_cache.set(id, layout)
+        syms.call_layout_cache[idx] = Some(layout)
         cached_layout = Some(layout)
       }
     }
