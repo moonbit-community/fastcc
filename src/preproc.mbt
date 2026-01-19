@@ -64,6 +64,7 @@ struct Preprocessor {
   pending : Array[Token]
   mut held : Token?
   cond_stack : Array[CondState]
+  mut active : Bool
   expanding : Array[Int]
   expanding_guards : Array[ExpandingGuard]
   date_literal : String
@@ -309,6 +310,7 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
     pending: [],
     held: None,
     cond_stack: [],
+    active: true,
     expanding: [],
     expanding_guards: [],
     date_literal,
@@ -346,11 +348,7 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
 
 ///|
 fn current_active(pp : Preprocessor) -> Bool {
-  if pp.cond_stack.length() == 0 {
-    return true
-  }
-  let idx = pp.cond_stack.length() - 1
-  pp.cond_stack[idx].active
+  pp.active
 }
 
 ///|
@@ -1612,6 +1610,7 @@ fn push_cond(pp : Preprocessor, cond : Bool) -> Unit {
   let parent = current_active(pp)
   let active = parent && cond
   pp.cond_stack.push({ parent_active: parent, taken: active, active })
+  pp.active = active
 }
 
 ///|
@@ -1633,6 +1632,7 @@ fn update_elif(pp : Preprocessor, cond : Bool, loc : SrcLoc) -> Unit {
     }
   }
   pp.cond_stack[idx] = state
+  pp.active = state.active
 }
 
 ///|
@@ -1652,6 +1652,7 @@ fn update_else(pp : Preprocessor, loc : SrcLoc) -> Unit {
     state.taken = true
   }
   pp.cond_stack[idx] = state
+  pp.active = state.active
 }
 
 ///|
@@ -1661,6 +1662,12 @@ fn pop_cond(pp : Preprocessor, loc : SrcLoc) -> Unit {
     return
   }
   ignore(pp.cond_stack.pop())
+  if pp.cond_stack.length() == 0 {
+    pp.active = true
+  } else {
+    let idx = pp.cond_stack.length() - 1
+    pp.active = pp.cond_stack[idx].active
+  }
 }
 
 ///|
