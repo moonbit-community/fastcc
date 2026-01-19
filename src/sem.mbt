@@ -5007,44 +5007,29 @@ fn ensure_expr_type_cache(ctx : SemContext, id : Int) -> Unit {
 }
 
 ///|
-fn cached_expr_type(ctx : SemContext, expr : Expr) -> CType? {
-  let id = expr_node_id(expr)
-  if id <= 0 {
-    return None
-  }
-  let cache_len = ctx.expr_type_cache.length()
-  if id <= cache_len {
-    ctx.expr_type_cache[id - 1]
-  } else {
-    None
-  }
-}
-
-///|
-fn set_cached_expr_type(ctx : SemContext, expr : Expr, ty : CType) -> Unit {
-  let id = expr_node_id(expr)
-  if id <= 0 {
-    return
-  }
-  let cache_len = ctx.expr_type_cache.length()
-  if id <= cache_len {
-    ctx.expr_type_cache[id - 1] = Some(ty)
-    return
-  }
-  ensure_expr_type_cache(ctx, id)
-  ctx.expr_type_cache[id - 1] = Some(ty)
-}
-
 ///|
 fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
-  let cached = cached_expr_type(ctx, expr)
-  let ty = match cached {
-    Some(found) => found
-    None => {
+  let id = expr_node_id(expr)
+  let ty = if id > 0 {
+    let idx = id - 1
+    let cache_len = ctx.expr_type_cache.length()
+    if idx < cache_len {
+      match ctx.expr_type_cache[idx] {
+        Some(found) => found
+        None => {
+          let computed = type_of_expr_impl(ctx, expr)
+          ctx.expr_type_cache[idx] = Some(computed)
+          computed
+        }
+      }
+    } else {
       let computed = type_of_expr_impl(ctx, expr)
-      set_cached_expr_type(ctx, expr, computed)
+      ensure_expr_type_cache(ctx, id)
+      ctx.expr_type_cache[idx] = Some(computed)
       computed
     }
+  } else {
+    type_of_expr_impl(ctx, expr)
   }
   if ctx.record_agg_temps {
     match ctx.current_func_name {
