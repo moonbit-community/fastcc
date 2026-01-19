@@ -28,6 +28,20 @@ struct PreprocBuiltinIds {
   defined : Int
   has_include : Int
   has_include_next : Int
+  dir_define : Int
+  dir_undef : Int
+  dir_if : Int
+  dir_ifdef : Int
+  dir_ifndef : Int
+  dir_elif : Int
+  dir_else : Int
+  dir_endif : Int
+  dir_include : Int
+  dir_include_next : Int
+  dir_line : Int
+  dir_error : Int
+  dir_warning : Int
+  dir_pragma : Int
 }
 
 ///|
@@ -255,6 +269,20 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
   let (_, has_include_id) = interner.intern_view_with_id("__has_include"[:])
   let (_, has_include_next_id) =
     interner.intern_view_with_id("__has_include_next"[:])
+  let (_, dir_define_id) = interner.intern_view_with_id("define"[:])
+  let (_, dir_undef_id) = interner.intern_view_with_id("undef"[:])
+  let (_, dir_if_id) = interner.intern_view_with_id("if"[:])
+  let (_, dir_ifdef_id) = interner.intern_view_with_id("ifdef"[:])
+  let (_, dir_ifndef_id) = interner.intern_view_with_id("ifndef"[:])
+  let (_, dir_elif_id) = interner.intern_view_with_id("elif"[:])
+  let (_, dir_else_id) = interner.intern_view_with_id("else"[:])
+  let (_, dir_endif_id) = interner.intern_view_with_id("endif"[:])
+  let (_, dir_include_id) = interner.intern_view_with_id("include"[:])
+  let (_, dir_include_next_id) = interner.intern_view_with_id("include_next"[:])
+  let (_, dir_line_id) = interner.intern_view_with_id("line"[:])
+  let (_, dir_error_id) = interner.intern_view_with_id("error"[:])
+  let (_, dir_warning_id) = interner.intern_view_with_id("warning"[:])
+  let (_, dir_pragma_id) = interner.intern_view_with_id("pragma"[:])
   let pp = {
     lexer: new_lexer(file, diags, interner, keyword_ids),
     lexer_stack: [],
@@ -289,6 +317,20 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
       defined: defined_id,
       has_include: has_include_id,
       has_include_next: has_include_next_id,
+      dir_define: dir_define_id,
+      dir_undef: dir_undef_id,
+      dir_if: dir_if_id,
+      dir_ifdef: dir_ifdef_id,
+      dir_ifndef: dir_ifndef_id,
+      dir_elif: dir_elif_id,
+      dir_else: dir_else_id,
+      dir_endif: dir_endif_id,
+      dir_include: dir_include_id,
+      dir_include_next: dir_include_next_id,
+      dir_line: dir_line_id,
+      dir_error: dir_error_id,
+      dir_warning: dir_warning_id,
+      dir_pragma: dir_pragma_id,
     },
   }
   init_builtin_macros(pp)
@@ -2352,18 +2394,19 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     pp.held = Some(name_tok)
     return
   }
-  let name = name_tok.lexeme
-  let is_conditional = name == "if" ||
-    name == "ifdef" ||
-    name == "ifndef" ||
-    name == "elif" ||
-    name == "else" ||
-    name == "endif"
+  let name_id = name_tok.id
+  let ids = pp.builtin_ids
+  let is_conditional = name_id == ids.dir_if ||
+    name_id == ids.dir_ifdef ||
+    name_id == ids.dir_ifndef ||
+    name_id == ids.dir_elif ||
+    name_id == ids.dir_else ||
+    name_id == ids.dir_endif
   if !current_active(pp) && !is_conditional {
     skip_directive_line(pp)
     return
   }
-  if name == "define" {
+  if name_id == ids.dir_define {
     let args = read_directive_tokens(pp)
     if args.length() == 0 || !is_macro_name_token(args[0]) {
       add_pp_error(pp, name_tok.loc, "missing macro name in #define")
@@ -2380,7 +2423,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     }
     return
   }
-  if name == "undef" {
+  if name_id == ids.dir_undef {
     let args = read_directive_tokens(pp)
     if args.length() == 0 || !is_macro_name_token(args[0]) {
       add_pp_error(pp, name_tok.loc, "missing macro name in #undef")
@@ -2392,7 +2435,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     }
     return
   }
-  if name == "ifdef" {
+  if name_id == ids.dir_ifdef {
     if !current_active(pp) {
       skip_directive_line(pp)
       push_cond(pp, false)
@@ -2405,7 +2448,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     push_cond(pp, cond)
     return
   }
-  if name == "ifndef" {
+  if name_id == ids.dir_ifndef {
     if !current_active(pp) {
       skip_directive_line(pp)
       push_cond(pp, false)
@@ -2418,7 +2461,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     push_cond(pp, cond)
     return
   }
-  if name == "if" {
+  if name_id == ids.dir_if {
     if !current_active(pp) {
       skip_directive_line(pp)
       push_cond(pp, false)
@@ -2430,7 +2473,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     push_cond(pp, cond)
     return
   }
-  if name == "elif" {
+  if name_id == ids.dir_elif {
     if pp.cond_stack.length() == 0 {
       skip_directive_line(pp)
       update_elif(pp, false, name_tok.loc)
@@ -2449,17 +2492,17 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     update_elif(pp, cond, name_tok.loc)
     return
   }
-  if name == "else" {
+  if name_id == ids.dir_else {
     skip_directive_line(pp)
     update_else(pp, name_tok.loc)
     return
   }
-  if name == "endif" {
+  if name_id == ids.dir_endif {
     skip_directive_line(pp)
     pop_cond(pp, name_tok.loc)
     return
   }
-  if name == "include" {
+  if name_id == ids.dir_include {
     let args = read_directive_tokens(pp)
     if current_active(pp) {
       let expanded = expand_tokens(pp, args)
@@ -2470,7 +2513,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     }
     return
   }
-  if name == "include_next" {
+  if name_id == ids.dir_include_next {
     let args = read_directive_tokens(pp)
     if current_active(pp) {
       let expanded = expand_tokens(pp, args)
@@ -2481,7 +2524,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     }
     return
   }
-  if name == "line" {
+  if name_id == ids.dir_line {
     let args = read_directive_tokens(pp)
     if !current_active(pp) {
       return
@@ -2490,7 +2533,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     handle_line_directive(pp, expanded, name_tok.loc)
     return
   }
-  if name == "error" {
+  if name_id == ids.dir_error {
     if current_active(pp) {
       let text = read_directive_text(pp)
       add_pp_error(pp, name_tok.loc, "error: " + text)
@@ -2499,7 +2542,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     }
     return
   }
-  if name == "warning" {
+  if name_id == ids.dir_warning {
     if current_active(pp) {
       let text = read_directive_text(pp)
       add_pp_error(pp, name_tok.loc, "warning: " + text)
@@ -2508,7 +2551,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     }
     return
   }
-  if name == "pragma" {
+  if name_id == ids.dir_pragma {
     skip_directive_line(pp)
     return
   }
