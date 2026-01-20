@@ -1870,12 +1870,18 @@ fn emit_cast_value(
         CType::Int(unsigned~, ..) => unsigned
         _ => false
       }
+      let from_size = match scalar_size_signed_or_error(sem, from_ty, loc) {
+        None => return
+        Some((size, _)) => size
+      }
+      let sf_bit : Int = if from_size == 8 { 0x80000000 } else { 0 }
       let norm_target = normalize_float_kind(to_kind_raw)
       if norm_target == CFloatKind::Float {
         let base : Int = if is_unsigned { 0x1e230000 } else { 0x1e220000 }
         emit32(
           emitter,
           base
+          .lor(sf_bit)
           .lor(0)
           .lor(reg << 5)
           .reinterpret_as_uint(),
@@ -1886,6 +1892,7 @@ fn emit_cast_value(
         emit32(
           emitter,
           base
+          .lor(sf_bit)
           .lor(0)
           .lor(reg << 5)
           .reinterpret_as_uint(),
@@ -8034,11 +8041,17 @@ fn gen_expr_to_float_kind_bits_with_type(
         CType::Int(unsigned~, ..) => unsigned
         _ => false
       }
+      let src_size = match scalar_size_signed_or_error(alloc.sem, src_ty, expr_loc(expr)) {
+        None => return
+        Some((size, _)) => size
+      }
+      let sf_bit : Int = if src_size == 8 { 0x80000000 } else { 0 }
       if norm_target == CFloatKind::Float {
         let base : Int = if is_unsigned { 0x1e230000 } else { 0x1e220000 }
         emit32(
           emitter,
           base
+          .lor(sf_bit)
           .lor(0)
           .lor(dst << 5)
           .reinterpret_as_uint(),
@@ -8049,6 +8062,7 @@ fn gen_expr_to_float_kind_bits_with_type(
         emit32(
           emitter,
           base
+          .lor(sf_bit)
           .lor(0)
           .lor(dst << 5)
           .reinterpret_as_uint(),
