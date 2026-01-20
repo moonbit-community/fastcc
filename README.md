@@ -16,11 +16,11 @@ DATASET=vc APPLY_VC_PATCH=1 DETAIL=1 REPEAT=3 WARMUP=1 scripts/bench_tinycc_comp
 
 Results (3 runs):
 
-- tinycc.mbt total: 0.494s
+- tinycc.mbt total: 0.487s
 - refs/tinycc total: 0.114s
-- clang total: 1.593s
-- ratio (mbt/ref): 4.35x
+- clang total: 1.595s
+- ratio (mbt/ref): 4.31x
 - ratio (mbt/clang): 0.31x
 - ratio (ref/clang): 0.07x
-- phases avg ms: parse=153.536 sem=92.947 codegen=205.947 total=452.431
+- phases avg ms: parse=155.297 sem=92.595 codegen=201.484 total=449.376
 - notes: arm64 benchmark applies `refs/vc_patches/arm64_closure_bytes.patch` to `refs/vc/v.c`; clang uses system headers (compat include skipped); numbers vary by run

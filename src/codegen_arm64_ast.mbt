@@ -36,6 +36,8 @@ struct LocalSlot {
   ty : CType
   vla_size_offset : Int?
   byref : Bool
+  type_size : Int?
+  type_align : Int?
 }
 
 ///|
@@ -232,6 +234,18 @@ fn type_size_align_or_error(
   match type_size_align(sem, ty, loc) {
     None => None
     Some((size, align)) => Some((size, align))
+  }
+}
+
+///|
+fn slot_type_size_align(
+  alloc : LocalAlloc,
+  slot : LocalSlot,
+  loc : SrcLoc,
+) -> (Int, Int)? {
+  match (slot.type_size, slot.type_align) {
+    (Some(size), Some(align)) => Some((size, align))
+    _ => type_size_align_or_error(alloc.sem, slot.ty, loc)
   }
 }
 
@@ -502,18 +516,26 @@ fn alloc_local(
   ty : CType,
   loc : SrcLoc,
 ) -> LocalSlot? {
-  let (size, align) = match strip_top_qualifiers(ty) {
-    CType::Array(size=None, size_expr=Some(_), ..) => (8, 8)
-    _ =>
-      match type_size_align_or_error(alloc.sem, ty, loc) {
-        None => return None
-        Some(v) => v
-      }
+  let (slot_size, slot_align, type_size, type_align) =
+    match strip_top_qualifiers(ty) {
+      CType::Array(size=None, size_expr=Some(_), ..) => (8, 8, None, None)
+      _ =>
+        match type_size_align_or_error(alloc.sem, ty, loc) {
+          None => return None
+          Some((size, align)) => (size, align, Some(size), Some(align))
+        }
+    }
+  let aligned = align_up(alloc.used_bytes, slot_align)
+  alloc.used_bytes = aligned + slot_size
+  let offset = -(aligned + slot_size)
+  let slot = {
+    offset,
+    ty,
+    vla_size_offset: None,
+    byref: false,
+    type_size,
+    type_align,
   }
-  let aligned = align_up(alloc.used_bytes, align)
-  alloc.used_bytes = aligned + size
-  let offset = -(aligned + size)
-  let slot = { offset, ty, vla_size_offset: None, byref: false }
   let idx = alloc.scopes.length() - 1
   let scope = alloc.scopes[idx]
   let already = id > 0 && scope.contains(id)
@@ -545,7 +567,14 @@ fn alloc_local_byref(
   let aligned = align_up(alloc.used_bytes, align)
   alloc.used_bytes = aligned + size
   let offset = -(aligned + size)
-  let slot = { offset, ty, vla_size_offset: None, byref: true }
+  let slot = {
+    offset,
+    ty,
+    vla_size_offset: None,
+    byref: true,
+    type_size: None,
+    type_align: None,
+  }
   let idx = alloc.scopes.length() - 1
   let scope = alloc.scopes[idx]
   let already = id > 0 && scope.contains(id)
@@ -976,6 +1005,8 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt, walk_exprs : Bool) -> Unit {
                   ty: slot.ty,
                   vla_size_offset: Some(size_off),
                   byref: slot.byref,
+                  type_size: slot.type_size,
+                  type_align: slot.type_align,
                 }
                 if d.id > 0 {
                   let scope_idx = alloc.scopes.length() - 1
@@ -11725,6 +11756,8 @@ fn gen_stmt(
                   ty: slot0.ty,
                   vla_size_offset: Some(size_off),
                   byref: slot0.byref,
+                  type_size: slot0.type_size,
+                  type_align: slot0.type_align,
                 }
                 if d.id > 0 {
                   let scope_idx = alloc.scopes.length() - 1
@@ -11760,7 +11793,7 @@ fn gen_stmt(
               Some(init) => {
                 let needs_zero = type_is_aggregate(slot0.ty)
                 if needs_zero {
-                  match type_size_align_or_error(alloc.sem, slot0.ty, d.loc) {
+                  match slot_type_size_align(alloc, slot0, d.loc) {
                     None => ()
                     Some((size, _)) =>
                       if size > 0 {
@@ -12714,7 +12747,7 @@ fn gen_func_def(
           let reg = loc_i >> 1
           match strip_top_qualifiers(slot.ty) {
             CType::Struct(..) | CType::Union(..) =>
-              match type_size_align_or_error(alloc.sem, slot.ty, p.loc) {
+              match slot_type_size_align(alloc, slot, p.loc) {
                 None => ()
                 Some((size, _)) =>
                   emit_store_gp_regs_to_addr(
@@ -12798,7 +12831,7 @@ fn gen_func_def(
               }
           }
         } else if loc_i >= 32 {
-          match type_size_align_or_error(alloc.sem, slot.ty, p.loc) {
+          match slot_type_size_align(alloc, slot, p.loc) {
             None => ()
             Some((size, _)) =>
               if size > 0 {
