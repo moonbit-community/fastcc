@@ -10,3 +10,6 @@
 [submodule "refs/quickjs"]
 	path = refs/quickjs
 	url = https://github.com/bellard/quickjs.git
+[submodule "refs/sqlite"]
+	path = refs/sqlite
+	url = https://github.com/sqlite/sqlite.git

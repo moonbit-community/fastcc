@@ -39,5 +39,6 @@ extern int errno;
 #define ENOSYS 38
 #define ENOTEMPTY 39
 #define ETIMEDOUT 110
+#define ENOLCK 77
 
 #endif /* _TCC_COMPAT_ERRNO_H */

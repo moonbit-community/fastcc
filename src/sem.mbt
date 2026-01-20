@@ -19,6 +19,7 @@ enum BuiltinCallKind {
   Expect
   ConstantP
   Unreachable
+  SyncSynchronize
   VaStart
   VaCopy
   VaEnd
@@ -5804,6 +5805,12 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
             }
             return CType::Void
           }
+          Some(BuiltinCallKind::SyncSynchronize) => {
+            if args.length() != 0 {
+              add_sem_error(ctx, loc, "__sync_synchronize expects no args")
+            }
+            return CType::Void
+          }
           Some(BuiltinCallKind::VaStart) => {
             if args.length() != 2 {
               add_sem_error(ctx, loc, "__builtin_va_start expects 2 arguments")
@@ -5965,20 +5972,23 @@ fn builtin_call_kind(
       None => ()
     }
   }
-  if !has_builtin_prefix(name) {
-    return None
-  }
-  let kind = match name {
-    "__builtin_choose_expr" => Some(BuiltinCallKind::ChooseExpr)
-    "__builtin_expect" => Some(BuiltinCallKind::Expect)
-    "__builtin_constant_p" => Some(BuiltinCallKind::ConstantP)
-    "__builtin_unreachable" => Some(BuiltinCallKind::Unreachable)
-    "__builtin_va_start" => Some(BuiltinCallKind::VaStart)
-    "__builtin_va_copy" => Some(BuiltinCallKind::VaCopy)
-    "__builtin_va_end" => Some(BuiltinCallKind::VaEnd)
-    "__builtin_frame_address" => Some(BuiltinCallKind::FrameAddress)
-    "__builtin_return_address" => Some(BuiltinCallKind::ReturnAddress)
-    _ => None
+  let kind = if name == "__sync_synchronize" {
+    Some(BuiltinCallKind::SyncSynchronize)
+  } else if !has_builtin_prefix(name) {
+    None
+  } else {
+    match name {
+      "__builtin_choose_expr" => Some(BuiltinCallKind::ChooseExpr)
+      "__builtin_expect" => Some(BuiltinCallKind::Expect)
+      "__builtin_constant_p" => Some(BuiltinCallKind::ConstantP)
+      "__builtin_unreachable" => Some(BuiltinCallKind::Unreachable)
+      "__builtin_va_start" => Some(BuiltinCallKind::VaStart)
+      "__builtin_va_copy" => Some(BuiltinCallKind::VaCopy)
+      "__builtin_va_end" => Some(BuiltinCallKind::VaEnd)
+      "__builtin_frame_address" => Some(BuiltinCallKind::FrameAddress)
+      "__builtin_return_address" => Some(BuiltinCallKind::ReturnAddress)
+      _ => None
+    }
   }
   match kind {
     Some(value) => {

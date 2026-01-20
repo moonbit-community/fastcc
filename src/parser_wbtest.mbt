@@ -53,6 +53,84 @@ fn struct_size_align_from_text(
 }
 
 ///|
+fn collect_ident_ids_expr(
+  expr : Expr,
+  name : String,
+  out : Array[Int],
+) -> Unit {
+  match expr {
+    Expr::Ident(name=ident_name, id~, ..) =>
+      if ident_name == name {
+        out.push(id)
+      }
+    Expr::LabelAddr(..)
+    | Expr::IntLit(..)
+    | Expr::FloatLit(..)
+    | Expr::CharLit(..)
+    | Expr::StringLit(..)
+    | Expr::BuiltinTypesCompatibleP(..)
+    | Expr::BuiltinOffsetof(..)
+    | Expr::SizeofType(..)
+    | Expr::AlignofType(..) => ()
+    Expr::BuiltinVaArg(list~, ..) =>
+      collect_ident_ids_expr(list, name, out)
+    Expr::Unary(expr=inner, ..)
+    | Expr::Cast(expr=inner, ..)
+    | Expr::SizeofExpr(expr=inner, ..)
+    | Expr::AlignofExpr(expr=inner, ..) =>
+      collect_ident_ids_expr(inner, name, out)
+    Expr::CompoundLiteral(init~, ..) =>
+      collect_ident_ids_init(init, name, out)
+    Expr::StmtExpr(stmts~, ..) =>
+      for stmt in stmts {
+        match stmt {
+          Stmt::ExprStmt(expr=inner, ..)
+          | Stmt::Return(value=Some(inner), ..) =>
+            collect_ident_ids_expr(inner, name, out)
+          _ => ()
+        }
+      }
+    Expr::Binary(left~, right~, ..) => {
+      collect_ident_ids_expr(left, name, out)
+      collect_ident_ids_expr(right, name, out)
+    }
+    Expr::Conditional(cond~, then_expr~, else_expr~, ..) => {
+      collect_ident_ids_expr(cond, name, out)
+      collect_ident_ids_expr(then_expr, name, out)
+      collect_ident_ids_expr(else_expr, name, out)
+    }
+    Expr::Call(callee~, args~, ..) => {
+      collect_ident_ids_expr(callee, name, out)
+      for arg in args {
+        collect_ident_ids_expr(arg, name, out)
+      }
+    }
+    Expr::Index(base~, index~, ..) => {
+      collect_ident_ids_expr(base, name, out)
+      collect_ident_ids_expr(index, name, out)
+    }
+    Expr::Member(base~, ..) =>
+      collect_ident_ids_expr(base, name, out)
+  }
+}
+
+///|
+fn collect_ident_ids_init(
+  init : Initializer,
+  name : String,
+  out : Array[Int],
+) -> Unit {
+  match init {
+    Initializer::Expr(expr=inner, ..) =>
+      collect_ident_ids_expr(inner, name, out)
+    Initializer::List(items~, ..) =>
+      for item in items {
+        collect_ident_ids_init(item.value, name, out)
+      }
+  }
+}
+
+///|
 test "parse function with return" {
   let (unit, bag) = parse_text("int main(){return 1;}")
   assert_true(!has_errors(bag))
@@ -67,6 +145,52 @@ test "parse function with return" {
 test "sem accepts local declarations" {
   let (_, bag) = check_text("int main(){int x = 1; return x;}")
   assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts static local arrays used in sizeof macro" {
+  let text =
+    "#define ArraySize(x) (sizeof(x)/sizeof((x)[0]))\n" +
+    "typedef struct { int x; } Foo;\n" +
+    "int f(void){\n" +
+    "  static Foo aTable[] = { {1}, {2} };\n" +
+    "  return ArraySize(aTable) + aTable[0].x;\n" +
+    "}\n"
+  let (unit, bag) = parse_text(text)
+  assert_true(!has_errors(bag))
+  guard unit.decls.length() == 2 else { fail("expected two declarations") }
+  match unit.decls[1] {
+    Decl::FuncDef(func) =>
+      match func.body {
+        Stmt::Compound(stmts~, ..) => {
+          guard stmts.length() >= 2 else { fail("expected decl and return") }
+          let decl = match stmts[0] {
+            Stmt::DeclStmt(decls~, ..) => {
+              guard decls.length() > 0 else { fail("expected static decl") }
+              decls[0]
+            }
+            _ => fail("expected decl statement")
+          }
+          assert_eq(decl.name, "aTable")
+          assert_eq(decl.storage, StorageClass::Static)
+          assert_true(decl.id > 0)
+          let ret_expr = match stmts[1] {
+            Stmt::Return(value=Some(expr), ..) => expr
+            _ => fail("expected return statement")
+          }
+          let ids : Array[Int] = []
+          collect_ident_ids_expr(ret_expr, "aTable", ids)
+          assert_true(ids.length() > 0)
+          for id in ids {
+            assert_eq(id, decl.id)
+          }
+        }
+        _ => fail("expected compound body")
+      }
+    _ => fail("expected function definition")
+  }
+  let (_, sem_bag) = check_text(text)
+  assert_true(!has_errors(sem_bag))
 }
 
 ///|
@@ -146,6 +270,35 @@ test "parse __builtin_expect call" {
       }
     _ => fail("expected function definition")
   }
+}
+
+///|
+test "parse nested function pointer declarator" {
+  let text =
+    "void (*(*x)(void*, const char*))(void);\n" +
+    "void *dlsym();\n" +
+    "void (*(*y)(void*, const char*))(void) = (void(*(*)(void*, const char*))(void))dlsym;"
+  let (_, bag) = parse_text(text)
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "parse nested function pointer in struct field" {
+  let text =
+    "struct S {\n" +
+    "  void (*(*x)(void*, const char*))(void);\n" +
+    "};"
+  let (_, bag) = parse_text(text)
+  assert_true(!has_errors(bag))
+}
+
+///|
+test "sem accepts nested function pointer field call" {
+  let text =
+    "struct S { void (*(*x)(int))(void); };\n" +
+    "void g(struct S* s){ void (*fp)(void) = s->x(1); fp(); }\n"
+  let (_, bag) = check_text(text)
+  assert_true(!has_errors(bag))
 }
 
 ///|

@@ -2066,6 +2066,133 @@ fn parse_pp_int_literal(
 }
 
 ///|
+fn parse_pp_char_literal(pp : Preprocessor, tok : Token) -> PpValue {
+  let lexeme = tok.lexeme
+  if lexeme.length() < 3 {
+    add_pp_error(pp, tok.loc, "invalid character literal in #if")
+    return { value: 0, is_unsigned: false }
+  }
+  let len = lexeme.length()
+  let mut value = 0
+  let mut i = 1
+  if i + 1 >= len {
+    add_pp_error(pp, tok.loc, "invalid character literal in #if")
+    return { value: 0, is_unsigned: false }
+  }
+  let code = lexeme[i]
+  if code == 92 {
+    let (esc, next_index) = decode_pp_escape_value(pp, lexeme, i + 1, tok.loc)
+    value = esc
+    i = next_index
+  } else {
+    value = code.to_int()
+    i = i + 1
+  }
+  if i + 1 < len {
+    add_pp_error(pp, tok.loc, "multi-character literal in #if")
+  }
+  { value: value.to_uint64(), is_unsigned: false }
+}
+
+///|
+fn decode_pp_escape_value(
+  pp : Preprocessor,
+  text : String,
+  start : Int,
+  loc : SrcLoc,
+) -> (Int, Int) {
+  if start >= text.length() {
+    add_pp_error(pp, loc, "unterminated escape sequence in #if")
+    return (0, start)
+  }
+  let code = text[start]
+  match code {
+    97 => (7, start + 1) // \a
+    98 => (8, start + 1) // \b
+    102 => (12, start + 1) // \f
+    110 => (10, start + 1) // \n
+    114 => (13, start + 1) // \r
+    116 => (9, start + 1) // \t
+    118 => (11, start + 1) // \v
+    92 => (92, start + 1) // \\
+    39 => (39, start + 1) // \'
+    34 => (34, start + 1) // \"
+    63 => (63, start + 1) // \?
+    120 | 88 => parse_pp_hex_escape(pp, text, start + 1, loc) // \x
+    _ =>
+      if pp_is_oct_digit(code) {
+        parse_pp_octal_escape(text, start)
+      } else {
+        (code.to_int(), start + 1)
+      }
+  }
+}
+
+///|
+fn parse_pp_hex_escape(
+  pp : Preprocessor,
+  text : String,
+  start : Int,
+  loc : SrcLoc,
+) -> (Int, Int) {
+  let mut i = start
+  let mut value = 0
+  let mut saw = false
+  while i < text.length() {
+    let code = text[i]
+    let digit = pp_hex_digit_value(code)
+    match digit {
+      None => break
+      Some(v) => {
+        value = value * 16 + v
+        saw = true
+        i = i + 1
+      }
+    }
+  }
+  if !saw {
+    add_pp_error(pp, loc, "invalid hex escape in #if")
+  }
+  (value, i)
+}
+
+///|
+fn parse_pp_octal_escape(text : String, start : Int) -> (Int, Int) {
+  let mut i = start
+  let mut value = 0
+  let mut count = 0
+  while i < text.length() && count < 3 {
+    let code = text[i]
+    if !pp_is_oct_digit(code) {
+      break
+    }
+    value = value * 8 + (code.to_int() - 48)
+    i = i + 1
+    count = count + 1
+  }
+  (value, i)
+}
+
+///|
+fn pp_is_oct_digit(code : UInt16) -> Bool {
+  code >= 48 && code <= 55
+}
+
+///|
+fn pp_hex_digit_value(code : UInt16) -> Int? {
+  if code >= 48 && code <= 57 {
+    return Some(code.to_int() - 48)
+  }
+  if code >= 65 && code <= 70 {
+    return Some(code.to_int() - 65 + 10)
+  }
+  if code >= 97 && code <= 102 {
+    return Some(code.to_int() - 97 + 10)
+  }
+  None
+}
+
+///|
 fn macro_int_value(
   pp : Preprocessor,
   tok : Token,
@@ -2108,6 +2235,9 @@ fn parse_primary(p : IfParser, loc : SrcLoc) -> PpValue {
       }
       if tok.kind == IntLit {
         return parse_pp_int_literal(p.pp, tok.lexeme, tok.loc)
+      }
+      if tok.kind == CharLit {
+        return parse_pp_char_literal(p.pp, tok)
       }
       if tok.kind == Ident {
         if tok.id == p.pp.builtin_ids.defined {

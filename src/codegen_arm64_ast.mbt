@@ -41,6 +41,12 @@ struct LocalSlot {
 }
 
 ///|
+struct StaticLocalInfo {
+  name : String
+  ty : CType
+}
+
+///|
 struct FieldAccessInfo {
   offset : Int
   ty : CType
@@ -61,6 +67,7 @@ struct LocalAlloc {
   local_overrides : Array[Array[(String, LocalSlot?)]]
   local_id_values : FastMap[Int, LocalSlot]
   local_id_overrides : Array[Array[(Int, LocalSlot?)]]
+  static_locals : FastMap[Int, StaticLocalInfo]
   func_name : String
   labels : LabelCtx
   compound_literal_slots : FastMap[String, Int]
@@ -78,8 +85,12 @@ struct VlaScopeInfo {
 }
 
 ///|
-fn new_local_alloc(sem : SemContext, ret_ty : CType, func_name : String) ->
-  LocalAlloc {
+fn new_local_alloc(
+  sem : SemContext,
+  ret_ty : CType,
+  func_name : String,
+  static_locals : FastMap[Int, StaticLocalInfo],
+) -> LocalAlloc {
   {
     sem,
     ret_ty,
@@ -91,6 +102,7 @@ fn new_local_alloc(sem : SemContext, ret_ty : CType, func_name : String) ->
     local_overrides: [],
     local_id_values: fast_map_new(),
     local_id_overrides: [],
+    static_locals,
     func_name,
     labels: new_label_ctx(),
     compound_literal_slots: fast_map_new(),
@@ -106,6 +118,7 @@ fn new_local_alloc_with_compound_slots(
   sem : SemContext,
   ret_ty : CType,
   func_name : String,
+  static_locals : FastMap[Int, StaticLocalInfo],
   compound_literal_slots : FastMap[String, Int],
 ) -> LocalAlloc {
   {
@@ -119,6 +132,7 @@ fn new_local_alloc_with_compound_slots(
     local_overrides: [],
     local_id_values: fast_map_new(),
     local_id_overrides: [],
+    static_locals,
     func_name,
     labels: new_label_ctx(),
     compound_literal_slots,
@@ -179,6 +193,14 @@ fn lookup_local(alloc : LocalAlloc, name : String, id : Int) -> LocalSlot? {
     return alloc.local_id_values.get(id)
   }
   alloc.local_values.get(name)
+}
+
+///|
+fn lookup_static_local(alloc : LocalAlloc, id : Int) -> StaticLocalInfo? {
+  if id <= 0 {
+    return None
+  }
+  alloc.static_locals.get(id)
 }
 
 ///|
@@ -595,6 +617,20 @@ fn alloc_local_byref(
 }
 
 ///|
+fn record_static_local_binding(alloc : LocalAlloc, decl : VarDecl) -> Unit {
+  if decl.id <= 0 || alloc.sem.locals.length() == 0 {
+    return
+  }
+  let ty = match alloc.static_locals.get(decl.id) {
+    None => decl.ty
+    Some(info) => info.ty
+  }
+  let idx = alloc.sem.locals.length() - 1
+  alloc.sem.locals[idx].set(decl.id, ty)
+  record_local_binding(alloc.sem, decl.id, ty)
+}
+
+///|
 fn alloc_hidden_slot(alloc : LocalAlloc, size : Int, align : Int) -> Int {
   let aligned = align_up(alloc.used_bytes, align)
   alloc.used_bytes = aligned + size
@@ -953,6 +989,216 @@ fn infer_array_size_from_init_items(items : Array[InitItem]) -> Int {
 }
 
 ///|
+fn static_local_base_name(func_name : String, local_name : String, id : Int) -> String {
+  let func_part = if func_name == "" { "anonymous" } else { func_name }
+  "__local_static.\{func_part}.\{local_name}.\{id}"
+}
+
+///|
+fn collect_static_local_decl(
+  func_name : String,
+  decl : VarDecl,
+  locals : FastMap[Int, StaticLocalInfo],
+  decls : Array[VarDecl],
+  init_maps : FastMap[String, FastMap[Int, StaticLocalInfo]],
+) -> Unit {
+  if decl.storage != StorageClass::Static {
+    return
+  }
+  let stripped = strip_top_qualifiers(decl.ty)
+  match stripped {
+    CType::Function(..) => return
+    _ => ()
+  }
+  if decl.id <= 0 {
+    return
+  }
+  if locals.contains(decl.id) {
+    return
+  }
+  let mut decl_ty = decl.ty
+  match stripped {
+    CType::Array(elem=elem_ty, size=None, size_expr=None) =>
+      match decl.init {
+        Some(Initializer::Expr(expr=Expr::StringLit(length~, ..), ..)) =>
+          if is_char_type(elem_ty) {
+            decl_ty = apply_inferred_array_size(decl.ty, length)
+          }
+        Some(Initializer::List(items~, ..)) => {
+          let len = infer_array_size_from_init_items(items)
+          decl_ty = apply_inferred_array_size(decl.ty, len)
+        }
+        _ => ()
+      }
+    _ => ()
+  }
+  let base_name = static_local_base_name(func_name, decl.name, decl.id)
+  locals.set(decl.id, { name: base_name, ty: decl_ty })
+  init_maps.set(base_name, locals)
+  decls.push({
+    name: base_name,
+    id: 0,
+    ty: decl_ty,
+    init: decl.init,
+    storage: StorageClass::Static,
+    attrs: decl.attrs,
+    loc: decl.loc,
+  })
+}
+
+///|
+fn collect_static_locals_in_expr(
+  func_name : String,
+  expr : Expr,
+  locals : FastMap[Int, StaticLocalInfo],
+  decls : Array[VarDecl],
+  init_maps : FastMap[String, FastMap[Int, StaticLocalInfo]],
+) -> Unit {
+  match expr {
+    Expr::Unary(expr=inner, ..) =>
+      collect_static_locals_in_expr(func_name, inner, locals, decls, init_maps)
+    Expr::Cast(expr=inner, ..) =>
+      collect_static_locals_in_expr(func_name, inner, locals, decls, init_maps)
+    Expr::StmtExpr(stmts~, ..) =>
+      for s in stmts {
+        collect_static_locals_in_stmt(func_name, s, locals, decls, init_maps)
+      }
+    Expr::SizeofExpr(expr=inner, ..) =>
+      collect_static_locals_in_expr(func_name, inner, locals, decls, init_maps)
+    Expr::AlignofExpr(expr=inner, ..) =>
+      collect_static_locals_in_expr(func_name, inner, locals, decls, init_maps)
+    Expr::CompoundLiteral(init~, ..) =>
+      collect_static_locals_in_initializer(func_name, init, locals, decls, init_maps)
+    Expr::Binary(left~, right~, ..) => {
+      collect_static_locals_in_expr(func_name, left, locals, decls, init_maps)
+      collect_static_locals_in_expr(func_name, right, locals, decls, init_maps)
+    }
+    Expr::Conditional(cond~, then_expr~, else_expr~, ..) => {
+      collect_static_locals_in_expr(func_name, cond, locals, decls, init_maps)
+      collect_static_locals_in_expr(func_name, then_expr, locals, decls, init_maps)
+      collect_static_locals_in_expr(func_name, else_expr, locals, decls, init_maps)
+    }
+    Expr::Call(callee~, args~, ..) => {
+      collect_static_locals_in_expr(func_name, callee, locals, decls, init_maps)
+      for a in args {
+        collect_static_locals_in_expr(func_name, a, locals, decls, init_maps)
+      }
+    }
+    Expr::Index(base~, index~, ..) => {
+      collect_static_locals_in_expr(func_name, base, locals, decls, init_maps)
+      collect_static_locals_in_expr(func_name, index, locals, decls, init_maps)
+    }
+    Expr::Member(base~, ..) =>
+      collect_static_locals_in_expr(func_name, base, locals, decls, init_maps)
+    Expr::BuiltinVaArg(list~, ..) =>
+      collect_static_locals_in_expr(func_name, list, locals, decls, init_maps)
+    _ => ()
+  }
+}
+
+///|
+fn collect_static_locals_in_initializer(
+  func_name : String,
+  init : Initializer,
+  locals : FastMap[Int, StaticLocalInfo],
+  decls : Array[VarDecl],
+  init_maps : FastMap[String, FastMap[Int, StaticLocalInfo]],
+) -> Unit {
+  match init {
+    Initializer::Expr(expr~, ..) =>
+      collect_static_locals_in_expr(func_name, expr, locals, decls, init_maps)
+    Initializer::List(items~, ..) =>
+      for item in items {
+        collect_static_locals_in_initializer(func_name, item.value, locals, decls, init_maps)
+      }
+  }
+}
+
+///|
+fn collect_static_locals_in_stmt(
+  func_name : String,
+  stmt : Stmt,
+  locals : FastMap[Int, StaticLocalInfo],
+  decls : Array[VarDecl],
+  init_maps : FastMap[String, FastMap[Int, StaticLocalInfo]],
+) -> Unit {
+  match stmt {
+    Stmt::Compound(stmts~, ..) =>
+      for s in stmts {
+        collect_static_locals_in_stmt(func_name, s, locals, decls, init_maps)
+      }
+    Stmt::If(cond~, then_branch~, else_branch~, ..) => {
+      collect_static_locals_in_expr(func_name, cond, locals, decls, init_maps)
+      collect_static_locals_in_stmt(func_name, then_branch, locals, decls, init_maps)
+      match else_branch {
+        None => ()
+        Some(s) => collect_static_locals_in_stmt(func_name, s, locals, decls, init_maps)
+      }
+    }
+    Stmt::While(cond~, body~, ..) => {
+      collect_static_locals_in_expr(func_name, cond, locals, decls, init_maps)
+      collect_static_locals_in_stmt(func_name, body, locals, decls, init_maps)
+    }
+    Stmt::DoWhile(cond~, body~, ..) => {
+      collect_static_locals_in_stmt(func_name, body, locals, decls, init_maps)
+      collect_static_locals_in_expr(func_name, cond, locals, decls, init_maps)
+    }
+    Stmt::For(init~, cond~, step~, body~, ..) => {
+      match init {
+        None => ()
+        Some(s) => collect_static_locals_in_stmt(func_name, s, locals, decls, init_maps)
+      }
+      match cond {
+        None => ()
+        Some(e) => collect_static_locals_in_expr(func_name, e, locals, decls, init_maps)
+      }
+      match step {
+        None => ()
+        Some(e) => collect_static_locals_in_expr(func_name, e, locals, decls, init_maps)
+      }
+      collect_static_locals_in_stmt(func_name, body, locals, decls, init_maps)
+    }
+    Stmt::Switch(cond~, body~, ..) => {
+      collect_static_locals_in_expr(func_name, cond, locals, decls, init_maps)
+      collect_static_locals_in_stmt(func_name, body, locals, decls, init_maps)
+    }
+    Stmt::Case(expr~, end_expr~, body~, ..) => {
+      collect_static_locals_in_expr(func_name, expr, locals, decls, init_maps)
+      match end_expr {
+        None => ()
+        Some(e) => collect_static_locals_in_expr(func_name, e, locals, decls, init_maps)
+      }
+      collect_static_locals_in_stmt(func_name, body, locals, decls, init_maps)
+    }
+    Stmt::Default(body~, ..) =>
+      collect_static_locals_in_stmt(func_name, body, locals, decls, init_maps)
+    Stmt::Label(body=body, ..) =>
+      collect_static_locals_in_stmt(func_name, body, locals, decls, init_maps)
+    Stmt::Return(value~, ..) =>
+      match value {
+        None => ()
+        Some(expr) => collect_static_locals_in_expr(func_name, expr, locals, decls, init_maps)
+      }
+    Stmt::Asm(asm_stmt) => {
+      for op in asm_stmt.outputs {
+        collect_static_locals_in_expr(func_name, op.expr, locals, decls, init_maps)
+      }
+      for op in asm_stmt.inputs {
+        collect_static_locals_in_expr(func_name, op.expr, locals, decls, init_maps)
+      }
+    }
+    Stmt::ExprStmt(expr~, ..) =>
+      collect_static_locals_in_expr(func_name, expr, locals, decls, init_maps)
+    Stmt::DeclStmt(decls=items, ..) =>
+      for d in items {
+        collect_static_local_decl(func_name, d, locals, decls, init_maps)
+      }
+    Stmt::TagDef(..) | Stmt::StaticAssert(_) | Stmt::Empty(..) |
+    Stmt::Goto(..) | Stmt::GotoExpr(..) | Stmt::Break(..) | Stmt::Continue(..) => ()
+  }
+}
+
+///|
 fn layout_stmt(alloc : LocalAlloc, stmt : Stmt, walk_exprs : Bool) -> Unit {
   match stmt {
     Stmt::Compound(stmts~, ..) => {
@@ -976,6 +1222,10 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt, walk_exprs : Bool) -> Unit {
           _ => ()
         }
         if d.storage == StorageClass::Extern {
+          continue
+        }
+        if d.storage == StorageClass::Static {
+          record_static_local_binding(alloc, d)
           continue
         }
         let mut decl_ty = d.ty
@@ -3566,6 +3816,11 @@ fn sym_for_name(tab : SymTable, name : String) -> Sym {
 }
 
 ///|
+fn sym_for_static_local(syms : SymTable, info : StaticLocalInfo) -> Sym {
+  sym_for_name(syms, link_name(info.name))
+}
+
+///|
 fn link_name(name : String) -> String {
   "_\{name}"
 }
@@ -5391,6 +5646,13 @@ fn gen_call_expr_impl(
         return
       }
       Some(BuiltinCallKind::VaEnd) => return
+      Some(BuiltinCallKind::SyncSynchronize) => {
+        if args.length() != 0 {
+          add_error(bag, loc, "__sync_synchronize expects no args")
+        }
+        emit32(emitter, (0xd5033bbf : UInt))
+        return
+      }
       Some(BuiltinCallKind::FrameAddress) => {
         gen_builtin_frame_address(emitter, alloc, pool, args, false, loc, bag)
         return
@@ -5420,7 +5682,8 @@ fn gen_call_expr_impl(
     } else {
       alloc.sem.functions.contains(name)
     }
-    if lookup_local(alloc, name, id) is None && has_func {
+    if lookup_local(alloc, name, id) is None && lookup_static_local(alloc, id) is None &&
+      has_func {
       let ret_ty =
         gen_call_direct(
           emitter,
@@ -5848,7 +6111,10 @@ fn gen_lvalue_addr(
             }
           }
         None => {
-          let sym = sym_for_ident(syms, name, id=id)
+          let sym = match lookup_static_local(alloc, id) {
+            Some(info) => sym_for_static_local(syms, info)
+            None => sym_for_ident(syms, name, id=id)
+          }
           emit_addr_global(emitter, syms, sym, dst)
         }
       }
@@ -7604,7 +7870,10 @@ fn store_lvalue_scalar(
             bag,
           )
         None => {
-          let sym = sym_for_ident(syms, name, id=id)
+          let sym = match lookup_static_local(alloc, id) {
+            Some(info) => sym_for_static_local(syms, info)
+            None => sym_for_ident(syms, name, id=id)
+          }
           let addr_reg : Int = 16
           emit_addr_global(emitter, syms, sym, addr_reg)
           let sz = match arm64_sz_from_size(value_size) {
@@ -7846,7 +8115,10 @@ fn gen_expr_floatbits(
         Some(slot) =>
           emit_load_local_scalar(emitter, alloc.sem, slot.ty, dst, slot.offset, loc, bag)
         None => {
-          let sym = sym_for_ident(syms, name, id=id)
+          let sym = match lookup_static_local(alloc, id) {
+            Some(info) => sym_for_static_local(syms, info)
+            None => sym_for_ident(syms, name, id=id)
+          }
           let addr_reg : Int = 16
           emit_addr_global(emitter, syms, sym, addr_reg)
           let size = if is_double { 8 } else { 4 }
@@ -8241,42 +8513,69 @@ fn gen_expr_int32(
       match lookup_local(alloc, name, id) {
         Some(slot) =>
           emit_load_local_scalar(emitter, alloc.sem, slot.ty, dst, slot.offset, loc, bag)
-        None => {
-          let sym = sym_for_ident(syms, name, id=id)
-          let global_ty = if id > 0 { get_global_by_id(alloc.sem, id) } else { None }
-          let ty = match global_ty {
-            Some(gty) => decay_type(gty)
-            None =>
-              match alloc.sem.globals.get(name) {
+        None =>
+          match lookup_static_local(alloc, id) {
+            Some(info) => {
+              let sym = sym_for_static_local(syms, info)
+              let ty = decay_type(info.ty)
+              emit_addr_global(emitter, syms, sym, dst)
+              let (size, signed) = match scalar_size_signed_or_error(alloc.sem, ty, loc) {
+                None => return
+                Some(v) => v
+              }
+              let sz = match arm64_sz_from_size(size) {
+                None => {
+                  add_error(bag, loc, "codegen: unsupported scalar size")
+                  return
+                }
+                Some(v) => v
+              }
+              arm64_ldrx(
+                emitter,
+                signed,
+                sz,
+                dst.reinterpret_as_uint(),
+                dst.reinterpret_as_uint(),
+                0,
+              )
+            }
+            None => {
+              let sym = sym_for_ident(syms, name, id=id)
+              let global_ty = if id > 0 { get_global_by_id(alloc.sem, id) } else { None }
+              let ty = match global_ty {
                 Some(gty) => decay_type(gty)
                 None =>
-                  match expr_ty {
-                    Some(ty) => ty
-                    None => type_of_expr(alloc.sem, expr)
+                  match alloc.sem.globals.get(name) {
+                    Some(gty) => decay_type(gty)
+                    None =>
+                      match expr_ty {
+                        Some(ty) => ty
+                        None => type_of_expr(alloc.sem, expr)
+                      }
                   }
               }
-          }
-          emit_addr_global(emitter, syms, sym, dst)
-          let (size, signed) = match scalar_size_signed_or_error(alloc.sem, ty, loc) {
-            None => return
-            Some(v) => v
-          }
-          let sz = match arm64_sz_from_size(size) {
-            None => {
-              add_error(bag, loc, "codegen: unsupported scalar size")
-              return
+              emit_addr_global(emitter, syms, sym, dst)
+              let (size, signed) = match scalar_size_signed_or_error(alloc.sem, ty, loc) {
+                None => return
+                Some(v) => v
+              }
+              let sz = match arm64_sz_from_size(size) {
+                None => {
+                  add_error(bag, loc, "codegen: unsupported scalar size")
+                  return
+                }
+                Some(v) => v
+              }
+              arm64_ldrx(
+                emitter,
+                signed,
+                sz,
+                dst.reinterpret_as_uint(),
+                dst.reinterpret_as_uint(),
+                0,
+              )
             }
-            Some(v) => v
           }
-          arm64_ldrx(
-            emitter,
-            signed,
-            sz,
-            dst.reinterpret_as_uint(),
-            dst.reinterpret_as_uint(),
-            0,
-          )
-        }
       }
     }
     Expr::Index(base~, index~, loc~, ..) => {
@@ -10330,39 +10629,58 @@ fn gen_expr_ptr(
                 bag,
               )
           }
-        None => {
-          let sym = sym_for_ident(syms, name, id=id)
-          emit_addr_global(emitter, syms, sym, dst)
-          let has_func = if id > 0 {
-            has_function_by_id(alloc.sem, id) || alloc.sem.functions.contains(name)
-          } else {
-            alloc.sem.functions.contains(name)
-          }
-          if has_func {
-            return
-          }
-          let global_ty = if id > 0 { get_global_by_id(alloc.sem, id) } else { None }
-          let global_ty = match global_ty {
-            Some(found) => Some(found)
-            None => alloc.sem.globals.get(name)
-          }
-          match global_ty {
-            Some(gty) =>
-              match strip_top_qualifiers(gty) {
-                CType::Array(..) => return
+        None =>
+          match lookup_static_local(alloc, id) {
+            Some(info) => {
+              let sym = sym_for_static_local(syms, info)
+              emit_addr_global(emitter, syms, sym, dst)
+              match strip_top_qualifiers(info.ty) {
+                CType::Array(..) | CType::Function(..) => return
                 _ => ()
               }
-            None => ()
+              arm64_ldrx(
+                emitter,
+                false,
+                3,
+                dst.reinterpret_as_uint(),
+                dst.reinterpret_as_uint(),
+                0,
+              )
+            }
+            None => {
+              let sym = sym_for_ident(syms, name, id=id)
+              emit_addr_global(emitter, syms, sym, dst)
+              let has_func = if id > 0 {
+                has_function_by_id(alloc.sem, id) || alloc.sem.functions.contains(name)
+              } else {
+                alloc.sem.functions.contains(name)
+              }
+              if has_func {
+                return
+              }
+              let global_ty = if id > 0 { get_global_by_id(alloc.sem, id) } else { None }
+              let global_ty = match global_ty {
+                Some(found) => Some(found)
+                None => alloc.sem.globals.get(name)
+              }
+              match global_ty {
+                Some(gty) =>
+                  match strip_top_qualifiers(gty) {
+                    CType::Array(..) => return
+                    _ => ()
+                  }
+                None => ()
+              }
+              arm64_ldrx(
+                emitter,
+                false,
+                3,
+                dst.reinterpret_as_uint(),
+                dst.reinterpret_as_uint(),
+                0,
+              )
+            }
           }
-          arm64_ldrx(
-            emitter,
-            false,
-            3,
-            dst.reinterpret_as_uint(),
-            dst.reinterpret_as_uint(),
-            0,
-          )
-        }
       }
     }
     Expr::Member(base~, name~, id~, is_arrow~, loc~, ..) => {
@@ -11728,6 +12046,10 @@ fn gen_stmt(
         if d.storage == StorageClass::Extern {
           continue
         }
+        if d.storage == StorageClass::Static {
+          record_static_local_binding(alloc, d)
+          continue
+        }
         let mut decl_ty = d.ty
         match stripped {
           CType::Array(elem=elem_ty, size=None, size_expr=None) =>
@@ -11820,6 +12142,7 @@ fn gen_stmt(
       }
       return_chain
     }
+    Stmt::TagDef(..) | Stmt::StaticAssert(_) => return_chain
     Stmt::If(cond~, then_branch~, else_branch~, loc~) => {
       gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, cond, bag)
       let br_false = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
@@ -12482,8 +12805,13 @@ struct FramePlan {
 }
 
 ///|
-fn compute_frame_plan(sem : SemContext, func : FuncDef, bag : DiagBag) -> FramePlan {
-  let alloc = new_local_alloc(sem, func.return_type, func.name)
+fn compute_frame_plan(
+  sem : SemContext,
+  func : FuncDef,
+  static_locals : FastMap[Int, StaticLocalInfo],
+  bag : DiagBag,
+) -> FramePlan {
+  let alloc = new_local_alloc(sem, func.return_type, func.name, static_locals)
   cg_push_scope(alloc)
   reserve_sret_slot(alloc, func.loc, bag)
   let param_tys : Array[CType] = Array::new(capacity=func.params.length())
@@ -12651,6 +12979,7 @@ fn gen_func_def(
   syms : SymTable,
   func_offsets : FastMap[String, Int],
   cstrings : CstringPool,
+  static_locals : FastMap[Int, StaticLocalInfo],
   func : FuncDef,
   bag : DiagBag,
 ) -> Unit {
@@ -12659,13 +12988,14 @@ fn gen_func_def(
   let start = emitter_pc(emitter)
   func_offsets.set(link, start)
 
-  let plan = compute_frame_plan(sem, func, bag)
+  let plan = compute_frame_plan(sem, func, static_locals, bag)
   let frame_size = plan.frame_size
   let alloc =
     new_local_alloc_with_compound_slots(
       sem,
       func.return_type,
       func.name,
+      static_locals,
       plan.compound_literal_slots,
     )
   cg_push_scope(alloc)
@@ -13076,17 +13406,22 @@ fn const_pointer_from_lvalue(
   sem : SemContext,
   syms : SymTable,
   cstrings : CstringPool,
+  static_locals : FastMap[Int, StaticLocalInfo],
   expr : Expr,
 ) -> (Sym, Int)? {
   match expr {
-    Expr::Ident(name~, id~, ..) => Some((sym_for_ident(syms, name, id=id), 0))
+    Expr::Ident(name~, id~, ..) =>
+      match static_locals.get(id) {
+        Some(info) => Some((sym_for_static_local(syms, info), 0))
+        None => Some((sym_for_ident(syms, name, id=id), 0))
+      }
     Expr::StringLit(value~, ..) =>
       Some((cstring_sym_or_add(cstrings, syms, value), 0))
     Expr::Member(base~, name~, id~, is_arrow~, loc~, ..) => {
       let base_ptr = if is_arrow {
-        const_pointer_from_expr(sem, syms, cstrings, base)
+        const_pointer_from_expr(sem, syms, cstrings, static_locals, base)
       } else {
-        const_pointer_from_lvalue(sem, syms, cstrings, base)
+        const_pointer_from_lvalue(sem, syms, cstrings, static_locals, base)
       }
       match base_ptr {
         None => None
@@ -13105,7 +13440,7 @@ fn const_pointer_from_lvalue(
       match const_int_from_expr(sem, index, expr_loc(index)) {
         None => None
         Some(idx) =>
-          match const_pointer_from_expr(sem, syms, cstrings, base) {
+          match const_pointer_from_expr(sem, syms, cstrings, static_locals, base) {
             None => None
             Some((sym, addend)) =>
               match element_type_for_pointer_arith(type_of_expr(sem, base)) {
@@ -13121,11 +13456,11 @@ fn const_pointer_from_lvalue(
       }
     }
     Expr::Unary(op=UnaryOp::Deref, expr=inner, ..) =>
-      const_pointer_from_expr(sem, syms, cstrings, inner)
+      const_pointer_from_expr(sem, syms, cstrings, static_locals, inner)
     Expr::Cast(expr=inner, ..) =>
-      const_pointer_from_lvalue(sem, syms, cstrings, inner)
+      const_pointer_from_lvalue(sem, syms, cstrings, static_locals, inner)
     Expr::Unary(op=UnaryOp::Plus, expr=inner, ..) =>
-      const_pointer_from_lvalue(sem, syms, cstrings, inner)
+      const_pointer_from_lvalue(sem, syms, cstrings, static_locals, inner)
     _ => None
   }
 }
@@ -13135,29 +13470,33 @@ fn const_pointer_from_expr(
   sem : SemContext,
   syms : SymTable,
   cstrings : CstringPool,
+  static_locals : FastMap[Int, StaticLocalInfo],
   expr : Expr,
 ) -> (Sym, Int)? {
   match expr {
     Expr::StringLit(value~, ..) =>
       Some((cstring_sym_or_add(cstrings, syms, value), 0))
     Expr::Ident(name~, id~, ..) =>
-      Some((sym_for_ident(syms, name, id=id), 0))
+      match static_locals.get(id) {
+        Some(info) => Some((sym_for_static_local(syms, info), 0))
+        None => Some((sym_for_ident(syms, name, id=id), 0))
+      }
     Expr::Member(..) | Expr::Index(..) =>
       match type_of_lvalue(sem, expr) {
         Some(ty) =>
           match strip_top_qualifiers(ty) {
             CType::Array(..) =>
-              const_pointer_from_lvalue(sem, syms, cstrings, expr)
+              const_pointer_from_lvalue(sem, syms, cstrings, static_locals, expr)
             _ => None
           }
         None => None
       }
     Expr::Unary(op=UnaryOp::Addr, expr=inner, ..) =>
-      const_pointer_from_lvalue(sem, syms, cstrings, inner)
+      const_pointer_from_lvalue(sem, syms, cstrings, static_locals, inner)
     Expr::Cast(expr=inner, ..) =>
-      const_pointer_from_expr(sem, syms, cstrings, inner)
+      const_pointer_from_expr(sem, syms, cstrings, static_locals, inner)
     Expr::Unary(op=UnaryOp::Plus, expr=inner, ..) =>
-      const_pointer_from_expr(sem, syms, cstrings, inner)
+      const_pointer_from_expr(sem, syms, cstrings, static_locals, inner)
     _ => None
   }
 }
@@ -13167,6 +13506,7 @@ fn fill_global_initializer_bytes(
   sem : SemContext,
   syms : SymTable,
   cstrings : CstringPool,
+  static_locals : FastMap[Int, StaticLocalInfo],
   ty : CType,
   init : Initializer,
   bytes : Array[Int],
@@ -13225,6 +13565,7 @@ fn fill_global_initializer_bytes(
                 sem,
                 syms,
                 cstrings,
+                static_locals,
                 lit_ty,
                 lit_init,
                 bytes,
@@ -13255,7 +13596,7 @@ fn fill_global_initializer_bytes(
             }
             None =>
               if type_is_pointer_like(ty) {
-                match const_pointer_from_expr(sem, syms, cstrings, expr) {
+                match const_pointer_from_expr(sem, syms, cstrings, static_locals, expr) {
                   Some((sym, addend)) => {
                     let addend64 = addend.to_int64()
                     if size > 4 {
@@ -13440,6 +13781,7 @@ fn fill_global_initializer_bytes(
                           sem,
                           syms,
                           cstrings,
+                          static_locals,
                           target_ty,
                           item.value,
                           bytes,
@@ -13495,6 +13837,7 @@ fn fill_global_initializer_bytes(
               sem,
               syms,
               cstrings,
+              static_locals,
               target_ty,
               item.value,
               bytes,
@@ -13573,6 +13916,7 @@ fn fill_global_initializer_bytes(
                         sem,
                         syms,
                         cstrings,
+                        static_locals,
                         info.ty,
                         item.value,
                         bytes,
@@ -13616,6 +13960,7 @@ fn fill_global_initializer_bytes(
                             sem,
                             syms,
                             cstrings,
+                            static_locals,
                             field.ty,
                             init,
                             bytes,
@@ -13641,6 +13986,7 @@ fn fill_global_initializer_bytes(
                           sem,
                           syms,
                           cstrings,
+                          static_locals,
                           field.ty,
                           init,
                           bytes,
@@ -13689,6 +14035,7 @@ fn fill_global_initializer_bytes(
                         sem,
                         syms,
                         cstrings,
+                        static_locals,
                         field.ty,
                         item.value,
                         bytes,
@@ -13767,6 +14114,7 @@ fn fill_global_initializer_bytes(
                       sem,
                       syms,
                       cstrings,
+                      static_locals,
                       info.ty,
                       first.value,
                       bytes,
@@ -13814,6 +14162,7 @@ fn fill_global_initializer_bytes(
                 sem,
                 syms,
                 cstrings,
+                static_locals,
                 field.ty,
                 first.value,
                 bytes,
@@ -13835,6 +14184,7 @@ fn build_global_initializer_bytes(
   sem : SemContext,
   syms : SymTable,
   cstrings : CstringPool,
+  static_locals : FastMap[Int, StaticLocalInfo],
   ty : CType,
   init : Initializer,
   bag : DiagBag,
@@ -13850,7 +14200,18 @@ fn build_global_initializer_bytes(
   let bytes : Array[Int] = []
   ensure_bytes_len(bytes, size)
   let relocs : Array[Reloc] = []
-  fill_global_initializer_bytes(sem, syms, cstrings, ty, init, bytes, relocs, 0, bag)
+  fill_global_initializer_bytes(
+    sem,
+    syms,
+    cstrings,
+    static_locals,
+    ty,
+    init,
+    bytes,
+    relocs,
+    0,
+    bag,
+  )
   Some((bytes, relocs))
 }
 
@@ -13944,7 +14305,26 @@ fn codegen_arm64_object_bytes_with_sem(
       _ => ()
     }
   }
-  let sym_capacity = if decl_count > 0 { decl_count * 2 } else { 0 }
+  let static_locals_by_func : FastMap[String, FastMap[Int, StaticLocalInfo]] = fast_map_new()
+  let static_local_init_maps : FastMap[String, FastMap[Int, StaticLocalInfo]] = fast_map_new()
+  let static_local_decls : Array[VarDecl] = Array::new(capacity=decl_count)
+  for func in func_defs {
+    let func_locals : FastMap[Int, StaticLocalInfo] = fast_map_new()
+    collect_static_locals_in_stmt(
+      func.name,
+      func.body,
+      func_locals,
+      static_local_decls,
+      static_local_init_maps,
+    )
+    static_locals_by_func.set(func.name, func_locals)
+  }
+  for decl in static_local_decls {
+    var_decls.push(decl)
+  }
+  let empty_static_locals : FastMap[Int, StaticLocalInfo] = fast_map_new()
+  let total_decl_count = decl_count + static_local_decls.length()
+  let sym_capacity = if total_decl_count > 0 { total_decl_count * 2 } else { 0 }
   let syms = new_symtab_with_capacity(sym_capacity)
   for pair in external_symbols {
     let (name, is_ext) = pair
@@ -13955,18 +14335,23 @@ fn codegen_arm64_object_bytes_with_sem(
   let reloc_capacity = func_count * 16
   let emitter = new_arm64_emitter_with_capacity(code_capacity, reloc_capacity)
   let func_offsets : FastMap[String, Int] = fast_map_new(capacity=func_count)
-  let cstring_pool = new_cstring_pool(decl_count)
+  let cstring_pool = new_cstring_pool(total_decl_count)
 
   // Generate `main` first when present for stable layout, but allow objects without `main`.
   if main_found {
     for func in func_defs {
       if func.name == "main" {
+        let func_statics = match static_locals_by_func.get(func.name) {
+          Some(map) => map
+          None => empty_static_locals
+        }
         gen_func_def(
           emitter,
           sem,
           syms,
           func_offsets,
           cstring_pool,
+          func_statics,
           func,
           bag,
         )
@@ -13975,12 +14360,17 @@ fn codegen_arm64_object_bytes_with_sem(
   }
   for func in func_defs {
     if !main_found || func.name != "main" {
+      let func_statics = match static_locals_by_func.get(func.name) {
+        Some(map) => map
+        None => empty_static_locals
+      }
       gen_func_def(
         emitter,
         sem,
         syms,
         func_offsets,
         cstring_pool,
+        func_statics,
         func,
         bag,
       )
@@ -14000,16 +14390,20 @@ fn codegen_arm64_object_bytes_with_sem(
   for var_decl in var_decls {
     let link = link_name(var_decl.name)
     sym_for_name(syms, link) |> ignore
-    if var_decl.storage == StorageClass::Extern {
-      let id = syms.name_to_id.get(link).unwrap_or(0)
-      def_symbols.set(link, {
-        id,
-        name: link,
-        section: None,
-        value: 0,
-        is_external: true,
-      })
-      syms.externals.set(id, true)
+    let is_extern_decl =
+      var_decl.storage == StorageClass::Extern && var_decl.init is None
+    if is_extern_decl {
+      if !def_symbols.contains(link) {
+        let id = syms.name_to_id.get(link).unwrap_or(0)
+        def_symbols.set(link, {
+          id,
+          name: link,
+          section: None,
+          value: 0,
+          is_external: true,
+        })
+        syms.externals.set(id, true)
+      }
     } else {
       let global_ty =
         if var_decl.id > 0 { get_global_by_id(sem, var_decl.id) } else { None }
@@ -14044,10 +14438,15 @@ fn codegen_arm64_object_bytes_with_sem(
         }
         Some(init) => {
           let data_off = align_up(data_words.length() << 2, align)
+          let init_locals = match static_local_init_maps.get(var_decl.name) {
+            Some(map) => map
+            None => empty_static_locals
+          }
           match build_global_initializer_bytes(
             sem,
             syms,
             cstring_pool,
+            init_locals,
             var_ty,
             init,
             bag,

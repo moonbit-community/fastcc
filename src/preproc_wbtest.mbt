@@ -191,8 +191,26 @@ test "preprocess if expression" {
 }
 
 ///|
+test "preprocess if char literal" {
+  let (toks, bag) = pp_tokens("#if 'A' == '\\101'\nint ok;\n#endif")
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
+}
+
+///|
 test "preprocess if macro expression" {
   let (toks, bag) = pp_tokens("#define A 1 + 2\n#if A == 3\nint ok;\n#endif")
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
+}
+
+///|
+test "preprocess if defined and numeric macro" {
+  let text =
+    "#define FOO 1\n#define BAR 0\n#if defined(FOO) && BAR\nint bad;\n#endif\nint ok;\n"
+  let (toks, bag) = pp_tokens(text)
   assert_true(!has_errors(bag))
   let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
   @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])

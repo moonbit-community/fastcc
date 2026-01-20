@@ -82,7 +82,10 @@ struct stat {
 #endif
 
 int stat(const char *path, struct stat *buf);
+int lstat(const char *path, struct stat *buf);
 int fstat(int fd, struct stat *buf);
 int chmod(const char *path, mode_t mode);
+int fchmod(int fd, mode_t mode);
+int mkdir(const char *path, mode_t mode);
 
 #endif /* _TCC_COMPAT_SYS_STAT_H */

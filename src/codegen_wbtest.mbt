@@ -410,3 +410,39 @@ test "codegen emits .data for initialized global int" {
   }
   assert_eq(read_u32_le_at(bytes, data_off), (3 : UInt))
 }
+
+///|
+test "codegen emits .data for extern initialized global int" {
+  let (unit, bag) = parse_text("extern int x=3; int main(){return x;}")
+  assert_true(!has_errors(bag))
+  check_translation_unit(unit, bag) |> ignore
+  assert_true(!has_errors(bag))
+  let bytes = match codegen_arm64_object_bytes(unit, bag) {
+    None => fail("expected object bytes")
+    Some(b) => b
+  }
+  let data_off = match macho_section_file_offset(bytes, "__DATA", "__data") {
+    None => fail("expected __DATA,__data section")
+    Some(v) => v
+  }
+  assert_eq(read_u32_le_at(bytes, data_off), (3 : UInt))
+}
+
+///|
+test "codegen keeps definition after extern redeclare" {
+  let (unit, bag) = parse_text(
+    "extern int x; int x=3; extern int x; int main(){return x;}",
+  )
+  assert_true(!has_errors(bag))
+  check_translation_unit(unit, bag) |> ignore
+  assert_true(!has_errors(bag))
+  let bytes = match codegen_arm64_object_bytes(unit, bag) {
+    None => fail("expected object bytes")
+    Some(b) => b
+  }
+  let data_off = match macho_section_file_offset(bytes, "__DATA", "__data") {
+    None => fail("expected __DATA,__data section")
+    Some(v) => v
+  }
+  assert_eq(read_u32_le_at(bytes, data_off), (3 : UInt))
+}
