@@ -5912,9 +5912,26 @@ fn gen_index_addr_with_elem_type(
   bag : DiagBag,
 ) -> CType? {
   gen_expr_ptr(emitter, alloc, syms, pool, cstrings, base, dst, bag)
+  let mut base_reg = dst
+  let mut saved_reg : Int? = None
+  if expr_may_call(index) && dst < 19 {
+    let tmp = take_reg(pool) catch {
+      err => {
+        add_error(bag, loc, err.to_string())
+        return None
+      }
+    }
+    emit_mov(emitter, true, tmp, dst)
+    base_reg = tmp
+    saved_reg = Some(tmp)
+  }
   let idx = take_reg(pool) catch {
     err => {
       add_error(bag, loc, err.to_string())
+      match saved_reg {
+        Some(r) => give_reg(pool, r)
+        None => ()
+      }
       return None
     }
   }
@@ -5926,6 +5943,10 @@ fn gen_index_addr_with_elem_type(
     None => {
       add_error(bag, loc, "codegen: index base is not pointer/array")
       give_reg(pool, idx)
+      match saved_reg {
+        Some(r) => give_reg(pool, r)
+        None => ()
+      }
       return None
     }
     Some(t) => t
@@ -5938,6 +5959,10 @@ fn gen_index_addr_with_elem_type(
         err => {
           add_error(bag, loc, err.to_string())
           give_reg(pool, idx)
+          match saved_reg {
+            Some(r) => give_reg(pool, r)
+            None => ()
+          }
           return None
         }
       }
@@ -5958,6 +5983,10 @@ fn gen_index_addr_with_elem_type(
       match type_size_align_or_error(alloc.sem, elem_ty, loc) {
         None => {
           give_reg(pool, idx)
+          match saved_reg {
+            Some(r) => give_reg(pool, r)
+            None => ()
+          }
           return None
         }
         Some((sz, _)) => elem_size_const = Some(sz)
@@ -5983,6 +6012,10 @@ fn gen_index_addr_with_elem_type(
               err => {
                 add_error(bag, loc, err.to_string())
                 give_reg(pool, idx)
+                match saved_reg {
+                  Some(r) => give_reg(pool, r)
+                  None => ()
+                }
                 return None
               }
             }
@@ -6007,12 +6040,21 @@ fn gen_index_addr_with_elem_type(
   emit32(
     emitter,
     (0x8b000000 : Int)
-    .lor(dst)
-    .lor(dst << 5)
+    .lor(base_reg)
+    .lor(base_reg << 5)
     .lor(idx << 16)
     .reinterpret_as_uint(),
   )
   give_reg(pool, idx)
+  match saved_reg {
+    Some(r) => {
+      if base_reg != dst {
+        emit_mov(emitter, true, dst, base_reg)
+      }
+      give_reg(pool, r)
+    }
+    None => ()
+  }
   Some(elem_ty)
 }
 

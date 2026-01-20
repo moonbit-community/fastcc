@@ -6,6 +6,26 @@
 
 typedef void *pthread_t;
 
+#if defined(__APPLE__)
+typedef struct { long __sig; char __opaque[56]; } pthread_attr_t;
+typedef struct { long __sig; char __opaque[56]; } pthread_mutex_t;
+typedef struct { long __sig; char __opaque[8]; } pthread_mutexattr_t;
+typedef struct { long __sig; char __opaque[40]; } pthread_cond_t;
+typedef struct { long __sig; char __opaque[8]; } pthread_condattr_t;
+typedef struct { long __sig; char __opaque[192]; } pthread_rwlock_t;
+typedef struct { long __sig; char __opaque[16]; } pthread_rwlockattr_t;
+typedef struct { long __sig; char __opaque[8]; } pthread_once_t;
+
+#define _PTHREAD_MUTEX_SIG_init 0x32aaaba7
+#define _PTHREAD_COND_SIG_init 0x3cb0b1bb
+#define _PTHREAD_RWLOCK_SIG_init 0x2da8b3b4
+#define _PTHREAD_ONCE_SIG_init 0x30b1bcba
+
+#define PTHREAD_MUTEX_INITIALIZER {_PTHREAD_MUTEX_SIG_init, {0}}
+#define PTHREAD_COND_INITIALIZER {_PTHREAD_COND_SIG_init, {0}}
+#define PTHREAD_RWLOCK_INITIALIZER {_PTHREAD_RWLOCK_SIG_init, {0}}
+#define PTHREAD_ONCE_INIT {_PTHREAD_ONCE_SIG_init, {0}}
+#else
 typedef struct { int __opaque; } pthread_attr_t;
 typedef struct { int __opaque; } pthread_mutex_t;
 typedef struct { int __opaque; } pthread_mutexattr_t;
@@ -19,6 +39,7 @@ typedef struct { int __opaque; } pthread_once_t;
 #define PTHREAD_COND_INITIALIZER {0}
 #define PTHREAD_RWLOCK_INITIALIZER {0}
 #define PTHREAD_ONCE_INIT {0}
+#endif
 #define PTHREAD_CREATE_DETACHED 2
 #define PTHREAD_MUTEX_NORMAL 0
 #define PTHREAD_MUTEX_ERRORCHECK 1

@@ -21,6 +21,15 @@
 #define F_SETLK 8
 #define F_SETLKW 9
 
+#if defined(__APPLE__)
+struct flock {
+  off_t l_start;
+  off_t l_len;
+  pid_t l_pid;
+  short l_type;
+  short l_whence;
+};
+#else
 struct flock {
   short l_type;
   short l_whence;
@@ -28,6 +37,7 @@ struct flock {
   off_t l_len;
   pid_t l_pid;
 };
+#endif
 
 int open(const char *path, int flags, ...);
 int creat(const char *path, mode_t mode);

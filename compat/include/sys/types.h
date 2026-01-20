@@ -15,6 +15,7 @@ typedef uint16_t mode_t;
 typedef int32_t pid_t;
 typedef uint32_t uid_t;
 typedef uint32_t gid_t;
+typedef struct { int32_t val[2]; } fsid_t;
 #else
 typedef long off_t;
 typedef long suseconds_t;
