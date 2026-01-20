@@ -62,9 +62,11 @@ struct SemContext {
   union_size_cache : FastMap[String, (Int, Int)]
   union_size_cache_by_id : Array[(Int, Int)?]
   func_compound_literals : FastMap[String, Array[String]]
+  func_compound_literals_by_id : Array[Array[String]?]
   compound_literal_sizes : FastMap[String, (Int, Int)]
   func_has_compound_literal : FastMap[String, Bool]
   func_has_stmt_expr : FastMap[String, Bool]
+  func_has_stmt_expr_by_id : Array[Bool?]
   enum_defs : FastMap[String, Array[EnumItem]]
   enum_defs_by_id : Array[Array[EnumItem]?]
   enum_consts : FastMap[String, Int]
@@ -74,12 +76,14 @@ struct SemContext {
   compound_literal_types : FastMap[String, CType]
   expr_type_cache : Array[CType?]
   func_agg_temps : FastMap[String, (Int, Int)]
+  func_agg_temps_by_id : Array[(Int, Int)?]
   switch_stack : Array[SwitchInfo]
   mut labels_defined : FastMap[String, Bool]
   mut labels_used : Array[(String, SrcLoc)]
   mut loop_depth : Int
   mut switch_depth : Int
   mut current_func_name : String?
+  mut current_func_id : Int
   mut current_agg_temp_size : Int
   mut current_agg_temp_align : Int
   mut record_agg_temps : Bool
@@ -145,9 +149,11 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     union_size_cache: fast_map_new(),
     union_size_cache_by_id: [],
     func_compound_literals: fast_map_new(),
+    func_compound_literals_by_id: [],
     compound_literal_sizes: fast_map_new(),
     func_has_compound_literal: fast_map_new(),
     func_has_stmt_expr: fast_map_new(),
+    func_has_stmt_expr_by_id: [],
     enum_defs: fast_map_new(),
     enum_defs_by_id: [],
     enum_consts: fast_map_new(),
@@ -157,12 +163,14 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     compound_literal_types: fast_map_new(),
     expr_type_cache: [],
     func_agg_temps: fast_map_new(),
+    func_agg_temps_by_id: [],
     switch_stack: [],
     labels_defined: fast_map_new(),
     labels_used: [],
     loop_depth: 0,
     switch_depth: 0,
     current_func_name: None,
+    current_func_id: 0,
     current_agg_temp_size: 0,
     current_agg_temp_align: 1,
     record_agg_temps: true,
@@ -2965,9 +2973,11 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
   )
   add_function_sig(ctx, func_def.name, func_def.id, sig, func_def.loc, is_def=true)
   let prev_func = ctx.current_func_name
+  let prev_func_id = ctx.current_func_id
   let prev_agg_size = ctx.current_agg_temp_size
   let prev_agg_align = ctx.current_agg_temp_align
   ctx.current_func_name = Some(func_def.name)
+  ctx.current_func_id = func_def.id
   ctx.current_agg_temp_size = 0
   ctx.current_agg_temp_align = 1
   ctx.labels_defined = fast_map_new()
@@ -2995,13 +3005,22 @@ fn check_func_def(ctx : SemContext, func_def : FuncDef) -> Unit {
   }
   check_stmt(ctx, func_def.body, resolved_return)
   check_label_uses(ctx)
-  ctx.func_agg_temps.set(
-    func_def.name,
-    (ctx.current_agg_temp_size, ctx.current_agg_temp_align),
-  )
+  if func_def.id > 0 {
+    set_opt_by_id(
+      ctx.func_agg_temps_by_id,
+      func_def.id,
+      (ctx.current_agg_temp_size, ctx.current_agg_temp_align),
+    )
+  } else {
+    ctx.func_agg_temps.set(
+      func_def.name,
+      (ctx.current_agg_temp_size, ctx.current_agg_temp_align),
+    )
+  }
   ctx.current_agg_temp_size = prev_agg_size
   ctx.current_agg_temp_align = prev_agg_align
   ctx.current_func_name = prev_func
+  ctx.current_func_id = prev_func_id
   pop_scope(ctx)
 }
 
@@ -3179,6 +3198,11 @@ fn record_local_binding(ctx : SemContext, id : Int, ty : CType) -> Unit {
 
 ///|
 fn record_stmt_expr(ctx : SemContext) -> Unit {
+  let id = ctx.current_func_id
+  if id > 0 {
+    set_opt_by_id(ctx.func_has_stmt_expr_by_id, id, true)
+    return
+  }
   match ctx.current_func_name {
     None => ()
     Some(name) => ctx.func_has_stmt_expr.set(name, true)
@@ -3195,34 +3219,52 @@ fn record_compound_literal(
   if !ctx.record_agg_temps {
     return
   }
-  match ctx.current_func_name {
-    None => ()
-    Some(name) => {
-      ctx.func_has_compound_literal.set(name, true)
-      let key = compound_literal_key(loc, node_id)
-      let keys = match ctx.func_compound_literals.get(name) {
-        None => []
-        Some(list) => list
+  let key = compound_literal_key(loc, node_id)
+  let id = ctx.current_func_id
+  if id > 0 {
+    let keys = match get_opt_by_id(ctx.func_compound_literals_by_id, id) {
+      None => []
+      Some(list) => list
+    }
+    let mut has_key = false
+    for existing in keys {
+      if existing == key {
+        has_key = true
       }
-      let mut has_key = false
-      for existing in keys {
-        if existing == key {
-          has_key = true
+    }
+    if !has_key {
+      keys.push(key)
+      set_opt_by_id(ctx.func_compound_literals_by_id, id, keys)
+    }
+  } else {
+    match ctx.current_func_name {
+      None => ()
+      Some(name) => {
+        ctx.func_has_compound_literal.set(name, true)
+        let keys = match ctx.func_compound_literals.get(name) {
+          None => []
+          Some(list) => list
+        }
+        let mut has_key = false
+        for existing in keys {
+          if existing == key {
+            has_key = true
+          }
+        }
+        if !has_key {
+          keys.push(key)
+          ctx.func_compound_literals.set(name, keys)
         }
       }
-      if !has_key {
-        keys.push(key)
-        ctx.func_compound_literals.set(name, keys)
-      }
-      if !ctx.compound_literal_sizes.contains(key) {
-        match type_size_align(ctx, ty, loc) {
-          None => ()
-          Some((size, align)) =>
-            if size > 0 {
-              ctx.compound_literal_sizes.set(key, (size, align))
-            }
+    }
+  }
+  if !ctx.compound_literal_sizes.contains(key) {
+    match type_size_align(ctx, ty, loc) {
+      None => ()
+      Some((size, align)) =>
+        if size > 0 {
+          ctx.compound_literal_sizes.set(key, (size, align))
         }
-      }
     }
   }
 }

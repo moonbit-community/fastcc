@@ -12471,7 +12471,14 @@ fn compute_frame_plan(sem : SemContext, func : FuncDef, bag : DiagBag) -> FrameP
     }
     i = i + 1
   }
-  match sem.func_compound_literals.get(func.name) {
+  let func_id = func.id
+  let compound_keys =
+    if func_id > 0 {
+      get_opt_by_id(sem.func_compound_literals_by_id, func_id)
+    } else {
+      sem.func_compound_literals.get(func.name)
+    }
+  match compound_keys {
     None => ()
     Some(keys) =>
       for key in keys {
@@ -12490,7 +12497,13 @@ fn compute_frame_plan(sem : SemContext, func : FuncDef, bag : DiagBag) -> FrameP
         }
       }
   }
-  match sem.func_agg_temps.get(func.name) {
+  let agg_temps =
+    if func_id > 0 {
+      get_opt_by_id(sem.func_agg_temps_by_id, func_id)
+    } else {
+      sem.func_agg_temps.get(func.name)
+    }
+  match agg_temps {
     None => ()
     Some((size, align)) => {
       alloc.agg_temp_size = size
@@ -12507,7 +12520,11 @@ fn compute_frame_plan(sem : SemContext, func : FuncDef, bag : DiagBag) -> FrameP
   let agg_temp_align = alloc.agg_temp_align
   let agg_temp_offset = alloc.agg_temp_offset
   let compound_literal_slots = alloc.compound_literal_slots
-  let walk_exprs = sem.func_has_stmt_expr.get(func.name).unwrap_or(false)
+  let walk_exprs = if func_id > 0 {
+    get_opt_by_id(sem.func_has_stmt_expr_by_id, func_id).unwrap_or(false)
+  } else {
+    sem.func_has_stmt_expr.get(func.name).unwrap_or(false)
+  }
   layout_stmt(alloc, func.body, walk_exprs)
   let frame_size = align_up(alloc.used_bytes, 16)
   cg_pop_scope(alloc)
