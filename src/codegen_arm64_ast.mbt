@@ -3135,26 +3135,19 @@ fn gen_initializer_to_addr(
           )
         }
         _ => {
-          match float_kind_of_type(ty) {
-            Some(k) =>
-              gen_expr_to_float_kind_bits(
-                emitter,
-                alloc,
-                syms,
-                pool,
-                cstrings,
-                expr,
-                k,
-                0,
-                bag,
-              )
-            None =>
-              if type_is_pointer_like(ty) {
-                gen_expr_ptr(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
-              } else {
-                gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
-              }
-          }
+          let expr_ty = type_of_expr(alloc.sem, expr)
+          gen_expr_any_with_type(
+            emitter,
+            alloc,
+            syms,
+            pool,
+            cstrings,
+            expr,
+            expr_ty,
+            0,
+            bag,
+          )
+          emit_cast_value(emitter, alloc.sem, expr_ty, ty, 0, loc, bag)
           emit_store_scalar_at(
             emitter,
             alloc.sem,
@@ -12836,7 +12829,21 @@ fn gen_stmt(
                         }
                       }
                   }
-                _ => gen_expr_any(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
+                _ => {
+                  let expr_ty = type_of_expr(alloc.sem, expr)
+                  gen_expr_any_with_type(
+                    emitter,
+                    alloc,
+                    syms,
+                    pool,
+                    cstrings,
+                    expr,
+                    expr_ty,
+                    0,
+                    bag,
+                  )
+                  emit_cast_value(emitter, alloc.sem, expr_ty, alloc.ret_ty, 0, loc, bag)
+                }
               }
           }
       }

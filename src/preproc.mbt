@@ -1028,13 +1028,22 @@ fn stringize_tokens(tokens : Array[Token]) -> String {
   }
   let sb = StringBuilder::new(size_hint=size_hint)
   let mut first = true
+  let mut prev : Token? = None
   for tok in tokens {
     if first {
       first = false
     } else {
-      sb.write_char(' ')
+      match prev {
+        Some(prev_tok) => {
+          if !is_adjacent(prev_tok, tok) {
+            sb.write_char(' ')
+          }
+        }
+        None => sb.write_char(' ')
+      }
     }
     sb.write_string(tok.lexeme)
+    prev = Some(tok)
   }
   sb.to_string()
 }

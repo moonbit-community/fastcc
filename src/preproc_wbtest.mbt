@@ -181,6 +181,16 @@ test "preprocess stringize and paste" {
 }
 
 ///|
+test "preprocess stringize keeps adjacency" {
+  let (toks, bag) = pp_tokens("#define STR(x) #x\nchar* s = STR(->>);")
+  assert_true(!has_errors(bag))
+  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  @json.inspect(items, content=[
+    "KwChar:char", "Star:*", "Ident:s", "Assign:=", "StrLit:\"->>\"", "Semicolon:;",
+  ])
+}
+
+///|
 test "preprocess if expression" {
   let (toks, bag) = pp_tokens(
     "#define A 4\n#if A + 2 * 3 == 10\nint ok;\n#endif",
