@@ -100,17 +100,23 @@ enum TokenKind {
 } derive(Show, Eq, ToJson)
 
 ///|
+struct HiddenList {
+  id : Int
+  next : HiddenList?
+} derive(Show, Eq, ToJson)
+
+///|
 struct Token {
   kind : TokenKind
   lexeme : String
   id : Int
   loc : SrcLoc
   line_start : Bool
-  hidden : Array[Int]
+  hidden : HiddenList?
 } derive(Show, Eq, ToJson)
 
 ///|
-let empty_hidden : Array[Int] = []
+let empty_hidden : HiddenList? = None
 
 ///|
 struct KeywordIds {

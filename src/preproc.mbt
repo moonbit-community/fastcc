@@ -71,7 +71,7 @@ struct Preprocessor {
   time_literal : String
   interner : StringInterner
   keyword_ids : KeywordIds
-  hidden_singletons : FastMap[Int, Array[Int]]
+  hidden_singletons : FastMap[Int, HiddenList]
   builtin_ids : PreprocBuiltinIds
 }
 
@@ -1203,7 +1203,7 @@ fn lex_paste_tokens(
   left : String,
   right : String,
   loc : SrcLoc,
-  hidden : Array[Int],
+  hidden : HiddenList?,
 ) -> Array[Token] {
   let file = { id: loc.file_id, path: ":paste:", text }
   let lex = new_lexer(file, pp.diags, pp.interner, pp.keyword_ids)
@@ -1504,7 +1504,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
       }
     }
     let hidden_ok = !is_macro_name ||
-      tok.hidden.length() == 0 ||
+      hidden_is_empty(tok.hidden) ||
       (macro_id != 0 && !hidden_contains(tok.hidden, macro_id))
     if is_macro_name && macro_id != 0 && hidden_ok {
       match get_macro(pp, macro_id) {
@@ -1817,45 +1817,49 @@ fn release_expanding_guards(pp : Preprocessor) -> Unit {
 }
 
 ///|
-fn merge_hidden(a : Array[Int], b : Array[Int]) -> Array[Int] {
-  if a.length() == 0 {
-    return b
-  }
-  if b.length() == 0 {
-    return a
-  }
-  let mut all_in = true
-  for h in b {
-    if !hidden_contains(a, h) {
-      all_in = false
-      break
-    }
-  }
-  if all_in {
-    return a
-  }
-  let out = a.copy()
-  for h in b {
-    if !hidden_contains(out, h) {
-      out.push(h)
-    }
-  }
-  out
+fn hidden_is_empty(hidden : HiddenList?) -> Bool {
+  hidden is None
 }
 
 ///|
-fn hidden_contains(hidden : Array[Int], id : Int) -> Bool {
-  for h in hidden {
-    if h == id {
-      return true
-    }
+fn hidden_contains(hidden : HiddenList?, id : Int) -> Bool {
+  match hidden {
+    None => false
+    Some(node) =>
+      if node.id == id {
+        true
+      } else {
+        hidden_contains(node.next, id)
+      }
   }
-  false
+}
+
+///|
+fn hidden_add(hidden : HiddenList?, id : Int) -> HiddenList? {
+  if hidden_contains(hidden, id) {
+    hidden
+  } else {
+    Some({ id, next: hidden })
+  }
+}
+
+///|
+fn merge_hidden(a : HiddenList?, b : HiddenList?) -> HiddenList? {
+  if hidden_is_empty(a) {
+    return b
+  }
+  if hidden_is_empty(b) {
+    return a
+  }
+  match b {
+    None => a
+    Some(node) => merge_hidden(hidden_add(a, node.id), node.next)
+  }
 }
 
 ///|
 fn add_hidden(pp : Preprocessor, tok : Token, id : Int) -> Token {
-  if tok.hidden.length() == 0 {
+  if hidden_is_empty(tok.hidden) {
     match pp.hidden_singletons.get(id) {
       Some(hidden) =>
         return {
@@ -1864,11 +1868,11 @@ fn add_hidden(pp : Preprocessor, tok : Token, id : Int) -> Token {
           id: tok.id,
           loc: tok.loc,
           line_start: tok.line_start,
-          hidden,
+          hidden: Some(hidden),
         }
       None => ()
     }
-    let hidden = [id]
+    let hidden = { id, next: None }
     pp.hidden_singletons.set(id, hidden)
     return {
       kind: tok.kind,
@@ -1876,21 +1880,19 @@ fn add_hidden(pp : Preprocessor, tok : Token, id : Int) -> Token {
       id: tok.id,
       loc: tok.loc,
       line_start: tok.line_start,
-      hidden,
+      hidden: Some(hidden),
     }
   }
   if hidden_contains(tok.hidden, id) {
     tok
   } else {
-    let out = tok.hidden.copy()
-    out.push(id)
     {
       kind: tok.kind,
       lexeme: tok.lexeme,
       id: tok.id,
       loc: tok.loc,
       line_start: tok.line_start,
-      hidden: out,
+      hidden: Some({ id, next: tok.hidden }),
     }
   }
 }
@@ -2679,7 +2681,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
       }
     }
     let hidden_ok = !is_macro_name ||
-      tok.hidden.length() == 0 ||
+      hidden_is_empty(tok.hidden) ||
       (macro_id != 0 && !hidden_contains(tok.hidden, macro_id))
     if is_macro_name && macro_id != 0 && hidden_ok {
       match get_macro(pp, macro_id) {
