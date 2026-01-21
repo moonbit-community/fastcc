@@ -1790,7 +1790,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
   match out_opt {
     None => tokens
     Some(out) =>
-      if changed {
+      if changed && tokens_need_expansion(pp, out) {
         expand_tokens(pp, out)
       } else {
         out
