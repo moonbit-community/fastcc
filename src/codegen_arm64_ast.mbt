@@ -10542,15 +10542,43 @@ fn gen_expr_int32(
       }
     }
     Expr::Conditional(cond~, then_expr~, else_expr~, loc~, ..) => {
+      let result_ty = match expr_ty {
+        Some(ty) => ty
+        None => type_of_expr(alloc.sem, expr)
+      }
+      let then_ty = type_of_expr(alloc.sem, then_expr)
+      let else_ty = type_of_expr(alloc.sem, else_expr)
       gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, cond, bag)
       let br_else = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
-      gen_expr_int32(emitter, alloc, syms, pool, cstrings, then_expr, dst, bag)
+      gen_expr_int32(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        then_expr,
+        dst,
+        bag,
+        expr_ty=then_ty,
+      )
+      emit_cast_value(emitter, alloc.sem, then_ty, result_ty, dst, loc, bag)
       let br_end = gjmp(emitter, 0)
       let else_pc = emitter_pc(emitter)
       patch_b_cond(emitter, br_else, else_pc, ARM64_COND_EQ) catch {
         err => add_error(bag, loc, err.to_string())
       }
-      gen_expr_int32(emitter, alloc, syms, pool, cstrings, else_expr, dst, bag)
+      gen_expr_int32(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        else_expr,
+        dst,
+        bag,
+        expr_ty=else_ty,
+      )
+      emit_cast_value(emitter, alloc.sem, else_ty, result_ty, dst, loc, bag)
       let end_pc = emitter_pc(emitter)
       gsym_addr(emitter, br_end, end_pc) catch {
         err => add_error(bag, loc, err.to_string())

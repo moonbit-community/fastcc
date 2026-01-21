@@ -213,6 +213,21 @@ test "sem accepts compat header macros and declarations" {
 }
 
 ///|
+test "sem accepts pthread compat declarations" {
+  let text =
+    "#include <pthread.h>\n" +
+    "void f(void){\n" +
+    "  volatile pthread_t owner = 0;\n" +
+    "  pthread_mutex_t *m = 0;\n" +
+    "  owner = pthread_self();\n" +
+    "  if (pthread_equal(owner, pthread_self())) { owner = 0; }\n" +
+    "  pthread_mutex_trylock(m);\n" +
+    "}\n"
+  let (_, bag) = check_text_with_paths(text, ["compat/include"])
+  assert_true(!has_errors(bag))
+}
+
+///|
 test "sem accepts typeof in statement expression" {
   let (_, bag) = check_text(
     "int f(int *ptr){ __typeof__(ptr) x = ({ __typeof__(ptr) p = ptr; p; }); return x == ptr; }",
