@@ -514,6 +514,24 @@ fn read_directive_tokens(pp : Preprocessor) -> Array[Token] {
 }
 
 ///|
+fn read_directive_head_token(pp : Preprocessor) -> Token? {
+  let tok = next_input_token(pp)
+  match tok.kind {
+    Eof => {
+      pp.held = Some(tok)
+      None
+    }
+    _ =>
+      if tok.line_start {
+        pp.held = Some(tok)
+        None
+      } else {
+        Some(tok)
+      }
+  }
+}
+
+///|
 fn skip_directive_line(pp : Preprocessor) -> Unit {
   while true {
     match peek_char(pp.lexer) {
@@ -2743,16 +2761,27 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     return
   }
   if name_id == ids.dir_undef {
-    let args = read_directive_tokens(pp)
-    if args.length() == 0 || !is_macro_name_token(args[0]) {
-      add_pp_error(pp, name_tok.loc, "missing macro name in #undef")
-      return
+    let macro_name_tok = read_directive_head_token(pp)
+    if pp.held is None {
+      skip_directive_line(pp)
     }
-    let macro_id = macro_id_from_token(pp, args[0])
-    if macro_id != 0 {
-      remove_macro(pp, macro_id)
+    match macro_name_tok {
+      None => {
+        add_pp_error(pp, name_tok.loc, "missing macro name in #undef")
+        return
+      }
+      Some(tok) =>
+        if !is_macro_name_token(tok) {
+          add_pp_error(pp, name_tok.loc, "missing macro name in #undef")
+          return
+        } else {
+          let macro_id = macro_id_from_token(pp, tok)
+          if macro_id != 0 {
+            remove_macro(pp, macro_id)
+          }
+          return
+        }
     }
-    return
   }
   if name_id == ids.dir_ifdef {
     if !current_active(pp) {
@@ -2760,10 +2789,13 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
       push_cond(pp, false)
       return
     }
-    let args = read_directive_tokens(pp)
-    let cond = args.length() > 0 &&
-      is_macro_name_token(args[0]) &&
-      has_macro(pp, macro_id_from_token(pp, args[0]))
+    let macro_name_tok = read_directive_head_token(pp)
+    if pp.held is None {
+      skip_directive_line(pp)
+    }
+    let cond = macro_name_tok is Some(tok) &&
+      is_macro_name_token(tok) &&
+      has_macro(pp, macro_id_from_token(pp, tok))
     push_cond(pp, cond)
     return
   }
@@ -2773,10 +2805,13 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
       push_cond(pp, false)
       return
     }
-    let args = read_directive_tokens(pp)
-    let cond = args.length() > 0 &&
-      is_macro_name_token(args[0]) &&
-      !has_macro(pp, macro_id_from_token(pp, args[0]))
+    let macro_name_tok = read_directive_head_token(pp)
+    if pp.held is None {
+      skip_directive_line(pp)
+    }
+    let cond = macro_name_tok is Some(tok) &&
+      is_macro_name_token(tok) &&
+      !has_macro(pp, macro_id_from_token(pp, tok))
     push_cond(pp, cond)
     return
   }
