@@ -13,10 +13,20 @@ test "cli parses -I/-c/-o and input" {
 
 ///|
 test "cli rejects unknown flags" {
-  match parse_cli_args(["prog", "-Zunknown", "-c", "in.c"]) {
+  match parse_cli_args(["prog", "-bogus", "-c", "in.c"]) {
     CliParse::Error => ()
     _ => fail("expected parse error")
   }
+}
+
+///|
+test "cli ignores -Z flags" {
+  let cfg = match parse_cli_args(["prog", "-Zunknown", "-c", "in.c"]) {
+    CliParse::Run(v) => v
+    _ => fail("expected args")
+  }
+  assert_true(cfg.compile_only)
+  assert_eq(cfg.inputs, ["in.c"])
 }
 
 ///|
@@ -74,6 +84,53 @@ test "cli parses -D and -U" {
     CliMacroAction::Undef(name="FOO"),
     CliMacroAction::Undef(name="QUX"),
   ])
+}
+
+///|
+test "cli expands @listfile" {
+  let dir = "target"
+  if !@fs.path_exists(dir) {
+    @fs.create_dir(dir) catch {
+      err => fail("failed to create target dir: \{err.to_string()}")
+    }
+  }
+  let path = dir + "/cli_args.txt"
+  @fs.write_string_to_file(path, "-I inc -DTEST=1 in.c") catch {
+    err => fail("failed to write listfile: \{err.to_string()}")
+  }
+  let cfg = match parse_cli_args(["prog", "@" + path]) {
+    CliParse::Run(v) => v
+    _ => fail("expected args")
+  }
+  assert_eq(cfg.include_paths, ["inc"])
+  assert_eq(cfg.inputs, ["in.c"])
+  assert_eq(cfg.macro_actions, [CliMacroAction::Define(name="TEST", value=Some("1"))])
+  @fs.remove_file(path) catch {
+    _ => ()
+  }
+}
+
+///|
+test "cli parses -run" {
+  let cfg = match parse_cli_args([
+    "prog",
+    "-L",
+    "libdir",
+    "-lfoo",
+    "libbar.dylib",
+    "-run",
+    "main.c",
+    "arg1",
+  ]) {
+    CliParse::Run(v) => v
+    _ => fail("expected args")
+  }
+  assert_true(cfg.run)
+  assert_eq(cfg.inputs, ["main.c"])
+  assert_eq(cfg.run_args, ["arg1"])
+  assert_eq(cfg.link_paths, ["libdir"])
+  assert_eq(cfg.link_libs, ["foo"])
+  assert_eq(cfg.link_inputs, ["libbar.dylib"])
 }
 
 ///|

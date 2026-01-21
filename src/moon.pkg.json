@@ -6,7 +6,8 @@
     "moonbitlang/x/time"
   ],
   "native-stub": [
-    "bench_timer.c"
+    "bench_timer.c",
+    "run_command.c"
   ],
   "targets": {
     "bench_timer_native.mbt": ["native"],

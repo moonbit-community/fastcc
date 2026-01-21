@@ -94,6 +94,20 @@ fn has_b_uncond(bytes : Bytes, text_offset : Int, max_words : Int) -> Bool {
 }
 
 ///|
+fn has_ldr_w(bytes : Bytes, text_offset : Int, max_words : Int) -> Bool {
+  let mut i = 0
+  while i < max_words {
+    let w = read_u32_le_at(bytes, text_offset + (i << 2))
+    let op = w & (0xffc00000 : UInt)
+    if op == (0xb9400000 : UInt) || op == (0xb9800000 : UInt) {
+      return true
+    }
+    i = i + 1
+  }
+  false
+}
+
+///|
 fn find_word_offset(
   bytes : Bytes,
   text_offset : Int,
@@ -372,16 +386,19 @@ test "codegen emits global load relocs for return x" {
   }
   assert_true(!has_errors(bag))
   let (text_offset, reloff, nreloc) = macho_text_section_offsets(bytes)
+  let bytes_len = bytes.length()
+  let max_words = (bytes_len - text_offset) / 4
+  let scan_words = if max_words < 64 { max_words } else { 64 }
   assert_eq(nreloc, 2)
-  let adrp_off = match find_word_offset(bytes, text_offset, 64, (0x90000000 : UInt)) {
+  let adrp_off = match find_word_offset(bytes, text_offset, scan_words, (0x90000000 : UInt)) {
     None => fail("expected ADRP instruction")
     Some(v) => v
   }
-  let add_off = match find_word_offset(bytes, text_offset, 64, (0x91000000 : UInt)) {
+  let add_off = match find_word_offset(bytes, text_offset, scan_words, (0x91000000 : UInt)) {
     None => fail("expected ADD instruction")
     Some(v) => v
   }
-  assert_true(find_word_offset(bytes, text_offset, 64, (0xb9400000 : UInt)) is Some(_))
+  assert_true(has_ldr_w(bytes, text_offset, scan_words))
   assert_eq(
     read_u32_le_at(bytes, reloff),
     (adrp_off - text_offset).reinterpret_as_uint(),
