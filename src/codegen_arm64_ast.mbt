@@ -995,6 +995,20 @@ fn static_local_base_name(func_name : String, local_name : String, id : Int) -> 
 }
 
 ///|
+fn static_local_func_name(base_name : String) -> String? {
+  let prefix = "__local_static."
+  if !base_name.has_prefix(prefix) {
+    return None
+  }
+  let start = prefix.length()
+  let view = base_name.view(start_offset=start, end_offset=base_name.length())
+  match view.find("."[:]) {
+    None => None
+    Some(idx) => Some(base_name.view(start_offset=start, end_offset=start + idx).to_string())
+  }
+}
+
+///|
 fn collect_static_local_decl(
   func_name : String,
   decl : VarDecl,
@@ -13099,6 +13113,7 @@ fn gen_func_def(
   sem : SemContext,
   syms : SymTable,
   func_offsets : FastMap[String, Int],
+  label_addrs_by_func : FastMap[String, FastMap[String, Int]],
   cstrings : CstringPool,
   static_locals : FastMap[Int, StaticLocalInfo],
   func : FuncDef,
@@ -13335,6 +13350,7 @@ fn gen_func_def(
   }
   emit_restore_sp_to_frame_base(emitter, frame_size)
   emit_epilogue(emitter, frame_size)
+  label_addrs_by_func.set(func.name, alloc.labels.addrs)
 }
 
 ///|
@@ -13523,12 +13539,20 @@ fn store_bitfield_init_le(
 }
 
 ///|
+struct LabelAddrContext {
+  func_sym : Sym
+  func_start : Int
+  labels : FastMap[String, Int]
+}
+
+///|
 fn const_pointer_from_lvalue(
   sem : SemContext,
   syms : SymTable,
   cstrings : CstringPool,
   static_locals : FastMap[Int, StaticLocalInfo],
   expr : Expr,
+  label_ctx? : LabelAddrContext? = None,
 ) -> (Sym, Int)? {
   match expr {
     Expr::Ident(name~, id~, ..) =>
@@ -13540,9 +13564,9 @@ fn const_pointer_from_lvalue(
       Some((cstring_sym_or_add(cstrings, syms, value), 0))
     Expr::Member(base~, name~, id~, is_arrow~, loc~, ..) => {
       let base_ptr = if is_arrow {
-        const_pointer_from_expr(sem, syms, cstrings, static_locals, base)
+        const_pointer_from_expr(sem, syms, cstrings, static_locals, base, label_ctx=label_ctx)
       } else {
-        const_pointer_from_lvalue(sem, syms, cstrings, static_locals, base)
+        const_pointer_from_lvalue(sem, syms, cstrings, static_locals, base, label_ctx=label_ctx)
       }
       match base_ptr {
         None => None
@@ -13561,7 +13585,7 @@ fn const_pointer_from_lvalue(
       match const_int_from_expr(sem, index, expr_loc(index)) {
         None => None
         Some(idx) =>
-          match const_pointer_from_expr(sem, syms, cstrings, static_locals, base) {
+          match const_pointer_from_expr(sem, syms, cstrings, static_locals, base, label_ctx=label_ctx) {
             None => None
             Some((sym, addend)) =>
               match element_type_for_pointer_arith(type_of_expr(sem, base)) {
@@ -13577,11 +13601,11 @@ fn const_pointer_from_lvalue(
       }
     }
     Expr::Unary(op=UnaryOp::Deref, expr=inner, ..) =>
-      const_pointer_from_expr(sem, syms, cstrings, static_locals, inner)
+      const_pointer_from_expr(sem, syms, cstrings, static_locals, inner, label_ctx=label_ctx)
     Expr::Cast(expr=inner, ..) =>
-      const_pointer_from_lvalue(sem, syms, cstrings, static_locals, inner)
+      const_pointer_from_lvalue(sem, syms, cstrings, static_locals, inner, label_ctx=label_ctx)
     Expr::Unary(op=UnaryOp::Plus, expr=inner, ..) =>
-      const_pointer_from_lvalue(sem, syms, cstrings, static_locals, inner)
+      const_pointer_from_lvalue(sem, syms, cstrings, static_locals, inner, label_ctx=label_ctx)
     _ => None
   }
 }
@@ -13593,6 +13617,7 @@ fn const_pointer_from_expr(
   cstrings : CstringPool,
   static_locals : FastMap[Int, StaticLocalInfo],
   expr : Expr,
+  label_ctx? : LabelAddrContext? = None,
 ) -> (Sym, Int)? {
   match expr {
     Expr::StringLit(value~, ..) =>
@@ -13602,22 +13627,31 @@ fn const_pointer_from_expr(
         Some(info) => Some((sym_for_static_local(syms, info), 0))
         None => Some((sym_for_ident(syms, name, id=id), 0))
       }
+    Expr::LabelAddr(name~, ..) =>
+      match label_ctx {
+        None => None
+        Some(ctx) =>
+          match ctx.labels.get(name) {
+            None => None
+            Some(addr) => Some((ctx.func_sym, addr - ctx.func_start))
+          }
+      }
     Expr::Member(..) | Expr::Index(..) =>
       match type_of_lvalue(sem, expr) {
         Some(ty) =>
           match strip_top_qualifiers(ty) {
             CType::Array(..) =>
-              const_pointer_from_lvalue(sem, syms, cstrings, static_locals, expr)
+              const_pointer_from_lvalue(sem, syms, cstrings, static_locals, expr, label_ctx=label_ctx)
             _ => None
           }
         None => None
       }
     Expr::Unary(op=UnaryOp::Addr, expr=inner, ..) =>
-      const_pointer_from_lvalue(sem, syms, cstrings, static_locals, inner)
+      const_pointer_from_lvalue(sem, syms, cstrings, static_locals, inner, label_ctx=label_ctx)
     Expr::Cast(expr=inner, ..) =>
-      const_pointer_from_expr(sem, syms, cstrings, static_locals, inner)
+      const_pointer_from_expr(sem, syms, cstrings, static_locals, inner, label_ctx=label_ctx)
     Expr::Unary(op=UnaryOp::Plus, expr=inner, ..) =>
-      const_pointer_from_expr(sem, syms, cstrings, static_locals, inner)
+      const_pointer_from_expr(sem, syms, cstrings, static_locals, inner, label_ctx=label_ctx)
     _ => None
   }
 }
@@ -13634,6 +13668,7 @@ fn fill_global_initializer_bytes(
   relocs : Array[Reloc],
   base_off : Int,
   bag : DiagBag,
+  label_ctx? : LabelAddrContext? = None,
 ) -> Unit {
   match init {
     Initializer::Expr(expr~, loc~) => {
@@ -13693,6 +13728,7 @@ fn fill_global_initializer_bytes(
                 relocs,
                 base_off,
                 bag,
+                label_ctx=label_ctx,
               )
             _ => add_error(bag, loc, "codegen: aggregate initializer must be a list")
           }
@@ -13717,7 +13753,7 @@ fn fill_global_initializer_bytes(
             }
             None =>
               if type_is_pointer_like(ty) {
-                match const_pointer_from_expr(sem, syms, cstrings, static_locals, expr) {
+                match const_pointer_from_expr(sem, syms, cstrings, static_locals, expr, label_ctx=label_ctx) {
                   Some((sym, addend)) => {
                     let addend64 = addend.to_int64()
                     if size > 4 {
@@ -13909,6 +13945,7 @@ fn fill_global_initializer_bytes(
                           relocs,
                           base_off + rel_off,
                           bag,
+                          label_ctx=label_ctx,
                         )
                         cur = cur + 1
                       }
@@ -13965,6 +14002,7 @@ fn fill_global_initializer_bytes(
               relocs,
               base_off + rel_off,
               bag,
+              label_ctx=label_ctx,
             )
             if has_index {
               if idx >= 0 {
@@ -14044,6 +14082,7 @@ fn fill_global_initializer_bytes(
                         relocs,
                         base_off + info.offset,
                         bag,
+                        label_ctx=label_ctx,
                       )
                   }
               }
@@ -14093,6 +14132,7 @@ fn fill_global_initializer_bytes(
                             relocs,
                             base_off + field_off,
                             bag,
+                            label_ctx=label_ctx,
                           )
                           consumed = count
                           used_elision = true
@@ -14119,6 +14159,7 @@ fn fill_global_initializer_bytes(
                           relocs,
                           base_off + field_off,
                           bag,
+                          label_ctx=label_ctx,
                         )
                         used_elision = true
                       }
@@ -14168,6 +14209,7 @@ fn fill_global_initializer_bytes(
                         relocs,
                         base_off + field_off,
                         bag,
+                        label_ctx=label_ctx,
                       )
                     }
                   }
@@ -14247,6 +14289,7 @@ fn fill_global_initializer_bytes(
                       relocs,
                       base_off + info.offset,
                       bag,
+                      label_ctx=label_ctx,
                     )
                 }
             }
@@ -14295,6 +14338,7 @@ fn fill_global_initializer_bytes(
                 relocs,
                 base_off,
                 bag,
+                label_ctx=label_ctx,
               )
             }
           }
@@ -14314,6 +14358,7 @@ fn build_global_initializer_bytes(
   ty : CType,
   init : Initializer,
   bag : DiagBag,
+  label_ctx? : LabelAddrContext? = None,
 ) -> (Array[Int], Array[Reloc])? {
   let init_loc = match init {
     Initializer::Expr(loc=loc, ..) => loc
@@ -14337,6 +14382,7 @@ fn build_global_initializer_bytes(
     relocs,
     0,
     bag,
+    label_ctx=label_ctx,
   )
   Some((bytes, relocs))
 }
@@ -14461,6 +14507,8 @@ fn codegen_arm64_object_bytes_with_sem(
   let reloc_capacity = func_count * 16
   let emitter = new_arm64_emitter_with_capacity(code_capacity, reloc_capacity)
   let func_offsets : FastMap[String, Int] = fast_map_new(capacity=func_count)
+  let label_addrs_by_func : FastMap[String, FastMap[String, Int]] =
+    fast_map_new(capacity=func_count)
   let cstring_pool = new_cstring_pool(total_decl_count)
 
   // Generate `main` first when present for stable layout, but allow objects without `main`.
@@ -14476,6 +14524,7 @@ fn codegen_arm64_object_bytes_with_sem(
           sem,
           syms,
           func_offsets,
+          label_addrs_by_func,
           cstring_pool,
           func_statics,
           func,
@@ -14495,6 +14544,7 @@ fn codegen_arm64_object_bytes_with_sem(
         sem,
         syms,
         func_offsets,
+        label_addrs_by_func,
         cstring_pool,
         func_statics,
         func,
@@ -14568,6 +14618,22 @@ fn codegen_arm64_object_bytes_with_sem(
             Some(map) => map
             None => empty_static_locals
           }
+          let label_ctx =
+            match static_local_func_name(var_decl.name) {
+              None => None
+              Some(func_name) =>
+                match label_addrs_by_func.get(func_name) {
+                  None => None
+                  Some(labels) =>
+                    match func_offsets.get(link_name(func_name)) {
+                      None => None
+                      Some(func_start) => {
+                        let func_sym = sym_for_name(syms, link_name(func_name))
+                        Some({ func_sym, func_start, labels })
+                      }
+                    }
+                }
+            }
           match build_global_initializer_bytes(
             sem,
             syms,
@@ -14576,6 +14642,7 @@ fn codegen_arm64_object_bytes_with_sem(
             var_ty,
             init,
             bag,
+            label_ctx=label_ctx,
           ) {
             None => ()
             Some((bytes, rels)) => {
