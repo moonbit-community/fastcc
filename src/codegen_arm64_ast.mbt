@@ -3451,10 +3451,15 @@ fn gen_initializer_to_addr(
                   item_idx = item_idx + 1
                 }
                 Some((field, next_idx)) => {
-                  let field_off = match eval_builtin_offsetof(alloc.sem, ty, [field.name], item.loc) {
-                    None => 0
-                    Some(v) => v
-                  }
+                  let field_off =
+                    if field.bit_width is Some(_) {
+                      0
+                    } else {
+                      match eval_builtin_offsetof(alloc.sem, ty, [field.name], item.loc) {
+                        None => 0
+                        Some(v) => v
+                      }
+                    }
                   let mut consumed = 1
                   let mut used_elision = false
                   match (strip_top_qualifiers(field.ty), item.value) {
@@ -9043,6 +9048,7 @@ fn gen_expr_int32(
                   .reinterpret_as_uint(),
                 )
                 emit_bitfield_store(emitter, alloc, pool, addr, info, dst, loc, bag)
+                emit_bitfield_load(emitter, alloc, pool, addr, info, dst, loc, bag)
               }
               give_reg(pool, one)
               give_reg(pool, addr)
@@ -9224,6 +9230,9 @@ fn gen_expr_int32(
               addr.reinterpret_as_uint(),
               0,
             )
+            if size < 4 {
+              emit_int_cast(emitter, alloc.sem, ty, ty, dst, loc, bag)
+            }
           }
           give_reg(pool, one)
           give_reg(pool, addr)
@@ -14054,10 +14063,15 @@ fn fill_global_initializer_bytes(
                   item_idx = item_idx + 1
                 }
                 Some((field, next_idx)) => {
-                  let field_off = match eval_builtin_offsetof(sem, ty, [field.name], item.loc) {
-                    None => 0
-                    Some(v) => v
-                  }
+                  let field_off =
+                    if field.bit_width is Some(_) {
+                      0
+                    } else {
+                      match eval_builtin_offsetof(sem, ty, [field.name], item.loc) {
+                        None => 0
+                        Some(v) => v
+                      }
+                    }
                   let mut consumed = 1
                   let mut used_elision = false
                   match (strip_top_qualifiers(field.ty), item.value) {
