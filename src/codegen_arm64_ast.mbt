@@ -9522,7 +9522,21 @@ fn gen_expr_int32(
                 }
               }
               emit_mov(emitter, is64, tmp_old, dst)
-              gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+              let right_ty = type_of_expr(alloc.sem, right)
+              gen_expr_int32(
+                emitter,
+                alloc,
+                syms,
+                pool,
+                cstrings,
+                right,
+                dst,
+                bag,
+                expr_ty=right_ty,
+              )
+              if is64 {
+                emit_int_extend_to_64(emitter, alloc.sem, right_ty, dst, loc, bag)
+              }
               match op {
                 BinaryOp::AddAssign =>
                   emit32(
@@ -9680,7 +9694,21 @@ fn gen_expr_int32(
             }
           }
           emit_mov(emitter, is64, tmp_old, dst)
-          gen_expr_int32(emitter, alloc, syms, pool, cstrings, right, dst, bag)
+          let right_ty = type_of_expr(alloc.sem, right)
+          gen_expr_int32(
+            emitter,
+            alloc,
+            syms,
+            pool,
+            cstrings,
+            right,
+            dst,
+            bag,
+            expr_ty=right_ty,
+          )
+          if is64 {
+            emit_int_extend_to_64(emitter, alloc.sem, right_ty, dst, loc, bag)
+          }
           match op {
             BinaryOp::AddAssign =>
               emit32(

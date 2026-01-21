@@ -14,6 +14,8 @@ HOST_CC="${HOST_CC:-clang}"
 TCLSH_CMD="${TCLSH_CMD:-tclsh}"
 TCL_CONFIG_SH="${TCL_CONFIG_SH:-}"
 MAKE_ASSUME_OLD="${MAKE_ASSUME_OLD:-sqlite3.o}"
+SQLITE_PATCH="${SQLITE_PATCH:-${ROOT_DIR}/patches/refs-sqlite/sqlite-test-harness.patch}"
+sqlite_patch_applied=0
 
 usage() {
   cat <<'EOF'
@@ -76,6 +78,27 @@ if {[file exists /System/Library/Frameworks/Tcl.framework/Tcl]} {
 TCL
 }
 
+apply_sqlite_patch() {
+  if [[ ! -f "${SQLITE_PATCH}" ]]; then
+    return
+  fi
+  if git -C "${SQLITE_SRC}" apply --check "${SQLITE_PATCH}" >/dev/null 2>&1; then
+    echo "Applying sqlite patch ${SQLITE_PATCH}"
+    git -C "${SQLITE_SRC}" apply "${SQLITE_PATCH}"
+    sqlite_patch_applied=1
+  elif git -C "${SQLITE_SRC}" apply --reverse --check "${SQLITE_PATCH}" >/dev/null 2>&1; then
+    sqlite_patch_applied=0
+  else
+    echo "warning: unable to apply sqlite patch ${SQLITE_PATCH}" >&2
+  fi
+}
+
+cleanup_sqlite_patch() {
+  if [[ "${sqlite_patch_applied}" -eq 1 ]]; then
+    git -C "${SQLITE_SRC}" apply --reverse "${SQLITE_PATCH}" >/dev/null 2>&1 || true
+  fi
+}
+
 if [[ -z "${TCL_CONFIG_SH}" ]]; then
   TCL_CONFIG_SH="$(find_tcl_config)"
 fi
@@ -101,6 +124,9 @@ if [[ ! -d "${SQLITE_SRC}" ]]; then
   echo "error: sqlite sources missing at ${SQLITE_SRC}" >&2
   exit 1
 fi
+
+apply_sqlite_patch
+trap cleanup_sqlite_patch EXIT
 
 SQLITE_VERSION="$(cat "${SQLITE_SRC}/VERSION")"
 

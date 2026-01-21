@@ -1,0 +1,39 @@
+diff --git a/src/tclsqlite.c b/src/tclsqlite.c
+index 2c79189266..026e28a47b 100644
+--- a/src/tclsqlite.c
++++ b/src/tclsqlite.c
+@@ -91,6 +91,7 @@
+ # endif
+ #endif
+ #include <ctype.h>
++#include <float.h>
+ 
+ /* Used to get the current process ID */
+ #if !defined(_WIN32)
+@@ -1865,7 +1866,12 @@ static Tcl_Obj *dbEvalColumnValue(DbEvalContext *p, int iCol){
+       }
+     }
+     case SQLITE_FLOAT: {
+-      return Tcl_NewDoubleObj(sqlite3_column_double(pStmt, iCol));
++      double r = sqlite3_column_double(pStmt, iCol);
++      if( r!=r || r>DBL_MAX || r<-DBL_MAX ){
++        const unsigned char *zText = sqlite3_column_text(pStmt, iCol);
++        return Tcl_NewStringObj((const char *)zText, -1);
++      }
++      return Tcl_NewDoubleObj(r);
+     }
+     case SQLITE_NULL: {
+       return Tcl_NewStringObj(p->pDb->zNull, -1);
+diff --git a/src/test1.c b/src/test1.c
+index 6f2e2e94ed..837395d2e2 100644
+--- a/src/test1.c
++++ b/src/test1.c
+@@ -6158,7 +6158,7 @@ static int SQLITE_TCLAPI tcl_variable_type(
+   }
+   pVar = Tcl_GetVar2Ex(interp, Tcl_GetString(objv[1]), 0, TCL_LEAVE_ERR_MSG);
+   if( pVar==0 ) return TCL_ERROR;
+-  if( pVar->typePtr ){
++  if( pVar->typePtr && strcmp(pVar->typePtr->name, "string")!=0 ){
+     Tcl_SetObjResult(interp, Tcl_NewStringObj(pVar->typePtr->name, -1));
+   }
+   return TCL_OK;
