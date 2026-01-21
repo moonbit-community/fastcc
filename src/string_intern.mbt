@@ -4,6 +4,7 @@ struct StringInterner {
   next_by_id : Array[Int]
   strings : Array[String]
   views : Array[StringView]
+  hashes : Array[UInt]
 }
 
 ///|
@@ -38,6 +39,7 @@ fn new_string_interner_with_capacity(capacity? : Int) -> StringInterner {
       next_by_id: [],
       strings: [],
       views: [],
+      hashes: [],
     }
     Some(value) => {
       let cap = if value > 0 { value } else { 0 }
@@ -46,6 +48,7 @@ fn new_string_interner_with_capacity(capacity? : Int) -> StringInterner {
         next_by_id: Array::new(capacity=cap),
         strings: Array::new(capacity=cap),
         views: Array::new(capacity=cap),
+        hashes: Array::new(capacity=cap),
       }
     }
   }
@@ -70,9 +73,11 @@ fn StringInterner::intern_view_with_id_hash(
   let len = view.length()
   let mut id = self.buckets[bucket]
   while id != 0 {
-    let stored = self.strings[id - 1]
-    if stored.length() == len && view == self.views[id - 1] {
-      return (stored, id)
+    if self.hashes[id - 1] == hash {
+      let stored = self.strings[id - 1]
+      if stored.length() == len && view == self.views[id - 1] {
+        return (stored, id)
+      }
     }
     id = self.next_by_id[id - 1]
   }
@@ -80,6 +85,7 @@ fn StringInterner::intern_view_with_id_hash(
   let id = self.strings.length() + 1
   self.strings.push(owned)
   self.views.push(self.strings[id - 1].view())
+  self.hashes.push(hash)
   self.next_by_id.push(self.buckets[bucket])
   self.buckets[bucket] = id
   let stored = self.strings[id - 1]
