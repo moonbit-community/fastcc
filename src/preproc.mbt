@@ -1251,7 +1251,6 @@ fn substitute_macro(
   pp : Preprocessor,
   macro_def : Macro,
   raw_args : Array[Array[Token]],
-  expanded_args : Array[Array[Token]],
   loc : SrcLoc,
 ) -> Array[Token] {
   if !macro_def.is_function {
@@ -1259,6 +1258,7 @@ fn substitute_macro(
   }
   let out : Array[Token] = []
   let params = macro_def.params
+  let expanded_cache : Array[Array[Token]?] = Array::make(raw_args.length(), None)
   let mut i = 0
   while i < macro_def.replacement.length() {
     let tok = macro_def.replacement[i]
@@ -1359,11 +1359,7 @@ fn substitute_macro(
       if param_id > 0 {
         match lookup_param_index(params, param_id) {
           Some(idx) => {
-            let arg_tokens = if idx < expanded_args.length() {
-              expanded_args[idx]
-            } else {
-              []
-            }
+            let arg_tokens = ensure_expanded_arg(pp, raw_args, expanded_cache, idx)
             for t in arg_tokens {
               out.push({
                 kind: t.kind,
@@ -1473,15 +1469,23 @@ fn read_macro_args_from_tokens(
 }
 
 ///|
-fn expand_macro_args(
+fn ensure_expanded_arg(
   pp : Preprocessor,
-  args : Array[Array[Token]],
-) -> Array[Array[Token]] {
-  let out : Array[Array[Token]] = Array::new(capacity=args.length())
-  for arg in args {
-    out.push(expand_tokens(pp, arg))
+  raw_args : Array[Array[Token]],
+  expanded_cache : Array[Array[Token]?],
+  idx : Int,
+) -> Array[Token] {
+  if idx < 0 || idx >= raw_args.length() {
+    return []
   }
-  out
+  match expanded_cache[idx] {
+    Some(tokens) => tokens
+    None => {
+      let expanded = expand_tokens(pp, raw_args[idx])
+      expanded_cache[idx] = Some(expanded)
+      expanded
+    }
+  }
 }
 
 ///|
@@ -1580,15 +1584,13 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                         i = next_i
                         continue
                       }
-                      let expanded_args = expand_macro_args(pp, norm_raw)
-                      push_expanding(pp, macro_id)
                       let replaced = substitute_macro(
                         pp,
                         macro_def,
                         norm_raw,
-                        expanded_args,
                         tok.loc,
                       )
+                      push_expanding(pp, macro_id)
                       let expanded =
                         add_hidden_tokens(pp, expand_tokens(pp, replaced), macro_id)
                       pop_expanding(pp)
@@ -2851,15 +2853,13 @@ fn next_pp_token(pp : Preprocessor) -> Token {
                   }
                   Some(norm_args) => {
                     let restore_len = pp.pending.length()
-                    let expanded_args = expand_macro_args(pp, norm_args)
-                    push_expanding(pp, macro_id)
                     let replaced = substitute_macro(
                       pp,
                       macro_def,
                       norm_args,
-                      expanded_args,
                       tok.loc,
                     )
+                    push_expanding(pp, macro_id)
                     let expanded =
                       add_hidden_tokens(pp, expand_tokens(pp, replaced), macro_id)
                     if expanded.length() > 0 {
