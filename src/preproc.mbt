@@ -11,6 +11,7 @@ struct Macro {
   is_variadic : Bool
   is_function : Bool
   replacement : Array[Token]
+  replacement_has_id : Bool
 }
 
 ///|
@@ -113,11 +114,13 @@ fn define_macro(
   if id == 0 {
     return
   }
+  let replacement_has_id = tokens_have_id(replacement)
   set_macro(pp, id, {
     params: [],
     is_variadic: false,
     is_function: false,
     replacement,
+    replacement_has_id,
   })
 }
 
@@ -140,11 +143,13 @@ fn define_func_macro_zero(pp : Preprocessor, name : String) -> Unit {
     return
   }
   let param_id = macro_id_from_name(pp, "x")
+  let replacement = [make_builtin_token(IntLit, "0")]
   set_macro(pp, id, {
     params: [param_id],
     is_variadic: true,
     is_function: true,
-    replacement: [make_builtin_token(IntLit, "0")],
+    replacement,
+    replacement_has_id: tokens_have_id(replacement),
   })
 }
 
@@ -155,11 +160,13 @@ fn define_func_macro_empty(pp : Preprocessor, name : String) -> Unit {
     return
   }
   let param_id = macro_id_from_name(pp, "x")
+  let replacement : Array[Token] = []
   set_macro(pp, id, {
     params: [param_id],
     is_variadic: true,
     is_function: true,
-    replacement: [],
+    replacement,
+    replacement_has_id: false,
   })
 }
 
@@ -882,20 +889,25 @@ fn parse_define_macro(
   if is_function_like {
     match parse_macro_params(pp, args, loc) {
       None => None
-      Some((params, is_variadic, replacement)) =>
+      Some((params, is_variadic, replacement)) => {
+        let normalized = normalize_macro_tokens(replacement)
         Some({
           params,
           is_variadic,
           is_function: true,
-          replacement: normalize_macro_tokens(replacement),
+          replacement: normalized,
+          replacement_has_id: tokens_have_id(normalized),
         })
+      }
     }
   } else {
+    let normalized = normalize_macro_tokens(args)
     Some({
       params: [],
       is_variadic: false,
       is_function: false,
-      replacement: normalize_macro_tokens(args),
+      replacement: normalized,
+      replacement_has_id: tokens_have_id(normalized),
     })
   }
 }
@@ -1254,6 +1266,16 @@ fn tokens_need_expansion(pp : Preprocessor, tokens : Array[Token]) -> Bool {
   for tok in tokens {
     let id = tok.id
     if id > 0 && (is_builtin_macro_id(pp, id) || get_macro(pp, id) is Some(_)) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn tokens_have_id(tokens : Array[Token]) -> Bool {
+  for tok in tokens {
+    if tok.id > 0 {
       return true
     }
   }
@@ -1751,7 +1773,8 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
             continue
           } else {
             let expanded =
-              if tokens_need_expansion(pp, macro_def.replacement) {
+              if macro_def.replacement_has_id &&
+                tokens_need_expansion(pp, macro_def.replacement) {
                 push_expanding(pp, macro_id)
                 let expanded = add_hidden_tokens(
                   pp,
@@ -3054,7 +3077,8 @@ fn next_pp_token(pp : Preprocessor) -> Token {
             let restore_len = pp.pending.length()
             let mut did_push = false
             let expanded =
-              if tokens_need_expansion(pp, macro_def.replacement) {
+              if macro_def.replacement_has_id &&
+                tokens_need_expansion(pp, macro_def.replacement) {
                 push_expanding(pp, macro_id)
                 did_push = true
                 add_hidden_tokens(pp, expand_tokens(pp, macro_def.replacement), macro_id)
