@@ -1242,6 +1242,25 @@ fn builtin_macro_tokens(pp : Preprocessor, tok : Token) -> Array[Token]? {
 }
 
 ///|
+fn is_builtin_macro_id(pp : Preprocessor, id : Int) -> Bool {
+  id == pp.builtin_ids.line_macro ||
+  id == pp.builtin_ids.file_macro ||
+  id == pp.builtin_ids.date_macro ||
+  id == pp.builtin_ids.time_macro
+}
+
+///|
+fn tokens_need_expansion(pp : Preprocessor, tokens : Array[Token]) -> Bool {
+  for tok in tokens {
+    let id = tok.id
+    if id > 0 && (is_builtin_macro_id(pp, id) || get_macro(pp, id) is Some(_)) {
+      return true
+    }
+  }
+  false
+}
+
+///|
 fn init_datetime_literals() -> (String, String) {
   let now_ms = @env.now()
   let now_sec = (now_ms / 1000UL).to_int().to_int64()
@@ -1697,10 +1716,15 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                         norm_raw,
                         tok.loc,
                       )
-                      push_expanding(pp, macro_id)
-                      let expanded =
-                        add_hidden_tokens(pp, expand_tokens(pp, replaced), macro_id)
-                      pop_expanding(pp)
+                      let expanded = if tokens_need_expansion(pp, replaced) {
+                        push_expanding(pp, macro_id)
+                        let expanded =
+                          add_hidden_tokens(pp, expand_tokens(pp, replaced), macro_id)
+                        pop_expanding(pp)
+                        expanded
+                      } else {
+                        replaced
+                      }
                       let out = match out_opt {
                         Some(arr) => arr
                         None => {
@@ -1726,10 +1750,19 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
             i = i + 1
             continue
           } else {
-            push_expanding(pp, macro_id)
             let expanded =
-              add_hidden_tokens(pp, expand_tokens(pp, macro_def.replacement), macro_id)
-            pop_expanding(pp)
+              if tokens_need_expansion(pp, macro_def.replacement) {
+                push_expanding(pp, macro_id)
+                let expanded = add_hidden_tokens(
+                  pp,
+                  expand_tokens(pp, macro_def.replacement),
+                  macro_id,
+                )
+                pop_expanding(pp)
+                expanded
+              } else {
+                macro_def.replacement
+              }
             let out = match out_opt {
               Some(arr) => arr
               None => {
@@ -2991,14 +3024,26 @@ fn next_pp_token(pp : Preprocessor) -> Token {
                       norm_args,
                       tok.loc,
                     )
-                    push_expanding(pp, macro_id)
-                    let expanded =
+                    let mut did_push = false
+                    let expanded = if tokens_need_expansion(pp, replaced) {
+                      push_expanding(pp, macro_id)
+                      did_push = true
                       add_hidden_tokens(pp, expand_tokens(pp, replaced), macro_id)
-                    if expanded.length() > 0 {
-                      pp.expanding_guards.push({ restore_len, })
-                      push_tokens(pp, expanded)
-                      release_expanding_guards(pp)
                     } else {
+                      replaced
+                    }
+                    if expanded.length() > 0 {
+                      if did_push {
+                        pp.expanding_guards.push({ restore_len, })
+                      }
+                      push_tokens(pp, expanded)
+                      if did_push {
+                        release_expanding_guards(pp)
+                      }
+                      if did_push && is_expanding(pp, macro_id) {
+                        pop_expanding(pp)
+                      }
+                    } else if did_push {
                       pop_expanding(pp)
                     }
                     continue
@@ -3007,14 +3052,27 @@ fn next_pp_token(pp : Preprocessor) -> Token {
             }
           } else {
             let restore_len = pp.pending.length()
-            push_expanding(pp, macro_id)
+            let mut did_push = false
             let expanded =
-              add_hidden_tokens(pp, expand_tokens(pp, macro_def.replacement), macro_id)
+              if tokens_need_expansion(pp, macro_def.replacement) {
+                push_expanding(pp, macro_id)
+                did_push = true
+                add_hidden_tokens(pp, expand_tokens(pp, macro_def.replacement), macro_id)
+              } else {
+                macro_def.replacement
+              }
             if expanded.length() > 0 {
-              pp.expanding_guards.push({ restore_len, })
+              if did_push {
+                pp.expanding_guards.push({ restore_len, })
+              }
               push_tokens(pp, expanded)
-              release_expanding_guards(pp)
-            } else {
+              if did_push {
+                release_expanding_guards(pp)
+              }
+              if did_push && is_expanding(pp, macro_id) {
+                pop_expanding(pp)
+              }
+            } else if did_push {
               pop_expanding(pp)
             }
             continue
