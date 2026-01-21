@@ -40,6 +40,7 @@ struct SemContext {
   function_defs : FastMap[String, Bool]
   locals : Array[FastMap[Int, CType]]
   local_values : FastMap[Int, CType]
+  local_values_by_id : Array[CType?]
   local_overrides : Array[Array[(Int, CType?)]]
   type_aliases : FastMap[String, CType]
   struct_defs : FastMap[String, RecordDef]
@@ -127,6 +128,7 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     function_defs: fast_map_new(),
     locals: [],
     local_values: fast_map_new(),
+    local_values_by_id: [],
     local_overrides: [],
     type_aliases,
     struct_defs: fast_map_new(),
@@ -423,7 +425,7 @@ fn lookup_local_only(ctx : SemContext, id : Int) -> CType? {
   if id <= 0 {
     return None
   }
-  ctx.local_values.get(id)
+  get_opt_by_id(ctx.local_values_by_id, id)
 }
 
 ///|
@@ -3295,6 +3297,7 @@ fn update_decl_type(
       scope.set(id, ty)
       ctx.locals[idx] = scope
       ctx.local_values.set(id, ty)
+      set_opt_by_id(ctx.local_values_by_id, id, ty)
     }
   } else if ctx.globals.contains(name) {
     ctx.globals.set(name, ty)
@@ -3311,9 +3314,10 @@ fn record_local_binding(ctx : SemContext, id : Int, ty : CType) -> Unit {
   }
   let idx = ctx.locals.length() - 1
   let overrides = ctx.local_overrides[idx]
-  overrides.push((id, ctx.local_values.get(id)))
+  overrides.push((id, get_opt_by_id(ctx.local_values_by_id, id)))
   ctx.local_overrides[idx] = overrides
   ctx.local_values.set(id, ty)
+  set_opt_by_id(ctx.local_values_by_id, id, ty)
 }
 
 ///|
@@ -6739,7 +6743,7 @@ fn merge_global_decl_type(existing : CType, incoming : CType) -> CType {
 
 ///|
 fn lookup_value(ctx : SemContext, name : String, id : Int) -> CType? {
-  let mut found = if id > 0 { ctx.local_values.get(id) } else { None }
+  let mut found = if id > 0 { get_opt_by_id(ctx.local_values_by_id, id) } else { None }
   if found is None {
     found = if id > 0 { get_global_by_id(ctx, id) } else { ctx.globals.get(name) }
   }
@@ -6798,9 +6802,15 @@ fn pop_scope(ctx : SemContext) -> Unit {
         i = i - 1
         let (id, prev) = overrides[i]
         match prev {
-          Some(ty) => ctx.local_values.set(id, ty)
+          Some(ty) => {
+            ctx.local_values.set(id, ty)
+            set_opt_by_id(ctx.local_values_by_id, id, ty)
+          }
           None => {
             ctx.local_values.remove(id)
+            if id > 0 && id <= ctx.local_values_by_id.length() {
+              ctx.local_values_by_id[id - 1] = None
+            }
           }
         }
       }

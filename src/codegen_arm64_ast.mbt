@@ -14544,7 +14544,13 @@ fn codegen_arm64_object_bytes_with_sem(
     let sym = sym_for_name(syms, name)
     syms.externals.set(sym.id, is_ext)
   }
-  let code_capacity = func_count * 256
+  let base_capacity = func_count * 256
+  let expr_capacity = sem.expr_type_cache.length() * 2
+  let code_capacity = if expr_capacity > base_capacity {
+    expr_capacity
+  } else {
+    base_capacity
+  }
   let reloc_capacity = func_count * 16
   let emitter = new_arm64_emitter_with_capacity(code_capacity, reloc_capacity)
   let func_offsets : FastMap[String, Int] = fast_map_new(capacity=func_count)

@@ -534,6 +534,95 @@ fn skip_directive_line(pp : Preprocessor) -> Unit {
 }
 
 ///|
+fn skip_inactive(pp : Preprocessor) -> Unit {
+  let lex = pp.lexer
+  let text = lex.text
+  let len = lex.text_len
+  while lex.index < len {
+    let idx = lex.index
+    let code = text[idx]
+    if lex.line_start {
+      if is_ws_no_newline(code) {
+        lex.index = idx + 1
+        lex.col = lex.col + 1
+        continue
+      }
+      if code == 10 {
+        lex.index = idx + 1
+        lex.line = lex.line + 1
+        lex.col = 1
+        lex.line_start = true
+        continue
+      }
+      if code == 92 && idx + 1 < len && text[idx + 1] == 10 {
+        lex.index = idx + 2
+        lex.line = lex.line + 1
+        lex.col = 1
+        lex.line_start = false
+        continue
+      }
+      if code == 47 && idx + 1 < len {
+        let next_code = text[idx + 1]
+        if next_code == 47 {
+          lex.index = idx + 2
+          lex.col = lex.col + 2
+          skip_line_comment(lex)
+          continue
+        }
+        if next_code == 42 {
+          let start_loc = lexer_loc(lex)
+          lex.index = idx + 2
+          lex.col = lex.col + 2
+          skip_block_comment(lex, start_loc)
+          continue
+        }
+      }
+      if code == 35 {
+        return
+      }
+    }
+    if code == 10 {
+      lex.index = idx + 1
+      lex.line = lex.line + 1
+      lex.col = 1
+      lex.line_start = true
+      continue
+    }
+    if code == 92 && idx + 1 < len && text[idx + 1] == 10 {
+      lex.index = idx + 2
+      lex.line = lex.line + 1
+      lex.col = 1
+      lex.line_start = false
+      continue
+    }
+    if code == 47 && idx + 1 < len {
+      let next_code = text[idx + 1]
+      if next_code == 47 {
+        lex.index = idx + 2
+        lex.col = lex.col + 2
+        skip_line_comment(lex)
+        continue
+      }
+      if next_code == 42 {
+        let start_loc = lexer_loc(lex)
+        lex.index = idx + 2
+        lex.col = lex.col + 2
+        skip_block_comment(lex, start_loc)
+        continue
+      }
+    }
+    if code == 34 || code == 39 {
+      let start_loc = lexer_loc(lex)
+      skip_string_literal(lex, start_loc, code)
+      continue
+    }
+    lex.index = idx + 1
+    lex.col = lex.col + 1
+    lex.line_start = false
+  }
+}
+
+///|
 fn read_directive_text(pp : Preprocessor) -> String {
   let sb = StringBuilder::new()
   let mut saw_non_ws = false
@@ -1837,14 +1926,19 @@ fn hidden_is_empty(hidden : HiddenList?) -> Bool {
 
 ///|
 fn hidden_contains(hidden : HiddenList?, id : Int) -> Bool {
-  match hidden {
-    None => false
-    Some(node) =>
-      if node.id == id {
-        true
-      } else {
-        hidden_contains(node.next, id)
-      }
+  let mut cur = hidden
+  while true {
+    match cur {
+      None => return false
+      Some(node) =>
+        if node.id == id {
+          return true
+        } else {
+          cur = node.next
+        }
+    }
+  } else {
+    false
   }
 }
 
@@ -2789,6 +2883,9 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
 ///|
 fn next_pp_token(pp : Preprocessor) -> Token {
   while true {
+    if !current_active(pp) && pp.held is None && pp.pending.length() == 0 {
+      skip_inactive(pp)
+    }
     let mut from_pending = false
     let tok = if pp.pending.length() > 0 {
       match pp.pending.pop() {

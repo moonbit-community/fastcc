@@ -114,23 +114,6 @@ fn advance(lex : Lexer) -> UInt16? {
 }
 
 ///|
-fn advance_comment(lex : Lexer) -> UInt16? {
-  if lex.index >= lex.text_len {
-    return None
-  }
-  let code = lex.text[lex.index]
-  lex.index = lex.index + 1
-  if code == 10 {
-    lex.line = lex.line + 1
-    lex.col = 1
-    lex.line_start = true
-  } else {
-    lex.col = lex.col + 1
-  }
-  Some(code)
-}
-
-///|
 fn add_lex_error(lex : Lexer, loc : SrcLoc, message : String) -> Unit {
   add_error(lex.diags, loc, message)
 }
@@ -142,15 +125,15 @@ fn is_ws_no_newline(code : UInt16) -> Bool {
 
 ///|
 fn skip_ws(lex : Lexer) -> Unit {
+  let text = lex.text
+  let len = lex.text_len
   while true {
     let idx = lex.index
-    if idx >= lex.text_len {
+    if idx >= len {
       return
     }
-    let code = lex.text[idx]
+    let code = text[idx]
     if is_ws_no_newline(code) {
-      let text = lex.text
-      let len = lex.text_len
       let mut next = idx + 1
       while next < len && is_ws_no_newline(text[next]) {
         next = next + 1
@@ -161,32 +144,36 @@ fn skip_ws(lex : Lexer) -> Unit {
       continue
     }
     if code == 10 {
-      let _ = advance(lex)
+      lex.index = idx + 1
+      lex.line = lex.line + 1
+      lex.col = 1
+      lex.line_start = true
       continue
     }
     if code == 92 {
       let next = idx + 1
-      if next < lex.text_len && lex.text[next] == 10 {
-        let _ = advance_comment(lex) // '\'
-        let _ = advance_comment(lex) // '\n'
+      if next < len && text[next] == 10 {
+        lex.index = idx + 2
+        lex.line = lex.line + 1
+        lex.col = 1
         lex.line_start = false
         continue
       }
     }
     if code == 47 {
       let next = idx + 1
-      if next < lex.text_len {
-        let next_code = lex.text[next]
+      if next < len {
+        let next_code = text[next]
         if next_code == 47 {
-          let _ = advance_comment(lex)
-          let _ = advance_comment(lex)
+          lex.index = idx + 2
+          lex.col = lex.col + 2
           skip_line_comment(lex)
           continue
         }
         if next_code == 42 {
           let start_loc = lexer_loc(lex)
-          let _ = advance_comment(lex)
-          let _ = advance_comment(lex)
+          lex.index = idx + 2
+          lex.col = lex.col + 2
           skip_block_comment(lex, start_loc)
           continue
         }
@@ -213,7 +200,10 @@ fn skip_line_comment(lex : Lexer) -> Unit {
     lex.col = lex.col + (i - idx)
   }
   if i < len {
-    let _ = advance_comment(lex)
+    lex.index = i + 1
+    lex.line = lex.line + 1
+    lex.col = 1
+    lex.line_start = true
   }
 }
 
@@ -221,38 +211,40 @@ fn skip_line_comment(lex : Lexer) -> Unit {
 fn skip_block_comment(lex : Lexer, start_loc : SrcLoc) -> Unit {
   let idx = lex.index
   let len = lex.text_len
-  if idx < len {
-    let text = lex.text
-    let mut i = idx
-    while i + 1 < len {
-      let code = text[i]
-      if code == 10 {
-        break
-      }
-      if code == 42 && text[i + 1] == 47 {
-        let delta = i + 2 - idx
-        lex.index = idx + delta
-        lex.col = lex.col + delta
-        return
-      }
+  if idx >= len {
+    add_lex_error(lex, start_loc, "unterminated block comment")
+    return
+  }
+  let text = lex.text
+  let mut i = idx
+  let mut line = lex.line
+  let mut col = lex.col
+  let mut line_start = lex.line_start
+  while i < len {
+    let code = text[i]
+    if code == 10 {
+      line = line + 1
+      col = 1
+      line_start = true
       i = i + 1
+      continue
     }
-  }
-  let mut saw_star = false
-  while true {
-    match advance_comment(lex) {
-      None => {
-        add_lex_error(lex, start_loc, "unterminated block comment")
-        return
-      }
-      Some(code) => {
-        if saw_star && code == 47 {
-          return
-        }
-        saw_star = code == 42
-      }
+    if code == 42 && i + 1 < len && text[i + 1] == 47 {
+      col = col + 2
+      lex.index = i + 2
+      lex.line = line
+      lex.col = col
+      lex.line_start = line_start
+      return
     }
+    col = col + 1
+    i = i + 1
   }
+  lex.index = len
+  lex.line = line
+  lex.col = col
+  lex.line_start = line_start
+  add_lex_error(lex, start_loc, "unterminated block comment")
 }
 
 ///|
@@ -409,13 +401,8 @@ fn lex_number(
 }
 
 ///|
-fn lex_string_literal(
-  lex : Lexer,
-  loc : SrcLoc,
-  line_start : Bool,
-  quote : UInt16,
-) -> Token {
-  let start = lex.index
+///|
+fn skip_string_literal(lex : Lexer, loc : SrcLoc, quote : UInt16) -> Unit {
   let text = lex.text
   let len = lex.text_len
   let _ = advance(lex)
@@ -463,7 +450,18 @@ fn lex_string_literal(
       }
     }
   }
-  let lit = slice_to_string(text, start, lex.index)
+}
+
+///|
+fn lex_string_literal(
+  lex : Lexer,
+  loc : SrcLoc,
+  line_start : Bool,
+  quote : UInt16,
+) -> Token {
+  let start = lex.index
+  skip_string_literal(lex, loc, quote)
+  let lit = slice_to_string(lex.text, start, lex.index)
   let kind = if quote == 34 { StrLit } else { CharLit }
   make_token(kind, lit, loc, line_start)
 }
