@@ -1433,25 +1433,94 @@ fn type_for_typeof(ctx : SemContext, expr : Expr) -> CType {
 
 ///|
 fn resolve_type(ctx : SemContext, ty : CType, loc : SrcLoc) -> CType {
+  let (resolved, _) = resolve_type_inner(ctx, ty, loc)
+  resolved
+}
+
+///|
+fn resolve_type_inner(ctx : SemContext, ty : CType, loc : SrcLoc) -> (CType, Bool) {
   match ty {
-    CType::Qualified(qual~, base~) =>
-      CType::Qualified(qual~, base=resolve_type(ctx, base, loc))
-    CType::Attributed(attrs~, base~) =>
-      CType::Attributed(attrs~, base=resolve_type(ctx, base, loc))
-    CType::Pointer(inner) => CType::Pointer(resolve_type(ctx, inner, loc))
-    CType::Array(elem~, size~, size_expr~) =>
-      CType::Array(elem=resolve_type(ctx, elem, loc), size~, size_expr~)
-    CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) =>
-      CType::Function(
-        return_type=resolve_type(ctx, return_type, loc),
-        params=params.map(param => resolve_type(ctx, param, loc)),
-        varargs~,
-        is_old_style~,
-        call_conv~,
-      )
-    CType::TypeofExpr(expr~) =>
-      resolve_type(ctx, type_for_typeof(ctx, expr), expr_loc(expr))
-    _ => ty
+    CType::Qualified(qual~, base~) => {
+      let (resolved_base, changed) = resolve_type_inner(ctx, base, loc)
+      if changed {
+        (CType::Qualified(qual~, base=resolved_base), true)
+      } else {
+        (ty, false)
+      }
+    }
+    CType::Attributed(attrs~, base~) => {
+      let (resolved_base, changed) = resolve_type_inner(ctx, base, loc)
+      if changed {
+        (CType::Attributed(attrs~, base=resolved_base), true)
+      } else {
+        (ty, false)
+      }
+    }
+    CType::Pointer(inner) => {
+      let (resolved_inner, changed) = resolve_type_inner(ctx, inner, loc)
+      if changed {
+        (CType::Pointer(resolved_inner), true)
+      } else {
+        (ty, false)
+      }
+    }
+    CType::Array(elem~, size~, size_expr~) => {
+      let (resolved_elem, changed) = resolve_type_inner(ctx, elem, loc)
+      if changed {
+        (CType::Array(elem=resolved_elem, size~, size_expr~), true)
+      } else {
+        (ty, false)
+      }
+    }
+    CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) => {
+      let (resolved_ret, ret_changed) = resolve_type_inner(ctx, return_type, loc)
+      let mut any_changed = ret_changed
+      let mut out_params : Array[CType]? = None
+      let len = params.length()
+      for i = 0; i < len; i = i + 1 {
+        let param = params[i]
+        let (resolved_param, param_changed) = resolve_type_inner(ctx, param, loc)
+        if param_changed {
+          any_changed = true
+          if out_params is None {
+            let arr : Array[CType] = Array::new(capacity=len)
+            for j = 0; j < i; j = j + 1 {
+              arr.push(params[j])
+            }
+            out_params = Some(arr)
+          }
+        }
+        match out_params {
+          None => ()
+          Some(arr) =>
+            if param_changed { arr.push(resolved_param) } else { arr.push(param) }
+        }
+      }
+      if !any_changed {
+        (ty, false)
+      } else {
+        let resolved_params = match out_params {
+          Some(arr) => arr
+          None => params
+        }
+        (
+          CType::Function(
+            return_type=resolved_ret,
+            params=resolved_params,
+            varargs~,
+            is_old_style~,
+            call_conv~,
+          ),
+          true,
+        )
+      }
+    }
+    CType::TypeofExpr(expr~) => {
+      let resolved = type_for_typeof(ctx, expr)
+      let (final_ty, _) = resolve_type_inner(ctx, resolved, expr_loc(expr))
+      (final_ty, true)
+    }
+    _ => (ty, false)
   }
 }
 
