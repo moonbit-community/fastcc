@@ -63,9 +63,9 @@ struct SemContext {
   struct_size_cache_by_id : Array[(Int, Int)?]
   union_size_cache : FastMap[String, (Int, Int)]
   union_size_cache_by_id : Array[(Int, Int)?]
-  func_compound_literals : FastMap[String, Array[String]]
-  func_compound_literals_by_id : Array[Array[String]?]
-  compound_literal_sizes : FastMap[String, (Int, Int)]
+  func_compound_literals : FastMap[String, Array[Int]]
+  func_compound_literals_by_id : Array[Array[Int]?]
+  compound_literal_sizes : FastMap[Int, (Int, Int)]
   func_has_compound_literal : FastMap[String, Bool]
   func_has_stmt_expr : FastMap[String, Bool]
   func_has_stmt_expr_by_id : Array[Bool?]
@@ -75,7 +75,7 @@ struct SemContext {
   enum_consts_by_id : Array[Int?]
   enum_types : FastMap[String, CType]
   enum_types_by_id : Array[CType?]
-  compound_literal_types : FastMap[String, CType]
+  compound_literal_types : FastMap[Int, CType]
   expr_type_cache : Array[CType?]
   func_agg_temps : FastMap[String, (Int, Int)]
   func_agg_temps_by_id : Array[(Int, Int)?]
@@ -3312,8 +3312,8 @@ fn apply_inferred_array_size(ty : CType, size : Int) -> CType {
 }
 
 ///|
-fn compound_literal_key(loc : SrcLoc, node_id : Int) -> String {
-  "\{loc.file_id}:\{node_id}:\{loc.offset}"
+fn compound_literal_key(node_id : Int) -> Int {
+  node_id
 }
 
 ///|
@@ -3324,7 +3324,7 @@ fn compound_literal_type(
   loc : SrcLoc,
   node_id : Int,
 ) -> CType {
-  let key = compound_literal_key(loc, node_id)
+  let key = compound_literal_key(node_id)
   match ctx.compound_literal_types.get(key) {
     Some(resolved) => resolved
     None => {
@@ -3406,7 +3406,7 @@ fn record_compound_literal(
   if !ctx.record_agg_temps {
     return
   }
-  let key = compound_literal_key(loc, node_id)
+  let key = compound_literal_key(node_id)
   let id = ctx.current_func_id
   if id > 0 {
     let keys = match get_opt_by_id(ctx.func_compound_literals_by_id, id) {

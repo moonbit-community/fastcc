@@ -71,7 +71,7 @@ struct LocalAlloc {
   static_locals : FastMap[Int, StaticLocalInfo]
   func_name : String
   labels : LabelCtx
-  compound_literal_slots : FastMap[String, Int]
+  compound_literal_slots : FastMap[Int, Int]
   mut agg_temp_offset : Int?
   mut agg_temp_size : Int
   mut agg_temp_align : Int
@@ -121,7 +121,7 @@ fn new_local_alloc_with_compound_slots(
   ret_ty : CType,
   func_name : String,
   static_locals : FastMap[Int, StaticLocalInfo],
-  compound_literal_slots : FastMap[String, Int],
+  compound_literal_slots : FastMap[Int, Int],
 ) -> LocalAlloc {
   {
     sem,
@@ -1389,7 +1389,7 @@ fn reserve_compound_literal_slot(
   loc : SrcLoc,
   node_id : Int,
 ) -> Unit {
-  let key = compound_literal_key(loc, node_id)
+  let key = compound_literal_key(node_id)
   match alloc.compound_literal_slots.get(key) {
     Some(_) => return
     None => ()
@@ -6099,7 +6099,7 @@ fn gen_compound_literal_addr_with_type(
   dst : Int,
   bag : DiagBag,
 ) -> CType? {
-  let key = compound_literal_key(loc, node_id)
+  let key = compound_literal_key(node_id)
   match alloc.compound_literal_slots.get(key) {
     None => {
       add_error(bag, loc, "codegen: missing compound literal slot")
@@ -12972,7 +12972,7 @@ struct FramePlan {
   agg_temp_size : Int
   agg_temp_align : Int
   agg_temp_offset : Int?
-  compound_literal_slots : FastMap[String, Int]
+  compound_literal_slots : FastMap[Int, Int]
 }
 
 ///|
