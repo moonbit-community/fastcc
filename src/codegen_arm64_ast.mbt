@@ -11803,8 +11803,8 @@ fn switch_append_break(
 
 ///|
 struct SwitchCaseInfo {
-  start : Int
-  end : Int
+  start : Int64
+  end : Int64
 }
 
 ///|
@@ -11822,10 +11822,10 @@ fn collect_switch_labels(
   ) -> Bool {
     match stmt {
       Stmt::Case(expr~, end_expr~, body~, ..) => {
-        let start = const_int_from_expr(sem, expr, expr_loc(expr)).unwrap_or(0)
+        let start = const_int64_from_expr(sem, expr, expr_loc(expr)).unwrap_or(0)
         let end = match end_expr {
           None => start
-          Some(e) => const_int_from_expr(sem, e, expr_loc(e)).unwrap_or(start)
+          Some(e) => const_int64_from_expr(sem, e, expr_loc(e)).unwrap_or(start)
         }
         cases.push({ start, end })
         walk(sem, body, cases, has_default)
@@ -12430,13 +12430,34 @@ fn gen_stmt(
 	    }
     Stmt::Switch(cond~, body~, loc~) => {
       let (cases, _has_default) = collect_switch_labels(alloc.sem, body)
+      let cond_ty = type_of_expr(alloc.sem, cond)
+      let (cond_is64, cond_unsigned) = match scalar_size_signed_or_error(
+        alloc.sem,
+        cond_ty,
+        loc,
+      ) {
+        None => (false, false)
+        Some((size, signed)) => (size == 8, !signed)
+      }
+      let range_cond_lt = if cond_unsigned { ARM64_COND_LO } else { ARM64_COND_LT }
+      let range_cond_gt = if cond_unsigned { ARM64_COND_HI } else { ARM64_COND_GT }
       let case_addrs : Array[Int] = []
       for _ in cases {
         case_addrs.push(0)
       }
       let mut default_addr : Int? = None
 
-      gen_expr_int32(emitter, alloc, syms, pool, cstrings, cond, 0, bag)
+      gen_expr_int32(
+        emitter,
+        alloc,
+        syms,
+        pool,
+        cstrings,
+        cond,
+        0,
+        bag,
+        expr_ty=cond_ty,
+      )
 
       let eq_branches : Array[(Int, Int)] = []
       let range_jmps : Array[(Int, Int)] = []
@@ -12452,9 +12473,9 @@ fn gen_stmt(
           arm64_movimm(
             emitter,
             tmp.reinterpret_as_uint(),
-            info.start.to_uint64(),
+            info.start.reinterpret_as_uint64(),
           )
-          emit_cmp(emitter, false, 0, tmp)
+          emit_cmp(emitter, cond_is64, 0, tmp)
           give_reg(pool, tmp)
           let at = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
           eq_branches.push((at, i))
@@ -12468,26 +12489,26 @@ fn gen_stmt(
           arm64_movimm(
             emitter,
             tmp.reinterpret_as_uint(),
-            info.start.to_uint64(),
+            info.start.reinterpret_as_uint64(),
           )
-          emit_cmp(emitter, false, 0, tmp)
-          let skip1 = emit_b_cond_placeholder(emitter, ARM64_COND_LT)
+          emit_cmp(emitter, cond_is64, 0, tmp)
+          let skip1 = emit_b_cond_placeholder(emitter, range_cond_lt)
           arm64_movimm(
             emitter,
             tmp.reinterpret_as_uint(),
-            info.end.to_uint64(),
+            info.end.reinterpret_as_uint64(),
           )
-          emit_cmp(emitter, false, 0, tmp)
-          let skip2 = emit_b_cond_placeholder(emitter, ARM64_COND_GT)
+          emit_cmp(emitter, cond_is64, 0, tmp)
+          let skip2 = emit_b_cond_placeholder(emitter, range_cond_gt)
           give_reg(pool, tmp)
 
           let jmp = gjmp(emitter, 0)
           range_jmps.push((jmp, i))
           let next_pc = emitter_pc(emitter)
-          patch_b_cond(emitter, skip1, next_pc, ARM64_COND_LT) catch {
+          patch_b_cond(emitter, skip1, next_pc, range_cond_lt) catch {
             err => add_error(bag, loc, err.to_string())
           }
-          patch_b_cond(emitter, skip2, next_pc, ARM64_COND_GT) catch {
+          patch_b_cond(emitter, skip2, next_pc, range_cond_gt) catch {
             err => add_error(bag, loc, err.to_string())
           }
         }

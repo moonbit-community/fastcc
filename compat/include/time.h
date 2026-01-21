@@ -17,6 +17,9 @@ struct tm {
   int tm_yday;
   int tm_isdst;
   long tm_gmtoff;
+#if defined(__APPLE__)
+  char *tm_zone;
+#endif
 };
 
 struct timespec {
