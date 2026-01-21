@@ -2014,8 +2014,9 @@ fn parse_int_value(text : String) -> Int {
 
 ///|
 fn parse_uint64_value(text : String) -> UInt64 {
-  let trimmed = trim_int_literal(text)
-  parse_uint64_literal(trimmed, int_literal_base(text))
+  let end = int_literal_end(text)
+  let base = int_literal_base_from(text, end)
+  parse_uint64_literal_prefix(text, base, end)
 }
 
 ///|
