@@ -203,20 +203,17 @@ fn skip_line_comment(lex : Lexer) -> Unit {
   if idx >= len {
     return
   }
-  let view = lex.text.view(start_offset=idx)
-  match view.find("\n"[:]) {
-    None => {
-      let delta = len - idx
-      lex.index = len
-      lex.col = lex.col + delta
-    }
-    Some(off) => {
-      if off > 0 {
-        lex.index = idx + off
-        lex.col = lex.col + off
-      }
-      let _ = advance_comment(lex)
-    }
+  let text = lex.text
+  let mut i = idx
+  while i < len && text[i] != 10 {
+    i = i + 1
+  }
+  if i > idx {
+    lex.index = i
+    lex.col = lex.col + (i - idx)
+  }
+  if i < len {
+    let _ = advance_comment(lex)
   }
 }
 
