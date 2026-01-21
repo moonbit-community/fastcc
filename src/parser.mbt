@@ -918,7 +918,12 @@ fn parse_type_specifiers(
         } else {
           CIntKind::Int
         }
-        let unsigned = signedness == 2
+        let unsigned =
+          if kind == CIntKind::Char && signedness == 0 {
+            char_is_unsigned
+          } else {
+            signedness == 2
+          }
         CType::Int(kind~, unsigned~)
       }
   }

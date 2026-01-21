@@ -204,6 +204,9 @@ fn init_builtin_macros(pp : Preprocessor) -> Unit {
   define_words_macro(pp, "__uint128_t", ["long", "double"])
 
   define_int_macro(pp, "__CHAR_BIT__", 8)
+  if char_is_unsigned {
+    define_int_macro(pp, "__CHAR_UNSIGNED__", 1)
+  }
   define_int_macro(pp, "__SIZEOF_POINTER__", 8)
   define_int_macro(pp, "__SIZEOF_LONG__", 8)
   define_int_macro(pp, "__SIZEOF_LONG_LONG__", 8)

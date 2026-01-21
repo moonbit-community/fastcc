@@ -382,7 +382,7 @@ let size_t_type_value : CType =
 
 ///|
 let char_type_value : CType =
-  CType::Int(kind=CIntKind::Char, unsigned=false)
+  CType::Int(kind=CIntKind::Char, unsigned=char_is_unsigned)
 
 ///|
 let void_pointer_type_value : CType =
@@ -2280,7 +2280,14 @@ fn eval_const_expr_value(
         eval_const_expr_value(ctx, else_expr, loc)
       }
     }
-    Expr::Cast(expr~, ..) => eval_const_expr_value(ctx, expr, loc)
+    Expr::Cast(ty~, expr~, ..) => {
+      let (v, ok) = eval_const_expr_value(ctx, expr, loc)
+      if !ok {
+        return (0, false)
+      }
+      let (casted, ok_cast) = cast_const_int64_value(ctx, v.to_int64(), ty, loc)
+      (casted.to_int(), ok_cast)
+    }
     Expr::SizeofExpr(expr~, loc~, ..) => {
       let ty = type_for_sizeof(ctx, expr)
       match strip_top_qualifiers(ty) {
@@ -2339,6 +2346,43 @@ fn eval_const_expr_value(
           (0, false)
         }
       }
+    _ => {
+      add_sem_error(ctx, loc, "invalid constant expression")
+      (0, false)
+    }
+  }
+}
+
+///|
+fn cast_const_int64_value(
+  ctx : SemContext,
+  value : Int64,
+  ty : CType,
+  loc : SrcLoc,
+) -> (Int64, Bool) {
+  let resolved = resolve_type(ctx, ty, loc)
+  let base = strip_top_qualifiers_keep_attrs(resolved)
+  match base {
+    CType::Bool => (if value == 0 { 0 } else { 1 }, true)
+    CType::Enum(..) => cast_const_int64_value(ctx, value, enum_type_for_arith(ctx, base), loc)
+    CType::Pointer(_) => (value.reinterpret_as_uint64().reinterpret_as_int64(), true)
+    CType::Int(kind~, unsigned~) => {
+      let bits = int_size(kind) * 8
+      let mask : UInt64 =
+        if bits >= 64 {
+          (0 : UInt64).lnot()
+        } else {
+          ((1 : UInt64) << bits) - (1 : UInt64)
+        }
+      let u = value.reinterpret_as_uint64() & mask
+      if unsigned || bits >= 64 {
+        (u.reinterpret_as_int64(), true)
+      } else {
+        let sign_bit = (1 : UInt64) << (bits - 1)
+        let signed_u = if (u & sign_bit) != 0 { u | mask.lnot() } else { u }
+        (signed_u.reinterpret_as_int64(), true)
+      }
+    }
     _ => {
       add_sem_error(ctx, loc, "invalid constant expression")
       (0, false)
@@ -2461,7 +2505,13 @@ fn eval_const_expr_value_i64(
         eval_const_expr_value_i64(ctx, else_expr, loc)
       }
     }
-    Expr::Cast(expr~, ..) => eval_const_expr_value_i64(ctx, expr, loc)
+    Expr::Cast(ty~, expr~, ..) => {
+      let (v, ok) = eval_const_expr_value_i64(ctx, expr, loc)
+      if !ok {
+        return (0, false)
+      }
+      cast_const_int64_value(ctx, v, ty, loc)
+    }
     Expr::SizeofExpr(expr~, loc~, ..) => {
       let ty = type_for_sizeof(ctx, expr)
       match strip_top_qualifiers(ty) {

@@ -498,6 +498,14 @@ test "sem accepts builtin types_compatible_p in _Static_assert" {
 }
 
 ///|
+test "sem treats plain char as unsigned" {
+  let (_, bag) = check_text(
+    "_Static_assert((char)-1 > 0, \"ok\"); int main(){return 0;}",
+  )
+  assert_true(!has_errors(bag))
+}
+
+///|
 test "sem accepts builtin va_arg with type argument" {
   let (_, bag) = check_text("int *p; int main(){return __builtin_va_arg(p, int);}")
   assert_true(!has_errors(bag))
