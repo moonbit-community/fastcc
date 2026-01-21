@@ -2027,14 +2027,12 @@ fn trim_int_literal(text : String) -> String {
 ///|
 fn int_literal_type(text : String) -> CType {
   let end = int_literal_end(text)
-  let suffix = if end >= text.length() {
-    ""
-  } else {
-    slice_string_sem(text, end, text.length())
+  let (long_count, unsigned) = parse_int_suffix_range(text, end)
+  let base = int_literal_base_from(text, end)
+  if base == 10 && end <= 9 && long_count == 0 && !unsigned {
+    return CType::Int(kind=CIntKind::Int, unsigned=false)
   }
-  let (long_count, unsigned) = parse_int_suffix(suffix)
-  let value = parse_uint64_value(text)
-  let base = int_literal_base(text)
+  let value = parse_uint64_literal_prefix(text, base, end)
   let (adj_long_count, adj_unsigned) = adjust_int_literal_kind(
     value, base, long_count, unsigned,
   )
@@ -2143,6 +2141,34 @@ fn parse_uint64_literal(text : String, base : Int) -> UInt64 {
 }
 
 ///|
+fn parse_uint64_literal_prefix(text : String, base : Int, end : Int) -> UInt64 {
+  let mut value : UInt64 = 0
+  let mut i = 0
+  if base == 16 && end >= 2 && text[0] == 48 &&
+    (text[1] == 120 || text[1] == 88) {
+    i = 2
+  } else if base == 2 && end >= 2 && text[0] == 48 &&
+    (text[1] == 98 || text[1] == 66) {
+    i = 2
+  } else if base == 8 && end > 1 && text[0] == 48 {
+    i = 1
+  }
+  while i < end {
+    let code = text[i]
+    let digit = match digit_value(code) {
+      None => break
+      Some(v) => v
+    }
+    if digit >= base {
+      break
+    }
+    value = value * base.to_uint64() + digit.to_uint64()
+    i = i + 1
+  }
+  value
+}
+
+///|
 fn digit_value(code : UInt16) -> Int? {
   if is_dec_digit_code(code) {
     Some(code.to_int() - 48)
@@ -2172,6 +2198,21 @@ fn int_literal_base(text : String) -> Int {
 }
 
 ///|
+fn int_literal_base_from(text : String, end : Int) -> Int {
+  if end >= 2 && text[0] == 48 {
+    let next = text[1]
+    if next == 120 || next == 88 {
+      return 16
+    }
+    if next == 98 || next == 66 {
+      return 2
+    }
+    return 8
+  }
+  10
+}
+
+///|
 fn parse_int_suffix(suffix : String) -> (Int, Bool) {
   let mut long_count = 0
   let mut unsigned = false
@@ -2181,6 +2222,27 @@ fn parse_int_suffix(suffix : String) -> (Int, Bool) {
     } else if code == 'u' {
       unsigned = true
     }
+  }
+  if long_count > 2 {
+    long_count = 2
+  }
+  (long_count, unsigned)
+}
+
+///|
+fn parse_int_suffix_range(text : String, start : Int) -> (Int, Bool) {
+  let mut long_count = 0
+  let mut unsigned = false
+  let len = text.length()
+  let mut i = start
+  while i < len {
+    let code = text[i]
+    if code == 108 || code == 76 {
+      long_count = long_count + 1
+    } else if code == 117 || code == 85 {
+      unsigned = true
+    }
+    i = i + 1
   }
   if long_count > 2 {
     long_count = 2
