@@ -222,19 +222,20 @@ fn skip_block_comment(lex : Lexer, start_loc : SrcLoc) -> Unit {
   let idx = lex.index
   let len = lex.text_len
   if idx < len {
-    let view = lex.text.view(start_offset=idx)
-    match view.find("*/"[:]) {
-      Some(end_off) =>
-        match view.find("\n"[:]) {
-          Some(nl_off) if nl_off < end_off => ()
-          _ => {
-            let delta = end_off + 2
-            lex.index = idx + delta
-            lex.col = lex.col + delta
-            return
-          }
-        }
-      None => ()
+    let text = lex.text
+    let mut i = idx
+    while i + 1 < len {
+      let code = text[i]
+      if code == 10 {
+        break
+      }
+      if code == 42 && text[i + 1] == 47 {
+        let delta = i + 2 - idx
+        lex.index = idx + delta
+        lex.col = lex.col + delta
+        return
+      }
+      i = i + 1
     }
   }
   let mut saw_star = false

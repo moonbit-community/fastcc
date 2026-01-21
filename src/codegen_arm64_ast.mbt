@@ -1004,11 +1004,15 @@ fn static_local_func_name(base_name : String) -> String? {
     return None
   }
   let start = prefix.length()
-  let view = base_name.view(start_offset=start, end_offset=base_name.length())
-  match view.find("."[:]) {
-    None => None
-    Some(idx) => Some(base_name.view(start_offset=start, end_offset=start + idx).to_string())
+  let len = base_name.length()
+  let mut i = start
+  while i < len {
+    if base_name[i] == 46 {
+      return Some(base_name.view(start_offset=start, end_offset=i).to_string())
+    }
+    i = i + 1
   }
+  None
 }
 
 ///|
