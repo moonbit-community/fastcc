@@ -61,6 +61,7 @@ struct LocalAlloc {
   ret_ty : CType
   mut ret_loc : Int?
   mut used_bytes : Int
+  mut varargs_stack_size : Int
   scopes : Array[FastMap[Int, LocalSlot]]
   vla_scopes : Array[VlaScopeInfo]
   local_values : FastMap[String, LocalSlot]
@@ -96,6 +97,7 @@ fn new_local_alloc(
     ret_ty,
     ret_loc: None,
     used_bytes: 0,
+    varargs_stack_size: 0,
     scopes: [],
     vla_scopes: [],
     local_values: fast_map_new(),
@@ -126,6 +128,7 @@ fn new_local_alloc_with_compound_slots(
     ret_ty,
     ret_loc: None,
     used_bytes: 0,
+    varargs_stack_size: 0,
     scopes: [],
     vla_scopes: [],
     local_values: fast_map_new(),
@@ -4143,7 +4146,8 @@ fn gen_builtin_va_start(
       return
     }
   }
-  arm64_add_imm(emitter, base, 29, 16)
+  let stack_offset = 16 + alloc.varargs_stack_size
+  emit_addr_reg(emitter, base, 29, stack_offset, loc, bag)
   arm64_strx(
     emitter,
     3,
@@ -13185,6 +13189,11 @@ fn gen_func_def(
   }
   let variadic_index = if func.varargs { param_tys.length() } else { 0 }
   let layout = arm64_pcs(alloc.sem, variadic_index, alloc.ret_ty, param_tys, func.loc, bag)
+  if func.varargs {
+    alloc.varargs_stack_size = layout.stack_size
+  } else {
+    alloc.varargs_stack_size = 0
+  }
   let arg_locs = layout.arg_locs
 
   let mut i = 0
