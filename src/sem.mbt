@@ -289,13 +289,10 @@ fn set_global_by_id(ctx : SemContext, id : Int, ty : CType) -> Unit {
 
 ///|
 fn get_global_by_id(ctx : SemContext, id : Int) -> CType? {
-  if id <= 0 {
-    return None
-  }
-  if id <= ctx.globals_by_id.length() {
-    ctx.globals_by_id[id - 1]
-  } else {
+  if id <= 0 || id > ctx.globals_by_id.length() {
     None
+  } else {
+    ctx.globals_by_id[id - 1]
   }
 }
 
@@ -331,13 +328,10 @@ fn set_function_by_id(ctx : SemContext, id : Int, sig : FuncSig) -> Unit {
 
 ///|
 fn get_function_by_id(ctx : SemContext, id : Int) -> FuncSig? {
-  if id <= 0 {
-    return None
-  }
-  if id <= ctx.functions_by_id.length() {
-    ctx.functions_by_id[id - 1]
-  } else {
+  if id <= 0 || id > ctx.functions_by_id.length() {
     None
+  } else {
+    ctx.functions_by_id[id - 1]
   }
 }
 
@@ -373,13 +367,10 @@ fn set_enum_const_by_id(ctx : SemContext, id : Int, value : Int) -> Unit {
 
 ///|
 fn get_enum_const_by_id(ctx : SemContext, id : Int) -> Int? {
-  if id <= 0 {
-    return None
-  }
-  if id <= ctx.enum_consts_by_id.length() {
-    ctx.enum_consts_by_id[id - 1]
-  } else {
+  if id <= 0 || id > ctx.enum_consts_by_id.length() {
     None
+  } else {
+    ctx.enum_consts_by_id[id - 1]
   }
 }
 
