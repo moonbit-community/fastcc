@@ -1100,9 +1100,8 @@ fn parse_asm_clobbers(p : Parser) -> Array[String] {
   }
   while true {
     let loc = peek_token(p).loc
-    match parse_attr_string(p, loc) {
-      None => ()
-      Some(value) => clobbers.push(value)
+    if parse_attr_string(p, loc) is Some(value) {
+      clobbers.push(value)
     }
     if match_token(p, Comma) is Some(_) {
       continue
@@ -1326,11 +1325,8 @@ fn parse_attribute_clause(p : Parser, loc : SrcLoc) -> Attributes {
         if !has_args {
           add_parse_error(p, name_tok.loc, "expected '(' after cleanup")
         } else {
-          match expect_ident(p, "expected cleanup function name") {
-            None => ()
-            Some(id) =>
-              attrs =
-                merge_attrs(attrs, attrs_with(cleanup=Some(token_lexeme(p, id))))
+          if expect_ident(p, "expected cleanup function name") is Some(id) {
+            attrs = merge_attrs(attrs, attrs_with(cleanup=Some(token_lexeme(p, id))))
           }
           expect(p, RParen, "expected ')' after cleanup") |> ignore
         }
@@ -1535,10 +1531,8 @@ fn parse_declarator(p : Parser, base : CType) -> Declarator? {
         )
         attrs = merge_attrs(attrs, suffix_attrs)
         if match_token(p, KwAsm) is Some(asm_tok) {
-          match parse_asm_label(p, asm_tok.loc) {
-            None => ()
-            Some(label) =>
-              attrs = merge_attrs(attrs, attrs_with(asm_label=Some(label)))
+          if parse_asm_label(p, asm_tok.loc) is Some(label) {
+            attrs = merge_attrs(attrs, attrs_with(asm_label=Some(label)))
           }
           attrs = merge_attrs(attrs, parse_attributes(p))
         }
@@ -1917,10 +1911,8 @@ fn parse_paren_pointer_declarator(p : Parser, base : CType) -> Declarator? {
       }
       let mut attrs = merge_attrs(parts.attrs, suffix_attrs)
       if match_token(p, KwAsm) is Some(asm_tok) {
-        match parse_asm_label(p, asm_tok.loc) {
-          None => ()
-          Some(label) =>
-            attrs = merge_attrs(attrs, attrs_with(asm_label=Some(label)))
+        if parse_asm_label(p, asm_tok.loc) is Some(label) {
+          attrs = merge_attrs(attrs, attrs_with(asm_label=Some(label)))
         }
         attrs = merge_attrs(attrs, parse_attributes(p))
       }
@@ -3791,17 +3783,14 @@ fn push_typedef_scope(p : Parser) -> Unit {
 
 ///|
 fn pop_typedef_scope(p : Parser) -> Unit {
-  match p.typedef_overrides.pop() {
-    None => ()
-    Some(overrides) => {
-      let mut i = overrides.length()
-      while i > 0 {
-        i = i - 1
-        let (id, prev, prev_scope) = overrides[i]
-        set_typedef_value(p, id, prev)
-        set_typedef_scope_level(p, id, prev_scope)
-        dec_typedef_count(p, id)
-      }
+  if p.typedef_overrides.pop() is Some(overrides) {
+    let mut i = overrides.length()
+    while i > 0 {
+      i = i - 1
+      let (id, prev, prev_scope) = overrides[i]
+      set_typedef_value(p, id, prev)
+      set_typedef_scope_level(p, id, prev_scope)
+      dec_typedef_count(p, id)
     }
   }
   p.typedef_scope_stack.pop() |> ignore
