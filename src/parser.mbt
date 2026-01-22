@@ -1714,8 +1714,17 @@ fn is_paren_pointer_declarator(p : Parser) -> Bool {
     match peek_kind(p, i) {
       Eof => return false
       LParen => depth = depth + 1
-      RParen => if depth == 0 { return false } else { depth = depth - 1 }
-      Star => if depth == 0 { return true }
+      RParen => {
+        if depth == 0 {
+          return false
+        }
+        depth = depth - 1
+      }
+      Star => {
+        if depth == 0 {
+          return true
+        }
+      }
       _ => ()
     }
     i = i + 1
