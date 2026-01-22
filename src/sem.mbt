@@ -4708,13 +4708,10 @@ fn find_field(
             field_list,
             is_union=false,
           )
-          match nested {
-            None => ()
-            Some(list) =>
-              match find_field(ctx, list, name, id) {
-                Some(found) => return Some(found)
-                None => ()
-              }
+          if nested is Some(list) {
+            if find_field(ctx, list, name, id) is Some(found) {
+              return Some(found)
+            }
           }
         }
         CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
@@ -4725,13 +4722,10 @@ fn find_field(
             field_list,
             is_union=true,
           )
-          match nested {
-            None => ()
-            Some(list) =>
-              match find_field(ctx, list, name, id) {
-                Some(found) => return Some(found)
-                None => ()
-              }
+          if nested is Some(list) {
+            if find_field(ctx, list, name, id) is Some(found) {
+              return Some(found)
+            }
           }
         }
         _ => ()
@@ -4762,13 +4756,10 @@ fn find_field_index(
             field_list,
             is_union=false,
           )
-          match nested {
-            None => ()
-            Some(list) =>
-              match find_field(ctx, list, name, id) {
-                Some(_) => return Some(i)
-                None => ()
-              }
+          if nested is Some(list) {
+            if find_field(ctx, list, name, id) is Some(_) {
+              return Some(i)
+            }
           }
         }
         CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
@@ -4779,13 +4770,10 @@ fn find_field_index(
             field_list,
             is_union=true,
           )
-          match nested {
-            None => ()
-            Some(list) =>
-              match find_field(ctx, list, name, id) {
-                Some(_) => return Some(i)
-                None => ()
-              }
+          if nested is Some(list) {
+            if find_field(ctx, list, name, id) is Some(_) {
+              return Some(i)
+            }
           }
         }
         _ => ()
@@ -4823,19 +4811,17 @@ fn collect_field_index_cache_from_field(
         is_union=false,
         loc,
       )
-      match nested {
-        None => ()
-        Some(def) =>
-          for nested_field in def.fields {
-            collect_field_index_cache_from_field(
-              ctx,
-              nested_field,
-              top_index,
-              loc,
-              cache_by_name,
-              cache_by_id,
-            )
-          }
+      if nested is Some(def) {
+        for nested_field in def.fields {
+          collect_field_index_cache_from_field(
+            ctx,
+            nested_field,
+            top_index,
+            loc,
+            cache_by_name,
+            cache_by_id,
+          )
+        }
       }
     }
     CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
@@ -4847,19 +4833,17 @@ fn collect_field_index_cache_from_field(
         is_union=true,
         loc,
       )
-      match nested {
-        None => ()
-        Some(def) =>
-          for nested_field in def.fields {
-            collect_field_index_cache_from_field(
-              ctx,
-              nested_field,
-              top_index,
-              loc,
-              cache_by_name,
-              cache_by_id,
-            )
-          }
+      if nested is Some(def) {
+        for nested_field in def.fields {
+          collect_field_index_cache_from_field(
+            ctx,
+            nested_field,
+            top_index,
+            loc,
+            cache_by_name,
+            cache_by_id,
+          )
+        }
       }
     }
     _ => ()
