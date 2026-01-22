@@ -23,7 +23,7 @@ no-daemon: false
 # no-auto-import: false
 
 # Enable JSON output by default
-json: true
+json: false
 
 # Default actor for audit trails (overridden by BD_ACTOR or --actor)
 # actor: ""
