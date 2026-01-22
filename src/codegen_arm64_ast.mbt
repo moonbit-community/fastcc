@@ -159,31 +159,25 @@ fn cg_push_scope(alloc : LocalAlloc) -> Unit {
 fn cg_pop_scope(alloc : LocalAlloc) -> Unit {
   alloc.scopes.pop() |> ignore
   alloc.vla_scopes.pop() |> ignore
-  match alloc.local_overrides.pop() {
-    None => ()
-    Some(overrides) => {
-      let mut i = overrides.length()
-      while i > 0 {
-        i = i - 1
-        let (name, prev) = overrides[i]
-        match prev {
-          Some(slot) => alloc.local_values.set(name, slot)
-          None => alloc.local_values.remove(name)
-        }
+  if alloc.local_overrides.pop() is Some(overrides) {
+    let mut i = overrides.length()
+    while i > 0 {
+      i = i - 1
+      let (name, prev) = overrides[i]
+      match prev {
+        Some(slot) => alloc.local_values.set(name, slot)
+        None => alloc.local_values.remove(name)
       }
     }
   }
-  match alloc.local_id_overrides.pop() {
-    None => ()
-    Some(overrides) => {
-      let mut i = overrides.length()
-      while i > 0 {
-        i = i - 1
-        let (id, prev) = overrides[i]
-        match prev {
-          Some(slot) => alloc.local_id_values.set(id, slot)
-          None => alloc.local_id_values.remove(id)
-        }
+  if alloc.local_id_overrides.pop() is Some(overrides) {
+    let mut i = overrides.length()
+    while i > 0 {
+      i = i - 1
+      let (id, prev) = overrides[i]
+      match prev {
+        Some(slot) => alloc.local_id_values.set(id, slot)
+        None => alloc.local_id_values.remove(id)
       }
     }
   }
@@ -865,16 +859,14 @@ fn gen_vla_alloc_to_local_slot(
     bag,
   )
 
-  match size_slot_offset {
-    None => ()
-    Some(off) =>
-      arm64_strx(
-        emitter,
-        3,
-        bytes_reg.reinterpret_as_uint(),
-        (29 : UInt),
-        off.to_int64().reinterpret_as_uint64(),
-      )
+  if size_slot_offset is Some(off) {
+    arm64_strx(
+      emitter,
+      3,
+      bytes_reg.reinterpret_as_uint(),
+      (29 : UInt),
+      off.to_int64().reinterpret_as_uint64(),
+    )
   }
 
   // Round allocation up to 16 to preserve AArch64 stack alignment.
@@ -947,12 +939,9 @@ fn infer_array_size_from_init_items(items : Array[InitItem]) -> Int {
     if item.designators.length() > 0 {
       match item.designators[0] {
         InitDesignator::Index(expr~, ..) =>
-          match const_i64_from_expr(expr) {
-            None => ()
-            Some(v) => {
-              idx = v.to_int()
-              has_index = true
-            }
+          if const_i64_from_expr(expr) is Some(v) {
+            idx = v.to_int()
+            has_index = true
           }
         InitDesignator::IndexRange(start~, end~, ..) =>
           match (const_i64_from_expr(start), const_i64_from_expr(end)) {
@@ -1249,29 +1238,27 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt, walk_exprs : Bool) -> Unit {
             }
           _ => ()
         }
-        match alloc_local(alloc, d.name, d.id, decl_ty, d.loc) {
-          None => ()
-          Some(slot) =>
-            match strip_top_qualifiers(slot.ty) {
-              CType::Array(size=None, size_expr=Some(_), ..) => {
-                let size_off = alloc_hidden_slot(alloc, 8, 8)
-                let updated = {
-                  offset: slot.offset,
-                  ty: slot.ty,
-                  vla_size_offset: Some(size_off),
-                  byref: slot.byref,
-                  type_size: slot.type_size,
-                  type_align: slot.type_align,
-                }
-                if d.id > 0 {
-                  let scope_idx = alloc.scopes.length() - 1
-                  alloc.scopes[scope_idx].set(d.id, updated)
-                }
-                update_local_slot(alloc, d.name, d.id, updated)
-                vla_record_decl(alloc, slot.offset) |> ignore
+        if alloc_local(alloc, d.name, d.id, decl_ty, d.loc) is Some(slot) {
+          match strip_top_qualifiers(slot.ty) {
+            CType::Array(size=None, size_expr=Some(_), ..) => {
+              let size_off = alloc_hidden_slot(alloc, 8, 8)
+              let updated = {
+                offset: slot.offset,
+                ty: slot.ty,
+                vla_size_offset: Some(size_off),
+                byref: slot.byref,
+                type_size: slot.type_size,
+                type_align: slot.type_align,
               }
-              _ => ()
+              if d.id > 0 {
+                let scope_idx = alloc.scopes.length() - 1
+                alloc.scopes[scope_idx].set(d.id, updated)
+              }
+              update_local_slot(alloc, d.name, d.id, updated)
+              vla_record_decl(alloc, slot.offset) |> ignore
             }
+            _ => ()
+          }
         }
         if d.init is Some(init) {
           layout_initializer(alloc, init, walk_exprs)
@@ -1367,22 +1354,19 @@ fn reserve_compound_literal_slot(
   node_id : Int,
 ) -> Unit {
   let key = compound_literal_key(node_id)
-  match alloc.compound_literal_slots.get(key) {
-    Some(_) => return
-    None => ()
+  if alloc.compound_literal_slots.get(key) is Some(_) {
+    return
   }
   let resolved = compound_literal_type(alloc.sem, ty, init, loc, node_id)
   let size_align = match alloc.sem.compound_literal_sizes.get(key) {
     Some(value) => Some(value)
     None => type_size_align_or_error(alloc.sem, resolved, loc)
   }
-  match size_align {
-    None => ()
-    Some((size, align)) =>
-      if size > 0 {
-        let offset = alloc_hidden_slot(alloc, size, align)
-        alloc.compound_literal_slots.set(key, offset)
-      }
+  if size_align is Some((size, align)) {
+    if size > 0 {
+      let offset = alloc_hidden_slot(alloc, size, align)
+      alloc.compound_literal_slots.set(key, offset)
+    }
   }
 }
 
