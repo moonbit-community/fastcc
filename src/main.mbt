@@ -509,7 +509,13 @@ fn lex_cli_macro_tokens(pp : Preprocessor, value : String) -> Array[Token] {
     return []
   }
   let file = add_file(pp.map, "<cmdline>", value)
-  let lex = new_lexer(file, pp.diags, pp.interner, pp.keyword_ids)
+  let lex = new_lexer(
+    file,
+    pp.diags,
+    pp.interner,
+    pp.keyword_ids,
+    pp.lexeme_pool,
+  )
   let tokens : Array[Token] = []
   while true {
     let tok = next_token(lex)
@@ -629,6 +635,7 @@ fn compile_to_object_path(
       let total_start = if bench_enabled { bench_now_ns() } else { 0UL }
       let parse_start = total_start
       let unit = parse_translation_unit(pp)
+      finalize_preprocessor(pp)
       if bench_enabled {
         let parse_end = bench_now_ns()
         parse_ns = bench_delta_ns(parse_start, parse_end)
@@ -771,7 +778,7 @@ fn main {
                 apply_cli_macros(pp, cfg.macro_actions)
                 let toks = dump_tokens(pp, 32)
                 for t in toks {
-                  println(t.lexeme)
+                  println(token_text_with(pp.interner, pp.lexeme_pool, t))
                 }
                 if has_errors(bag) {
                   any_errors = true

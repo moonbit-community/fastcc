@@ -3,7 +3,7 @@ struct Parser {
   pp : Preprocessor
   mut current : Token
   mut lookahead : Token
-  mut buffer : Array[Token]
+  buffer : Array[Token]
   mut buffer_pos : Int
   diags : DiagBag
   typedef_counts : Array[Int]
@@ -1016,17 +1016,17 @@ fn parse_attr_string(p : Parser, loc : SrcLoc) -> String? {
     return None
   }
   let tok = advance_token(p)
-  let (part, _len) = decode_string_literal(p, tok.lexeme, tok.loc)
+  let (part, _len) = decode_string_literal(p, token_lexeme(p, tok), tok.loc)
   if peek_token(p).kind != StrLit {
     return Some(part)
   }
-  let sb = StringBuilder::new(size_hint=tok.lexeme.length())
+  let sb = StringBuilder::new(size_hint=token_lexeme_len(p, tok))
   sb.write_string(part)
   while peek_token(p).kind == StrLit {
     let next_tok = advance_token(p)
     let (next_part, _next_len) = decode_string_literal(
       p,
-      next_tok.lexeme,
+      token_lexeme(p, next_tok),
       next_tok.loc,
     )
     sb.write_string(next_part)
@@ -1065,7 +1065,7 @@ fn parse_asm_operands(p : Parser) -> Array[AsmOperand] {
     let name = if match_token(p, LBracket) is Some(_) {
       let id = match expect_ident(p, "expected asm operand name") {
         None => ""
-        Some(tok) => tok.lexeme
+        Some(tok) => token_lexeme(p, tok)
       }
       expect(p, RBracket, "expected ']' after asm operand name") |> ignore
       if id == "" {
@@ -1121,7 +1121,7 @@ fn parse_asm_labels(p : Parser) -> Array[String] {
   while true {
     let name = match expect_ident(p, "expected label identifier") {
       None => ""
-      Some(tok) => tok.lexeme
+      Some(tok) => token_lexeme(p, tok)
     }
     if name != "" {
       labels.push(name)
@@ -1225,7 +1225,7 @@ fn parse_attribute_clause(p : Parser, loc : SrcLoc) -> Attributes {
       break
     }
     ignore(advance_token(p))
-    let name = normalize_attr_name(name_tok.lexeme)
+    let name = normalize_attr_name(token_lexeme(p, name_tok))
     let mut has_args = false
     if match_token(p, LParen) is Some(_) {
       has_args = true
@@ -1329,7 +1329,8 @@ fn parse_attribute_clause(p : Parser, loc : SrcLoc) -> Attributes {
           match expect_ident(p, "expected cleanup function name") {
             None => ()
             Some(id) =>
-              attrs = merge_attrs(attrs, attrs_with(cleanup=Some(id.lexeme)))
+              attrs =
+                merge_attrs(attrs, attrs_with(cleanup=Some(token_lexeme(p, id))))
           }
           expect(p, RParen, "expected ')' after cleanup") |> ignore
         }
@@ -1372,7 +1373,10 @@ fn parse_attribute_clause(p : Parser, loc : SrcLoc) -> Attributes {
         } else {
           let raw = if peek_token(p).kind == IntLit {
             let tok = advance_token(p)
-            let parsed = try @strconv.parse_int(tok.lexeme, base=0) catch {
+            let parsed = try @strconv.parse_int(
+              token_lexeme(p, tok),
+              base=0,
+            ) catch {
               _ => 0
             } noraise {
               v => v
@@ -1539,7 +1543,7 @@ fn parse_declarator(p : Parser, base : CType) -> Declarator? {
           attrs = merge_attrs(attrs, parse_attributes(p))
         }
         Some({
-          name: tok.lexeme,
+          name: token_lexeme(p, tok),
           id: tok.id,
           ty,
           params,
@@ -1598,7 +1602,7 @@ fn parse_field_declarator(
   } else {
     let (name, id, loc) = if peek_token(p).kind == Ident {
       let name_tok = advance_token(p)
-      (name_tok.lexeme, name_tok.id, name_tok.loc)
+      (token_lexeme(p, name_tok), name_tok.id, name_tok.loc)
     } else {
       ("", 0, fallback_loc)
     }
@@ -1645,7 +1649,7 @@ fn parse_designator_list(p : Parser) -> (Array[InitDesignator], SrcLoc) {
       start_loc = dot_tok.loc
       let (name, id) = match expect_ident(p, "expected field name") {
         None => ("", 0)
-        Some(tok) => (tok.lexeme, tok.id)
+        Some(tok) => (token_lexeme(p, tok), tok.id)
       }
       designators.push(InitDesignator::Field(name~, id~, loc=dot_tok.loc))
       continue
@@ -1674,7 +1678,11 @@ fn parse_designator_list(p : Parser) -> (Array[InitDesignator], SrcLoc) {
       start_loc = name_tok.loc
       expect(p, Colon, "expected ':' after designator") |> ignore
       designators.push(
-        InitDesignator::Field(name=name_tok.lexeme, id=name_tok.id, loc=name_tok.loc),
+        InitDesignator::Field(
+          name=token_lexeme(p, name_tok),
+          id=name_tok.id,
+          loc=name_tok.loc,
+        ),
       )
       continue
     }
@@ -1835,7 +1843,7 @@ fn parse_paren_pointer_parts(
     }
   } else if peek_token(p).kind == Ident {
     let tok = advance_token(p)
-    name = tok.lexeme
+    name = token_lexeme(p, tok)
     id = tok.id
     loc = tok.loc
   } else if allow_missing_name {
@@ -1998,6 +2006,24 @@ fn parse_array_size(p : Parser) -> (Int?, Expr?) {
     ignore(advance_token(p))
   }
   let loc = peek_token(p).loc
+  if peek_token(p).kind == IntLit && peek_kind(p, 1) == RBracket {
+    let tok = advance_token(p)
+    let text = token_lexeme(p, tok)
+    match parse_int64_literal(text) {
+      Some(v) =>
+        if v < 0 {
+          add_parse_error(p, loc, "invalid array size")
+          let expr = Expr::IntLit(value=text, node_id=new_expr_id(p), loc=tok.loc)
+          return (None, Some(expr))
+        } else {
+          return (Some(v.to_int()), None)
+        }
+      None => {
+        let expr = Expr::IntLit(value=text, node_id=new_expr_id(p), loc=tok.loc)
+        return (None, Some(expr))
+      }
+    }
+  }
   let expr = parse_expr_cond(p)
   let size = match const_i64_from_expr(expr) {
     None => None
@@ -2028,7 +2054,7 @@ fn parse_struct_type(p : Parser, is_union~ : Bool) -> (CType, SrcLoc)? {
   let mut id = 0
   if peek_token(p).kind == Ident {
     let tok = advance_token(p)
-    name = tok.lexeme
+    name = token_lexeme(p, tok)
     id = tok.id
   } else {
     ()
@@ -2156,7 +2182,7 @@ fn parse_enum_type(p : Parser) -> (CType, SrcLoc)? {
   let mut id = 0
   if peek_token(p).kind == Ident {
     let tok = advance_token(p)
-    name = tok.lexeme
+    name = token_lexeme(p, tok)
     id = tok.id
   } else {
     ()
@@ -2194,7 +2220,12 @@ fn parse_enum_items(p : Parser) -> Array[EnumItem] {
         } else {
           None
         }
-        items.push({ name: tok.lexeme, id: tok.id, value, loc: tok.loc })
+        items.push({
+          name: token_lexeme(p, tok),
+          id: tok.id,
+          value,
+          loc: tok.loc,
+        })
       }
     }
     if match_token(p, Comma) is Some(_) {
@@ -2235,7 +2266,7 @@ fn parse_param_list(p : Parser) -> (Array[Param], Bool, Bool) {
         None => break
         Some(tok) =>
           params.push({
-            name: tok.lexeme,
+            name: token_lexeme(p, tok),
             id: tok.id,
             ty: CType::Int(kind=CIntKind::Int, unsigned=false),
             loc: tok.loc,
@@ -2367,7 +2398,7 @@ fn parse_param_declarator(
     let call_conv = normalize_call_conv(attrs.call_conv)
     let adjusted_ty = apply_call_conv_to_type(ty, call_conv)
     return Some({
-      name: name_tok.lexeme,
+      name: token_lexeme(p, name_tok),
       id: name_tok.id,
       ty: adjusted_ty,
       loc: name_tok.loc,
@@ -2476,7 +2507,7 @@ fn parse_stmt(p : Parser) -> Stmt {
       } else {
         let name = match expect_ident(p, "expected label after goto") {
           None => ""
-          Some(tok) => tok.lexeme
+          Some(tok) => token_lexeme(p, tok)
         }
         expect(p, Semicolon, "expected ';' after goto") |> ignore
         return Stmt::Goto(name~, loc=goto_tok.loc)
@@ -2502,7 +2533,11 @@ fn parse_stmt(p : Parser) -> Stmt {
     expect(p, Colon, "expected ':' after label") |> ignore
     ignore(parse_attributes(p))
     let body = parse_stmt(p)
-    return Stmt::Label(name=label_tok.lexeme, body~, loc=label_tok.loc)
+    return Stmt::Label(
+      name=token_lexeme(p, label_tok),
+      body~,
+      loc=label_tok.loc,
+    )
   }
   if is_type_start(p, tok) {
     ensure_typedef_scope(p)
@@ -3085,7 +3120,7 @@ fn parse_expr_unary(p : Parser) -> Expr {
         None => Expr::IntLit(value="0", node_id=new_expr_id(p), loc=tok.loc)
         Some(label_tok) =>
           Expr::LabelAddr(
-            name=label_tok.lexeme,
+            name=token_lexeme(p, label_tok),
             id=label_tok.id,
             node_id=new_expr_id(p),
             loc=tok.loc,
@@ -3166,7 +3201,7 @@ fn parse_postfix_tail(p : Parser, base : Expr) -> Expr {
         let tok = advance_token(p)
         let (name, id) = match expect_ident(p, "expected field name") {
           None => ("", 0)
-          Some(tok) => (tok.lexeme, tok.id)
+          Some(tok) => (token_lexeme(p, tok), tok.id)
         }
         expr =
           Expr::Member(
@@ -3183,7 +3218,7 @@ fn parse_postfix_tail(p : Parser, base : Expr) -> Expr {
         let tok = advance_token(p)
         let (name, id) = match expect_ident(p, "expected field name") {
           None => ("", 0)
-          Some(tok) => (tok.lexeme, tok.id)
+          Some(tok) => (token_lexeme(p, tok), tok.id)
         }
         expr =
           Expr::Member(
@@ -3254,9 +3289,17 @@ fn parse_expr_primary(p : Parser) -> Expr {
   let tok = advance_token(p)
   match tok.kind {
     IntLit =>
-      Expr::IntLit(value=tok.lexeme, node_id=new_expr_id(p), loc=tok.loc)
+      Expr::IntLit(
+        value=token_lexeme(p, tok),
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     FloatLit =>
-      Expr::FloatLit(value=tok.lexeme, node_id=new_expr_id(p), loc=tok.loc)
+      Expr::FloatLit(
+        value=token_lexeme(p, tok),
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     CharLit =>
       Expr::CharLit(
         value=parse_char_literal_value(p, tok),
@@ -3314,7 +3357,7 @@ fn parse_expr_primary(p : Parser) -> Expr {
             let path : Array[String] = []
             match expect_ident(p, "expected member name in __builtin_offsetof") {
               None => ()
-              Some(id) => path.push(id.lexeme)
+              Some(id) => path.push(token_lexeme(p, id))
             }
             while true {
               match p.current.kind {
@@ -3322,7 +3365,7 @@ fn parse_expr_primary(p : Parser) -> Expr {
                   advance_token(p) |> ignore
                   match expect_ident(p, "expected member name in __builtin_offsetof") {
                     None => break
-                    Some(id) => path.push(id.lexeme)
+                    Some(id) => path.push(token_lexeme(p, id))
                   }
                 }
                 _ => break
@@ -3350,7 +3393,7 @@ fn parse_expr_primary(p : Parser) -> Expr {
             Expr::BuiltinVaArg(list~, ty~, node_id=new_expr_id(p), loc=tok.loc)
           } else {
             Expr::Ident(
-              name=tok.lexeme,
+              name=token_lexeme(p, tok),
               id=tok.id,
               node_id=new_expr_id(p),
               loc=tok.loc,
@@ -3359,7 +3402,7 @@ fn parse_expr_primary(p : Parser) -> Expr {
         }
         _ =>
           Expr::Ident(
-            name=tok.lexeme,
+            name=token_lexeme(p, tok),
             id=tok.id,
             node_id=new_expr_id(p),
             loc=tok.loc,
@@ -3393,7 +3436,11 @@ fn parse_expr_primary(p : Parser) -> Expr {
 ///|
 ///|
 fn parse_string_literal_expr(p : Parser, first : Token) -> Expr {
-  let (value, len) = decode_string_literal(p, first.lexeme, first.loc)
+  let (value, len) = decode_string_literal(
+    p,
+    token_lexeme(p, first),
+    first.loc,
+  )
   if peek_token(p).kind != StrLit {
     return Expr::StringLit(
       value=value,
@@ -3402,12 +3449,13 @@ fn parse_string_literal_expr(p : Parser, first : Token) -> Expr {
       loc=first.loc,
     )
   }
-  let sb = StringBuilder::new(size_hint=first.lexeme.length())
+  let sb = StringBuilder::new(size_hint=token_lexeme_len(p, first))
   let mut byte_len = len
   sb.write_string(value)
   while peek_token(p).kind == StrLit {
     let tok = advance_token(p)
-    let (part, part_len) = decode_string_literal(p, tok.lexeme, tok.loc)
+    let (part, part_len) =
+      decode_string_literal(p, token_lexeme(p, tok), tok.loc)
     sb.write_string(part)
     byte_len = byte_len + part_len
   }
@@ -3459,7 +3507,7 @@ fn decode_string_literal(
 
 ///|
 fn parse_char_literal_value(p : Parser, tok : Token) -> Int {
-  let lexeme = tok.lexeme
+  let lexeme = token_lexeme(p, tok)
   if lexeme.length() < 3 {
     add_parse_error(p, tok.loc, "invalid character literal")
     return 0
@@ -3922,6 +3970,16 @@ fn add_parse_error(p : Parser, loc : SrcLoc, message : String) -> Unit {
 }
 
 ///|
+fn token_lexeme(p : Parser, tok : Token) -> String {
+  token_text_with(p.pp.interner, p.pp.lexeme_pool, tok)
+}
+
+///|
+fn token_lexeme_len(p : Parser, tok : Token) -> Int {
+  token_text_len_with(p.pp.interner, p.pp.lexeme_pool, tok)
+}
+
+///|
 fn peek_token(p : Parser) -> Token {
   p.current
 }
@@ -3954,7 +4012,7 @@ fn advance_token(p : Parser) -> Token {
     p.lookahead = p.buffer[p.buffer_pos]
     p.buffer_pos = p.buffer_pos + 1
     if p.buffer_pos == p.buffer.length() {
-      p.buffer = []
+      p.buffer.clear()
       p.buffer_pos = 0
     }
   } else {

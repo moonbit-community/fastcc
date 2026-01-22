@@ -99,3 +99,11 @@ fn StringInterner::intern_view(self : StringInterner, view : StringView) -> Stri
 }
 
 ///|
+fn StringInterner::get(self : StringInterner, id : Int) -> String {
+  if id <= 0 || id > self.strings.length() {
+    return ""
+  }
+  self.strings[id - 1]
+}
+
+///|

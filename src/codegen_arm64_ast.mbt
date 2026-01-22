@@ -572,10 +572,6 @@ fn alloc_local(
   } else {
     update_local_slot(alloc, name, id, slot)
   }
-  let sem_idx = alloc.sem.locals.length() - 1
-  if id > 0 {
-    alloc.sem.locals[sem_idx].set(id, ty)
-  }
   record_local_binding(alloc.sem, id, ty)
   Some(slot)
 }
@@ -611,25 +607,19 @@ fn alloc_local_byref(
   } else {
     update_local_slot(alloc, name, id, slot)
   }
-  let sem_idx = alloc.sem.locals.length() - 1
-  if id > 0 {
-    alloc.sem.locals[sem_idx].set(id, ty)
-  }
   record_local_binding(alloc.sem, id, ty)
   slot
 }
 
 ///|
 fn record_static_local_binding(alloc : LocalAlloc, decl : VarDecl) -> Unit {
-  if decl.id <= 0 || alloc.sem.locals.length() == 0 {
+  if decl.id <= 0 || current_local_scope_id(alloc.sem) == 0 {
     return
   }
   let ty = match alloc.static_locals.get(decl.id) {
     None => decl.ty
     Some(info) => info.ty
   }
-  let idx = alloc.sem.locals.length() - 1
-  alloc.sem.locals[idx].set(decl.id, ty)
   record_local_binding(alloc.sem, decl.id, ty)
 }
 
@@ -5059,7 +5049,7 @@ fn patch_adr(
   bag : DiagBag,
 ) -> Unit {
   let idx = at >> 2
-  if idx < 0 || idx >= emitter.code.length() {
+  if idx < 0 || idx >= emitter.code_len {
     add_error(bag, loc, "codegen: invalid label address patch")
     return
   }
@@ -12973,6 +12963,10 @@ struct FramePlan {
   agg_temp_align : Int
   agg_temp_offset : Int?
   compound_literal_slots : FastMap[Int, Int]
+  ret_loc : Int
+  arg_locs : Array[Int]
+  stack_size : Int
+  param_tys : Array[CType]
 }
 
 ///|
@@ -12984,13 +12978,17 @@ fn compute_frame_plan(
 ) -> FramePlan {
   let alloc = new_local_alloc(sem, func.return_type, func.name, static_locals)
   cg_push_scope(alloc)
-  reserve_sret_slot(alloc, func.loc, bag)
   let param_tys : Array[CType] = Array::new(capacity=func.params.length())
   for p in func.params {
     param_tys.push(adjust_param_type_for_local(p.ty))
   }
   let variadic_index = if func.varargs { param_tys.length() } else { 0 }
   let layout = arm64_pcs(sem, variadic_index, func.return_type, param_tys, func.loc, bag)
+  let ret_loc = layout.ret_loc
+  let arg_locs = layout.arg_locs
+  let stack_size = layout.stack_size
+  alloc.ret_loc = Some(layout.ret_loc)
+  reserve_sret_slot(alloc, func.loc, bag)
   let mut i = 0
   while i < func.params.length() {
     let p = func.params[i]
@@ -13057,7 +13055,14 @@ fn compute_frame_plan(
   } else {
     sem.func_has_stmt_expr.get(func.name).unwrap_or(false)
   }
-  layout_stmt(alloc, func.body, walk_exprs)
+  let has_local_decls = if func_id > 0 {
+    get_opt_by_id(sem.func_has_local_decl_by_id, func_id).unwrap_or(false)
+  } else {
+    sem.func_has_local_decl.get(func.name).unwrap_or(false)
+  }
+  if has_local_decls {
+    layout_stmt(alloc, func.body, walk_exprs)
+  }
   let frame_size = align_up(alloc.used_bytes, 16)
   cg_pop_scope(alloc)
   {
@@ -13067,6 +13072,10 @@ fn compute_frame_plan(
     agg_temp_align,
     agg_temp_offset,
     compound_literal_slots,
+    ret_loc,
+    arg_locs,
+    stack_size,
+    param_tys,
   }
 }
 
@@ -13171,6 +13180,8 @@ fn gen_func_def(
       plan.compound_literal_slots,
     )
   cg_push_scope(alloc)
+  let param_tys = plan.param_tys
+  alloc.ret_loc = Some(plan.ret_loc)
   reserve_sret_slot(alloc, func.loc, bag)
   emit_prologue(emitter, frame_size)
 
@@ -13186,19 +13197,12 @@ fn gen_func_def(
         off.to_int64().reinterpret_as_uint64(),
       )
   }
-
-  let param_tys : Array[CType] = Array::new(capacity=func.params.length())
-  for p in func.params {
-    param_tys.push(adjust_param_type_for_local(p.ty))
-  }
-  let variadic_index = if func.varargs { param_tys.length() } else { 0 }
-  let layout = arm64_pcs(alloc.sem, variadic_index, alloc.ret_ty, param_tys, func.loc, bag)
   if func.varargs {
-    alloc.varargs_stack_size = layout.stack_size
+    alloc.varargs_stack_size = plan.stack_size
   } else {
     alloc.varargs_stack_size = 0
   }
-  let arg_locs = layout.arg_locs
+  let arg_locs = plan.arg_locs
 
   let mut i = 0
   while i < func.params.length() {
@@ -14522,15 +14526,23 @@ fn codegen_arm64_object_bytes_with_sem(
   let static_local_init_maps : FastMap[String, FastMap[Int, StaticLocalInfo]] = fast_map_new()
   let static_local_decls : Array[VarDecl] = Array::new(capacity=decl_count)
   for func in func_defs {
-    let func_locals : FastMap[Int, StaticLocalInfo] = fast_map_new()
-    collect_static_locals_in_stmt(
-      func.name,
-      func.body,
-      func_locals,
-      static_local_decls,
-      static_local_init_maps,
-    )
-    static_locals_by_func.set(func.name, func_locals)
+    let func_id = func.id
+    let has_static_locals = if func_id > 0 {
+      get_opt_by_id(sem.func_has_static_local_by_id, func_id).unwrap_or(false)
+    } else {
+      sem.func_has_static_local.get(func.name).unwrap_or(false)
+    }
+    if has_static_locals {
+      let func_locals : FastMap[Int, StaticLocalInfo] = fast_map_new()
+      collect_static_locals_in_stmt(
+        func.name,
+        func.body,
+        func_locals,
+        static_local_decls,
+        static_local_init_maps,
+      )
+      static_locals_by_func.set(func.name, func_locals)
+    }
   }
   for decl in static_local_decls {
     var_decls.push(decl)

@@ -38,7 +38,7 @@ test "arm64 movimm emits movk sequence" {
   let emitter = new_arm64_emitter()
   let v0 : UInt64 = 0x12345678
   arm64_movimm(emitter, 0, v0)
-  assert_eq(emitter.code.length(), 2)
+  assert_eq(emitter.code_len, 2)
   assert_eq(emitter.code[0], (0xd28acf00 : UInt))
   assert_eq(emitter.code[1], (0xf2a24680 : UInt))
 }
@@ -48,7 +48,7 @@ test "arm64 movimm uses movn when beneficial" {
   let emitter = new_arm64_emitter()
   let v0 : UInt64 = 0xffff1234ffff5678
   arm64_movimm(emitter, 0, v0)
-  assert_eq(emitter.code.length(), 4)
+  assert_eq(emitter.code_len, 4)
   assert_eq(emitter.code[0], (0x929530e0 : UInt))
   assert_eq(emitter.code[1], (0xf2bfffe0 : UInt))
   assert_eq(emitter.code[2], (0xf2c24680 : UInt))
@@ -58,9 +58,9 @@ test "arm64 movimm uses movn when beneficial" {
 ///|
 test "arm64 gsym_addr patches branches" {
   let emitter = new_arm64_emitter()
-  emitter.code.push(0)
-  emitter.code.push((8 : UInt))
-  emitter.code.push(0)
+  emit32(emitter, 0)
+  emit32(emitter, (8 : UInt))
+  emit32(emitter, 0)
   gsym_addr(emitter, 4, 12) catch {
     err => fail("unexpected gsym_addr error: \{err.to_string()}")
   }
@@ -136,7 +136,7 @@ test "arm64 gen opic add immediate" {
   let emitter = new_arm64_emitter()
   let ok = arm64_gen_opic(emitter, TOK_ADD, 0, true, 5, 1, 2)
   assert_true(ok)
-  assert_eq(emitter.code.length(), 1)
+  assert_eq(emitter.code_len, 1)
   assert_eq(emitter.code[0], (0x11001441 : UInt))
 }
 
@@ -145,7 +145,7 @@ test "arm64 sym emits relocations" {
   let emitter = new_arm64_emitter()
   let sym = { id: 7 }
   arm64_sym(emitter, 0, sym, 0)
-  assert_eq(emitter.code.length(), 2)
+  assert_eq(emitter.code_len, 2)
   assert_eq(emitter.code[0], (0x90000000 : UInt))
   assert_eq(emitter.code[1], (0xf9400000 : UInt))
   assert_eq(emitter.relocs.length(), 2)

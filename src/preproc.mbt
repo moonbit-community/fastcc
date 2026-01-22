@@ -46,6 +46,18 @@ struct PreprocBuiltinIds {
 }
 
 ///|
+struct HiddenNode {
+  id : Int
+  next : Int
+}
+
+///|
+struct HiddenPool {
+  nodes : Array[HiddenNode]
+  singleton_by_id : Array[Int]
+}
+
+///|
 struct Preprocessor {
   mut lexer : Lexer
   lexer_stack : Array[Lexer]
@@ -72,7 +84,8 @@ struct Preprocessor {
   time_literal : String
   interner : StringInterner
   keyword_ids : KeywordIds
-  hidden_singletons : FastMap[Int, HiddenList]
+  lexeme_pool : LexemePool
+  hidden_pool : HiddenPool
   builtin_ids : PreprocBuiltinIds
 }
 
@@ -80,14 +93,25 @@ struct Preprocessor {
 struct ExpandingGuard { restore_len : Int }
 
 ///|
+fn new_hidden_pool() -> HiddenPool {
+  { nodes: [], singleton_by_id: [] }
+}
+
+///|
+fn clear_hidden_pool(pool : HiddenPool) -> Unit {
+  pool.nodes.clear()
+  pool.singleton_by_id.clear()
+}
+
+///|
 fn make_builtin_token(
   kind : TokenKind,
-  lexeme : String,
   id? : Int = 0,
+  lexeme_id? : Int = 0,
 ) -> Token {
   {
     kind,
-    lexeme,
+    lexeme_id,
     id,
     loc: dummy_loc(0),
     line_start: false,
@@ -97,11 +121,21 @@ fn make_builtin_token(
 
 ///|
 fn make_builtin_word_token(pp : Preprocessor, word : String) -> Token {
-  let (lexeme, id) = pp.interner.intern_view_with_id(word[:])
+  let (_, id) = pp.interner.intern_view_with_id(word[:])
   match keyword_kind_from_id(id, pp.keyword_ids) {
-    Some(kind) => make_builtin_token(kind, lexeme, id=id)
-    None => make_builtin_token(Ident, lexeme, id=id)
+    Some(kind) => make_builtin_token(kind, id=id)
+    None => make_builtin_token(Ident, id=id)
   }
+}
+
+///|
+fn pp_token_lexeme(pp : Preprocessor, tok : Token) -> String {
+  token_text_with(pp.interner, pp.lexeme_pool, tok)
+}
+
+///|
+fn pp_token_lexeme_len(pp : Preprocessor, tok : Token) -> Int {
+  token_text_len_with(pp.interner, pp.lexeme_pool, tok)
 }
 
 ///|
@@ -133,7 +167,8 @@ fn define_words_macro(pp : Preprocessor, name : String, words : Array[String]) -
 
 ///|
 fn define_int_macro(pp : Preprocessor, name : String, value : Int) -> Unit {
-  define_macro(pp, name, [make_builtin_token(IntLit, value.to_string())])
+  let lexeme_id = lexeme_pool_intern(pp.lexeme_pool, value.to_string())
+  define_macro(pp, name, [make_builtin_token(IntLit, lexeme_id=lexeme_id)])
 }
 
 ///|
@@ -143,7 +178,8 @@ fn define_func_macro_zero(pp : Preprocessor, name : String) -> Unit {
     return
   }
   let param_id = macro_id_from_name(pp, "x")
-  let replacement = [make_builtin_token(IntLit, "0")]
+  let lexeme_id = lexeme_pool_intern(pp.lexeme_pool, "0")
+  let replacement = [make_builtin_token(IntLit, lexeme_id=lexeme_id)]
   set_macro(pp, id, {
     params: [param_id],
     is_variadic: true,
@@ -180,13 +216,22 @@ fn init_builtin_macros(pp : Preprocessor) -> Unit {
   define_int_macro(pp, "__TINYC__", 928)
 
   define_macro(pp, "__ORDER_LITTLE_ENDIAN__", [
-    make_builtin_token(IntLit, "1234"),
+    make_builtin_token(
+      IntLit,
+      lexeme_id=lexeme_pool_intern(pp.lexeme_pool, "1234"),
+    ),
   ])
   define_macro(pp, "__ORDER_BIG_ENDIAN__", [
-    make_builtin_token(IntLit, "4321"),
+    make_builtin_token(
+      IntLit,
+      lexeme_id=lexeme_pool_intern(pp.lexeme_pool, "4321"),
+    ),
   ])
   define_macro(pp, "__ORDER_PDP_ENDIAN__", [
-    make_builtin_token(IntLit, "3412"),
+    make_builtin_token(
+      IntLit,
+      lexeme_id=lexeme_pool_intern(pp.lexeme_pool, "3412"),
+    ),
   ])
   define_macro(pp, "__BYTE_ORDER__", [
     make_builtin_word_token(pp, "__ORDER_LITTLE_ENDIAN__"),
@@ -230,7 +275,10 @@ fn init_builtin_macros(pp : Preprocessor) -> Unit {
   define_int_macro(pp, "__STDC__", 1)
   define_int_macro(pp, "__STDC_HOSTED__", 1)
   define_macro(pp, "__STDC_VERSION__", [
-    make_builtin_token(IntLit, "201112"),
+    make_builtin_token(
+      IntLit,
+      lexeme_id=lexeme_pool_intern(pp.lexeme_pool, "201112"),
+    ),
   ])
 
   define_int_macro(pp, "__GNUC__", 4)
@@ -301,8 +349,9 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
   let (_, dir_error_id) = interner.intern_view_with_id("error"[:])
   let (_, dir_warning_id) = interner.intern_view_with_id("warning"[:])
   let (_, dir_pragma_id) = interner.intern_view_with_id("pragma"[:])
+  let lexeme_pool = new_lexeme_pool()
   let pp = {
-    lexer: new_lexer(file, diags, interner, keyword_ids),
+    lexer: new_lexer(file, diags, interner, keyword_ids, lexeme_pool),
     lexer_stack: [],
     held_stack: [],
     path_stack: [],
@@ -327,7 +376,8 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
     time_literal,
     interner,
     keyword_ids,
-    hidden_singletons: fast_map_new(),
+    lexeme_pool,
+    hidden_pool: new_hidden_pool(),
     builtin_ids: {
       line_macro: line_macro_id,
       file_macro: file_macro_id,
@@ -354,6 +404,39 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
   }
   init_builtin_macros(pp)
   pp
+}
+
+///|
+fn finalize_preprocessor(pp : Preprocessor) -> Unit {
+  let dummy_file = { id: pp.lexer.file_id, path: pp.current_path, text: "" }
+  pp.lexer = new_lexer(dummy_file, pp.diags, pp.interner, pp.keyword_ids, pp.lexeme_pool)
+  pp.lexer_stack.clear()
+  pp.held_stack.clear()
+  pp.path_stack.clear()
+  pp.dir_stack.clear()
+  pp.logical_path_stack.clear()
+  pp.line_adjust_stack.clear()
+  pp.include_paths.clear()
+  pp.macros.clear()
+  pp.pending.clear()
+  pp.cond_stack.clear()
+  pp.expanding.clear()
+  pp.expanding_guards.clear()
+  clear_hidden_pool(pp.hidden_pool)
+  let mut i = 0
+  while i < pp.map.files.length() {
+    let file = pp.map.files[i]
+    if file.text.length() > 0 {
+      pp.map.files[i] = { id: file.id, path: file.path, text: "" }
+    }
+    i = i + 1
+  }
+  pp.lexeme_pool.strings.clear()
+  pp.interner.buckets.clear()
+  pp.interner.next_by_id.clear()
+  pp.interner.strings.clear()
+  pp.interner.views.clear()
+  pp.interner.hashes.clear()
 }
 
 ///|
@@ -489,7 +572,7 @@ fn next_input_token(pp : Preprocessor) -> Token {
   } else {
     {
       kind: Eof,
-      lexeme: "",
+      lexeme_id: 0,
       id: 0,
       loc: lexer_loc(pp.lexer),
       line_start: false,
@@ -752,7 +835,10 @@ fn parse_include_path(
     return None
   }
   if args[0].kind == StrLit {
-    return Some({ path: strip_quotes(args[0].lexeme), is_angle: false })
+    return Some({
+      path: strip_quotes(pp_token_lexeme(pp, args[0])),
+      is_angle: false,
+    })
   }
   if args[0].kind == Lt {
     let sb = StringBuilder::new()
@@ -761,7 +847,7 @@ fn parse_include_path(
       if args[i].kind == Gt {
         return Some({ path: sb.to_string(), is_angle: true })
       }
-      sb.write_string(args[i].lexeme)
+      sb.write_string(pp_token_lexeme(pp, args[i]))
       i = i + 1
     }
     add_pp_error(pp, loc, "unterminated include path")
@@ -772,12 +858,15 @@ fn parse_include_path(
 }
 
 ///|
-fn parse_has_include_path(args : Array[Token]) -> IncludeSpec? {
+fn parse_has_include_path(pp : Preprocessor, args : Array[Token]) -> IncludeSpec? {
   if args.length() == 0 {
     return None
   }
   if args[0].kind == StrLit {
-    return Some({ path: strip_quotes(args[0].lexeme), is_angle: false })
+    return Some({
+      path: strip_quotes(pp_token_lexeme(pp, args[0])),
+      is_angle: false,
+    })
   }
   if args[0].kind == Lt {
     let sb = StringBuilder::new()
@@ -786,7 +875,7 @@ fn parse_has_include_path(args : Array[Token]) -> IncludeSpec? {
       if args[i].kind == Gt {
         return Some({ path: sb.to_string(), is_angle: true })
       }
-      sb.write_string(args[i].lexeme)
+      sb.write_string(pp_token_lexeme(pp, args[i]))
       i = i + 1
     }
   }
@@ -799,7 +888,7 @@ fn eval_has_include(
   args : Array[Token],
   include_next~ : Bool,
 ) -> Int {
-  match parse_has_include_path(args) {
+  match parse_has_include_path(pp, args) {
     None => 0
     Some(spec) =>
       match resolve_include_path(pp, spec.path, spec.is_angle, include_next~) {
@@ -866,7 +955,13 @@ fn include_file(
           pp.dir_stack.push(pp.current_dir)
           pp.logical_path_stack.push(pp.logical_path)
           pp.line_adjust_stack.push(pp.line_adjust)
-          pp.lexer = new_lexer(file, pp.diags, pp.interner, pp.keyword_ids)
+          pp.lexer = new_lexer(
+            file,
+            pp.diags,
+            pp.interner,
+            pp.keyword_ids,
+            pp.lexeme_pool,
+          )
           pp.current_path = resolved
           pp.current_dir = dir_name(resolved)
           pp.logical_path = resolved
@@ -885,7 +980,7 @@ fn parse_define_macro(
 ) -> Macro? {
   let is_function_like = args.length() > 0 &&
     args[0].kind == LParen &&
-    is_adjacent(name_tok, args[0])
+    is_adjacent(pp, name_tok, args[0])
   if is_function_like {
     match parse_macro_params(pp, args, loc) {
       None => None
@@ -1086,7 +1181,7 @@ fn normalize_macro_args(
         var_tokens.push(
           {
             kind: Comma,
-            lexeme: ",",
+            lexeme_id: 0,
             id: 0,
             loc,
             line_start: false,
@@ -1108,9 +1203,9 @@ fn normalize_macro_args(
 }
 
 ///|
-fn is_adjacent(left : Token, right : Token) -> Bool {
+fn is_adjacent(pp : Preprocessor, left : Token, right : Token) -> Bool {
   left.loc.file_id == right.loc.file_id &&
-  right.loc.offset == left.loc.offset + left.lexeme.length()
+  right.loc.offset == left.loc.offset + pp_token_lexeme_len(pp, left)
 }
 
 ///|
@@ -1134,16 +1229,16 @@ fn pop_expanding(pp : Preprocessor) -> Unit {
 }
 
 ///|
-fn stringize_tokens(tokens : Array[Token]) -> String {
+fn stringize_tokens(pp : Preprocessor, tokens : Array[Token]) -> String {
   if tokens.length() == 0 {
     return ""
   }
   if tokens.length() == 1 {
-    return tokens[0].lexeme
+    return pp_token_lexeme(pp, tokens[0])
   }
   let mut size_hint = 0
   for tok in tokens {
-    size_hint = size_hint + tok.lexeme.length() + 1
+    size_hint = size_hint + pp_token_lexeme_len(pp, tok) + 1
   }
   if size_hint > 0 {
     size_hint = size_hint - 1
@@ -1157,25 +1252,26 @@ fn stringize_tokens(tokens : Array[Token]) -> String {
     } else {
       match prev {
         Some(prev_tok) => {
-          if !is_adjacent(prev_tok, tok) {
+          if !is_adjacent(pp, prev_tok, tok) {
             sb.write_char(' ')
           }
         }
         None => sb.write_char(' ')
       }
     }
-    sb.write_string(tok.lexeme)
+    sb.write_string(pp_token_lexeme(pp, tok))
     prev = Some(tok)
   }
   sb.to_string()
 }
 
 ///|
-fn make_string_literal(text : String, loc : SrcLoc) -> Token {
+fn make_string_literal(pp : Preprocessor, text : String, loc : SrcLoc) -> Token {
   let escaped = escape_string(text)
+  let lexeme_id = lexeme_pool_intern(pp.lexeme_pool, "\"" + escaped + "\"")
   {
     kind: StrLit,
-    lexeme: "\"" + escaped + "\"",
+    lexeme_id,
     id: 0,
     loc,
     line_start: false,
@@ -1219,10 +1315,11 @@ fn logical_line(pp : Preprocessor, loc : SrcLoc) -> Int {
 }
 
 ///|
-fn make_int_literal_token(value : Int, loc : SrcLoc) -> Token {
+fn make_int_literal_token(pp : Preprocessor, value : Int, loc : SrcLoc) -> Token {
+  let lexeme_id = lexeme_pool_intern(pp.lexeme_pool, value.to_string())
   {
     kind: IntLit,
-    lexeme: value.to_string(),
+    lexeme_id,
     id: 0,
     loc,
     line_start: false,
@@ -1234,7 +1331,9 @@ fn make_int_literal_token(value : Int, loc : SrcLoc) -> Token {
 fn builtin_macro_tokens(pp : Preprocessor, tok : Token) -> Array[Token]? {
   let id = tok.id
   if id == pp.builtin_ids.line_macro {
-    return Some([make_int_literal_token(logical_line(pp, tok.loc), tok.loc)])
+    return Some([
+      make_int_literal_token(pp, logical_line(pp, tok.loc), tok.loc),
+    ])
   }
   if id == pp.builtin_ids.file_macro {
     let path = if pp.logical_path == "" {
@@ -1242,13 +1341,13 @@ fn builtin_macro_tokens(pp : Preprocessor, tok : Token) -> Array[Token]? {
     } else {
       pp.logical_path
     }
-    return Some([make_string_literal(path, tok.loc)])
+    return Some([make_string_literal(pp, path, tok.loc)])
   }
   if id == pp.builtin_ids.date_macro {
-    return Some([make_string_literal(pp.date_literal, tok.loc)])
+    return Some([make_string_literal(pp, pp.date_literal, tok.loc)])
   }
   if id == pp.builtin_ids.time_macro {
-    return Some([make_string_literal(pp.time_literal, tok.loc)])
+    return Some([make_string_literal(pp, pp.time_literal, tok.loc)])
   }
   None
 }
@@ -1363,10 +1462,16 @@ fn lex_paste_tokens(
   left : String,
   right : String,
   loc : SrcLoc,
-  hidden : HiddenList?,
+  hidden : Int,
 ) -> Array[Token] {
   let file = { id: loc.file_id, path: ":paste:", text }
-  let lex = new_lexer(file, pp.diags, pp.interner, pp.keyword_ids)
+  let lex = new_lexer(
+    file,
+    pp.diags,
+    pp.interner,
+    pp.keyword_ids,
+    pp.lexeme_pool,
+  )
   let out : Array[Token] = []
   while true {
     let tok = next_token(lex)
@@ -1375,7 +1480,7 @@ fn lex_paste_tokens(
       _ =>
         out.push({
           kind: tok.kind,
-          lexeme: tok.lexeme,
+          lexeme_id: tok.lexeme_id,
           id: tok.id,
           loc,
           line_start: false,
@@ -1422,7 +1527,9 @@ fn substitute_macro(
               } else {
                 []
               }
-              out.push(make_string_literal(stringize_tokens(arg_tokens), loc))
+              out.push(
+                make_string_literal(pp, stringize_tokens(pp, arg_tokens), loc),
+              )
               i = i + 2
               continue
             }
@@ -1469,13 +1576,16 @@ fn substitute_macro(
         i = i + 2
         continue
       }
-      let merged_lexeme = last.lexeme + next_tokens[0].lexeme
-      let merged_hidden = merge_hidden(last.hidden, next_tokens[0].hidden)
+      let last_text = pp_token_lexeme(pp, last)
+      let next_text = pp_token_lexeme(pp, next_tokens[0])
+      let merged_lexeme = last_text + next_text
+      let merged_hidden =
+        merge_hidden(pp.hidden_pool, last.hidden, next_tokens[0].hidden)
       let merged_tokens = lex_paste_tokens(
         pp,
         merged_lexeme,
-        last.lexeme,
-        next_tokens[0].lexeme,
+        last_text,
+        next_text,
         loc,
         merged_hidden,
       )
@@ -1490,7 +1600,7 @@ fn substitute_macro(
           } else {
             out.push({
               kind: t.kind,
-              lexeme: t.lexeme,
+              lexeme_id: t.lexeme_id,
               id: t.id,
               loc,
               line_start: false,
@@ -1511,7 +1621,7 @@ fn substitute_macro(
             for t in arg_tokens {
               out.push({
                 kind: t.kind,
-                lexeme: t.lexeme,
+                lexeme_id: t.lexeme_id,
                 id: t.id,
                 loc: t.loc,
                 line_start: false,
@@ -1527,7 +1637,7 @@ fn substitute_macro(
     }
     out.push({
       kind: tok.kind,
-      lexeme: tok.lexeme,
+      lexeme_id: tok.lexeme_id,
       id: tok.id,
       loc,
       line_start: false,
@@ -1669,7 +1779,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
     }
     let hidden_ok = !is_macro_name ||
       hidden_is_empty(tok.hidden) ||
-      (macro_id != 0 && !hidden_contains(tok.hidden, macro_id))
+      (macro_id != 0 && !hidden_contains(pp.hidden_pool, tok.hidden, macro_id))
     if is_macro_name && macro_id != 0 && hidden_ok {
       match get_macro(pp, macro_id) {
         None => ()
@@ -1727,7 +1837,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                             arr
                           }
                         }
-                        out.push(make_int_literal_token(value, tok.loc))
+                        out.push(make_int_literal_token(pp, value, tok.loc))
                         changed = true
                         i = next_i
                         continue
@@ -1902,7 +2012,7 @@ fn normalize_macro_tokens(tokens : Array[Token]) -> Array[Token] {
   for tok in tokens {
     out.push({
       kind: tok.kind,
-      lexeme: tok.lexeme,
+      lexeme_id: tok.lexeme_id,
       id: tok.id,
       loc: tok.loc,
       line_start: false,
@@ -1994,87 +2104,81 @@ fn release_expanding_guards(pp : Preprocessor) -> Unit {
 }
 
 ///|
-fn hidden_is_empty(hidden : HiddenList?) -> Bool {
-  hidden is None
+fn hidden_is_empty(hidden : Int) -> Bool {
+  hidden == 0
 }
 
 ///|
-fn hidden_contains(hidden : HiddenList?, id : Int) -> Bool {
+fn hidden_contains(pool : HiddenPool, hidden : Int, id : Int) -> Bool {
   let mut cur = hidden
-  while true {
-    match cur {
-      None => return false
-      Some(node) =>
-        if node.id == id {
-          return true
-        } else {
-          cur = node.next
-        }
+  while cur != 0 {
+    let node = pool.nodes[cur - 1]
+    if node.id == id {
+      return true
     }
-  } else {
-    false
+    cur = node.next
+  }
+  false
+}
+
+///|
+fn ensure_hidden_singleton_slot(pool : HiddenPool, id : Int) -> Unit {
+  while pool.singleton_by_id.length() < id {
+    pool.singleton_by_id.push(0)
   }
 }
 
 ///|
-fn hidden_add(hidden : HiddenList?, id : Int) -> HiddenList? {
-  if hidden_contains(hidden, id) {
-    hidden
-  } else {
-    Some({ id, next: hidden })
+fn hidden_add(pool : HiddenPool, hidden : Int, id : Int) -> Int {
+  if hidden_contains(pool, hidden, id) {
+    return hidden
   }
+  if hidden == 0 {
+    ensure_hidden_singleton_slot(pool, id)
+    let existing = pool.singleton_by_id[id - 1]
+    if existing != 0 {
+      return existing
+    }
+  }
+  let node_id = pool.nodes.length() + 1
+  pool.nodes.push({ id, next: hidden })
+  if hidden == 0 {
+    pool.singleton_by_id[id - 1] = node_id
+  }
+  node_id
 }
 
 ///|
-fn merge_hidden(a : HiddenList?, b : HiddenList?) -> HiddenList? {
+fn merge_hidden(pool : HiddenPool, a : Int, b : Int) -> Int {
   if hidden_is_empty(a) {
     return b
   }
   if hidden_is_empty(b) {
     return a
   }
-  match b {
-    None => a
-    Some(node) => merge_hidden(hidden_add(a, node.id), node.next)
+  let mut out = a
+  let mut cur = b
+  while cur != 0 {
+    let node = pool.nodes[cur - 1]
+    out = hidden_add(pool, out, node.id)
+    cur = node.next
   }
+  out
 }
 
 ///|
 fn add_hidden(pp : Preprocessor, tok : Token, id : Int) -> Token {
-  if hidden_is_empty(tok.hidden) {
-    match pp.hidden_singletons.get(id) {
-      Some(hidden) =>
-        return {
-          kind: tok.kind,
-          lexeme: tok.lexeme,
-          id: tok.id,
-          loc: tok.loc,
-          line_start: tok.line_start,
-          hidden: Some(hidden),
-        }
-      None => ()
-    }
-    let hidden = { id, next: None }
-    pp.hidden_singletons.set(id, hidden)
-    return {
-      kind: tok.kind,
-      lexeme: tok.lexeme,
-      id: tok.id,
-      loc: tok.loc,
-      line_start: tok.line_start,
-      hidden: Some(hidden),
-    }
-  }
-  if hidden_contains(tok.hidden, id) {
+  let new_hidden = hidden_add(pp.hidden_pool, tok.hidden, id)
+  if new_hidden == tok.hidden {
     tok
   } else {
     {
       kind: tok.kind,
-      lexeme: tok.lexeme,
+      lexeme_id: tok.lexeme_id,
       id: tok.id,
       loc: tok.loc,
       line_start: tok.line_start,
-      hidden: Some({ id, next: tok.hidden }),
+      hidden: new_hidden,
     }
   }
 }
@@ -2107,14 +2211,18 @@ fn handle_line_directive(
     add_pp_error(pp, loc, "invalid line number in #line")
     return
   }
-  let line_val = parse_line_int_literal(pp, line_tok.lexeme, line_tok.loc)
+  let line_val = parse_line_int_literal(
+    pp,
+    pp_token_lexeme(pp, line_tok),
+    line_tok.loc,
+  )
   if line_val <= 0 {
     add_pp_error(pp, loc, "invalid line number in #line")
     return
   }
   pp.line_adjust = line_val - (loc.line + 1)
   if tokens.length() > 1 && tokens[1].kind == StrLit {
-    pp.logical_path = strip_quotes(tokens[1].lexeme)
+    pp.logical_path = strip_quotes(pp_token_lexeme(pp, tokens[1]))
   }
 }
 
@@ -2249,7 +2357,7 @@ fn parse_pp_int_literal(
 
 ///|
 fn parse_pp_char_literal(pp : Preprocessor, tok : Token) -> PpValue {
-  let lexeme = tok.lexeme
+  let lexeme = pp_token_lexeme(pp, tok)
   if lexeme.length() < 3 {
     add_pp_error(pp, tok.loc, "invalid character literal in #if")
     return { value: 0, is_unsigned: false }
@@ -2394,7 +2502,7 @@ fn macro_int_value(
         macro_def.replacement[0].kind == IntLit {
         return Some(parse_pp_int_literal(
           pp,
-          macro_def.replacement[0].lexeme,
+          pp_token_lexeme(pp, macro_def.replacement[0]),
           loc,
         ))
       }
@@ -2416,7 +2524,7 @@ fn parse_primary(p : IfParser, loc : SrcLoc) -> PpValue {
         return { value: 0, is_unsigned: false }
       }
       if tok.kind == IntLit {
-        return parse_pp_int_literal(p.pp, tok.lexeme, tok.loc)
+        return parse_pp_int_literal(p.pp, pp_token_lexeme(p.pp, tok), tok.loc)
       }
       if tok.kind == CharLit {
         return parse_pp_char_literal(p.pp, tok)
@@ -3014,7 +3122,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
     }
     let hidden_ok = !is_macro_name ||
       hidden_is_empty(tok.hidden) ||
-      (macro_id != 0 && !hidden_contains(tok.hidden, macro_id))
+      (macro_id != 0 && !hidden_contains(pp.hidden_pool, tok.hidden, macro_id))
     if is_macro_name && macro_id != 0 && hidden_ok {
       match get_macro(pp, macro_id) {
         None => ()
@@ -3108,7 +3216,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
   } else {
     {
       kind: Eof,
-      lexeme: "",
+      lexeme_id: 0,
       id: 0,
       loc: lexer_loc(pp.lexer),
       line_start: false,

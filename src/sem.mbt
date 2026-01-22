@@ -38,10 +38,11 @@ struct SemContext {
   builtin_sig_ids : Array[FuncSig?]
   atomic_template_ids : Array[String?]
   function_defs : FastMap[String, Bool]
-  locals : Array[FastMap[Int, CType]]
-  local_values : FastMap[Int, CType]
+  local_scope_ids_by_id : Array[Int]
+  local_scope_stack : Array[Int]
+  mut next_local_scope_id : Int
   local_values_by_id : Array[CType?]
-  local_overrides : Array[Array[(Int, CType?)]]
+  local_overrides : Array[Array[LocalOverride]]
   type_aliases : FastMap[String, CType]
   struct_defs : FastMap[String, RecordDef]
   struct_defs_by_id : Array[RecordDef?]
@@ -69,6 +70,10 @@ struct SemContext {
   func_has_compound_literal : FastMap[String, Bool]
   func_has_stmt_expr : FastMap[String, Bool]
   func_has_stmt_expr_by_id : Array[Bool?]
+  func_has_static_local : FastMap[String, Bool]
+  func_has_static_local_by_id : Array[Bool?]
+  func_has_local_decl : FastMap[String, Bool]
+  func_has_local_decl_by_id : Array[Bool?]
   enum_defs : FastMap[String, Array[EnumItem]]
   enum_defs_by_id : Array[Array[EnumItem]?]
   enum_consts : FastMap[String, Int]
@@ -89,6 +94,13 @@ struct SemContext {
   mut current_agg_temp_size : Int
   mut current_agg_temp_align : Int
   mut record_agg_temps : Bool
+}
+
+///|
+struct LocalOverride {
+  id : Int
+  prev_ty : CType?
+  prev_scope : Int
 }
 
 ///|
@@ -126,8 +138,9 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     builtin_sig_ids: [],
     atomic_template_ids: [],
     function_defs: fast_map_new(),
-    locals: [],
-    local_values: fast_map_new(),
+    local_scope_ids_by_id: [],
+    local_scope_stack: [],
+    next_local_scope_id: 0,
     local_values_by_id: [],
     local_overrides: [],
     type_aliases,
@@ -157,6 +170,10 @@ fn new_sem_context(diags : DiagBag) -> SemContext {
     func_has_compound_literal: fast_map_new(),
     func_has_stmt_expr: fast_map_new(),
     func_has_stmt_expr_by_id: [],
+    func_has_static_local: fast_map_new(),
+    func_has_static_local_by_id: [],
+    func_has_local_decl: fast_map_new(),
+    func_has_local_decl_by_id: [],
     enum_defs: fast_map_new(),
     enum_defs_by_id: [],
     enum_consts: fast_map_new(),
@@ -215,6 +232,32 @@ fn[T] set_opt_by_id(arr : Array[T?], id : Int, value : T) -> Unit {
   }
   ensure_opt_array_capacity(arr, id)
   arr[id - 1] = Some(value)
+}
+
+///|
+fn ensure_int_array_capacity(arr : Array[Int], id : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  let len = arr.length()
+  if len >= id {
+    return
+  }
+  let mut i = len
+  while i < id {
+    arr.push(0)
+    i = i + 1
+  }
+}
+
+///|
+fn current_local_scope_id(ctx : SemContext) -> Int {
+  let len = ctx.local_scope_stack.length()
+  if len == 0 {
+    0
+  } else {
+    ctx.local_scope_stack[len - 1]
+  }
 }
 
 ///|
@@ -1991,11 +2034,19 @@ fn define_enum_const(
   value : Int,
 ) -> Unit {
   let mut conflict = enum_const_exists(ctx, name, id)
-  if !conflict && ctx.globals.contains(name) {
-    conflict = true
+  if !conflict {
+    conflict = if id > 0 {
+      has_global_by_id(ctx, id)
+    } else {
+      ctx.globals.contains(name)
+    }
   }
-  if !conflict && ctx.functions.contains(name) {
-    conflict = true
+  if !conflict {
+    conflict = if id > 0 {
+      has_function_by_id(ctx, id)
+    } else {
+      ctx.functions.contains(name)
+    }
   }
   if conflict {
     add_sem_error(ctx, loc, "redefinition of '\{name}'")
@@ -3234,26 +3285,25 @@ fn add_function_sig(
     add_sem_error(ctx, loc, "redefinition of '\{name}'")
   }
   let mut updated : FuncSig? = None
-  if ctx.functions.contains(name) {
-    match ctx.functions.get(name) {
-      Some(existing) =>
-        if !func_sig_eq(existing, sig) {
-          add_sem_error(
-            ctx,
-            loc,
-            "conflicting function declaration for '\{name}'",
-          )
-        } else if existing.is_old_style && !sig.is_old_style {
-          ctx.functions.set(name, sig)
-          updated = Some(sig)
-        } else {
-          updated = Some(existing)
-        }
-      None => ()
+  let existing = if id > 0 { get_function_by_id(ctx, id) } else { ctx.functions.get(name) }
+  match existing {
+    Some(existing) =>
+      if !func_sig_eq(existing, sig) {
+        add_sem_error(
+          ctx,
+          loc,
+          "conflicting function declaration for '\{name}'",
+        )
+      } else if existing.is_old_style && !sig.is_old_style {
+        ctx.functions.set(name, sig)
+        updated = Some(sig)
+      } else {
+        updated = Some(existing)
+      }
+    None => {
+      ctx.functions.set(name, sig)
+      updated = Some(sig)
     }
-  } else {
-    ctx.functions.set(name, sig)
-    updated = Some(sig)
   }
   if id > 0 {
     match updated {
@@ -3351,36 +3401,45 @@ fn update_decl_type(
   is_local~ : Bool,
 ) -> Unit {
   if is_local {
-    if ctx.locals.length() == 0 || id <= 0 {
+    let scope_id = current_local_scope_id(ctx)
+    if scope_id == 0 || id <= 0 {
       return
     }
-    let idx = ctx.locals.length() - 1
-    let scope = ctx.locals[idx]
-    if scope.contains(id) {
-      scope.set(id, ty)
-      ctx.locals[idx] = scope
-      ctx.local_values.set(id, ty)
+    if id <= ctx.local_scope_ids_by_id.length() &&
+      ctx.local_scope_ids_by_id[id - 1] == scope_id {
       set_opt_by_id(ctx.local_values_by_id, id, ty)
+    }
+  } else if id > 0 {
+    if has_global_by_id(ctx, id) {
+      ctx.globals.set(name, ty)
+      set_global_by_id(ctx, id, ty)
+    } else if ctx.globals.contains(name) {
+      ctx.globals.set(name, ty)
     }
   } else if ctx.globals.contains(name) {
     ctx.globals.set(name, ty)
-    if id > 0 && has_global_by_id(ctx, id) {
-      set_global_by_id(ctx, id, ty)
-    }
   }
 }
 
 ///|
 fn record_local_binding(ctx : SemContext, id : Int, ty : CType) -> Unit {
-  if ctx.locals.length() == 0 || id <= 0 {
+  let scope_id = current_local_scope_id(ctx)
+  if scope_id == 0 || id <= 0 {
     return
   }
-  let idx = ctx.locals.length() - 1
+  let idx = ctx.local_overrides.length() - 1
   let overrides = ctx.local_overrides[idx]
-  overrides.push((id, get_opt_by_id(ctx.local_values_by_id, id)))
+  let prev_scope =
+    if id <= ctx.local_scope_ids_by_id.length() {
+      ctx.local_scope_ids_by_id[id - 1]
+    } else {
+      0
+    }
+  overrides.push({ id, prev_ty: get_opt_by_id(ctx.local_values_by_id, id), prev_scope })
   ctx.local_overrides[idx] = overrides
-  ctx.local_values.set(id, ty)
   set_opt_by_id(ctx.local_values_by_id, id, ty)
+  ensure_int_array_capacity(ctx.local_scope_ids_by_id, id)
+  ctx.local_scope_ids_by_id[id - 1] = scope_id
 }
 
 ///|
@@ -3393,6 +3452,32 @@ fn record_stmt_expr(ctx : SemContext) -> Unit {
   match ctx.current_func_name {
     None => ()
     Some(name) => ctx.func_has_stmt_expr.set(name, true)
+  }
+}
+
+///|
+fn record_static_local(ctx : SemContext) -> Unit {
+  let id = ctx.current_func_id
+  if id > 0 {
+    set_opt_by_id(ctx.func_has_static_local_by_id, id, true)
+    return
+  }
+  match ctx.current_func_name {
+    None => ()
+    Some(name) => ctx.func_has_static_local.set(name, true)
+  }
+}
+
+///|
+fn record_local_decl(ctx : SemContext) -> Unit {
+  let id = ctx.current_func_id
+  if id > 0 {
+    set_opt_by_id(ctx.func_has_local_decl_by_id, id, true)
+    return
+  }
+  match ctx.current_func_name {
+    None => ()
+    Some(name) => ctx.func_has_local_decl.set(name, true)
   }
 }
 
@@ -3507,6 +3592,12 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
   register_type_defs(ctx, decl.ty, decl.loc)
   let resolved = resolve_type(ctx, decl.ty, decl.loc)
   let is_local = is_local && decl.storage != StorageClass::Extern
+  if is_local {
+    record_local_decl(ctx)
+    if decl.storage == StorageClass::Static {
+      record_static_local(ctx)
+    }
+  }
   let resolved_with_attrs = apply_type_attrs(
     resolved,
     type_attrs_from(decl.attrs),
@@ -6704,16 +6795,19 @@ fn declare_local(
   ty : CType,
   loc : SrcLoc,
 ) -> Unit {
-  if ctx.locals.length() == 0 || id <= 0 {
+  let scope_id = current_local_scope_id(ctx)
+  if scope_id == 0 || id <= 0 {
     return
   }
-  let idx = ctx.locals.length() - 1
-  let scope = ctx.locals[idx]
-  if scope.contains(id) {
+  let prev_scope =
+    if id <= ctx.local_scope_ids_by_id.length() {
+      ctx.local_scope_ids_by_id[id - 1]
+    } else {
+      0
+    }
+  if prev_scope == scope_id {
     add_sem_error(ctx, loc, "redefinition of '\{name}'")
   } else {
-    scope.set(id, ty)
-    ctx.locals[idx] = scope
     record_local_binding(ctx, id, ty)
   }
 }
@@ -6731,7 +6825,8 @@ fn declare_global(
     return
   }
   let mut updated : CType? = None
-  match ctx.globals.get(name) {
+  let existing = if id > 0 { get_global_by_id(ctx, id) } else { ctx.globals.get(name) }
+  match existing {
     None => {
       ctx.globals.set(name, ty)
       updated = Some(ty)
@@ -6850,35 +6945,37 @@ fn lookup_value(ctx : SemContext, name : String, id : Int) -> CType? {
 
 ///|
 fn push_scope(ctx : SemContext) -> Unit {
-  ctx.locals.push(fast_map_new())
+  ctx.next_local_scope_id = ctx.next_local_scope_id + 1
+  ctx.local_scope_stack.push(ctx.next_local_scope_id)
   ctx.local_overrides.push([])
 }
 
 ///|
 fn pop_scope(ctx : SemContext) -> Unit {
-  ignore(ctx.locals.pop())
   match ctx.local_overrides.pop() {
     None => ()
     Some(overrides) => {
       let mut i = overrides.length()
       while i > 0 {
         i = i - 1
-        let (id, prev) = overrides[i]
-        match prev {
-          Some(ty) => {
-            ctx.local_values.set(id, ty)
-            set_opt_by_id(ctx.local_values_by_id, id, ty)
-          }
-          None => {
-            ctx.local_values.remove(id)
-            if id > 0 && id <= ctx.local_values_by_id.length() {
+        let entry = overrides[i]
+        let id = entry.id
+        if id <= 0 {
+          continue
+        }
+        match entry.prev_ty {
+          Some(ty) => set_opt_by_id(ctx.local_values_by_id, id, ty)
+          None =>
+            if id <= ctx.local_values_by_id.length() {
               ctx.local_values_by_id[id - 1] = None
             }
-          }
         }
+        ensure_int_array_capacity(ctx.local_scope_ids_by_id, id)
+        ctx.local_scope_ids_by_id[id - 1] = entry.prev_scope
       }
     }
   }
+  ignore(ctx.local_scope_stack.pop())
 }
 
 ///|

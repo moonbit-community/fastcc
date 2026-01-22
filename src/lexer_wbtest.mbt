@@ -1,11 +1,12 @@
 ///|
-fn lex_tokens(text : String) -> (Array[Token], DiagBag) {
+fn lex_tokens(text : String) -> (Array[Token], DiagBag, StringInterner, LexemePool) {
   let bag = new_diag_bag()
   let map = new_source_map()
   let file = add_file(map, "<test>", text)
   let interner = new_string_interner_with_capacity()
   let keyword_ids = init_keyword_ids(interner)
-  let lexer = new_lexer(file, bag, interner, keyword_ids)
+  let lexeme_pool = new_lexeme_pool()
+  let lexer = new_lexer(file, bag, interner, keyword_ids, lexeme_pool)
   let out : Array[Token] = []
   while out.length() < 512 {
     let tok = next_token(lexer)
@@ -14,14 +15,17 @@ fn lex_tokens(text : String) -> (Array[Token], DiagBag) {
       break
     }
   }
-  (out.filter(tok => tok.kind != Eof), bag)
+  (out.filter(tok => tok.kind != Eof), bag, interner, lexeme_pool)
 }
 
 ///|
 test "lex keywords and operators" {
-  let (toks, bag) = lex_tokens("int x = 1 + 2; if (x >= 3) return x;")
+  let (toks, bag, interner, lexeme_pool) =
+    lex_tokens("int x = 1 + 2; if (x >= 3) return x;")
   assert_true(!has_errors(bag))
-  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  let items = toks.map(
+    tok => "\{tok.kind}:\{token_text_with(interner, lexeme_pool, tok)}",
+  )
   @json.inspect(items, content=[
     "KwInt:int", "Ident:x", "Assign:=", "IntLit:1", "Plus:+", "IntLit:2", "Semicolon:;",
     "KwIf:if", "LParen:(", "Ident:x", "Ge:>=", "IntLit:3", "RParen:)", "KwReturn:return",
@@ -31,9 +35,12 @@ test "lex keywords and operators" {
 
 ///|
 test "lex comments and literals" {
-  let (toks, bag) = lex_tokens("char c='\\n';/*c*/char* s=\"hi\\n\";//x\nc=c+1")
+  let (toks, bag, interner, lexeme_pool) =
+    lex_tokens("char c='\\n';/*c*/char* s=\"hi\\n\";//x\nc=c+1")
   assert_true(!has_errors(bag))
-  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}")
+  let items = toks.map(
+    tok => "\{tok.kind}:\{token_text_with(interner, lexeme_pool, tok)}",
+  )
   @json.inspect(items, content=[
     "KwChar:char", "Ident:c", "Assign:=", "CharLit:'\\n'", "Semicolon:;", "KwChar:char",
     "Star:*", "Ident:s", "Assign:=", "StrLit:\"hi\\n\"", "Semicolon:;", "Ident:c",
@@ -43,9 +50,13 @@ test "lex comments and literals" {
 
 ///|
 test "lex numbers and preprocessor hash" {
-  let (toks, bag) = lex_tokens("#define X 0x1f\nfloat y = .5 + 2e3;")
+  let (toks, bag, interner, lexeme_pool) =
+    lex_tokens("#define X 0x1f\nfloat y = .5 + 2e3;")
   assert_true(!has_errors(bag))
-  let items = toks.map(tok => "\{tok.kind}:\{tok.lexeme}:\{tok.line_start}")
+  let items = toks.map(
+    tok =>
+      "\{tok.kind}:\{token_text_with(interner, lexeme_pool, tok)}:\{tok.line_start}",
+  )
   @json.inspect(items, content=[
     "Hash:#:true", "Ident:define:false", "Ident:X:false", "IntLit:0x1f:false", "KwFloat:float:true",
     "Ident:y:false", "Assign:=:false", "FloatLit:.5:false", "Plus:+:false", "FloatLit:2e3:false",

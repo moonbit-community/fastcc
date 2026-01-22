@@ -100,23 +100,44 @@ enum TokenKind {
 } derive(Show, Eq, ToJson)
 
 ///|
-struct HiddenList {
-  id : Int
-  next : HiddenList?
-} derive(Show, Eq, ToJson)
-
-///|
 struct Token {
   kind : TokenKind
-  lexeme : String
+  lexeme_id : Int
   id : Int
   loc : SrcLoc
   line_start : Bool
-  hidden : HiddenList?
+  hidden : Int
 } derive(Show, Eq, ToJson)
 
 ///|
-let empty_hidden : HiddenList? = None
+let empty_hidden : Int = 0
+
+///|
+struct LexemePool {
+  strings : Array[String]
+}
+
+///|
+fn new_lexeme_pool() -> LexemePool {
+  { strings: [] }
+}
+
+///|
+fn lexeme_pool_intern(pool : LexemePool, text : String) -> Int {
+  if text.length() == 0 {
+    return 0
+  }
+  pool.strings.push(text)
+  pool.strings.length()
+}
+
+///|
+fn lexeme_pool_get(pool : LexemePool, id : Int) -> String {
+  if id <= 0 {
+    return ""
+  }
+  pool.strings[id - 1]
+}
 
 ///|
 struct KeywordIds {
@@ -267,4 +288,144 @@ fn keyword_kind_from_id(id : Int, ids : KeywordIds) -> TokenKind? {
     return None
   }
   kind_by_id[id]
+}
+
+///|
+fn token_kind_text(kind : TokenKind) -> String {
+  match kind {
+    LParen => "("
+    RParen => ")"
+    LBrace => "{"
+    RBrace => "}"
+    LBracket => "["
+    RBracket => "]"
+    Comma => ","
+    Semicolon => ";"
+    Colon => ":"
+    Question => "?"
+    Dot => "."
+    Ellipsis => "..."
+    Arrow => "->"
+    Assign => "="
+    Plus => "+"
+    Minus => "-"
+    Star => "*"
+    Slash => "/"
+    Percent => "%"
+    PlusPlus => "++"
+    MinusMinus => "--"
+    PlusAssign => "+="
+    MinusAssign => "-="
+    StarAssign => "*="
+    SlashAssign => "/="
+    PercentAssign => "%="
+    Eq => "=="
+    Ne => "!="
+    Lt => "<"
+    Le => "<="
+    Gt => ">"
+    Ge => ">="
+    ShiftLeft => "<<"
+    ShiftRight => ">>"
+    ShiftLeftAssign => "<<="
+    ShiftRightAssign => ">>="
+    Amp => "&"
+    Pipe => "|"
+    Caret => "^"
+    Tilde => "~"
+    Bang => "!"
+    AmpAmp => "&&"
+    PipePipe => "||"
+    AmpAssign => "&="
+    PipeAssign => "|="
+    CaretAssign => "^="
+    Hash => "#"
+    HashHash => "##"
+    _ => ""
+  }
+}
+
+///|
+fn token_kind_text_len(kind : TokenKind) -> Int {
+  match kind {
+    LParen |
+    RParen |
+    LBrace |
+    RBrace |
+    LBracket |
+    RBracket |
+    Comma |
+    Semicolon |
+    Colon |
+    Question |
+    Dot |
+    Assign |
+    Plus |
+    Minus |
+    Star |
+    Slash |
+    Percent |
+    Lt |
+    Gt |
+    Amp |
+    Pipe |
+    Caret |
+    Tilde |
+    Bang |
+    Hash => 1
+    Ellipsis => 3
+    Arrow |
+    PlusPlus |
+    MinusMinus |
+    PlusAssign |
+    MinusAssign |
+    StarAssign |
+    SlashAssign |
+    PercentAssign |
+    Eq |
+    Ne |
+    Le |
+    Ge |
+    ShiftLeft |
+    ShiftRight |
+    AmpAmp |
+    PipePipe |
+    AmpAssign |
+    PipeAssign |
+    CaretAssign |
+    HashHash => 2
+    ShiftLeftAssign |
+    ShiftRightAssign => 3
+    _ => 0
+  }
+}
+
+///|
+fn token_text_with(
+  interner : StringInterner,
+  pool : LexemePool,
+  tok : Token,
+) -> String {
+  if tok.lexeme_id != 0 {
+    return lexeme_pool_get(pool, tok.lexeme_id)
+  }
+  if tok.id != 0 {
+    return interner.get(tok.id)
+  }
+  token_kind_text(tok.kind)
+}
+
+///|
+fn token_text_len_with(
+  interner : StringInterner,
+  pool : LexemePool,
+  tok : Token,
+) -> Int {
+  if tok.lexeme_id != 0 {
+    return lexeme_pool_get(pool, tok.lexeme_id).length()
+  }
+  if tok.id != 0 {
+    return interner.get(tok.id).length()
+  }
+  token_kind_text_len(tok.kind)
 }

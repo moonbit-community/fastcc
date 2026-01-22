@@ -91,13 +91,14 @@ const R_AARCH64_POINTER : Int = 257
 
 ///|
 struct Arm64Emitter {
-  code : Array[UInt]
+  mut code : Array[UInt]
+  mut code_len : Int
   relocs : Array[Reloc]
 }
 
 ///|
 fn new_arm64_emitter() -> Arm64Emitter {
-  { code: [], relocs: [] }
+  { code: [], code_len: 0, relocs: [] }
 }
 
 ///|
@@ -110,20 +111,43 @@ fn new_arm64_emitter_with_capacity(
   }
   let code_cap = if code_capacity > 0 { code_capacity } else { 0 }
   let reloc_cap = if reloc_capacity > 0 { reloc_capacity } else { 0 }
+  let zero : UInt = 0
   {
-    code: Array::new(capacity=code_cap),
+    code: if code_cap > 0 {
+      Array::make(code_cap, zero)
+    } else {
+      []
+    },
+    code_len: 0,
     relocs: Array::new(capacity=reloc_cap),
   }
 }
 
 ///|
 fn emit32(emitter : Arm64Emitter, insn : UInt) -> Unit {
-  emitter.code.push(insn)
+  let idx = emitter.code_len
+  if idx >= emitter.code.length() {
+    let current = emitter.code.length()
+    let mut next = if current > 0 { current * 2 } else { 64 }
+    if next < idx + 1 {
+      next = idx + 1
+    }
+    let zero : UInt = 0
+    let expanded : Array[UInt] = Array::make(next, zero)
+    let mut i = 0
+    while i < idx {
+      expanded[i] = emitter.code[i]
+      i = i + 1
+    }
+    emitter.code = expanded
+  }
+  emitter.code[idx] = insn
+  emitter.code_len = idx + 1
 }
 
 ///|
 fn emitter_pc(emitter : Arm64Emitter) -> Int {
-  emitter.code.length() << 2
+  emitter.code_len << 2
 }
 
 ///|

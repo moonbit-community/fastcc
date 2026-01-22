@@ -529,9 +529,12 @@ fn encode_macho_object(
             out.write_byte(0)
             fileoff = fileoff + 1
           }
-          for word in layout.section.data {
-            out.write_uint_le(word)
+          let word_len = section_word_len(layout.section)
+          let mut i = 0
+          while i < word_len {
+            out.write_uint_le(layout.section.data[i])
             fileoff = fileoff + 4
+            i = i + 1
           }
         }
     }
