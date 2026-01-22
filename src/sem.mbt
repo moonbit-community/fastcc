@@ -3352,9 +3352,8 @@ fn compound_literal_type(
       register_type_defs(ctx, ty, loc)
       let resolved = resolve_type(ctx, ty, loc)
       let mut final_ty = resolved
-      match check_initializer(ctx, resolved, init, loc) {
-        None => ()
-        Some(size) => final_ty = apply_inferred_array_size(final_ty, size)
+      if check_initializer(ctx, resolved, init, loc) is Some(size) {
+        final_ty = apply_inferred_array_size(final_ty, size)
       }
       require_complete_object_type(ctx, final_ty, loc)
       ctx.compound_literal_types.set(key, final_ty)
@@ -3611,18 +3610,11 @@ fn check_var_decl(ctx : SemContext, decl : VarDecl, is_local~ : Bool) -> Unit {
   }
   if type_has_vla_object_size(final_ty) && decl.init is Some(_) {
     add_sem_error(ctx, decl.loc, "variable length array cannot be initialized")
-  } else {
-    match decl.init {
-      None => ()
-      Some(init) =>
-        match check_initializer(ctx, final_ty, init, decl.loc) {
-          None => ()
-          Some(size) => {
-            let updated = apply_inferred_array_size(final_ty, size)
-            final_ty = updated
-            update_decl_type(ctx, decl.name, decl.id, updated, is_local~)
-          }
-        }
+  } else if decl.init is Some(init) {
+    if check_initializer(ctx, final_ty, init, decl.loc) is Some(size) {
+      let updated = apply_inferred_array_size(final_ty, size)
+      final_ty = updated
+      update_decl_type(ctx, decl.name, decl.id, updated, is_local~)
     }
   }
   if decl.storage != StorageClass::Extern || decl.init is Some(_) {
