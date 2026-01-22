@@ -4190,9 +4190,8 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
     Stmt::If(cond~, then_branch~, else_branch~, ..) => {
       check_cond_expr(ctx, cond)
       check_stmt(ctx, then_branch, return_type)
-      match else_branch {
-        None => ()
-        Some(stmt) => check_stmt(ctx, stmt, return_type)
+      if else_branch is Some(stmt) {
+        check_stmt(ctx, stmt, return_type)
       }
     }
     Stmt::While(cond~, body~, ..) => {
@@ -4204,24 +4203,18 @@ fn check_stmt(ctx : SemContext, stmt : Stmt, return_type : CType) -> Unit {
       check_cond_expr(ctx, cond)
     }
     Stmt::For(init~, cond~, step~, body~, ..) => {
-      let needs_scope = match init {
-        Some(Stmt::DeclStmt(..)) => true
-        _ => false
-      }
+      let needs_scope = init is Some(Stmt::DeclStmt(..))
       if needs_scope {
         push_scope(ctx)
       }
-      match init {
-        None => ()
-        Some(stmt) => check_stmt(ctx, stmt, return_type)
+      if init is Some(stmt) {
+        check_stmt(ctx, stmt, return_type)
       }
-      match cond {
-        None => ()
-        Some(expr) => check_cond_expr(ctx, expr)
+      if cond is Some(expr) {
+        check_cond_expr(ctx, expr)
       }
-      match step {
-        None => ()
-        Some(expr) => type_of_expr(ctx, expr) |> ignore
+      if step is Some(expr) {
+        type_of_expr(ctx, expr) |> ignore
       }
       with_loop(ctx, () => check_stmt(ctx, body, return_type))
       if needs_scope {
