@@ -12,6 +12,8 @@ struct Macro {
   is_function : Bool
   replacement : Array[Token]
   replacement_has_id : Bool
+  replacement_needs_expand : Bool
+  replacement_needs_epoch : Int
 }
 
 ///|
@@ -74,6 +76,7 @@ struct Preprocessor {
   diags : DiagBag
   map : SourceMap
   macros : Array[Macro?]
+  mut macro_epoch : Int
   pending : Array[Token]
   mut held : Token?
   cond_stack : Array[CondState]
@@ -155,6 +158,8 @@ fn define_macro(
     is_function: false,
     replacement,
     replacement_has_id,
+    replacement_needs_expand: false,
+    replacement_needs_epoch: -1,
   })
 }
 
@@ -186,6 +191,8 @@ fn define_func_macro_zero(pp : Preprocessor, name : String) -> Unit {
     is_function: true,
     replacement,
     replacement_has_id: tokens_have_id(replacement),
+    replacement_needs_expand: false,
+    replacement_needs_epoch: -1,
   })
 }
 
@@ -203,6 +210,8 @@ fn define_func_macro_empty(pp : Preprocessor, name : String) -> Unit {
     is_function: true,
     replacement,
     replacement_has_id: false,
+    replacement_needs_expand: false,
+    replacement_needs_epoch: -1,
   })
 }
 
@@ -366,6 +375,7 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
     diags,
     map,
     macros: [],
+    macro_epoch: 0,
     pending: [],
     held: None,
     cond_stack: [],
@@ -418,6 +428,7 @@ fn finalize_preprocessor(pp : Preprocessor) -> Unit {
   pp.line_adjust_stack.clear()
   pp.include_paths.clear()
   pp.macros.clear()
+  pp.macro_epoch = 0
   pp.pending.clear()
   pp.cond_stack.clear()
   pp.expanding.clear()
@@ -513,6 +524,7 @@ fn set_macro(pp : Preprocessor, id : Int, macro_def : Macro) -> Unit {
   ensure_macro_capacity(pp, id)
   if id > 0 {
     pp.macros[id - 1] = Some(macro_def)
+    pp.macro_epoch = pp.macro_epoch + 1
   }
 }
 
@@ -524,6 +536,7 @@ fn remove_macro(pp : Preprocessor, id : Int) -> Unit {
   let len = pp.macros.length()
   if id <= len {
     pp.macros[id - 1] = None
+    pp.macro_epoch = pp.macro_epoch + 1
   }
 }
 
@@ -994,6 +1007,8 @@ fn parse_define_macro(
           is_function: true,
           replacement: normalized,
           replacement_has_id: tokens_have_id(normalized),
+          replacement_needs_expand: false,
+          replacement_needs_epoch: -1,
         })
       }
     }
@@ -1005,6 +1020,8 @@ fn parse_define_macro(
       is_function: false,
       replacement: normalized,
       replacement_has_id: tokens_have_id(normalized),
+      replacement_needs_expand: false,
+      replacement_needs_epoch: -1,
     })
   }
 }
@@ -1371,6 +1388,34 @@ fn tokens_need_expansion(pp : Preprocessor, tokens : Array[Token]) -> Bool {
     }
   }
   false
+}
+
+///|
+fn macro_replacement_needs_expand(
+  pp : Preprocessor,
+  macro_id : Int,
+  macro_def : Macro,
+) -> Bool {
+  if !macro_def.replacement_has_id {
+    return false
+  }
+  if macro_def.replacement_needs_epoch == pp.macro_epoch {
+    return macro_def.replacement_needs_expand
+  }
+  let needs = tokens_need_expansion(pp, macro_def.replacement)
+  if macro_id > 0 && macro_id <= pp.macros.length() {
+    pp.macros[macro_id - 1] =
+      Some({
+        params: macro_def.params,
+        is_variadic: macro_def.is_variadic,
+        is_function: macro_def.is_function,
+        replacement: macro_def.replacement,
+        replacement_has_id: macro_def.replacement_has_id,
+        replacement_needs_expand: needs,
+        replacement_needs_epoch: pp.macro_epoch,
+      })
+  }
+  needs
 }
 
 ///|
@@ -1885,8 +1930,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
             continue
           } else {
             let expanded =
-              if macro_def.replacement_has_id &&
-                tokens_need_expansion(pp, macro_def.replacement) {
+              if macro_replacement_needs_expand(pp, macro_id, macro_def) {
                 push_expanding(pp, macro_id)
                 let expanded = add_hidden_tokens(
                   pp,
@@ -3187,8 +3231,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
             let restore_len = pp.pending.length()
             let mut did_push = false
             let expanded =
-              if macro_def.replacement_has_id &&
-                tokens_need_expansion(pp, macro_def.replacement) {
+              if macro_replacement_needs_expand(pp, macro_id, macro_def) {
                 push_expanding(pp, macro_id)
                 did_push = true
                 add_hidden_tokens(pp, expand_tokens(pp, macro_def.replacement), macro_id)
