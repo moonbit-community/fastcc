@@ -3278,9 +3278,8 @@ fn add_function_sig(
     }
   }
   if id > 0 {
-    match updated {
-      None => ()
-      Some(resolved) => set_function_by_id(ctx, id, resolved)
+    if updated is Some(resolved) {
+      set_function_by_id(ctx, id, resolved)
     }
   }
   if is_def {
@@ -3421,9 +3420,8 @@ fn record_stmt_expr(ctx : SemContext) -> Unit {
     set_opt_by_id(ctx.func_has_stmt_expr_by_id, id, true)
     return
   }
-  match ctx.current_func_name {
-    None => ()
-    Some(name) => ctx.func_has_stmt_expr.set(name, true)
+  if ctx.current_func_name is Some(name) {
+    ctx.func_has_stmt_expr.set(name, true)
   }
 }
 
@@ -3434,9 +3432,8 @@ fn record_static_local(ctx : SemContext) -> Unit {
     set_opt_by_id(ctx.func_has_static_local_by_id, id, true)
     return
   }
-  match ctx.current_func_name {
-    None => ()
-    Some(name) => ctx.func_has_static_local.set(name, true)
+  if ctx.current_func_name is Some(name) {
+    ctx.func_has_static_local.set(name, true)
   }
 }
 
@@ -3447,9 +3444,8 @@ fn record_local_decl(ctx : SemContext) -> Unit {
     set_opt_by_id(ctx.func_has_local_decl_by_id, id, true)
     return
   }
-  match ctx.current_func_name {
-    None => ()
-    Some(name) => ctx.func_has_local_decl.set(name, true)
+  if ctx.current_func_name is Some(name) {
+    ctx.func_has_local_decl.set(name, true)
   }
 }
 
