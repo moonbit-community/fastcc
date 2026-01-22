@@ -451,7 +451,7 @@ fn finalize_preprocessor(pp : Preprocessor) -> Unit {
     }
     i = i + 1
   }
-  pp.lexeme_pool.strings.clear()
+  pp.lexeme_pool.entries.clear()
   pp.interner.buckets.clear()
   pp.interner.next_by_id.clear()
   pp.interner.strings.clear()

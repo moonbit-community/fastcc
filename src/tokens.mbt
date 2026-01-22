@@ -113,17 +113,23 @@ struct Token {
 let empty_hidden : Int = 0
 
 ///|
+enum LexemeEntry {
+  Owned(String)
+  Slice(text~ : String, start~ : Int, len~ : Int)
+}
+
+///|
 struct LexemePool {
-  strings : Array[String]
+  entries : Array[LexemeEntry]
 }
 
 ///|
 fn new_lexeme_pool(capacity? : Int) -> LexemePool {
   match capacity {
-    None => { strings: [] }
+    None => { entries: [] }
     Some(value) => {
       let cap = if value > 0 { value } else { 0 }
-      { strings: Array::new(capacity=cap) }
+      { entries: Array::new(capacity=cap) }
     }
   }
 }
@@ -133,8 +139,8 @@ fn lexeme_pool_intern(pool : LexemePool, text : String) -> Int {
   if text.length() == 0 {
     return 0
   }
-  pool.strings.push(text)
-  pool.strings.length()
+  pool.entries.push(LexemeEntry::Owned(text))
+  pool.entries.length()
 }
 
 ///|
@@ -142,7 +148,41 @@ fn lexeme_pool_get(pool : LexemePool, id : Int) -> String {
   if id <= 0 {
     return ""
   }
-  pool.strings[id - 1]
+  let idx = id - 1
+  match pool.entries[idx] {
+    LexemeEntry::Owned(value) => value
+    LexemeEntry::Slice(text=text, start=start, len=len) => {
+      let value = slice_string(text, start, start + len)
+      pool.entries[idx] = LexemeEntry::Owned(value)
+      value
+    }
+  }
+}
+
+///|
+fn lexeme_pool_intern_slice(
+  pool : LexemePool,
+  text : String,
+  start : Int,
+  end : Int,
+) -> Int {
+  let len = end - start
+  if len <= 0 {
+    return 0
+  }
+  pool.entries.push(LexemeEntry::Slice(text=text, start=start, len=len))
+  pool.entries.length()
+}
+
+///|
+fn lexeme_pool_len(pool : LexemePool, id : Int) -> Int {
+  if id <= 0 {
+    return 0
+  }
+  match pool.entries[id - 1] {
+    LexemeEntry::Owned(value) => value.length()
+    LexemeEntry::Slice(len=len, ..) => len
+  }
 }
 
 ///|
@@ -428,7 +468,7 @@ fn token_text_len_with(
   tok : Token,
 ) -> Int {
   if tok.lexeme_id != 0 {
-    return lexeme_pool_get(pool, tok.lexeme_id).length()
+    return lexeme_pool_len(pool, tok.lexeme_id)
   }
   if tok.id != 0 {
     return interner.get(tok.id).length()

@@ -292,10 +292,6 @@ fn is_bin_digit(code : UInt16) -> Bool {
 }
 
 ///|
-fn slice_to_string(text : String, start : Int, end : Int) -> String {
-  text.view(start_offset=start, end_offset=end).to_string()
-}
-
 ///|
 fn slice_to_view(text : String, start : Int, end : Int) -> StringView {
   text.view(start_offset=start, end_offset=end)
@@ -410,9 +406,8 @@ fn lex_number(
   lex.index = idx
   lex.col = lex.col + (idx - start)
   lex.line_start = false
-  let lit = slice_to_string(text, start, idx)
   let kind = if is_float { TokenKind::FloatLit } else { TokenKind::IntLit }
-  let lexeme_id = lexeme_pool_intern(lex.lexeme_pool, lit)
+  let lexeme_id = lexeme_pool_intern_slice(lex.lexeme_pool, text, start, idx)
   make_token(kind, loc, line_start, lexeme_id=lexeme_id)
 }
 
@@ -477,9 +472,8 @@ fn lex_string_literal(
 ) -> Token {
   let start = lex.index
   skip_string_literal(lex, loc, quote)
-  let lit = slice_to_string(lex.text, start, lex.index)
   let kind = if quote == 34 { StrLit } else { CharLit }
-  let lexeme_id = lexeme_pool_intern(lex.lexeme_pool, lit)
+  let lexeme_id = lexeme_pool_intern_slice(lex.lexeme_pool, lex.text, start, lex.index)
   make_token(kind, loc, line_start, lexeme_id=lexeme_id)
 }
 
@@ -664,8 +658,8 @@ fn lex_punct(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
     126 => make_token(Tilde, loc, line_start)
     _ => {
       add_lex_error(lex, loc, "unexpected character")
-      let lexeme = slice_to_string(lex.text, loc.offset, lex.index)
-      let lexeme_id = lexeme_pool_intern(lex.lexeme_pool, lexeme)
+      let lexeme_id =
+        lexeme_pool_intern_slice(lex.lexeme_pool, lex.text, loc.offset, lex.index)
       make_token(Invalid, loc, line_start, lexeme_id=lexeme_id)
     }
   }
