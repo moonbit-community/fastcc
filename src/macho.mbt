@@ -364,12 +364,9 @@ fn encode_macho_object(
     }
     layouts.push(layout)
     let idx = layouts.length() - 1
-    match segment_sections.get(info.segname) {
-      None => ()
-      Some(list) => {
-        list.push(idx)
-        segment_sections.set(info.segname, list)
-      }
+    if segment_sections.get(info.segname) is Some(list) {
+      list.push(idx)
+      segment_sections.set(info.segname, list)
     }
   }
   let mut sizeofcmds = 24
@@ -384,63 +381,59 @@ fn encode_macho_object(
   let mut offset = header_size + sizeofcmds
   let mut section_index = 1
   for seg in segment_order {
-    match segment_sections.get(seg) {
-      None => ()
-      Some(list) =>
-        for idx in list {
-          let layout = layouts[idx]
-          let align = if layout.section.align > 0 {
-            layout.section.align
-          } else {
-            layout.info.align
-          }
-          let aligned = if layout.info.is_zerofill {
-            offset
-          } else {
-            align_up(offset, align)
-          }
-          let data_off = if layout.info.is_zerofill { 0 } else { aligned }
-          let size = layout.size
-          if !layout.info.is_zerofill {
-            offset = aligned + size
-          }
-          layouts[idx] = {
-            section: layout.section,
-            info: layout.info,
-            align_log2: align_log2(align),
-            offset: data_off,
-            size,
-            reloff: 0,
-            nreloc: 0,
-            index: section_index,
-          }
-          section_index = section_index + 1
+    if segment_sections.get(seg) is Some(list) {
+      for idx in list {
+        let layout = layouts[idx]
+        let align = if layout.section.align > 0 {
+          layout.section.align
+        } else {
+          layout.info.align
         }
+        let aligned = if layout.info.is_zerofill {
+          offset
+        } else {
+          align_up(offset, align)
+        }
+        let data_off = if layout.info.is_zerofill { 0 } else { aligned }
+        let size = layout.size
+        if !layout.info.is_zerofill {
+          offset = aligned + size
+        }
+        layouts[idx] = {
+          section: layout.section,
+          info: layout.info,
+          align_log2: align_log2(align),
+          offset: data_off,
+          size,
+          reloff: 0,
+          nreloc: 0,
+          index: section_index,
+        }
+        section_index = section_index + 1
+      }
     }
   }
   let mut reloc_offset = align_up(offset, 4)
   for seg in segment_order {
-    match segment_sections.get(seg) {
-      None => ()
-      Some(list) =>
-        for idx in list {
-          let layout = layouts[idx]
-          let rel_count = layout.section.relocs.length()
-          let reloff = if rel_count > 0 { reloc_offset } else { 0 }
-          if rel_count > 0 {
-            reloc_offset = reloc_offset + rel_count * 8
-          }
-          layouts[idx] = {
-            section: layout.section,
-            info: layout.info,
-            align_log2: layout.align_log2,
-            offset: layout.offset,
-            size: layout.size,
-            reloff,
-            nreloc: rel_count,
-            index: layout.index,
-          }
+    if segment_sections.get(seg) is Some(list) {
+      for idx in list {
+        let layout = layouts[idx]
+        let rel_count = layout.section.relocs.length()
+        let reloff = if rel_count > 0 { reloc_offset } else { 0 }
+        if rel_count > 0 {
+          reloc_offset = reloc_offset + rel_count * 8
         }
+        layouts[idx] = {
+          section: layout.section,
+          info: layout.info,
+          align_log2: layout.align_log2,
+          offset: layout.offset,
+          size: layout.size,
+          reloff,
+          nreloc: rel_count,
+          index: layout.index,
+        }
+      }
     }
   }
   let symoff = align_up(reloc_offset, 4)
@@ -515,28 +508,26 @@ fn encode_macho_object(
   out.write_uint64_le(0)
   let mut fileoff = out.length()
   for seg in segment_order {
-    match segment_sections.get(seg) {
-      None => ()
-      Some(list) =>
-        for idx in list {
-          let layout = layouts[idx]
-          if layout.info.is_zerofill {
-            continue
-          }
-          let align = 1 << layout.align_log2
-          let aligned = align_up(fileoff, align)
-          while fileoff < aligned {
-            out.write_byte(0)
-            fileoff = fileoff + 1
-          }
-          let word_len = section_word_len(layout.section)
-          let mut i = 0
-          while i < word_len {
-            out.write_uint_le(layout.section.data[i])
-            fileoff = fileoff + 4
-            i = i + 1
-          }
+    if segment_sections.get(seg) is Some(list) {
+      for idx in list {
+        let layout = layouts[idx]
+        if layout.info.is_zerofill {
+          continue
         }
+        let align = 1 << layout.align_log2
+        let aligned = align_up(fileoff, align)
+        while fileoff < aligned {
+          out.write_byte(0)
+          fileoff = fileoff + 1
+        }
+        let word_len = section_word_len(layout.section)
+        let mut i = 0
+        while i < word_len {
+          out.write_uint_le(layout.section.data[i])
+          fileoff = fileoff + 4
+          i = i + 1
+        }
+      }
     }
   }
   let reloc_aligned = align_up(fileoff, 4)
@@ -545,24 +536,22 @@ fn encode_macho_object(
     fileoff = fileoff + 1
   }
   for seg in segment_order {
-    match segment_sections.get(seg) {
-      None => ()
-      Some(list) =>
-        for idx in list {
-          let layout = layouts[idx]
-          for rel in layout.section.relocs {
-            let (rtype, pcrel) = macho_reloc_type(rel.kind)
-            let symbolnum = match id_to_index.get(rel.sym.id) {
-              None => 0
-              Some(idx) => idx
-            }
-            let len = reloc_length(rel.kind)
-            let info = pack_reloc_info(symbolnum, pcrel, len, true, rtype)
-            out.write_uint_le(rel.offset.reinterpret_as_uint())
-            out.write_uint_le(info)
-            fileoff = fileoff + 8
+    if segment_sections.get(seg) is Some(list) {
+      for idx in list {
+        let layout = layouts[idx]
+        for rel in layout.section.relocs {
+          let (rtype, pcrel) = macho_reloc_type(rel.kind)
+          let symbolnum = match id_to_index.get(rel.sym.id) {
+            None => 0
+            Some(idx) => idx
           }
+          let len = reloc_length(rel.kind)
+          let info = pack_reloc_info(symbolnum, pcrel, len, true, rtype)
+          out.write_uint_le(rel.offset.reinterpret_as_uint())
+          out.write_uint_le(info)
+          fileoff = fileoff + 8
         }
+      }
     }
   }
   let sym_aligned = align_up(fileoff, 4)

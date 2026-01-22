@@ -1846,9 +1846,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
       hidden_is_empty(tok.hidden) ||
       (macro_id != 0 && !hidden_contains(pp.hidden_pool, tok.hidden, macro_id))
     if is_macro_name && macro_id != 0 && hidden_ok {
-      match get_macro(pp, macro_id) {
-        None => ()
-        Some(macro_def) => {
+      if get_macro(pp, macro_id) is Some(macro_def) {
           if is_expanding(pp, macro_id) {
             match out_opt {
               Some(arr) => arr.push(tok)
@@ -1975,7 +1973,6 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
             i = i + 1
             continue
           }
-        }
       }
     }
     match out_opt {
@@ -3191,9 +3188,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
       hidden_is_empty(tok.hidden) ||
       (macro_id != 0 && !hidden_contains(pp.hidden_pool, tok.hidden, macro_id))
     if is_macro_name && macro_id != 0 && hidden_ok {
-      match get_macro(pp, macro_id) {
-        None => ()
-        Some(macro_def) => {
+      if get_macro(pp, macro_id) is Some(macro_def) {
           if is_expanding(pp, macro_id) {
             return tok
           }
@@ -3275,7 +3270,6 @@ fn next_pp_token(pp : Preprocessor) -> Token {
             }
             continue
           }
-        }
       }
     }
     return tok

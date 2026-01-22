@@ -652,16 +652,12 @@ fn compile_to_object_path(
       }
       if !has_errors(bag) {
         let codegen_start = if bench_enabled { bench_now_ns() } else { 0UL }
-        match sem_ctx {
-          None => ()
-          Some(ctx) =>
-            match codegen_arm64_object_bytes_with_sem(unit, ctx, bag) {
-              None => ()
-              Some(bytes) =>
-                @fs.write_bytes_to_file(output_path, bytes) catch {
-                  err => add_error(bag, dummy_loc(0), err.to_string())
-                }
+        if sem_ctx is Some(ctx) {
+          if codegen_arm64_object_bytes_with_sem(unit, ctx, bag) is Some(bytes) {
+            @fs.write_bytes_to_file(output_path, bytes) catch {
+              err => add_error(bag, dummy_loc(0), err.to_string())
             }
+          }
         }
         if bench_enabled {
           let codegen_end = bench_now_ns()
@@ -671,9 +667,8 @@ fn compile_to_object_path(
       if bench_enabled {
         let total_end = bench_now_ns()
         total_ns = bench_delta_ns(total_start, total_end)
-        match bench_stats {
-          None => ()
-          Some(stats) => bench_stats_add(stats, parse_ns, sem_ns, codegen_ns, total_ns)
+        if bench_stats is Some(stats) {
+          bench_stats_add(stats, parse_ns, sem_ns, codegen_ns, total_ns)
         }
         println(bench_file_line(path, parse_ns, sem_ns, codegen_ns, total_ns))
       }
