@@ -3754,25 +3754,20 @@ fn check_initializer_list(
           if size is None && index < 0 {
             add_sem_error(ctx, item.loc, "array designator out of bounds")
           } else {
-            match size {
-              None => ()
-              Some(n) => {
-                let end_idx = range_end.unwrap_or(index)
-                if index < 0 || end_idx < 0 || index >= n || end_idx >= n {
-                  // TCC accepts excess array initializers and truncates them.
-                  ()
-                }
+            if size is Some(n) {
+              let end_idx = range_end.unwrap_or(index)
+              if index < 0 || end_idx < 0 || index >= n || end_idx >= n {
+                // TCC accepts excess array initializers and truncates them.
+                ()
               }
             }
           }
         } else {
-          match size {
-            None => ()
-            Some(n) =>
-              if index >= n {
-                // TCC accepts excess array initializers and truncates them.
-                ()
-              }
+          if size is Some(n) {
+            if index >= n {
+              // TCC accepts excess array initializers and truncates them.
+              ()
+            }
           }
         }
         let range_last = range_end.unwrap_or(index)
@@ -3840,16 +3835,13 @@ fn check_struct_initializer(
     if item.designators.length() > 0 {
       match item.designators[0] {
         InitDesignator::Field(name~, id~, ..) =>
-          match find_field_index_cached(ctx, ty, name, id, item.loc) {
-            None => ()
-            Some(idx) => index = idx + 1
+          if find_field_index_cached(ctx, ty, name, id, item.loc) is Some(idx) {
+            index = idx + 1
           }
         _ => ()
       }
-      match resolve_designator_type(ctx, ty, item.designators, item.loc) {
-        None => ()
-        Some(target_ty) =>
-          check_initializer(ctx, target_ty, item.value, item.loc) |> ignore
+      if resolve_designator_type(ctx, ty, item.designators, item.loc) is Some(target_ty) {
+        check_initializer(ctx, target_ty, item.value, item.loc) |> ignore
       }
       if is_union {
         saw = saw + 1
