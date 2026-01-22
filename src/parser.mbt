@@ -3714,13 +3714,10 @@ fn ensure_typedef_capacity(p : Parser, id : Int) -> Unit {
 
 ///|
 fn get_typedef_count(p : Parser, id : Int) -> Int {
-  if id <= 0 {
-    return 0
-  }
-  if id <= p.typedef_counts.length() {
-    p.typedef_counts[id - 1]
-  } else {
+  if id <= 0 || id > p.typedef_counts.length() {
     0
+  } else {
+    p.typedef_counts[id - 1]
   }
 }
 
@@ -3735,13 +3732,10 @@ fn set_typedef_count(p : Parser, id : Int, count : Int) -> Unit {
 
 ///|
 fn get_typedef_value(p : Parser, id : Int) -> CType? {
-  if id <= 0 {
-    return None
-  }
-  if id <= p.typedef_values.length() {
-    p.typedef_values[id - 1]
-  } else {
+  if id <= 0 || id > p.typedef_values.length() {
     None
+  } else {
+    p.typedef_values[id - 1]
   }
 }
 
@@ -3756,13 +3750,10 @@ fn set_typedef_value(p : Parser, id : Int, value : CType?) -> Unit {
 
 ///|
 fn get_typedef_scope_level(p : Parser, id : Int) -> Int {
-  if id <= 0 {
-    return 0
-  }
-  if id <= p.typedef_scope_levels.length() {
-    p.typedef_scope_levels[id - 1]
-  } else {
+  if id <= 0 || id > p.typedef_scope_levels.length() {
     0
+  } else {
+    p.typedef_scope_levels[id - 1]
   }
 }
 
