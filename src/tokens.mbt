@@ -118,8 +118,14 @@ struct LexemePool {
 }
 
 ///|
-fn new_lexeme_pool() -> LexemePool {
-  { strings: [] }
+fn new_lexeme_pool(capacity? : Int) -> LexemePool {
+  match capacity {
+    None => { strings: [] }
+    Some(value) => {
+      let cap = if value > 0 { value } else { 0 }
+      { strings: Array::new(capacity=cap) }
+    }
+  }
 }
 
 ///|

@@ -334,6 +334,15 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
   } else if interner_capacity > 65536 {
     interner_capacity = 65536
   }
+  let lexeme_capacity = interner_capacity
+  let mut pending_capacity = text_len / 64
+  if pending_capacity < 256 {
+    pending_capacity = 256
+  } else if pending_capacity > 8192 {
+    pending_capacity = 8192
+  }
+  let include_stack_capacity = 16
+  let cond_capacity = 64
   let interner = new_string_interner_with_capacity(capacity=interner_capacity)
   let keyword_ids = init_keyword_ids(interner)
   let (_, line_macro_id) = interner.intern_view_with_id("__LINE__"[:])
@@ -358,30 +367,30 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
   let (_, dir_error_id) = interner.intern_view_with_id("error"[:])
   let (_, dir_warning_id) = interner.intern_view_with_id("warning"[:])
   let (_, dir_pragma_id) = interner.intern_view_with_id("pragma"[:])
-  let lexeme_pool = new_lexeme_pool()
+  let lexeme_pool = new_lexeme_pool(capacity=lexeme_capacity)
   let pp = {
     lexer: new_lexer(file, diags, interner, keyword_ids, lexeme_pool),
-    lexer_stack: [],
-    held_stack: [],
-    path_stack: [],
-    dir_stack: [],
+    lexer_stack: Array::new(capacity=include_stack_capacity),
+    held_stack: Array::new(capacity=include_stack_capacity),
+    path_stack: Array::new(capacity=include_stack_capacity),
+    dir_stack: Array::new(capacity=include_stack_capacity),
     current_path: file.path,
     current_dir: dir_name(file.path),
     logical_path: file.path,
-    logical_path_stack: [],
+    logical_path_stack: Array::new(capacity=include_stack_capacity),
     line_adjust: 0,
-    line_adjust_stack: [],
-    include_paths: [],
+    line_adjust_stack: Array::new(capacity=include_stack_capacity),
+    include_paths: Array::new(capacity=include_stack_capacity),
     diags,
     map,
     macros: [],
     macro_epoch: 0,
-    pending: [],
+    pending: Array::new(capacity=pending_capacity),
     held: None,
-    cond_stack: [],
+    cond_stack: Array::new(capacity=cond_capacity),
     active: true,
-    expanding: [],
-    expanding_guards: [],
+    expanding: Array::new(capacity=cond_capacity),
+    expanding_guards: Array::new(capacity=cond_capacity),
     date_literal,
     time_literal,
     interner,
