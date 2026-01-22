@@ -215,13 +215,10 @@ fn[T] ensure_opt_array_capacity(arr : Array[T?], id : Int) -> Unit {
 
 ///|
 fn[T] get_opt_by_id(arr : Array[T?], id : Int) -> T? {
-  if id <= 0 {
-    return None
-  }
-  if id <= arr.length() {
-    arr[id - 1]
-  } else {
+  if id <= 0 || id > arr.length() {
     None
+  } else {
+    arr[id - 1]
   }
 }
 
