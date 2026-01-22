@@ -6051,12 +6051,10 @@ fn gen_compound_literal_addr_with_type(
         Some(value) => Some(value)
         None => type_size_align_or_error(alloc.sem, resolved, loc)
       }
-      match size_align {
-        None => ()
-        Some((size, _)) =>
-          if size > 0 {
-            emit_zero_bytes(emitter, 29, off, size)
-          }
+      if size_align is Some((size, _)) {
+        if size > 0 {
+          emit_zero_bytes(emitter, 29, off, size)
+        }
       }
       gen_initializer_to_addr(
         emitter,
@@ -6196,32 +6194,30 @@ fn gen_lvalue_addr(
       } else if !expr_is_lvalue_simple(base) {
         match strip_top_qualifiers(base_ty) {
           CType::Struct(..) | CType::Union(..) =>
-            match type_size_align_or_error(alloc.sem, base_ty, loc) {
-              None => ()
-              Some((size, _)) =>
-                match alloc.agg_temp_offset {
-                  None => add_error(bag, loc, "codegen: missing aggregate temp slot")
-                  Some(tmp_off) => {
-                    if size > alloc.agg_temp_size {
-                      add_error(bag, loc, "codegen: aggregate temp too small")
-                      return
-                    }
-                    gen_agg_expr_to_addr(
-                      emitter,
-                      alloc,
-                      syms,
-                      pool,
-                      cstrings,
-                      base,
-                      29,
-                      tmp_off,
-                      base_ty,
-                      loc,
-                      bag,
-                    )
-                    emit_addr_local(emitter, dst, tmp_off, loc, bag)
+            if type_size_align_or_error(alloc.sem, base_ty, loc) is Some((size, _)) {
+              match alloc.agg_temp_offset {
+                None => add_error(bag, loc, "codegen: missing aggregate temp slot")
+                Some(tmp_off) => {
+                  if size > alloc.agg_temp_size {
+                    add_error(bag, loc, "codegen: aggregate temp too small")
+                    return
                   }
+                  gen_agg_expr_to_addr(
+                    emitter,
+                    alloc,
+                    syms,
+                    pool,
+                    cstrings,
+                    base,
+                    29,
+                    tmp_off,
+                    base_ty,
+                    loc,
+                    bag,
+                  )
+                  emit_addr_local(emitter, dst, tmp_off, loc, bag)
                 }
+              }
             }
           _ => gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, base, dst, bag)
         }
@@ -6306,9 +6302,8 @@ fn struct_field_access_info(
           Some(v) => v
         }
         let mut field_align = base_align
-        match field_align_override {
-          None => ()
-          Some(value) => field_align = value
+        if field_align_override is Some(value) {
+          field_align = value
         }
         if width == 0 {
           let used_bytes = (bit_pos + 7) / 8
@@ -6319,9 +6314,8 @@ fn struct_field_access_info(
         if packed && width != 0 {
           field_align = 1
         }
-        match field_align_override {
-          None => ()
-          Some(value) => field_align = value
+        if field_align_override is Some(value) {
+          field_align = value
         }
         if field_align_override is Some(_) {
           let used_bytes = (bit_pos + 7) / 8
@@ -6395,9 +6389,8 @@ fn struct_field_access_info(
             }
         }
         let mut adjusted_align = if packed { 1 } else { field_align }
-        match field_align_override {
-          None => ()
-          Some(value) => adjusted_align = value
+        if field_align_override is Some(value) {
+          adjusted_align = value
         }
         size = align_to(size, adjusted_align)
         if (id > 0 && field.id == id) || field.name == name {
@@ -6412,16 +6405,14 @@ fn struct_field_access_info(
         if field.name == "" {
           match strip_top_qualifiers(field.ty) {
             CType::Struct(..) | CType::Union(..) =>
-              match record_field_access_info(ctx, field.ty, name, id, loc) {
-                None => ()
-                Some(inner) =>
-                  return Some({
-                    offset: size + inner.offset,
-                    ty: inner.ty,
-                    bit_offset: inner.bit_offset,
-                    bit_width: inner.bit_width,
-                    bit_unit_size: inner.bit_unit_size,
-                  })
+              if record_field_access_info(ctx, field.ty, name, id, loc) is Some(inner) {
+                return Some({
+                  offset: size + inner.offset,
+                  ty: inner.ty,
+                  bit_offset: inner.bit_offset,
+                  bit_width: inner.bit_width,
+                  bit_unit_size: inner.bit_unit_size,
+                })
               }
             _ => ()
           }
@@ -6479,16 +6470,14 @@ fn union_field_access_info(
     if field.name == "" {
       match strip_top_qualifiers(field.ty) {
         CType::Struct(..) | CType::Union(..) =>
-          match record_field_access_info(ctx, field.ty, name, id, loc) {
-            None => ()
-            Some(inner) =>
-              return Some({
-                offset: inner.offset,
-                ty: inner.ty,
-                bit_offset: inner.bit_offset,
-                bit_width: inner.bit_width,
-                bit_unit_size: inner.bit_unit_size,
-              })
+          if record_field_access_info(ctx, field.ty, name, id, loc) is Some(inner) {
+            return Some({
+              offset: inner.offset,
+              ty: inner.ty,
+              bit_offset: inner.bit_offset,
+              bit_width: inner.bit_width,
+              bit_unit_size: inner.bit_unit_size,
+            })
           }
         _ => ()
       }
@@ -6548,9 +6537,8 @@ fn collect_struct_field_access_cache(
           Some(v) => v
         }
         let mut field_align = base_align
-        match field_align_override {
-          None => ()
-          Some(value) => field_align = value
+        if field_align_override is Some(value) {
+          field_align = value
         }
         if width == 0 {
           let used_bytes = (bit_pos + 7) / 8
@@ -6561,9 +6549,8 @@ fn collect_struct_field_access_cache(
         if packed && width != 0 {
           field_align = 1
         }
-        match field_align_override {
-          None => ()
-          Some(value) => field_align = value
+        if field_align_override is Some(value) {
+          field_align = value
         }
         if field_align_override is Some(_) {
           let used_bytes = (bit_pos + 7) / 8
@@ -6636,9 +6623,8 @@ fn collect_struct_field_access_cache(
             }
         }
         let mut adjusted_align = if packed { 1 } else { field_align }
-        match field_align_override {
-          None => ()
-          Some(value) => adjusted_align = value
+        if field_align_override is Some(value) {
+          adjusted_align = value
         }
         size = align_to(size, adjusted_align)
         let info = {
