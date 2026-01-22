@@ -4362,9 +4362,8 @@ fn with_switch(ctx : SemContext, f : () -> Unit) -> Unit {
   ctx.switch_depth = ctx.switch_depth + 1
   ctx.switch_stack.push({ cases: [], has_default: false })
   f()
-  match ctx.switch_stack.pop() {
-    None => ()
-    Some(info) => check_switch_cases(ctx, info)
+  if ctx.switch_stack.pop() is Some(info) {
+    check_switch_cases(ctx, info)
   }
   ctx.switch_depth = ctx.switch_depth - 1
 }
@@ -6800,9 +6799,8 @@ fn declare_global(
       }
   }
   if id > 0 {
-    match updated {
-      None => ()
-      Some(resolved) => set_global_by_id(ctx, id, resolved)
+    if updated is Some(resolved) {
+      set_global_by_id(ctx, id, resolved)
     }
   }
 }
