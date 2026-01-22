@@ -117,6 +117,13 @@ fn advance(lex : Lexer) -> UInt16? {
 }
 
 ///|
+fn advance_punct(lex : Lexer) -> Unit {
+  lex.index = lex.index + 1
+  lex.col = lex.col + 1
+  lex.line_start = false
+}
+
+///|
 fn add_lex_error(lex : Lexer, loc : SrcLoc, message : String) -> Unit {
   add_error(lex.diags, loc, message)
 }
@@ -136,9 +143,17 @@ fn skip_ws(lex : Lexer) -> Unit {
       return
     }
     let code = text[idx]
-    if is_ws_no_newline(code) {
+    if code == 32 || code == 9 || code == 13 || code == 12 || code == 11 {
       let mut next = idx + 1
-      while next < len && is_ws_no_newline(text[next]) {
+      while next < len {
+        let next_code = text[next]
+        if !(next_code == 32 ||
+          next_code == 9 ||
+          next_code == 13 ||
+          next_code == 12 ||
+          next_code == 11) {
+          break
+        }
         next = next + 1
       }
       let delta = next - idx
@@ -193,28 +208,22 @@ fn skip_line_comment(lex : Lexer) -> Unit {
   if idx >= len {
     return
   }
-  let view = lex.text.view(start_offset=idx, end_offset=len)
-  match view.find("\n"[:]) {
-    None => {
-      if len > idx {
-        lex.index = len
-        lex.col = lex.col + (len - idx)
-      }
+  let text = lex.text
+  let mut i = idx
+  let mut col = lex.col
+  while i < len {
+    if text[i] == 10 {
+      lex.index = i + 1
+      lex.line = lex.line + 1
+      lex.col = 1
+      lex.line_start = true
+      return
     }
-    Some(pos) => {
-      let newline_idx = idx + pos
-      if newline_idx > idx {
-        lex.index = newline_idx
-        lex.col = lex.col + (newline_idx - idx)
-      }
-      if newline_idx < len {
-        lex.index = newline_idx + 1
-        lex.line = lex.line + 1
-        lex.col = 1
-        lex.line_start = true
-      }
-    }
+    i = i + 1
+    col = col + 1
   }
+  lex.index = len
+  lex.col = col
 }
 
 ///|
@@ -528,7 +537,7 @@ fn lex_punct(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
   }
   if code == 35 {
     if lex.index < len && text[lex.index] == 35 {
-      let _ = advance(lex)
+      advance_punct(lex)
       return make_token(HashHash, loc, line_start)
     }
     return make_token(Hash, loc, line_start)
@@ -537,8 +546,8 @@ fn lex_punct(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
     if lex.index + 1 < len &&
       text[lex.index] == 46 &&
       text[lex.index + 1] == 46 {
-      let _ = advance(lex)
-      let _ = advance(lex)
+      advance_punct(lex)
+      advance_punct(lex)
       return make_token(Ellipsis, loc, line_start)
     }
     return make_token(Dot, loc, line_start)
@@ -547,15 +556,15 @@ fn lex_punct(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
     if lex.index < len {
       let next = text[lex.index]
       if next == 62 {
-        let _ = advance(lex)
+        advance_punct(lex)
         return make_token(Arrow, loc, line_start)
       }
       if next == 45 {
-        let _ = advance(lex)
+        advance_punct(lex)
         return make_token(MinusMinus, loc, line_start)
       }
       if next == 61 {
-        let _ = advance(lex)
+        advance_punct(lex)
         return make_token(MinusAssign, loc, line_start)
       }
     }
@@ -565,11 +574,11 @@ fn lex_punct(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
     if lex.index < len {
       let next = text[lex.index]
       if next == 43 {
-        let _ = advance(lex)
+        advance_punct(lex)
         return make_token(PlusPlus, loc, line_start)
       }
       if next == 61 {
-        let _ = advance(lex)
+        advance_punct(lex)
         return make_token(PlusAssign, loc, line_start)
       }
     }
@@ -577,65 +586,65 @@ fn lex_punct(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
   }
   if code == 42 {
     if lex.index < len && text[lex.index] == 61 {
-      let _ = advance(lex)
+      advance_punct(lex)
       return make_token(StarAssign, loc, line_start)
     }
     return make_token(Star, loc, line_start)
   }
   if code == 47 {
     if lex.index < len && text[lex.index] == 61 {
-      let _ = advance(lex)
+      advance_punct(lex)
       return make_token(SlashAssign, loc, line_start)
     }
     return make_token(Slash, loc, line_start)
   }
   if code == 37 {
     if lex.index < len && text[lex.index] == 61 {
-      let _ = advance(lex)
+      advance_punct(lex)
       return make_token(PercentAssign, loc, line_start)
     }
     return make_token(Percent, loc, line_start)
   }
   if code == 61 {
     if lex.index < len && text[lex.index] == 61 {
-      let _ = advance(lex)
+      advance_punct(lex)
       return make_token(Eq, loc, line_start)
     }
     return make_token(Assign, loc, line_start)
   }
   if code == 33 {
     if lex.index < len && text[lex.index] == 61 {
-      let _ = advance(lex)
+      advance_punct(lex)
       return make_token(Ne, loc, line_start)
     }
     return make_token(Bang, loc, line_start)
   }
   if code == 60 {
     if lex.index < len && text[lex.index] == 60 {
-      let _ = advance(lex)
+      advance_punct(lex)
       if lex.index < len && text[lex.index] == 61 {
-        let _ = advance(lex)
+        advance_punct(lex)
         return make_token(ShiftLeftAssign, loc, line_start)
       }
       return make_token(ShiftLeft, loc, line_start)
     }
     if lex.index < len && text[lex.index] == 61 {
-      let _ = advance(lex)
+      advance_punct(lex)
       return make_token(Le, loc, line_start)
     }
     return make_token(Lt, loc, line_start)
   }
   if code == 62 {
     if lex.index < len && text[lex.index] == 62 {
-      let _ = advance(lex)
+      advance_punct(lex)
       if lex.index < len && text[lex.index] == 61 {
-        let _ = advance(lex)
+        advance_punct(lex)
         return make_token(ShiftRightAssign, loc, line_start)
       }
       return make_token(ShiftRight, loc, line_start)
     }
     if lex.index < len && text[lex.index] == 61 {
-      let _ = advance(lex)
+      advance_punct(lex)
       return make_token(Ge, loc, line_start)
     }
     return make_token(Gt, loc, line_start)
@@ -644,11 +653,11 @@ fn lex_punct(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
     if lex.index < len {
       let next = text[lex.index]
       if next == 38 {
-        let _ = advance(lex)
+        advance_punct(lex)
         return make_token(AmpAmp, loc, line_start)
       }
       if next == 61 {
-        let _ = advance(lex)
+        advance_punct(lex)
         return make_token(AmpAssign, loc, line_start)
       }
     }
@@ -658,11 +667,11 @@ fn lex_punct(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
     if lex.index < len {
       let next = text[lex.index]
       if next == 124 {
-        let _ = advance(lex)
+        advance_punct(lex)
         return make_token(PipePipe, loc, line_start)
       }
       if next == 61 {
-        let _ = advance(lex)
+        advance_punct(lex)
         return make_token(PipeAssign, loc, line_start)
       }
     }
@@ -670,7 +679,7 @@ fn lex_punct(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
   }
   if code == 94 {
     if lex.index < len && text[lex.index] == 61 {
-      let _ = advance(lex)
+      advance_punct(lex)
       return make_token(CaretAssign, loc, line_start)
     }
     return make_token(Caret, loc, line_start)

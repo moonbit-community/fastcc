@@ -2125,7 +2125,9 @@ fn normalize_float_kind(kind : CFloatKind) -> CFloatKind {
 
 ///|
 fn type_is_pointer_like(ty : CType) -> Bool {
-  match strip_top_qualifiers(ty) {
+  match ty {
+    CType::Qualified(base~, ..) => type_is_pointer_like(base)
+    CType::Attributed(base~, ..) => type_is_pointer_like(base)
     CType::Pointer(_) => true
     CType::Array(..) => true
     _ => false
@@ -2134,8 +2136,12 @@ fn type_is_pointer_like(ty : CType) -> Bool {
 
 ///|
 fn type_is_aggregate(ty : CType) -> Bool {
-  match strip_top_qualifiers(ty) {
-    CType::Struct(..) | CType::Union(..) | CType::Array(..) => true
+  match ty {
+    CType::Qualified(base~, ..) => type_is_aggregate(base)
+    CType::Attributed(base~, ..) => type_is_aggregate(base)
+    CType::Struct(..) => true
+    CType::Union(..) => true
+    CType::Array(..) => true
     _ => false
   }
 }
@@ -12196,7 +12202,8 @@ fn gen_stmt(
           None => ()
           Some(slot) => {
             let mut slot0 = slot
-            match strip_top_qualifiers(slot0.ty) {
+            let mut slot_stripped = strip_top_qualifiers(slot0.ty)
+            match slot_stripped {
               CType::Array(size=None, size_expr=Some(_), ..) => {
                 let size_off = alloc_hidden_slot(alloc, 8, 8)
                 let updated = {
@@ -12213,6 +12220,7 @@ fn gen_stmt(
                 }
                 update_local_slot(alloc, d.name, d.id, updated)
                 slot0 = updated
+                slot_stripped = strip_top_qualifiers(slot0.ty)
                 match vla_record_decl(alloc, slot0.offset) {
                   None => ()
                   Some(off) => emit_vla_sp_save(emitter, off)
@@ -12220,7 +12228,7 @@ fn gen_stmt(
               }
               _ => ()
             }
-            match strip_top_qualifiers(slot0.ty) {
+            match slot_stripped {
               CType::Array(elem=_elem_ty, size=None, size_expr=Some(_expr)) =>
                 gen_vla_alloc_to_local_slot(
                   emitter,

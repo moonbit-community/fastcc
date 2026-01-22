@@ -8,10 +8,10 @@ struct StringInterner {
 }
 
 ///|
-let tok_hash_size : Int = 16384
+let tok_hash_size : Int = 65536
 
 ///|
-let tok_hash_mask : UInt = 16383
+let tok_hash_mask : UInt = 65535
 
 ///|
 let tok_hash_init : UInt = 1

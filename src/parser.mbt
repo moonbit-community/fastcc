@@ -2866,129 +2866,33 @@ fn parse_expr_comma(p : Parser) -> Expr {
 ///|
 fn parse_expr_eq(p : Parser) -> Expr {
   let left = parse_expr_cond(p)
-  match p.current.kind {
-    Assign => {
+  let op = match p.current.kind {
+    Assign => Some(BinaryOp::Assign)
+    PlusAssign => Some(BinaryOp::AddAssign)
+    MinusAssign => Some(BinaryOp::SubAssign)
+    StarAssign => Some(BinaryOp::MulAssign)
+    SlashAssign => Some(BinaryOp::DivAssign)
+    PercentAssign => Some(BinaryOp::ModAssign)
+    ShiftLeftAssign => Some(BinaryOp::ShlAssign)
+    ShiftRightAssign => Some(BinaryOp::ShrAssign)
+    AmpAssign => Some(BinaryOp::BitAndAssign)
+    PipeAssign => Some(BinaryOp::BitOrAssign)
+    CaretAssign => Some(BinaryOp::BitXorAssign)
+    _ => None
+  }
+  match op {
+    None => left
+    Some(op) => {
       let tok = advance_token(p)
       let right = parse_expr_eq(p)
       Expr::Binary(
-        op=BinaryOp::Assign,
+        op~,
         left~,
         right~,
         node_id=new_expr_id(p),
         loc=tok.loc,
       )
     }
-    PlusAssign => {
-      let tok = advance_token(p)
-      let right = parse_expr_eq(p)
-      Expr::Binary(
-        op=BinaryOp::AddAssign,
-        left~,
-        right~,
-        node_id=new_expr_id(p),
-        loc=tok.loc,
-      )
-    }
-    MinusAssign => {
-      let tok = advance_token(p)
-      let right = parse_expr_eq(p)
-      Expr::Binary(
-        op=BinaryOp::SubAssign,
-        left~,
-        right~,
-        node_id=new_expr_id(p),
-        loc=tok.loc,
-      )
-    }
-    StarAssign => {
-      let tok = advance_token(p)
-      let right = parse_expr_eq(p)
-      Expr::Binary(
-        op=BinaryOp::MulAssign,
-        left~,
-        right~,
-        node_id=new_expr_id(p),
-        loc=tok.loc,
-      )
-    }
-    SlashAssign => {
-      let tok = advance_token(p)
-      let right = parse_expr_eq(p)
-      Expr::Binary(
-        op=BinaryOp::DivAssign,
-        left~,
-        right~,
-        node_id=new_expr_id(p),
-        loc=tok.loc,
-      )
-    }
-    PercentAssign => {
-      let tok = advance_token(p)
-      let right = parse_expr_eq(p)
-      Expr::Binary(
-        op=BinaryOp::ModAssign,
-        left~,
-        right~,
-        node_id=new_expr_id(p),
-        loc=tok.loc,
-      )
-    }
-    ShiftLeftAssign => {
-      let tok = advance_token(p)
-      let right = parse_expr_eq(p)
-      Expr::Binary(
-        op=BinaryOp::ShlAssign,
-        left~,
-        right~,
-        node_id=new_expr_id(p),
-        loc=tok.loc,
-      )
-    }
-    ShiftRightAssign => {
-      let tok = advance_token(p)
-      let right = parse_expr_eq(p)
-      Expr::Binary(
-        op=BinaryOp::ShrAssign,
-        left~,
-        right~,
-        node_id=new_expr_id(p),
-        loc=tok.loc,
-      )
-    }
-    AmpAssign => {
-      let tok = advance_token(p)
-      let right = parse_expr_eq(p)
-      Expr::Binary(
-        op=BinaryOp::BitAndAssign,
-        left~,
-        right~,
-        node_id=new_expr_id(p),
-        loc=tok.loc,
-      )
-    }
-    PipeAssign => {
-      let tok = advance_token(p)
-      let right = parse_expr_eq(p)
-      Expr::Binary(
-        op=BinaryOp::BitOrAssign,
-        left~,
-        right~,
-        node_id=new_expr_id(p),
-        loc=tok.loc,
-      )
-    }
-    CaretAssign => {
-      let tok = advance_token(p)
-      let right = parse_expr_eq(p)
-      Expr::Binary(
-        op=BinaryOp::BitXorAssign,
-        left~,
-        right~,
-        node_id=new_expr_id(p),
-        loc=tok.loc,
-      )
-    }
-    _ => left
   }
 }
 
@@ -3014,35 +2918,87 @@ fn parse_expr_cond(p : Parser) -> Expr {
 }
 
 ///|
-fn binary_op_info(kind : TokenKind) -> (BinaryOp, Int) {
-  match kind {
-    PipePipe => (BinaryOp::LogOr, 1)
-    AmpAmp => (BinaryOp::LogAnd, 2)
-    Pipe => (BinaryOp::BitOr, 3)
-    Caret => (BinaryOp::BitXor, 4)
-    Amp => (BinaryOp::BitAnd, 5)
-    Eq => (BinaryOp::Eq, 6)
-    Ne => (BinaryOp::Ne, 6)
-    Lt => (BinaryOp::Lt, 7)
-    Le => (BinaryOp::Le, 7)
-    Gt => (BinaryOp::Gt, 7)
-    Ge => (BinaryOp::Ge, 7)
-    ShiftLeft => (BinaryOp::Shl, 8)
-    ShiftRight => (BinaryOp::Shr, 8)
-    Plus => (BinaryOp::Add, 9)
-    Minus => (BinaryOp::Sub, 9)
-    Star => (BinaryOp::Mul, 10)
-    Slash => (BinaryOp::Div, 10)
-    Percent => (BinaryOp::Mod, 10)
-    _ => (BinaryOp::Add, 0)
-  }
-}
-
 ///|
 fn parse_expr_binary(p : Parser, min_prec : Int) -> Expr {
   let mut expr = parse_expr_unary(p)
   while true {
-    let (op, prec) = binary_op_info(p.current.kind)
+    let mut prec = 0
+    let mut op = BinaryOp::Add
+    match p.current.kind {
+      PipePipe => {
+        op = BinaryOp::LogOr
+        prec = 1
+      }
+      AmpAmp => {
+        op = BinaryOp::LogAnd
+        prec = 2
+      }
+      Pipe => {
+        op = BinaryOp::BitOr
+        prec = 3
+      }
+      Caret => {
+        op = BinaryOp::BitXor
+        prec = 4
+      }
+      Amp => {
+        op = BinaryOp::BitAnd
+        prec = 5
+      }
+      Eq => {
+        op = BinaryOp::Eq
+        prec = 6
+      }
+      Ne => {
+        op = BinaryOp::Ne
+        prec = 6
+      }
+      Lt => {
+        op = BinaryOp::Lt
+        prec = 7
+      }
+      Le => {
+        op = BinaryOp::Le
+        prec = 7
+      }
+      Gt => {
+        op = BinaryOp::Gt
+        prec = 7
+      }
+      Ge => {
+        op = BinaryOp::Ge
+        prec = 7
+      }
+      ShiftLeft => {
+        op = BinaryOp::Shl
+        prec = 8
+      }
+      ShiftRight => {
+        op = BinaryOp::Shr
+        prec = 8
+      }
+      Plus => {
+        op = BinaryOp::Add
+        prec = 9
+      }
+      Minus => {
+        op = BinaryOp::Sub
+        prec = 9
+      }
+      Star => {
+        op = BinaryOp::Mul
+        prec = 10
+      }
+      Slash => {
+        op = BinaryOp::Div
+        prec = 10
+      }
+      Percent => {
+        op = BinaryOp::Mod
+        prec = 10
+      }
+      _ => ()
+    }
     if prec == 0 || prec < min_prec {
       break
     }
