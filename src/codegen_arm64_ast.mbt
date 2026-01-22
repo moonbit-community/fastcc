@@ -5688,23 +5688,29 @@ fn gen_call_expr_impl(
     _ => ()
   }
 
-  let arg_tys : Array[CType] = Array::new(capacity=args.length())
-  let mut i = 0
-  while i < args.length() {
-    let param_ty =
-      if i < param_tys.length() {
-        param_tys[i]
-      } else {
-        type_of_expr(alloc.sem, args[i])
-      }
-    let store_ty =
-      if is_varargs && i >= param_tys.length() {
-        promote_vararg_type(param_ty)
-      } else {
-        param_ty
-      }
-    arg_tys.push(store_ty)
-    i = i + 1
+  let mut arg_tys : Array[CType] = []
+  if !is_varargs && args.length() == param_tys.length() {
+    arg_tys = param_tys
+  } else {
+    let built : Array[CType] = Array::new(capacity=args.length())
+    let mut i = 0
+    while i < args.length() {
+      let param_ty =
+        if i < param_tys.length() {
+          param_tys[i]
+        } else {
+          type_of_expr(alloc.sem, args[i])
+        }
+      let store_ty =
+        if is_varargs && i >= param_tys.length() {
+          promote_vararg_type(param_ty)
+        } else {
+          param_ty
+        }
+      built.push(store_ty)
+      i = i + 1
+    }
+    arg_tys = built
   }
   let variadic_index = if is_varargs { param_tys.length() } else { 0 }
 
