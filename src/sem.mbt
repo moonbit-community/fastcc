@@ -1300,9 +1300,8 @@ fn struct_size_align(
             }
         }
         let mut adjusted_align = if packed { 1 } else { field_align }
-        match field_align_override {
-          None => ()
-          Some(value) => adjusted_align = value
+        if field_align_override is Some(value) {
+          adjusted_align = value
         }
         size = align_to(size, adjusted_align)
         size = size + field_size
@@ -1505,10 +1504,8 @@ fn resolve_type_inner(ctx : SemContext, ty : CType, loc : SrcLoc) -> (CType, Boo
             out_params = Some(arr)
           }
         }
-        match out_params {
-          None => ()
-          Some(arr) =>
-            if param_changed { arr.push(resolved_param) } else { arr.push(param) }
+        if out_params is Some(arr) {
+          if param_changed { arr.push(resolved_param) } else { arr.push(param) }
         }
       }
       if !any_changed {
@@ -2868,9 +2865,8 @@ fn struct_field_offset_and_type(
           Some(v) => v
         }
         let mut field_align = base_align
-        match field_align_override {
-          None => ()
-          Some(value) => field_align = value
+        if field_align_override is Some(value) {
+          field_align = value
         }
         if width == 0 {
           let used_bytes = (bit_pos + 7) / 8
@@ -2881,9 +2877,8 @@ fn struct_field_offset_and_type(
         if packed && width != 0 {
           field_align = 1
         }
-        match field_align_override {
-          None => ()
-          Some(value) => field_align = value
+        if field_align_override is Some(value) {
+          field_align = value
         }
         if field_align_override is Some(_) {
           let used_bytes = (bit_pos + 7) / 8
@@ -2950,9 +2945,8 @@ fn struct_field_offset_and_type(
             }
         }
         let mut adjusted_align = if packed { 1 } else { field_align }
-        match field_align_override {
-          None => ()
-          Some(value) => adjusted_align = value
+        if field_align_override is Some(value) {
+          adjusted_align = value
         }
         size = align_to(size, adjusted_align)
         if field.name == name { return Some((size, field.ty, false)) }
@@ -3474,34 +3468,29 @@ fn record_compound_literal(
       set_opt_by_id(ctx.func_compound_literals_by_id, id, keys)
     }
   } else {
-    match ctx.current_func_name {
-      None => ()
-      Some(name) => {
-        ctx.func_has_compound_literal.set(name, true)
-        let keys = match ctx.func_compound_literals.get(name) {
-          None => []
-          Some(list) => list
+    if ctx.current_func_name is Some(name) {
+      ctx.func_has_compound_literal.set(name, true)
+      let keys = match ctx.func_compound_literals.get(name) {
+        None => []
+        Some(list) => list
+      }
+      let mut has_key = false
+      for existing in keys {
+        if existing == key {
+          has_key = true
         }
-        let mut has_key = false
-        for existing in keys {
-          if existing == key {
-            has_key = true
-          }
-        }
-        if !has_key {
-          keys.push(key)
-          ctx.func_compound_literals.set(name, keys)
-        }
+      }
+      if !has_key {
+        keys.push(key)
+        ctx.func_compound_literals.set(name, keys)
       }
     }
   }
   if !ctx.compound_literal_sizes.contains(key) {
-    match type_size_align(ctx, ty, loc) {
-      None => ()
-      Some((size, align)) =>
-        if size > 0 {
-          ctx.compound_literal_sizes.set(key, (size, align))
-        }
+    if type_size_align(ctx, ty, loc) is Some((size, align)) {
+      if size > 0 {
+        ctx.compound_literal_sizes.set(key, (size, align))
+      }
     }
   }
 }
