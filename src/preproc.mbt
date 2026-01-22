@@ -547,29 +547,23 @@ fn next_input_token(pp : Preprocessor) -> Token {
         let tok = next_token(pp.lexer)
         match tok.kind {
           Eof if pp.lexer_stack.length() > 0 => {
-            match pp.lexer_stack.pop() {
-              Some(prev) => pp.lexer = prev
-              None => ()
+            if pp.lexer_stack.pop() is Some(prev) {
+              pp.lexer = prev
             }
-            match pp.held_stack.pop() {
-              Some(prev_held) => pp.held = prev_held
-              None => ()
+            if pp.held_stack.pop() is Some(prev_held) {
+              pp.held = prev_held
             }
-            match pp.path_stack.pop() {
-              Some(prev_path) => pp.current_path = prev_path
-              None => ()
+            if pp.path_stack.pop() is Some(prev_path) {
+              pp.current_path = prev_path
             }
-            match pp.dir_stack.pop() {
-              Some(prev_dir) => pp.current_dir = prev_dir
-              None => ()
+            if pp.dir_stack.pop() is Some(prev_dir) {
+              pp.current_dir = prev_dir
             }
-            match pp.logical_path_stack.pop() {
-              Some(prev_path) => pp.logical_path = prev_path
-              None => ()
+            if pp.logical_path_stack.pop() is Some(prev_path) {
+              pp.logical_path = prev_path
             }
-            match pp.line_adjust_stack.pop() {
-              Some(prev_adjust) => pp.line_adjust = prev_adjust
-              None => ()
+            if pp.line_adjust_stack.pop() is Some(prev_adjust) {
+              pp.line_adjust = prev_adjust
             }
             continue
           }
@@ -1087,12 +1081,9 @@ fn parse_macro_params(
 ///|
 fn next_raw_token(pp : Preprocessor) -> Token {
   if pp.pending.length() > 0 {
-    match pp.pending.pop() {
-      Some(tok) => {
-        release_expanding_guards(pp)
-        return tok
-      }
-      None => ()
+    if pp.pending.pop() is Some(tok) {
+      release_expanding_guards(pp)
+      return tok
     }
   }
   next_input_token(pp)
@@ -1568,23 +1559,20 @@ fn substitute_macro(
       if next_tok.kind == Ident {
         let param_id = next_tok.id
         if param_id > 0 {
-          match lookup_param_index(params, param_id) {
-            Some(idx) => {
-              let arg_tokens = if idx < raw_args.length() {
-                raw_args[idx]
-              } else {
-                []
-              }
-              let string_tok =
-                make_string_literal(pp, stringize_tokens(pp, arg_tokens), loc)
-              out.push(string_tok)
-              if !needs_expand && token_needs_expansion(pp, string_tok) {
-                needs_expand = true
-              }
-              i = i + 2
-              continue
+          if lookup_param_index(params, param_id) is Some(idx) {
+            let arg_tokens = if idx < raw_args.length() {
+              raw_args[idx]
+            } else {
+              []
             }
-            None => ()
+            let string_tok =
+              make_string_literal(pp, stringize_tokens(pp, arg_tokens), loc)
+            out.push(string_tok)
+            if !needs_expand && token_needs_expansion(pp, string_tok) {
+              needs_expand = true
+            }
+            i = i + 2
+            continue
           }
         }
       }
@@ -1672,27 +1660,24 @@ fn substitute_macro(
     if tok.kind == Ident {
       let param_id = tok.id
       if param_id > 0 {
-        match lookup_param_index(params, param_id) {
-          Some(idx) => {
-            let arg_tokens = ensure_expanded_arg(pp, raw_args, expanded_cache, idx)
-            for t in arg_tokens {
-              let out_tok = {
-                kind: t.kind,
-                lexeme_id: t.lexeme_id,
-                id: t.id,
-                loc: t.loc,
-                line_start: false,
-                hidden: t.hidden,
-              }
-              out.push(out_tok)
-              if !needs_expand && token_needs_expansion(pp, out_tok) {
-                needs_expand = true
-              }
+        if lookup_param_index(params, param_id) is Some(idx) {
+          let arg_tokens = ensure_expanded_arg(pp, raw_args, expanded_cache, idx)
+          for t in arg_tokens {
+            let out_tok = {
+              kind: t.kind,
+              lexeme_id: t.lexeme_id,
+              id: t.id,
+              loc: t.loc,
+              line_start: false,
+              hidden: t.hidden,
             }
-            i = i + 1
-            continue
+            out.push(out_tok)
+            if !needs_expand && token_needs_expansion(pp, out_tok) {
+              needs_expand = true
+            }
           }
-          None => ()
+          i = i + 1
+          continue
         }
       }
     }
@@ -1822,24 +1807,21 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
     let macro_id = tok.id
     let is_macro_name = macro_id > 0
     if is_macro_name {
-      match builtin_macro_tokens(pp, tok) {
-        Some(replacement) => {
-          let out = match out_opt {
-            Some(arr) => arr
-            None => {
-              let arr = prefix_tokens(tokens, i)
-              out_opt = Some(arr)
-              arr
-            }
+      if builtin_macro_tokens(pp, tok) is Some(replacement) {
+        let out = match out_opt {
+          Some(arr) => arr
+          None => {
+            let arr = prefix_tokens(tokens, i)
+            out_opt = Some(arr)
+            arr
           }
-          for t in replacement {
-            out.push(t)
-          }
-          changed = true
-          i = i + 1
-          continue
         }
-        None => ()
+        for t in replacement {
+          out.push(t)
+        }
+        changed = true
+        i = i + 1
+        continue
       }
     }
     let hidden_ok = !is_macro_name ||
@@ -1848,9 +1830,8 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
     if is_macro_name && macro_id != 0 && hidden_ok {
       if get_macro(pp, macro_id) is Some(macro_def) {
           if is_expanding(pp, macro_id) {
-            match out_opt {
-              Some(arr) => arr.push(tok)
-              None => ()
+            if out_opt is Some(arr) {
+              arr.push(tok)
             }
             i = i + 1
             continue
@@ -1859,9 +1840,8 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
             if i + 1 < len && tokens[i + 1].kind == LParen {
               match read_macro_args_from_tokens(pp, tokens, i + 2, tok.loc) {
                 None => {
-                  match out_opt {
-                    Some(arr) => arr.push(tok)
-                    None => ()
+                  if out_opt is Some(arr) {
+                    arr.push(tok)
                   }
                   i = i + 1
                   continue
@@ -1870,9 +1850,8 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                   match normalize_macro_args(macro_def, raw_args, tok.loc) {
                     None => {
                       add_pp_error(pp, tok.loc, "macro argument count mismatch")
-                      match out_opt {
-                        Some(arr) => arr.push(tok)
-                        None => ()
+                      if out_opt is Some(arr) {
+                        arr.push(tok)
                       }
                       i = next_i
                       continue
@@ -1938,9 +1917,8 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                   }
               }
             }
-            match out_opt {
-              Some(arr) => arr.push(tok)
-              None => ()
+            if out_opt is Some(arr) {
+              arr.push(tok)
             }
             i = i + 1
             continue
@@ -1975,9 +1953,8 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
           }
       }
     }
-    match out_opt {
-      Some(arr) => arr.push(tok)
-      None => ()
+    if out_opt is Some(arr) {
+      arr.push(tok)
     }
     i = i + 1
   }
@@ -2979,9 +2956,8 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
       add_pp_error(pp, name_tok.loc, "invalid macro name in #define")
       return
     }
-    match parse_define_macro(pp, args[0], slice_tokens(args, 1), name_tok.loc) {
-      Some(macro_def) => set_macro(pp, macro_id, macro_def)
-      None => ()
+    if parse_define_macro(pp, args[0], slice_tokens(args, 1), name_tok.loc) is Some(macro_def) {
+      set_macro(pp, macro_id, macro_def)
     }
     return
   }
@@ -3085,9 +3061,8 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     let args = read_directive_tokens(pp)
     if current_active(pp) {
       let expanded = expand_tokens(pp, args)
-      match parse_include_path(pp, expanded, name_tok.loc) {
-        Some(spec) => include_file(pp, spec, name_tok.loc, include_next=false)
-        None => ()
+      if parse_include_path(pp, expanded, name_tok.loc) is Some(spec) {
+        include_file(pp, spec, name_tok.loc, include_next=false)
       }
     }
     return
@@ -3096,9 +3071,8 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     let args = read_directive_tokens(pp)
     if current_active(pp) {
       let expanded = expand_tokens(pp, args)
-      match parse_include_path(pp, expanded, name_tok.loc) {
-        Some(spec) => include_file(pp, spec, name_tok.loc, include_next=true)
-        None => ()
+      if parse_include_path(pp, expanded, name_tok.loc) is Some(spec) {
+        include_file(pp, spec, name_tok.loc, include_next=true)
       }
     }
     return
@@ -3176,12 +3150,9 @@ fn next_pp_token(pp : Preprocessor) -> Token {
     let macro_id = tok.id
     let is_macro_name = macro_id > 0
     if is_macro_name {
-      match builtin_macro_tokens(pp, tok) {
-        Some(tokens) => {
-          push_tokens(pp, tokens)
-          continue
-        }
-        None => ()
+      if builtin_macro_tokens(pp, tok) is Some(tokens) {
+        push_tokens(pp, tokens)
+        continue
       }
     }
     let hidden_ok = !is_macro_name ||

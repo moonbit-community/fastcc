@@ -2945,9 +2945,9 @@ fn struct_field_offset_and_type(
         if field.name == "" {
           match strip_top_qualifiers(field.ty) {
             CType::Struct(..) | CType::Union(..) =>
-              match eval_builtin_offsetof_and_type(ctx, field.ty, [name], loc, true) {
-                Some((inner_off, inner_ty, _)) => return Some((size + inner_off, inner_ty, false))
-                None => ()
+              if eval_builtin_offsetof_and_type(ctx, field.ty, [name], loc, true)
+                is Some((inner_off, inner_ty, _)) {
+                return Some((size + inner_off, inner_ty, false))
               }
             _ => ()
           }
@@ -2971,19 +2971,17 @@ fn union_field_offset_and_type(
   let _attrs = merge_attrs(def.attrs, union_attrs)
   for field in fields {
     if field.name == name {
-      match field.bit_width {
-        Some(_) => return Some((0, field.ty, true))
-        None => ()
+      if field.bit_width is Some(_) {
+        return Some((0, field.ty, true))
       }
       return Some((0, field.ty, false))
     }
     if field.name == "" {
       match strip_top_qualifiers(field.ty) {
         CType::Struct(..) | CType::Union(..) =>
-          match eval_builtin_offsetof_and_type(ctx, field.ty, [name], loc, true) {
-            Some((inner_off, inner_ty, _)) =>
-              return Some((inner_off, inner_ty, false))
-            None => ()
+          if eval_builtin_offsetof_and_type(ctx, field.ty, [name], loc, true)
+            is Some((inner_off, inner_ty, _)) {
+            return Some((inner_off, inner_ty, false))
           }
         _ => ()
       }
@@ -4659,9 +4657,8 @@ fn resolve_struct_fields(
   is_union~ : Bool,
 ) -> Array[Field]? {
   if tag != "" {
-    match lookup_struct_fields(ctx, tag, tag_id, is_union=is_union) {
-      Some(list) => return Some(list)
-      None => ()
+    if lookup_struct_fields(ctx, tag, tag_id, is_union=is_union) is Some(list) {
+      return Some(list)
     }
   }
   match fields {
@@ -5097,9 +5094,8 @@ fn member_access_search(
               return Some(apply_qualifiers(field.ty, qual))
             }
             if field.name == "" {
-              match member_access_search(ctx, field.ty, combined, name, id, loc) {
-                Some(found) => return Some(found)
-                None => ()
+              if member_access_search(ctx, field.ty, combined, name, id, loc) is Some(found) {
+                return Some(found)
               }
             }
           }
@@ -5126,9 +5122,8 @@ fn member_access_search(
               return Some(apply_qualifiers(field.ty, qual))
             }
             if field.name == "" {
-              match member_access_search(ctx, field.ty, combined, name, id, loc) {
-                Some(found) => return Some(found)
-                None => ()
+              if member_access_search(ctx, field.ty, combined, name, id, loc) is Some(found) {
+                return Some(found)
               }
             }
           }
@@ -5546,9 +5541,8 @@ fn type_of_expr(ctx : SemContext, expr : Expr) -> CType {
     type_of_expr_impl(ctx, expr)
   }
   if ctx.record_agg_temps {
-    match ctx.current_func_name {
-      Some(_) => maybe_record_agg_temp_for_expr(ctx, expr, ty)
-      None => ()
+    if ctx.current_func_name is Some(_) {
+      maybe_record_agg_temp_for_expr(ctx, expr, ty)
     }
   }
   ty
@@ -6133,9 +6127,8 @@ fn builtin_call_kind(
   id : Int,
 ) -> BuiltinCallKind? {
   if id != 0 {
-    match get_opt_by_id(ctx.builtin_call_ids, id) {
-      Some(kind) => return Some(kind)
-      None => ()
+    if get_opt_by_id(ctx.builtin_call_ids, id) is Some(kind) {
+      return Some(kind)
     }
   }
   let kind = if name == "__sync_synchronize" {
@@ -6174,9 +6167,8 @@ fn builtin_func_sig_from_ident(
   id : Int,
 ) -> FuncSig? {
   if id != 0 {
-    match get_opt_by_id(ctx.builtin_sig_ids, id) {
-      Some(sig) => return Some(sig)
-      None => ()
+    if get_opt_by_id(ctx.builtin_sig_ids, id) is Some(sig) {
+      return Some(sig)
     }
   }
   if !has_builtin_prefix(name) {
@@ -6201,9 +6193,8 @@ fn atomic_builtin_template_from_ident(
   id : Int,
 ) -> String? {
   if id != 0 {
-    match get_opt_by_id(ctx.atomic_template_ids, id) {
-      Some(template) => return Some(template)
-      None => ()
+    if get_opt_by_id(ctx.atomic_template_ids, id) is Some(template) {
+      return Some(template)
     }
   }
   if !has_atomic_prefix(name) {
@@ -6789,18 +6780,16 @@ fn lookup_value(ctx : SemContext, name : String, id : Int) -> CType? {
   }
   if found is None {
     let sig = if id > 0 { get_function_by_id(ctx, id) } else { ctx.functions.get(name) }
-    match sig {
-      Some(sig) =>
-        found = Some(
-          CType::Function(
-            return_type=sig.return_type,
-            params=sig.params,
-            varargs=sig.varargs,
-            is_old_style=sig.is_old_style,
-            call_conv=sig.call_conv,
-          ),
-        )
-      None => ()
+    if sig is Some(value) {
+      found = Some(
+        CType::Function(
+          return_type=value.return_type,
+          params=value.params,
+          varargs=value.varargs,
+          is_old_style=value.is_old_style,
+          call_conv=value.call_conv,
+        ),
+      )
     }
   }
   if found is None {
