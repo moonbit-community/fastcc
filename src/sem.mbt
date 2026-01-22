@@ -453,21 +453,16 @@ fn char_pointer_type() -> CType {
 
 ///|
 fn lookup_local_only(ctx : SemContext, id : Int) -> CType? {
-  if id <= 0 {
-    return None
-  }
   get_opt_by_id(ctx.local_values_by_id, id)
 }
 
 ///|
 fn enum_const_value(ctx : SemContext, name : String, id : Int) -> Int? {
   if id > 0 {
-    match get_enum_const_by_id(ctx, id) {
-      Some(v) => return Some(v)
-      None => return None
-    }
+    get_enum_const_by_id(ctx, id)
+  } else {
+    ctx.enum_consts.get(name)
   }
-  ctx.enum_consts.get(name)
 }
 
 ///|
