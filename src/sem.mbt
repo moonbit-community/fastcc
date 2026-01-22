@@ -1885,33 +1885,25 @@ fn register_struct_def(
   if incoming.fields.length() > 0 {
     for field in incoming.fields {
       register_type_defs(ctx, field.ty, field.loc)
-      match field.bit_width {
-        None => ()
-        Some(expr) => {
-          if !is_int_like(field.ty) {
-            add_sem_error(ctx, field.loc, "bitfields must have integer type")
+      if field.bit_width is Some(expr) {
+        if !is_int_like(field.ty) {
+          add_sem_error(ctx, field.loc, "bitfields must have integer type")
+        }
+        if const_int_from_expr(ctx, expr, field.loc) is Some(width) {
+          if width < 0 {
+            add_sem_error(ctx, field.loc, "negative width in bit-field")
           }
-          match const_int_from_expr(ctx, expr, field.loc) {
-            None => ()
-            Some(width) => {
-              if width < 0 {
-                add_sem_error(ctx, field.loc, "negative width in bit-field")
-              }
-              if width == 0 && field.name != "" {
-                add_sem_error(ctx, field.loc, "zero width for bit-field")
-              }
-              if width > 0 {
-                match type_size_align(ctx, field.ty, field.loc) {
-                  None => ()
-                  Some((size, _align)) =>
-                    if width > size * 8 {
-                      add_sem_error(
-                        ctx,
-                        field.loc,
-                        "width of '\{field.name}' exceeds its type",
-                      )
-                    }
-                }
+          if width == 0 && field.name != "" {
+            add_sem_error(ctx, field.loc, "zero width for bit-field")
+          }
+          if width > 0 {
+            if type_size_align(ctx, field.ty, field.loc) is Some((size, _align)) {
+              if width > size * 8 {
+                add_sem_error(
+                  ctx,
+                  field.loc,
+                  "width of '\{field.name}' exceeds its type",
+                )
               }
             }
           }
@@ -3719,12 +3711,9 @@ fn check_initializer_list(
         let target = if item.designators.length() > 0 {
           match item.designators[0] {
             InitDesignator::Index(expr~, loc=des_loc) =>
-              match const_int_from_expr(ctx, expr, des_loc) {
-                None => ()
-                Some(v) => {
-                  index = v
-                  has_index = true
-                }
+              if const_int_from_expr(ctx, expr, des_loc) is Some(v) {
+                index = v
+                has_index = true
               }
             InitDesignator::IndexRange(start~, end~, loc=des_loc) => {
               let start_val = const_int_from_expr(ctx, start, des_loc)
@@ -4025,16 +4014,12 @@ fn resolve_designator_type(
       InitDesignator::Index(expr~, loc=des_loc) =>
         match strip_top_qualifiers(current) {
           CType::Array(elem~, size~, ..) => {
-            match size {
-              None => ()
-              Some(n) =>
-                match const_int_from_expr(ctx, expr, des_loc) {
-                  None => ()
-                  Some(v) =>
-                    if v < 0 || v >= n {
-                      add_sem_error(ctx, loc, "array designator out of bounds")
-                    }
+            if size is Some(n) {
+              if const_int_from_expr(ctx, expr, des_loc) is Some(v) {
+                if v < 0 || v >= n {
+                  add_sem_error(ctx, loc, "array designator out of bounds")
                 }
+              }
             }
             current = elem
           }
@@ -4055,16 +4040,14 @@ fn resolve_designator_type(
                 }
               _ => ()
             }
-            match size {
-              None => ()
-              Some(n) =>
-                match (start_val, end_val) {
-                  (Some(start_idx), Some(end_idx)) =>
-                    if start_idx < 0 || end_idx < 0 || start_idx >= n || end_idx >= n {
-                      add_sem_error(ctx, loc, "array designator out of bounds")
-                    }
-                  _ => ()
-                }
+            if size is Some(n) {
+              match (start_val, end_val) {
+                (Some(start_idx), Some(end_idx)) =>
+                  if start_idx < 0 || end_idx < 0 || start_idx >= n || end_idx >= n {
+                    add_sem_error(ctx, loc, "array designator out of bounds")
+                  }
+                _ => ()
+              }
             }
             current = elem
           }
@@ -5030,17 +5013,15 @@ fn collect_member_cache_from_fields(
           is_union=false,
           loc,
         )
-        match def {
-          None => ()
-          Some(def_val) =>
-            collect_member_cache_from_fields(
-              ctx,
-              def_val.fields,
-              combined,
-              loc,
-              cache_by_name,
-              cache_by_id,
-            )
+        if def is Some(def_val) {
+          collect_member_cache_from_fields(
+            ctx,
+            def_val.fields,
+            combined,
+            loc,
+            cache_by_name,
+            cache_by_id,
+          )
         }
       }
       CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
@@ -5052,17 +5033,15 @@ fn collect_member_cache_from_fields(
           is_union=true,
           loc,
         )
-        match def {
-          None => ()
-          Some(def_val) =>
-            collect_member_cache_from_fields(
-              ctx,
-              def_val.fields,
-              combined,
-              loc,
-              cache_by_name,
-              cache_by_id,
-            )
+        if def is Some(def_val) {
+          collect_member_cache_from_fields(
+            ctx,
+            def_val.fields,
+            combined,
+            loc,
+            cache_by_name,
+            cache_by_id,
+          )
         }
       }
       _ => ()
