@@ -102,8 +102,7 @@ enum TokenKind {
 ///|
 struct Token {
   kind : TokenKind
-  lexeme_id : Int
-  id : Int
+  value : Int
   loc : SrcLoc
   line_start : Bool
   hidden : Int
@@ -111,6 +110,34 @@ struct Token {
 
 ///|
 let empty_hidden : Int = 0
+
+///|
+fn token_value_from_parts(id : Int, lexeme_id : Int) -> Int {
+  if lexeme_id != 0 {
+    return -lexeme_id
+  }
+  if id != 0 {
+    return id
+  }
+  0
+}
+
+///|
+fn token_id(tok : Token) -> Int {
+  let value = tok.value
+  if value > 0 { value } else { 0 }
+}
+
+///|
+fn token_lexeme_id(tok : Token) -> Int {
+  let value = tok.value
+  if value < 0 { -value } else { 0 }
+}
+
+///|
+fn token_has_id(tok : Token) -> Bool {
+  tok.value > 0
+}
 
 ///|
 enum LexemeEntry {
@@ -452,11 +479,13 @@ fn token_text_with(
   pool : LexemePool,
   tok : Token,
 ) -> String {
-  if tok.lexeme_id != 0 {
-    return lexeme_pool_get(pool, tok.lexeme_id)
+  let lexeme_id = token_lexeme_id(tok)
+  if lexeme_id != 0 {
+    return lexeme_pool_get(pool, lexeme_id)
   }
-  if tok.id != 0 {
-    return interner.get(tok.id)
+  let id = token_id(tok)
+  if id != 0 {
+    return interner.get(id)
   }
   token_kind_text(tok.kind)
 }
@@ -467,11 +496,13 @@ fn token_text_len_with(
   pool : LexemePool,
   tok : Token,
 ) -> Int {
-  if tok.lexeme_id != 0 {
-    return lexeme_pool_len(pool, tok.lexeme_id)
+  let lexeme_id = token_lexeme_id(tok)
+  if lexeme_id != 0 {
+    return lexeme_pool_len(pool, lexeme_id)
   }
-  if tok.id != 0 {
-    return interner.get(tok.id).length()
+  let id = token_id(tok)
+  if id != 0 {
+    return interner.get(id).length()
   }
   token_kind_text_len(tok.kind)
 }

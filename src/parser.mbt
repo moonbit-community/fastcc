@@ -105,7 +105,7 @@ fn new_expr_id(p : Parser) -> Int {
 
 ///|
 fn special_ident_kind(tok : Token, ids : KeywordIds) -> TokenKind? {
-  match keyword_kind_from_id(tok.id, ids) {
+  match keyword_kind_from_id(token_id(tok), ids) {
     Some(kind) =>
       match kind {
         KwVoid
@@ -1552,7 +1552,7 @@ fn parse_declarator(p : Parser, base : CType) -> Declarator? {
         }
         Some({
           name: token_lexeme(p, tok),
-          id: tok.id,
+          id: token_id(tok),
           ty,
           params,
           varargs,
@@ -1610,7 +1610,7 @@ fn parse_field_declarator(
   } else {
     let (name, id, loc) = if peek_token(p).kind is Ident {
       let name_tok = advance_token(p)
-      (token_lexeme(p, name_tok), name_tok.id, name_tok.loc)
+      (token_lexeme(p, name_tok), token_id(name_tok), name_tok.loc)
     } else {
       ("", 0, fallback_loc)
     }
@@ -1662,7 +1662,7 @@ fn parse_designator_list(p : Parser) -> (Array[InitDesignator], SrcLoc) {
       start_loc = dot_tok.loc
       let (name, id) = match expect_ident(p, "expected field name") {
         None => ("", 0)
-        Some(tok) => (token_lexeme(p, tok), tok.id)
+        Some(tok) => (token_lexeme(p, tok), token_id(tok))
       }
       designators.push(InitDesignator::Field(name~, id~, loc=dot_tok.loc))
       continue
@@ -1695,7 +1695,7 @@ fn parse_designator_list(p : Parser) -> (Array[InitDesignator], SrcLoc) {
       designators.push(
         InitDesignator::Field(
           name=token_lexeme(p, name_tok),
-          id=name_tok.id,
+          id=token_id(name_tok),
           loc=name_tok.loc,
         ),
       )
@@ -1868,7 +1868,7 @@ fn parse_paren_pointer_parts(
   } else if peek_token(p).kind is Ident {
     let tok = advance_token(p)
     name = token_lexeme(p, tok)
-    id = tok.id
+    id = token_id(tok)
     loc = tok.loc
   } else if allow_missing_name {
     name = ""
@@ -2077,7 +2077,7 @@ fn parse_struct_type(p : Parser, is_union~ : Bool) -> (CType, SrcLoc)? {
   if peek_token(p).kind is Ident {
     let tok = advance_token(p)
     name = token_lexeme(p, tok)
-    id = tok.id
+    id = token_id(tok)
   } else {
     ()
   }
@@ -2202,7 +2202,7 @@ fn parse_enum_type(p : Parser) -> (CType, SrcLoc)? {
   if peek_token(p).kind is Ident {
     let tok = advance_token(p)
     name = token_lexeme(p, tok)
-    id = tok.id
+    id = token_id(tok)
   } else {
     ()
   }
@@ -2239,7 +2239,7 @@ fn parse_enum_items(p : Parser) -> Array[EnumItem] {
       }
       items.push({
         name: token_lexeme(p, tok),
-        id: tok.id,
+        id: token_id(tok),
         value,
         loc: tok.loc,
       })
@@ -2283,7 +2283,7 @@ fn parse_param_list(p : Parser) -> (Array[Param], Bool, Bool) {
         Some(tok) =>
           params.push({
             name: token_lexeme(p, tok),
-            id: tok.id,
+            id: token_id(tok),
             ty: CType::Int(kind=CIntKind::Int, unsigned=false),
             loc: tok.loc,
           })
@@ -2408,7 +2408,7 @@ fn parse_param_declarator(
     let adjusted_ty = apply_call_conv_to_type(ty, call_conv)
     return Some({
       name: token_lexeme(p, name_tok),
-      id: name_tok.id,
+      id: token_id(name_tok),
       ty: adjusted_ty,
       loc: name_tok.loc,
     })
@@ -3086,7 +3086,7 @@ fn parse_expr_unary(p : Parser) -> Expr {
         Some(label_tok) =>
           Expr::LabelAddr(
             name=token_lexeme(p, label_tok),
-            id=label_tok.id,
+            id=token_id(label_tok),
             node_id=new_expr_id(p),
             loc=tok.loc,
           )
@@ -3166,7 +3166,7 @@ fn parse_postfix_tail(p : Parser, base : Expr) -> Expr {
         let tok = advance_token(p)
         let (name, id) = match expect_ident(p, "expected field name") {
           None => ("", 0)
-          Some(tok) => (token_lexeme(p, tok), tok.id)
+          Some(tok) => (token_lexeme(p, tok), token_id(tok))
         }
         expr =
           Expr::Member(
@@ -3183,7 +3183,7 @@ fn parse_postfix_tail(p : Parser, base : Expr) -> Expr {
         let tok = advance_token(p)
         let (name, id) = match expect_ident(p, "expected field name") {
           None => ("", 0)
-          Some(tok) => (token_lexeme(p, tok), tok.id)
+          Some(tok) => (token_lexeme(p, tok), token_id(tok))
         }
         expr =
           Expr::Member(
@@ -3275,7 +3275,7 @@ fn parse_expr_primary(p : Parser) -> Expr {
     Ident =>
       match p.current.kind {
         LParen => {
-          let id = tok.id
+          let id = token_id(tok)
           if id == p.builtin_ids.types_compatible_p {
             expect(
               p,
@@ -3359,7 +3359,7 @@ fn parse_expr_primary(p : Parser) -> Expr {
           } else {
             Expr::Ident(
               name=token_lexeme(p, tok),
-              id=tok.id,
+              id=token_id(tok),
               node_id=new_expr_id(p),
               loc=tok.loc,
             )
@@ -3368,7 +3368,7 @@ fn parse_expr_primary(p : Parser) -> Expr {
         _ =>
           Expr::Ident(
             name=token_lexeme(p, tok),
-            id=tok.id,
+            id=token_id(tok),
             node_id=new_expr_id(p),
             loc=tok.loc,
           )
@@ -3824,7 +3824,7 @@ fn typedef_id_from_token(_p : Parser, tok : Token) -> Int {
   if tok.kind != Ident {
     return 0
   }
-  if tok.id > 0 { tok.id } else { 0 }
+  token_id(tok)
 }
 
 ///|

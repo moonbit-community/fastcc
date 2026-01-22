@@ -76,7 +76,8 @@ fn make_token(
   id? : Int = 0,
   lexeme_id? : Int = 0,
 ) -> Token {
-  { kind, lexeme_id, id, loc, line_start, hidden: empty_hidden }
+  let value = token_value_from_parts(id, lexeme_id)
+  { kind, value, loc, line_start, hidden: empty_hidden }
 }
 
 ///|

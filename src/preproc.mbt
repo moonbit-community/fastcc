@@ -112,10 +112,10 @@ fn make_builtin_token(
   id? : Int = 0,
   lexeme_id? : Int = 0,
 ) -> Token {
+  let value = token_value_from_parts(id, lexeme_id)
   {
     kind,
-    lexeme_id,
-    id,
+    value,
     loc: dummy_loc(0),
     line_start: false,
     hidden: empty_hidden,
@@ -472,7 +472,7 @@ fn add_pp_error(pp : Preprocessor, loc : SrcLoc, message : String) -> Unit {
 ///|
 ///|
 fn is_macro_name_token(tok : Token) -> Bool {
-  tok.id > 0
+  token_id(tok) > 0
 }
 
 ///|
@@ -486,7 +486,7 @@ fn macro_id_from_name(pp : Preprocessor, name : String) -> Int {
 
 ///|
 fn macro_id_from_token(_pp : Preprocessor, tok : Token) -> Int {
-  tok.id
+  token_id(tok)
 }
 
 ///|
@@ -583,8 +583,7 @@ fn next_input_token(pp : Preprocessor) -> Token {
   } else {
     {
       kind: Eof,
-      lexeme_id: 0,
-      id: 0,
+      value: 0,
       loc: lexer_loc(pp.lexer),
       line_start: false,
       hidden: empty_hidden,
@@ -1195,8 +1194,7 @@ fn normalize_macro_args(
         var_tokens.push(
           {
             kind: Comma,
-            lexeme_id: 0,
-            id: 0,
+            value: 0,
             loc,
             line_start: false,
             hidden: empty_hidden,
@@ -1283,10 +1281,10 @@ fn stringize_tokens(pp : Preprocessor, tokens : Array[Token]) -> String {
 fn make_string_literal(pp : Preprocessor, text : String, loc : SrcLoc) -> Token {
   let escaped = escape_string(text)
   let lexeme_id = lexeme_pool_intern(pp.lexeme_pool, "\"" + escaped + "\"")
+  let token_value = token_value_from_parts(0, lexeme_id)
   {
     kind: StrLit,
-    lexeme_id,
-    id: 0,
+    value: token_value,
     loc,
     line_start: false,
     hidden: empty_hidden,
@@ -1331,10 +1329,10 @@ fn logical_line(pp : Preprocessor, loc : SrcLoc) -> Int {
 ///|
 fn make_int_literal_token(pp : Preprocessor, value : Int, loc : SrcLoc) -> Token {
   let lexeme_id = lexeme_pool_intern(pp.lexeme_pool, value.to_string())
+  let token_value = token_value_from_parts(0, lexeme_id)
   {
     kind: IntLit,
-    lexeme_id,
-    id: 0,
+    value: token_value,
     loc,
     line_start: false,
     hidden: empty_hidden,
@@ -1343,7 +1341,7 @@ fn make_int_literal_token(pp : Preprocessor, value : Int, loc : SrcLoc) -> Token
 
 ///|
 fn builtin_macro_tokens(pp : Preprocessor, tok : Token) -> Array[Token]? {
-  let id = tok.id
+  let id = token_id(tok)
   if id == pp.builtin_ids.line_macro {
     return Some([
       make_int_literal_token(pp, logical_line(pp, tok.loc), tok.loc),
@@ -1386,7 +1384,7 @@ fn tokens_need_expansion(pp : Preprocessor, tokens : Array[Token]) -> Bool {
 
 ///|
 fn token_needs_expansion(pp : Preprocessor, tok : Token) -> Bool {
-  let id = tok.id
+  let id = token_id(tok)
   id > 0 && (is_builtin_macro_id(pp, id) || get_macro(pp, id) is Some(_))
 }
 
@@ -1421,7 +1419,7 @@ fn macro_replacement_needs_expand(
 ///|
 fn tokens_have_id(tokens : Array[Token]) -> Bool {
   for tok in tokens {
-    if tok.id > 0 {
+    if token_has_id(tok) {
       return true
     }
   }
@@ -1527,8 +1525,7 @@ fn lex_paste_tokens(
       _ =>
         out.push({
           kind: tok.kind,
-          lexeme_id: tok.lexeme_id,
-          id: tok.id,
+          value: tok.value,
           loc,
           line_start: false,
           hidden,
@@ -1566,7 +1563,7 @@ fn substitute_macro(
     if tok.kind == Hash && i + 1 < macro_def.replacement.length() {
       let next_tok = macro_def.replacement[i + 1]
       if next_tok.kind == Ident {
-        let param_id = next_tok.id
+        let param_id = token_id(next_tok)
         if param_id > 0 {
           if lookup_param_index(params, param_id) is Some(idx) {
             let arg_tokens = if idx < raw_args.length() {
@@ -1600,7 +1597,7 @@ fn substitute_macro(
       let mut next_from_param = false
       let next_tok = macro_def.replacement[i + 1]
       if next_tok.kind == Ident {
-        let param_id = next_tok.id
+        let param_id = token_id(next_tok)
         if param_id > 0 {
           match lookup_param_index(params, param_id) {
             Some(idx) => {
@@ -1651,8 +1648,7 @@ fn substitute_macro(
           } else {
             out.push({
               kind: t.kind,
-              lexeme_id: t.lexeme_id,
-              id: t.id,
+              value: t.value,
               loc,
               line_start: false,
               hidden: t.hidden,
@@ -1667,15 +1663,14 @@ fn substitute_macro(
       continue
     }
     if tok.kind == Ident {
-      let param_id = tok.id
+      let param_id = token_id(tok)
       if param_id > 0 {
         if lookup_param_index(params, param_id) is Some(idx) {
           let arg_tokens = ensure_expanded_arg(pp, raw_args, expanded_cache, idx)
           for t in arg_tokens {
             let out_tok = {
               kind: t.kind,
-              lexeme_id: t.lexeme_id,
-              id: t.id,
+              value: t.value,
               loc: t.loc,
               line_start: false,
               hidden: t.hidden,
@@ -1692,8 +1687,7 @@ fn substitute_macro(
     }
     let out_tok = {
       kind: tok.kind,
-      lexeme_id: tok.lexeme_id,
-      id: tok.id,
+      value: tok.value,
       loc,
       line_start: false,
       hidden: tok.hidden,
@@ -1813,7 +1807,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
   let mut i = 0
   while i < len {
     let tok = tokens[i]
-    let macro_id = tok.id
+    let macro_id = token_id(tok)
     let is_macro_name = macro_id > 0
     if is_macro_name {
       if builtin_macro_tokens(pp, tok) is Some(replacement) {
@@ -1866,10 +1860,10 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                       continue
                     }
                     Some(norm_raw) => {
-                      if tok.id == pp.builtin_ids.has_include ||
-                        tok.id == pp.builtin_ids.has_include_next {
+                      if token_id(tok) == pp.builtin_ids.has_include ||
+                        token_id(tok) == pp.builtin_ids.has_include_next {
                         let include_next =
-                          tok.id == pp.builtin_ids.has_include_next
+                          token_id(tok) == pp.builtin_ids.has_include_next
                         let arg_tokens = if norm_raw.length() > 0 {
                           expand_tokens(pp, norm_raw[0])
                         } else {
@@ -2059,8 +2053,7 @@ fn normalize_macro_tokens(tokens : Array[Token]) -> Array[Token] {
   for tok in tokens {
     out.push({
       kind: tok.kind,
-      lexeme_id: tok.lexeme_id,
-      id: tok.id,
+      value: tok.value,
       loc: tok.loc,
       line_start: false,
       hidden: tok.hidden,
@@ -2073,7 +2066,7 @@ fn normalize_macro_tokens(tokens : Array[Token]) -> Array[Token] {
 fn expand_if_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
   let mut has_defined = false
   for tok in tokens {
-    if tok.kind == Ident && tok.id == pp.builtin_ids.defined {
+    if tok.kind == Ident && token_id(tok) == pp.builtin_ids.defined {
       has_defined = true
       break
     }
@@ -2087,7 +2080,7 @@ fn expand_if_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
   let mut i = 0
   while i < len {
     let tok = tokens[i]
-    if tok.kind == Ident && tok.id == pp.builtin_ids.defined {
+    if tok.kind == Ident && token_id(tok) == pp.builtin_ids.defined {
       if segment.length() > 0 {
         let expanded = expand_tokens(pp, segment)
         for t in expanded {
@@ -2221,8 +2214,7 @@ fn add_hidden(pp : Preprocessor, tok : Token, id : Int) -> Token {
   } else {
     {
       kind: tok.kind,
-      lexeme_id: tok.lexeme_id,
-      id: tok.id,
+      value: tok.value,
       loc: tok.loc,
       line_start: tok.line_start,
       hidden: new_hidden,
@@ -2577,7 +2569,7 @@ fn parse_primary(p : IfParser, loc : SrcLoc) -> PpValue {
         return parse_pp_char_literal(p.pp, tok)
       }
       if tok.kind == Ident {
-        if tok.id == p.pp.builtin_ids.defined {
+        if token_id(tok) == p.pp.builtin_ids.defined {
           return parse_defined(p, loc)
         }
         match macro_int_value(p.pp, tok, tok.loc) {
@@ -2942,7 +2934,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
     pp.held = Some(name_tok)
     return
   }
-  let name_id = name_tok.id
+  let name_id = token_id(name_tok)
   let ids = pp.builtin_ids
   let is_conditional = name_id == ids.dir_if ||
     name_id == ids.dir_ifdef ||
@@ -3153,10 +3145,10 @@ fn next_pp_token(pp : Preprocessor) -> Token {
     if !current_active(pp) {
       continue
     }
-    if tok.id == 0 {
+    if token_id(tok) == 0 {
       return tok
     }
-    let macro_id = tok.id
+    let macro_id = token_id(tok)
     let is_macro_name = macro_id > 0
     if is_macro_name {
       if builtin_macro_tokens(pp, tok) is Some(tokens) {
@@ -3256,8 +3248,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
   } else {
     {
       kind: Eof,
-      lexeme_id: 0,
-      id: 0,
+      value: 0,
       loc: lexer_loc(pp.lexer),
       line_start: false,
       hidden: empty_hidden,
