@@ -7123,32 +7123,30 @@ fn gen_member_addr_with_info(
   } else if !expr_is_lvalue_simple(base) {
     match strip_top_qualifiers(base_ty) {
       CType::Struct(..) | CType::Union(..) =>
-        match type_size_align_or_error(alloc.sem, base_ty, loc) {
-          None => ()
-          Some((size, _)) =>
-            match alloc.agg_temp_offset {
-              None => add_error(bag, loc, "codegen: missing aggregate temp slot")
-              Some(tmp_off) => {
-                if size > alloc.agg_temp_size {
-                  add_error(bag, loc, "codegen: aggregate temp too small")
-                  return
-                }
-                gen_agg_expr_to_addr(
-                  emitter,
-                  alloc,
-                  syms,
-                  pool,
-                  cstrings,
-                  base,
-                  29,
-                  tmp_off,
-                  base_ty,
-                  loc,
-                  bag,
-                )
-                emit_addr_local(emitter, dst, tmp_off, loc, bag)
+        if type_size_align_or_error(alloc.sem, base_ty, loc) is Some((size, _)) {
+          match alloc.agg_temp_offset {
+            None => add_error(bag, loc, "codegen: missing aggregate temp slot")
+            Some(tmp_off) => {
+              if size > alloc.agg_temp_size {
+                add_error(bag, loc, "codegen: aggregate temp too small")
+                return
               }
+              gen_agg_expr_to_addr(
+                emitter,
+                alloc,
+                syms,
+                pool,
+                cstrings,
+                base,
+                29,
+                tmp_off,
+                base_ty,
+                loc,
+                bag,
+              )
+              emit_addr_local(emitter, dst, tmp_off, loc, bag)
             }
+          }
         }
       _ => gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, base, dst, bag)
     }
@@ -9211,34 +9209,31 @@ fn gen_expr_int32(
           let lhs_ty = type_of_expr(alloc.sem, left)
           match strip_top_qualifiers(lhs_ty) {
             CType::Struct(..) | CType::Union(..) => {
-              match type_size_align_or_error(alloc.sem, lhs_ty, loc) {
-                None => ()
-                Some((size, _)) => {
-                  if size <= 0 {
+              if type_size_align_or_error(alloc.sem, lhs_ty, loc) is Some((size, _)) {
+                if size <= 0 {
+                  return
+                }
+                let dst_addr = take_reg(pool) catch {
+                  err => {
+                    add_error(bag, loc, err.to_string())
                     return
                   }
-                  let dst_addr = take_reg(pool) catch {
-                    err => {
-                      add_error(bag, loc, err.to_string())
-                      return
-                    }
-                  }
-                  gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, left, dst_addr, bag)
-                  gen_agg_expr_to_addr(
-                    emitter,
-                    alloc,
-                    syms,
-                    pool,
-                    cstrings,
-                    right,
-                    dst_addr,
-                    0,
-                    lhs_ty,
-                    loc,
-                    bag,
-                  )
-                  give_reg(pool, dst_addr)
                 }
+                gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, left, dst_addr, bag)
+                gen_agg_expr_to_addr(
+                  emitter,
+                  alloc,
+                  syms,
+                  pool,
+                  cstrings,
+                  right,
+                  dst_addr,
+                  0,
+                  lhs_ty,
+                  loc,
+                  bag,
+                )
+                give_reg(pool, dst_addr)
               }
             }
             _ =>
@@ -10362,27 +10357,24 @@ fn gen_expr_int32(
 	    Expr::SizeofExpr(expr=inner, loc~, ..) => {
 	      match inner {
 	        Expr::Ident(name~, id~, ..) =>
-	          match lookup_local(alloc, name, id) {
-	            None => ()
-	            Some(slot) =>
-	              match strip_top_qualifiers(slot.ty) {
-	                CType::Array(size=None, size_expr=Some(_), ..) =>
-	                  match slot.vla_size_offset {
-	                    None => add_error(bag, loc, "codegen: missing VLA byte size slot")
-	                    Some(off) => {
-	                      arm64_ldrx(
-	                        emitter,
-	                        false,
-	                        3,
-	                        dst.reinterpret_as_uint(),
-	                        (29 : UInt),
-	                        off.to_int64().reinterpret_as_uint64(),
-	                      )
-	                      return
-	                    }
-	                  }
-	                _ => ()
-	              }
+	          if lookup_local(alloc, name, id) is Some(slot) {
+	            match strip_top_qualifiers(slot.ty) {
+	              CType::Array(size=None, size_expr=Some(_), ..) =>
+	                if slot.vla_size_offset is Some(off) {
+	                  arm64_ldrx(
+	                    emitter,
+	                    false,
+	                    3,
+	                    dst.reinterpret_as_uint(),
+	                    (29 : UInt),
+	                    off.to_int64().reinterpret_as_uint64(),
+	                  )
+	                  return
+	                } else {
+	                  add_error(bag, loc, "codegen: missing VLA byte size slot")
+	                }
+	              _ => ()
+	            }
 	          }
 	        _ => ()
 	      }
@@ -10402,14 +10394,12 @@ fn gen_expr_int32(
 	            bag,
 	          )
 	        _ =>
-	          match type_size_align_or_error(alloc.sem, ty, loc) {
-	            None => ()
-	            Some((size, _)) =>
-	              arm64_movimm(
-	                emitter,
-	                dst.reinterpret_as_uint(),
-	                size.to_uint64(),
-	              )
+	          if type_size_align_or_error(alloc.sem, ty, loc) is Some((size, _)) {
+	            arm64_movimm(
+	              emitter,
+	              dst.reinterpret_as_uint(),
+	              size.to_uint64(),
+	            )
 	          }
 	      }
 	    }
@@ -10429,14 +10419,12 @@ fn gen_expr_int32(
 	            bag,
 	          )
 	        _ =>
-	          match type_size_align_or_error(alloc.sem, ty, loc) {
-	            None => ()
-	            Some((size, _)) =>
-	              arm64_movimm(
-	                emitter,
-	                dst.reinterpret_as_uint(),
-	                size.to_uint64(),
-	              )
+	          if type_size_align_or_error(alloc.sem, ty, loc) is Some((size, _)) {
+	            arm64_movimm(
+	              emitter,
+	              dst.reinterpret_as_uint(),
+	              size.to_uint64(),
+	            )
 	          }
 	      }
     Expr::Cast(ty=to_ty, expr=inner, loc=cast_loc, ..) => {
@@ -10795,24 +10783,22 @@ fn gen_expr_ptr(
         }
         None => {
           gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, expr, addr, bag)
-          match type_of_lvalue(alloc.sem, expr) {
-            None => ()
-            Some(lty) =>
-              match strip_top_qualifiers(lty) {
-                CType::Array(..) | CType::Function(..) =>
-                  if dst != addr {
-                    emit_mov(emitter, true, dst, addr)
-                  }
-                _ =>
-                  arm64_ldrx(
-                    emitter,
-                    false,
-                    3,
-                    dst.reinterpret_as_uint(),
-                    addr.reinterpret_as_uint(),
-                    0,
-                  )
-              }
+          if type_of_lvalue(alloc.sem, expr) is Some(lty) {
+            match strip_top_qualifiers(lty) {
+              CType::Array(..) | CType::Function(..) =>
+                if dst != addr {
+                  emit_mov(emitter, true, dst, addr)
+                }
+              _ =>
+                arm64_ldrx(
+                  emitter,
+                  false,
+                  3,
+                  dst.reinterpret_as_uint(),
+                  addr.reinterpret_as_uint(),
+                  0,
+                )
+            }
           }
         }
       }
