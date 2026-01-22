@@ -19,10 +19,12 @@ REPEAT="${REPEAT:-1}"
 WARMUP="${WARMUP:-0}"
 BUILD_MBT="${BUILD_MBT:-1}"
 DETAIL="${DETAIL:-0}"
+BASELINE_FILE="${BASELINE_FILE:-${ROOT_DIR}/README.md}"
+REGRESSION_PCT="${REGRESSION_PCT:-0}"
 
 export ROOT_DIR VC_FILE VC_PATCH TINYCC_DIR TINYCC_MBT_C_DIR OUT_DIR
 export TINYCC_MBT_BIN TINYCC_REF_BIN CLANG_BIN CLANG_FLAGS DATASET APPLY_VC_PATCH TINYCC_SOURCES
-export REPEAT WARMUP DETAIL
+export REPEAT WARMUP DETAIL BASELINE_FILE REGRESSION_PCT
 
 usage() {
   cat <<'EOF'
@@ -37,6 +39,8 @@ Env vars:
   WARMUP=0|1        Run a warmup compile pass (default: 0)
   BUILD_MBT=0|1     Build tinycc.mbt before benchmarking (default: 1)
   DETAIL=0|1        Collect per-phase timings from tinycc.mbt -bench (default: 0)
+  BASELINE_FILE=path  Baseline README to compare (default: README.md)
+  REGRESSION_PCT=N    Flag regression if slower by N percent (default: 0)
   TINYCC_MBT_BIN=path
   TINYCC_REF_BIN=path
   CLANG_BIN=path
@@ -71,6 +75,7 @@ mkdir -p "${OUT_DIR}"
 
 python3 - <<'PY'
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -88,6 +93,8 @@ tinycc_sources = os.environ.get("TINYCC_SOURCES", "").split()
 repeat = int(os.environ["REPEAT"])
 warmup = os.environ["WARMUP"] == "1"
 detail = os.environ["DETAIL"] == "1"
+baseline_file = os.environ.get("BASELINE_FILE")
+regression_pct = float(os.environ.get("REGRESSION_PCT", "0"))
 
 tinycc_mbt = os.environ["TINYCC_MBT_BIN"]
 tinycc_ref = os.environ["TINYCC_REF_BIN"]
@@ -259,4 +266,85 @@ if detail:
     avg_codegen = mbt_phases["codegen_us"] / (1000.0 * repeat)
     avg_total = mbt_phases["total_us"] / (1000.0 * repeat)
     print(f"tinycc.mbt phases (avg ms): parse={avg_parse:.3f} sem={avg_sem:.3f} codegen={avg_codegen:.3f} total={avg_total:.3f}")
+
+def load_baseline(path, dataset_name):
+    if not path or not os.path.isfile(path):
+        return None
+    with open(path, "r", encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+    marker = f"bench_tinycc_compile.sh DATASET={dataset_name}"
+    start = None
+    for idx, line in enumerate(lines):
+        if marker in line:
+            start = idx
+            break
+    if start is None:
+        return None
+    end = len(lines)
+    for idx in range(start + 1, len(lines)):
+        if lines[idx].startswith("### "):
+            end = idx
+            break
+    block = "\n".join(lines[start:end])
+    def grab(pattern):
+        match = re.search(pattern, block)
+        return float(match.group(1)) if match else None
+    baseline = {
+        "mbt_total_s": grab(r"tinycc\.mbt total:\s*([0-9.]+)s"),
+        "ref_total_s": grab(r"refs/tinycc total:\s*([0-9.]+)s"),
+        "clang_total_s": grab(r"clang total:\s*([0-9.]+)s"),
+        "ratio_mbt_ref": grab(r"ratio \(mbt/ref\):\s*([0-9.]+)x"),
+        "ratio_mbt_clang": grab(r"ratio \(mbt/clang\):\s*([0-9.]+)x"),
+        "ratio_ref_clang": grab(r"ratio \(ref/clang\):\s*([0-9.]+)x"),
+    }
+    phase_match = re.search(
+        r"phases avg ms:\s*parse=([0-9.]+)\s+sem=([0-9.]+)\s+codegen=([0-9.]+)\s+total=([0-9.]+)",
+        block,
+    )
+    if phase_match:
+        baseline["phase_parse_ms"] = float(phase_match.group(1))
+        baseline["phase_sem_ms"] = float(phase_match.group(2))
+        baseline["phase_codegen_ms"] = float(phase_match.group(3))
+        baseline["phase_total_ms"] = float(phase_match.group(4))
+    if all(value is None for value in baseline.values()):
+        return None
+    return baseline
+
+def fmt(value, unit):
+    if unit == "s":
+        return f"{value:.3f}s"
+    if unit == "x":
+        return f"{value:.2f}x"
+    if unit == "ms":
+        return f"{value:.3f}ms"
+    return f"{value:.3f}{unit}"
+
+def report_delta(label, current, baseline, unit):
+    delta = current - baseline
+    delta_pct = (delta / baseline * 100.0) if baseline else 0.0
+    is_regression = delta_pct > regression_pct
+    sign = "+" if delta >= 0 else ""
+    status = "REGRESSION" if is_regression else "ok"
+    print(
+        f"baseline {label}: {fmt(baseline, unit)} "
+        f"(current {fmt(current, unit)}, delta {sign}{fmt(delta, unit)}, {sign}{delta_pct:.1f}%) {status}"
+    )
+    return is_regression
+
+baseline = load_baseline(baseline_file, dataset)
+if baseline:
+    print(f"Baseline ({baseline_file})")
+    regressions = []
+    if baseline.get("mbt_total_s") is not None:
+        regressions.append(report_delta("tinycc.mbt total", mbt_time, baseline["mbt_total_s"], "s"))
+    if baseline.get("ratio_mbt_ref") is not None:
+        regressions.append(report_delta("ratio (mbt/ref)", ratio_mbt_ref, baseline["ratio_mbt_ref"], "x"))
+    if detail and baseline.get("phase_total_ms") is not None:
+        regressions.append(report_delta("phases total", avg_total, baseline["phase_total_ms"], "ms"))
+    if any(regressions):
+        print("Regression detected.")
+    else:
+        print("No regression detected.")
+else:
+    print(f"Baseline not found for DATASET={dataset} in {baseline_file}")
 PY
