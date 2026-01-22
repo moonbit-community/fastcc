@@ -3760,10 +3760,8 @@ fn check_initializer_list(
         } else {
           Some(elem)
         }
-        match target {
-          None => ()
-          Some(target_ty) =>
-            check_initializer(ctx, target_ty, item.value, item.loc) |> ignore
+        if target is Some(target_ty) {
+          check_initializer(ctx, target_ty, item.value, item.loc) |> ignore
         }
         if has_index {
           if size is None && index < 0 {
@@ -6901,27 +6899,24 @@ fn push_scope(ctx : SemContext) -> Unit {
 
 ///|
 fn pop_scope(ctx : SemContext) -> Unit {
-  match ctx.local_overrides.pop() {
-    None => ()
-    Some(overrides) => {
-      let mut i = overrides.length()
-      while i > 0 {
-        i = i - 1
-        let entry = overrides[i]
-        let id = entry.id
-        if id <= 0 {
-          continue
-        }
-        match entry.prev_ty {
-          Some(ty) => set_opt_by_id(ctx.local_values_by_id, id, ty)
-          None =>
-            if id <= ctx.local_values_by_id.length() {
-              ctx.local_values_by_id[id - 1] = None
-            }
-        }
-        ensure_int_array_capacity(ctx.local_scope_ids_by_id, id)
-        ctx.local_scope_ids_by_id[id - 1] = entry.prev_scope
+  if ctx.local_overrides.pop() is Some(overrides) {
+    let mut i = overrides.length()
+    while i > 0 {
+      i = i - 1
+      let entry = overrides[i]
+      let id = entry.id
+      if id <= 0 {
+        continue
       }
+      match entry.prev_ty {
+        Some(ty) => set_opt_by_id(ctx.local_values_by_id, id, ty)
+        None =>
+          if id <= ctx.local_values_by_id.length() {
+            ctx.local_values_by_id[id - 1] = None
+          }
+      }
+      ensure_int_array_capacity(ctx.local_scope_ids_by_id, id)
+      ctx.local_scope_ids_by_id[id - 1] = entry.prev_scope
     }
   }
   ignore(ctx.local_scope_stack.pop())
