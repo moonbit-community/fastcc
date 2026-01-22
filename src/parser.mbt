@@ -1071,10 +1071,7 @@ fn parse_asm_operands(p : Parser) -> Array[AsmOperand] {
     } else {
       None
     }
-    let constraint = match parse_attr_string(p, start_loc) {
-      None => ""
-      Some(value) => value
-    }
+    let constraint = parse_attr_string(p, start_loc).unwrap_or("")
     expect(p, LParen, "expected '(' after asm constraint") |> ignore
     let expr = parse_expr(p)
     expect(p, RParen, "expected ')' after asm operand") |> ignore
@@ -1155,10 +1152,7 @@ fn parse_asm_stmt(p : Parser, loc : SrcLoc) -> AsmStmt {
     break
   }
   expect(p, LParen, "expected '(' after asm") |> ignore
-  let template = match parse_attr_string(p, loc) {
-    None => ""
-    Some(value) => value
-  }
+  let template = parse_attr_string(p, loc).unwrap_or("")
   let mut outputs : Array[AsmOperand] = []
   let mut inputs : Array[AsmOperand] = []
   let mut clobbers : Array[String] = []

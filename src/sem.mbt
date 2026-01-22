@@ -1205,15 +1205,9 @@ fn struct_size_align(
     let field_align_override = attr_align_value(ctx, field.attrs, field.loc)
     match field.bit_width {
       Some(expr) => {
-        let width = match const_int_from_expr(ctx, expr, field.loc) {
-          Some(v) => v
-          None => 0
-        }
+        let width = const_int_from_expr(ctx, expr, field.loc).unwrap_or(0)
         let base = strip_top_qualifiers_keep_attrs(field.ty)
-        let (base_size, base_align) = match type_size_align(ctx, base, loc) {
-          None => (0, 1)
-          Some(v) => v
-        }
+        let (base_size, base_align) = type_size_align(ctx, base, loc).unwrap_or((0, 1))
         let mut field_align = base_align
         if field_align_override is Some(value) {
           field_align = value
@@ -1337,16 +1331,10 @@ fn union_size_align(
     let base = strip_top_qualifiers_keep_attrs(field.ty)
     let (field_size, field_align) = match field.bit_width {
       Some(expr) => {
-        let width = match const_int_from_expr(ctx, expr, field.loc) {
-          Some(v) => v
-          None => 0
-        }
+        let width = const_int_from_expr(ctx, expr, field.loc).unwrap_or(0)
         let size_bits = if width > 0 { width } else { 0 }
         let size_bytes = (size_bits + 7) / 8
-        let (_, base_align) = match type_size_align(ctx, base, loc) {
-          None => (0, 1)
-          Some(v) => v
-        }
+        let (_, base_align) = type_size_align(ctx, base, loc).unwrap_or((0, 1))
         (size_bytes, base_align)
       }
       None =>

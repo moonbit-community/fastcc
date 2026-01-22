@@ -6265,15 +6265,9 @@ fn struct_field_access_info(
     let field_align_override = attr_align_value(ctx, field.attrs, field.loc)
     match field.bit_width {
       Some(expr) => {
-        let width = match const_int_from_expr(ctx, expr, field.loc) {
-          Some(v) => v
-          None => 0
-        }
+        let width = const_int_from_expr(ctx, expr, field.loc).unwrap_or(0)
         let base = strip_top_qualifiers_keep_attrs(field.ty)
-        let (base_size, base_align) = match type_size_align(ctx, base, loc) {
-          None => (0, 1)
-          Some(v) => v
-        }
+        let (base_size, base_align) = type_size_align(ctx, base, loc).unwrap_or((0, 1))
         let mut field_align = base_align
         if field_align_override is Some(value) {
           field_align = value
