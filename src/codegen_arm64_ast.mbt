@@ -2691,12 +2691,10 @@ fn resolve_init_designator_offset_type(
               }
               Some(v) => v
             }
-            match size {
-              None => ()
-              Some(n) =>
-                if idx < 0 || idx >= n {
-                  add_error(bag, des_loc, "codegen: array designator out of bounds")
-                }
+            if size is Some(n) {
+              if idx < 0 || idx >= n {
+                add_error(bag, des_loc, "codegen: array designator out of bounds")
+              }
             }
             let (elem_size, _) = match type_size_align_or_error(sem, elem, des_loc) {
               None => return None
@@ -2834,12 +2832,10 @@ fn resolve_init_designator_access_info(
               }
               Some(v) => v
             }
-            match size {
-              None => ()
-              Some(n) =>
-                if idx < 0 || idx >= n {
-                  add_error(bag, des_loc, "codegen: array designator out of bounds")
-                }
+            if size is Some(n) {
+              if idx < 0 || idx >= n {
+                add_error(bag, des_loc, "codegen: array designator out of bounds")
+              }
             }
             let (elem_size, _) = match type_size_align_or_error(sem, elem, des_loc) {
               None => return None
@@ -3166,14 +3162,11 @@ fn gen_initializer_to_addr(
             if item.designators.length() > 0 {
               match item.designators[0] {
                 InitDesignator::Index(expr~, loc=des_loc) =>
-                  match const_int_from_expr(alloc.sem, expr, des_loc) {
-                    None => ()
-                    Some(v) => {
-                      idx = v
-                      has_index = true
-                      if idx < 0 || idx >= n {
-                        add_error(bag, des_loc, "codegen: array designator out of bounds")
-                      }
+                  if const_int_from_expr(alloc.sem, expr, des_loc) is Some(v) {
+                    idx = v
+                    has_index = true
+                    if idx < 0 || idx >= n {
+                      add_error(bag, des_loc, "codegen: array designator out of bounds")
                     }
                   }
                 InitDesignator::IndexRange(start~, end~, loc=des_loc) =>
@@ -3352,9 +3345,8 @@ fn gen_initializer_to_addr(
             if item.designators.length() > 0 {
               match item.designators[0] {
                 InitDesignator::Field(name~, id~, ..) =>
-                  match find_field_index_cached(alloc.sem, ty, name, id, item.loc) {
-                    None => ()
-                    Some(idx) => index = idx + 1
+                  if find_field_index_cached(alloc.sem, ty, name, id, item.loc) is Some(idx) {
+                    index = idx + 1
                   }
                 _ => ()
               }
