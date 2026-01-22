@@ -468,9 +468,10 @@ fn enum_const_value(ctx : SemContext, name : String, id : Int) -> Int? {
 ///|
 fn enum_const_exists(ctx : SemContext, name : String, id : Int) -> Bool {
   if id > 0 {
-    return has_enum_const_by_id(ctx, id)
+    has_enum_const_by_id(ctx, id)
+  } else {
+    ctx.enum_consts.contains(name)
   }
-  ctx.enum_consts.contains(name)
 }
 
 ///|
