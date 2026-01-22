@@ -477,11 +477,7 @@ fn macro_id_from_name(pp : Preprocessor, name : String) -> Int {
 
 ///|
 fn macro_id_from_token(_pp : Preprocessor, tok : Token) -> Int {
-  if tok.id > 0 {
-    tok.id
-  } else {
-    0
-  }
+  tok.id
 }
 
 ///|
