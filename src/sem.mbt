@@ -858,9 +858,10 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
         None => None
         Some((size, align)) => {
           let mut final_align = if attrs.packed { 1 } else { align }
-          match attr_align_value(ctx, attrs, loc) {
-            None => ()
-            Some(value) => if value > final_align { final_align = value }
+          if attr_align_value(ctx, attrs, loc) is Some(value) {
+            if value > final_align {
+              final_align = value
+            }
           }
           Some((size, final_align))
         }
@@ -1049,17 +1050,15 @@ fn record_agg_temp_for_type(ctx : SemContext, ty : CType, loc : SrcLoc) -> Unit 
   }
   match strip_top_qualifiers(ty) {
     CType::Struct(..) | CType::Union(..) =>
-      match type_size_align(ctx, ty, loc) {
-        None => ()
-        Some((size, align)) =>
-          if size > 0 {
-            if size > ctx.current_agg_temp_size {
-              ctx.current_agg_temp_size = size
-            }
-            if align > ctx.current_agg_temp_align {
-              ctx.current_agg_temp_align = align
-            }
+      if type_size_align(ctx, ty, loc) is Some((size, align)) {
+        if size > 0 {
+          if size > ctx.current_agg_temp_size {
+            ctx.current_agg_temp_size = size
           }
+          if align > ctx.current_agg_temp_align {
+            ctx.current_agg_temp_align = align
+          }
+        }
       }
     _ => ()
   }
