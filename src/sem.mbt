@@ -5531,9 +5531,9 @@ fn stmt_expr_result_type(ctx : SemContext, stmts : Array[Stmt], _loc : SrcLoc) -
     pop_scope(ctx)
     return result
   }
-  for i = 0; i < len; {
+  for i = 0; i < len; i = i + 1 {
     let stmt = stmts[i]
-    if i == len - 1 {
+    if i + 1 == len {
       match stmt {
         Stmt::ExprStmt(expr~, ..) => result = type_of_expr(ctx, expr)
         _ => {
@@ -5544,7 +5544,6 @@ fn stmt_expr_result_type(ctx : SemContext, stmts : Array[Stmt], _loc : SrcLoc) -
     } else {
       check_stmt(ctx, stmt, return_type)
     }
-    continue i + 1
   }
   pop_scope(ctx)
   result
@@ -5566,9 +5565,9 @@ fn stmt_expr_lvalue_type(
     add_sem_error(ctx, loc, "statement expression is not assignable")
     return None
   }
-  for i = 0; i < len; {
+  for i = 0; i < len; i = i + 1 {
     let stmt = stmts[i]
-    if i == len - 1 {
+    if i + 1 == len {
       match stmt {
         Stmt::ExprStmt(expr~, ..) => result = type_of_lvalue(ctx, expr)
         _ => {
@@ -5580,7 +5579,6 @@ fn stmt_expr_lvalue_type(
     } else {
       check_stmt(ctx, stmt, return_type)
     }
-    continue i + 1
   }
   pop_scope(ctx)
   result
