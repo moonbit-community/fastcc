@@ -6058,9 +6058,8 @@ fn type_of_expr_impl(ctx : SemContext, expr : Expr) -> CType {
           }
           _ => ()
         }
-        match atomic_builtin_return_type(ctx, name, id, args, loc) {
-          None => ()
-          Some(ret) => return ret
+        if atomic_builtin_return_type(ctx, name, id, args, loc) is Some(ret) {
+          return ret
         }
       }
       let callee_ty = match callee {
@@ -6524,29 +6523,25 @@ fn atomic_builtin_return_type(
         match strip_top_qualifiers(ptr_ty) {
           CType::Pointer(pointee) => {
             if atom_size > 0 {
-              match type_size_align(ctx, pointee, loc) {
-                None => ()
-                Some((size, _)) =>
-                  if size != atom_size {
-                    add_sem_error(
-                      ctx,
-                      loc,
-                      "\{name} pointer target type mismatch in argument \{i + 1}",
-                    )
-                  }
+              if type_size_align(ctx, pointee, loc) is Some((size, _)) {
+                if size != atom_size {
+                  add_sem_error(
+                    ctx,
+                    loc,
+                    "\{name} pointer target type mismatch in argument \{i + 1}",
+                  )
+                }
               }
             }
             if spec == 'l' {
-              match atom_type {
-                None => ()
-                Some(at) =>
-                  if !can_assign(at, pointee) {
-                    add_sem_error(
-                      ctx,
-                      loc,
-                      "\{name} type mismatch in argument \{i + 1}",
-                    )
-                  }
+              if atom_type is Some(at) {
+                if !can_assign(at, pointee) {
+                  add_sem_error(
+                    ctx,
+                    loc,
+                    "\{name} type mismatch in argument \{i + 1}",
+                  )
+                }
               }
             }
           }
@@ -6555,17 +6550,15 @@ fn atomic_builtin_return_type(
       }
       'v' => {
         let v_ty = type_of_expr(ctx, args[i])
-        match atom_type {
-          None => ()
-          Some(at) =>
-            if !can_assign(at, v_ty) &&
-              !(is_pointer_type(at) && is_null_pointer_expr(ctx, args[i])) {
-              add_sem_error(
-                ctx,
-                loc,
-                "\{name} type mismatch in argument \{i + 1}",
-              )
-            }
+        if atom_type is Some(at) {
+          if !can_assign(at, v_ty) &&
+            !(is_pointer_type(at) && is_null_pointer_expr(ctx, args[i])) {
+            add_sem_error(
+              ctx,
+              loc,
+              "\{name} type mismatch in argument \{i + 1}",
+            )
+          }
         }
       }
       'm' => {
