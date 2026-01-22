@@ -27,10 +27,26 @@ struct BuiltinIds {
 
 ///|
 fn new_parser(pp : Preprocessor) -> Parser {
-  let typedef_counts : Array[Int] = []
-  let typedef_values : Array[CType?] = []
-  let typedef_scope_levels : Array[Int] = []
-  let typedef_scope_stack : Array[Int] = [1]
+  let text_len = pp.lexer.text_len
+  let mut id_capacity = text_len / 64
+  if id_capacity < 512 {
+    id_capacity = 512
+  } else if id_capacity > 65536 {
+    id_capacity = 65536
+  }
+  let buffer_capacity = 64
+  let scope_capacity = 128
+  let override_capacity = 128
+  let typedef_counts : Array[Int] = Array::new(capacity=id_capacity)
+  let typedef_values : Array[CType?] = Array::new(capacity=id_capacity)
+  let typedef_scope_levels : Array[Int] = Array::new(capacity=id_capacity)
+  let typedef_scope_stack : Array[Int] = Array::new(capacity=scope_capacity)
+  typedef_scope_stack.push(1)
+  let typedef_overrides : Array[Array[(Int, CType?, Int)]] =
+    Array::new(capacity=override_capacity)
+  typedef_overrides.push([])
+  let pending_typedef_scopes : Array[Bool] = Array::new(capacity=scope_capacity)
+  let buffer : Array[Token] = Array::new(capacity=buffer_capacity)
   let next_typedef_scope_id = 2
   let builtin_defs = [
     ("__builtin_va_list", CType::Pointer(CType::Void)),
@@ -60,7 +76,7 @@ fn new_parser(pp : Preprocessor) -> Parser {
     pp,
     current,
     lookahead,
-    buffer: [],
+    buffer,
     buffer_pos: 0,
     diags: pp.diags,
     typedef_counts,
@@ -68,8 +84,8 @@ fn new_parser(pp : Preprocessor) -> Parser {
     typedef_scope_levels,
     typedef_scope_stack,
     next_typedef_scope_id,
-    typedef_overrides: [[]],
-    pending_typedef_scopes: [],
+    typedef_overrides,
+    pending_typedef_scopes,
     anon_tag_id: 0,
     next_expr_id: 0,
     builtin_ids: {
@@ -122,7 +138,13 @@ fn parse_translation_unit(pp : Preprocessor) -> TranslationUnit {
 
 ///|
 fn parse_translation_unit_with(p : Parser) -> TranslationUnit {
-  let decls : Array[Decl] = []
+  let mut decl_capacity = p.pp.lexer.text_len / 256
+  if decl_capacity < 256 {
+    decl_capacity = 256
+  } else if decl_capacity > 16384 {
+    decl_capacity = 16384
+  }
+  let decls : Array[Decl] = Array::new(capacity=decl_capacity)
   while !is_at_end(p) {
     match parse_decl(p) {
       Some(items) =>
