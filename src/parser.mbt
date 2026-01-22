@@ -151,7 +151,7 @@ fn parse_decl(p : Parser) -> Array[Decl]? {
   let specs = match parse_decl_specs(p) {
     None => {
       let head = peek_token(p)
-      if head.kind == Ident && !has_typedef(p, head) {
+      if head.kind is Ident && !has_typedef(p, head) {
         Some({
           ty: CType::Int(kind=CIntKind::Int, unsigned=false),
           loc: head.loc,
@@ -526,7 +526,7 @@ fn parse_type_qualifiers(p : Parser) -> TypeQual {
   while true {
     let tok = peek_token(p)
     let mut kind = tok.kind
-    if kind == Ident {
+    if kind is Ident {
       if special_ident_kind(tok, p.pp.keyword_ids) is Some(mapped) {
         kind = mapped
       }
@@ -595,7 +595,7 @@ fn parse_type_specifiers(
   while true {
     let tok = peek_token(p)
     let mut kind = tok.kind
-    if kind == Ident {
+    if kind is Ident {
       if special_ident_kind(tok, p.pp.keyword_ids) is Some(mapped) {
         kind = mapped
       }
@@ -945,7 +945,7 @@ fn parse_decl_specs(p : Parser, allow_storage? : Bool = true) -> DeclSpecs? {
 fn is_type_spec_start(p : Parser) -> Bool {
   let tok = peek_token(p)
   let mut kind = tok.kind
-  if kind == Ident {
+  if kind is Ident {
     if special_ident_kind(tok, p.pp.keyword_ids) is Some(mapped) {
       kind = mapped
     }
@@ -1017,7 +1017,7 @@ fn parse_attr_string(p : Parser, loc : SrcLoc) -> String? {
   }
   let sb = StringBuilder::new(size_hint=token_lexeme_len(p, tok))
   sb.write_string(part)
-  while peek_token(p).kind == StrLit {
+  while peek_token(p).kind is StrLit {
     let next_tok = advance_token(p)
     let (next_part, _next_len) = decode_string_literal(
       p,
@@ -1052,7 +1052,8 @@ fn parse_asm_label(p : Parser, loc : SrcLoc) -> String? {
 ///|
 fn parse_asm_operands(p : Parser) -> Array[AsmOperand] {
   let operands : Array[AsmOperand] = []
-  if peek_token(p).kind == Colon || peek_token(p).kind == RParen {
+  let kind = peek_token(p).kind
+  if kind is Colon || kind is RParen {
     return operands
   }
   while true {
@@ -1087,7 +1088,8 @@ fn parse_asm_operands(p : Parser) -> Array[AsmOperand] {
 ///|
 fn parse_asm_clobbers(p : Parser) -> Array[String] {
   let clobbers : Array[String] = []
-  if peek_token(p).kind == Colon || peek_token(p).kind == RParen {
+  let kind = peek_token(p).kind
+  if kind is Colon || kind is RParen {
     return clobbers
   }
   while true {
@@ -1106,7 +1108,8 @@ fn parse_asm_clobbers(p : Parser) -> Array[String] {
 ///|
 fn parse_asm_labels(p : Parser) -> Array[String] {
   let labels : Array[String] = []
-  if peek_token(p).kind == Colon || peek_token(p).kind == RParen {
+  let kind = peek_token(p).kind
+  if kind is Colon || kind is RParen {
     return labels
   }
   while true {
@@ -1134,7 +1137,7 @@ fn parse_asm_stmt(p : Parser, loc : SrcLoc) -> AsmStmt {
       is_volatile = true
       continue
     }
-    if peek_token(p).kind == Ident {
+    if peek_token(p).kind is Ident {
       let tok = peek_token(p)
       match special_ident_kind(tok, p.pp.keyword_ids) {
         Some(KwVolatile) => {
@@ -1221,7 +1224,7 @@ fn parse_attribute_clause(p : Parser, loc : SrcLoc) -> Attributes {
     match name {
       "aligned" => {
         let spec = if has_args {
-          if peek_token(p).kind == RParen {
+          if peek_token(p).kind is RParen {
             AlignSpec::Default
           } else {
             let expr = parse_expr_cond(p)
@@ -1356,7 +1359,7 @@ fn parse_attribute_clause(p : Parser, loc : SrcLoc) -> Attributes {
         if !has_args {
           add_parse_error(p, name_tok.loc, "expected '(' after regparm")
         } else {
-          let raw = if peek_token(p).kind == IntLit {
+          let raw = if peek_token(p).kind is IntLit {
             let tok = advance_token(p)
             let parsed = try @strconv.parse_int(
               token_lexeme(p, tok),
@@ -1424,7 +1427,7 @@ fn parse_attribute_clause(p : Parser, loc : SrcLoc) -> Attributes {
 ///|
 fn parse_attributes(p : Parser) -> Attributes {
   let mut attrs = empty_attrs()
-  while peek_token(p).kind == KwAttribute {
+  while peek_token(p).kind is KwAttribute {
     let clause = parse_attribute_clause(p, peek_token(p).loc)
     attrs = merge_attrs(attrs, clause)
   }
@@ -1495,7 +1498,7 @@ fn parse_declarator(p : Parser, base : CType) -> Declarator? {
   //   void *(*fp)(void)
   let (ty0, pointer_attrs) = parse_pointer_chain(p, base)
   let mut attrs = merge_attrs(pointer_attrs, parse_attributes(p))
-  if peek_kind(p, 0) == LParen {
+  if peek_kind(p, 0) is LParen {
     match parse_paren_pointer_declarator(p, ty0) {
       None => None
       Some(decl) =>
@@ -1567,7 +1570,7 @@ fn parse_field_declarator(
   // Like parse_declarator, but the name may be omitted (anonymous fields).
   let (ty0, pointer_attrs) = parse_pointer_chain(p, base)
   let mut attrs = merge_attrs(pointer_attrs, parse_attributes(p))
-  if peek_kind(p, 0) == LParen {
+  if peek_kind(p, 0) is LParen {
     match parse_paren_pointer_declarator(p, ty0) {
       None => None
       Some(decl) =>
@@ -1583,7 +1586,7 @@ fn parse_field_declarator(
         })
     }
   } else {
-    let (name, id, loc) = if peek_token(p).kind == Ident {
+    let (name, id, loc) = if peek_token(p).kind is Ident {
       let name_tok = advance_token(p)
       (token_lexeme(p, name_tok), name_tok.id, name_tok.loc)
     } else {
@@ -1599,10 +1602,10 @@ fn parse_field_declarator(
 
 ///|
 fn parse_initializer(p : Parser) -> Initializer {
-  if p.current.kind == LBrace {
+  if p.current.kind is LBrace {
     let lbrace = advance_token(p)
     let items : Array[InitItem] = Array::new(capacity=4)
-    if p.current.kind == RBrace {
+    if p.current.kind is RBrace {
       advance_token(p) |> ignore
       return Initializer::List(items~, loc=lbrace.loc)
     }
@@ -1610,9 +1613,9 @@ fn parse_initializer(p : Parser) -> Initializer {
       let (designators, item_loc) = parse_designator_list(p)
       let value = parse_initializer(p)
       items.push({ designators, value, loc: item_loc })
-      if p.current.kind == Comma {
+      if p.current.kind is Comma {
         advance_token(p) |> ignore
-        if p.current.kind == RBrace {
+        if p.current.kind is RBrace {
           advance_token(p) |> ignore
           break
         }
@@ -1632,7 +1635,7 @@ fn parse_designator_list(p : Parser) -> (Array[InitDesignator], SrcLoc) {
   let designators : Array[InitDesignator] = Array::new(capacity=2)
   let mut start_loc = peek_token(p).loc
   while true {
-    if p.current.kind == Dot {
+    if p.current.kind is Dot {
       let dot_tok = advance_token(p)
       start_loc = dot_tok.loc
       let (name, id) = match expect_ident(p, "expected field name") {
@@ -1642,12 +1645,12 @@ fn parse_designator_list(p : Parser) -> (Array[InitDesignator], SrcLoc) {
       designators.push(InitDesignator::Field(name~, id~, loc=dot_tok.loc))
       continue
     }
-    if p.current.kind == LBracket {
+    if p.current.kind is LBracket {
       let lbrack = advance_token(p)
       start_loc = lbrack.loc
       let start = parse_expr_cond(p)
       let end_expr =
-        if p.current.kind == Ellipsis {
+        if p.current.kind is Ellipsis {
           advance_token(p) |> ignore
           Some(parse_expr_cond(p))
         } else {
@@ -1663,7 +1666,7 @@ fn parse_designator_list(p : Parser) -> (Array[InitDesignator], SrcLoc) {
       }
       continue
     }
-    if peek_token(p).kind == Ident && peek_kind(p, 1) == Colon {
+    if peek_token(p).kind is Ident && peek_kind(p, 1) is Colon {
       let name_tok = advance_token(p)
       start_loc = name_tok.loc
       expect(p, Colon, "expected ':' after designator") |> ignore
@@ -1829,7 +1832,7 @@ fn parse_paren_pointer_parts(
   let mut loc = fallback_loc
   let mut nested_wrappers : Array[DeclWrapper] = []
   let mut nested_attrs = empty_attrs()
-  if peek_kind(p, 0) == LParen {
+  if peek_kind(p, 0) is LParen {
     match parse_paren_pointer_parts(p, allow_missing_name, fallback_loc) {
       None => return None
       Some(parts) => {
@@ -1840,7 +1843,7 @@ fn parse_paren_pointer_parts(
         nested_attrs = parts.attrs
       }
     }
-  } else if peek_token(p).kind == Ident {
+  } else if peek_token(p).kind is Ident {
     let tok = advance_token(p)
     name = token_lexeme(p, tok)
     id = tok.id
@@ -1996,14 +1999,14 @@ fn parse_declarator_suffix(
 
 ///|
 fn parse_array_size(p : Parser) -> (Int?, Expr?) {
-  if peek_token(p).kind == RBracket {
+  if peek_token(p).kind is RBracket {
     return (None, None)
   }
-  if peek_token(p).kind == KwStatic {
+  if peek_token(p).kind is KwStatic {
     ignore(advance_token(p))
   }
   let loc = peek_token(p).loc
-  if peek_token(p).kind == IntLit && peek_kind(p, 1) == RBracket {
+  if peek_token(p).kind is IntLit && peek_kind(p, 1) is RBracket {
     let tok = advance_token(p)
     let text = token_lexeme(p, tok)
     match parse_int64_literal(text) {
@@ -2049,7 +2052,7 @@ fn parse_struct_type(p : Parser, is_union~ : Bool) -> (CType, SrcLoc)? {
   let mut attrs = parse_attributes(p)
   let mut name = ""
   let mut id = 0
-  if peek_token(p).kind == Ident {
+  if peek_token(p).kind is Ident {
     let tok = advance_token(p)
     name = token_lexeme(p, tok)
     id = tok.id
@@ -2109,7 +2112,7 @@ fn parse_struct_fields(p : Parser) -> Array[RecordItem] {
         }
         let mut any_field = false
         while true {
-          let decl = if peek_token(p).kind == Colon {
+          let decl = if peek_token(p).kind is Colon {
             Some({
               name: "",
               id: 0,
@@ -2174,7 +2177,7 @@ fn parse_enum_type(p : Parser) -> (CType, SrcLoc)? {
   let kw = advance_token(p)
   let mut name = ""
   let mut id = 0
-  if peek_token(p).kind == Ident {
+  if peek_token(p).kind is Ident {
     let tok = advance_token(p)
     name = token_lexeme(p, tok)
     id = tok.id
@@ -2201,7 +2204,7 @@ fn parse_enum_type(p : Parser) -> (CType, SrcLoc)? {
 ///|
 fn parse_enum_items(p : Parser) -> Array[EnumItem] {
   let items : Array[EnumItem] = []
-  if peek_token(p).kind == RBrace {
+  if peek_token(p).kind is RBrace {
     return items
   }
   while true {
@@ -2220,7 +2223,7 @@ fn parse_enum_items(p : Parser) -> Array[EnumItem] {
       })
     }
     if match_token(p, Comma) is Some(_) {
-      if peek_token(p).kind == RBrace {
+      if peek_token(p).kind is RBrace {
         break
       }
       continue
@@ -2244,12 +2247,12 @@ fn parse_param_list(p : Parser) -> (Array[Param], Bool, Bool) {
     return (params, true, false)
   }
   let first = peek_token(p)
-  let first_mapped = if first.kind == Ident {
+  let first_mapped = if first.kind is Ident {
     special_ident_kind(first, p.pp.keyword_ids)
   } else {
     None
   }
-  if first.kind == Ident && first_mapped is None &&
+  if first.kind is Ident && first_mapped is None &&
     !has_typedef(p, first) {
     old_style = true
     while true {
@@ -2271,7 +2274,7 @@ fn parse_param_list(p : Parser) -> (Array[Param], Bool, Bool) {
     expect(p, RParen, "expected ')' after parameter list") |> ignore
     return (params, varargs, old_style)
   }
-  if peek_token(p).kind == KwVoid {
+  if peek_token(p).kind is KwVoid {
     let void_tok = advance_token(p)
     if match_token(p, RParen) is Some(_) {
       return (params, varargs, false)
@@ -2373,7 +2376,7 @@ fn parse_param_declarator(
     })
   }
 
-  if peek_token(p).kind == Ident {
+  if peek_token(p).kind is Ident {
     let name_tok = advance_token(p)
     let (ty, _params, _varargs, _old_style, suffix_attrs) = parse_declarator_suffix(
       p, ty0,
@@ -2483,7 +2486,7 @@ fn parse_stmt(p : Parser) -> Stmt {
     }
     KwGoto => {
       let goto_tok = advance_token(p)
-      if p.current.kind == Star {
+      if p.current.kind is Star {
         ignore(advance_token(p))
         let expr = parse_expr(p)
         expect(p, Semicolon, "expected ';' after goto") |> ignore
@@ -2512,7 +2515,7 @@ fn parse_stmt(p : Parser) -> Stmt {
     }
     _ => ()
   }
-  if tok.kind == Ident && peek_kind(p, 1) == Colon {
+  if tok.kind is Ident && peek_kind(p, 1) is Colon {
     let label_tok = advance_token(p)
     expect(p, Colon, "expected ':' after label") |> ignore
     ignore(parse_attributes(p))
@@ -2991,7 +2994,7 @@ fn parse_expr_unary(p : Parser) -> Expr {
   match p.current.kind {
     KwSizeof => {
       let tok = advance_token(p)
-      if peek_kind(p, 0) == LParen && is_type_start(p, peek_token_at(p, 1)) {
+      if peek_kind(p, 0) is LParen && is_type_start(p, peek_token_at(p, 1)) {
         expect(p, LParen, "expected '(' after sizeof") |> ignore
         match parse_type_name(p) {
           None => {
@@ -3009,7 +3012,7 @@ fn parse_expr_unary(p : Parser) -> Expr {
     }
     KwAlignof => {
       let tok = advance_token(p)
-      if peek_kind(p, 0) == LParen && is_type_start(p, peek_token_at(p, 1)) {
+      if peek_kind(p, 0) is LParen && is_type_start(p, peek_token_at(p, 1)) {
         expect(p, LParen, "expected '(' after alignof") |> ignore
         match parse_type_name(p) {
           None => {
@@ -3027,7 +3030,7 @@ fn parse_expr_unary(p : Parser) -> Expr {
     }
     _ => ()
   }
-  if peek_kind(p, 0) == LParen && is_type_start(p, peek_token_at(p, 1)) {
+  if peek_kind(p, 0) is LParen && is_type_start(p, peek_token_at(p, 1)) {
     let lparen = advance_token(p)
     match parse_type_name(p) {
       None => {
@@ -3036,7 +3039,7 @@ fn parse_expr_unary(p : Parser) -> Expr {
       }
       Some(ty) => {
         expect(p, RParen, "expected ')' after cast type") |> ignore
-        if peek_kind(p, 0) == LBrace {
+        if peek_kind(p, 0) is LBrace {
           let init = parse_initializer(p)
           let literal =
             Expr::CompoundLiteral(
@@ -3392,7 +3395,7 @@ fn parse_string_literal_expr(p : Parser, first : Token) -> Expr {
   let sb = StringBuilder::new(size_hint=token_lexeme_len(p, first))
   let mut byte_len = len
   sb.write_string(value)
-  while peek_token(p).kind == StrLit {
+  while peek_token(p).kind is StrLit {
     let tok = advance_token(p)
     let (part, part_len) =
       decode_string_literal(p, token_lexeme(p, tok), tok.loc)
@@ -3971,7 +3974,7 @@ fn expect(p : Parser, kind : TokenKind, message : String) -> Token {
 ///|
 fn expect_ident(p : Parser, message : String) -> Token? {
   let tok = p.current
-  if tok.kind == Ident {
+  if tok.kind is Ident {
     return Some(advance_token(p))
   }
   add_parse_error(p, tok.loc, message)
