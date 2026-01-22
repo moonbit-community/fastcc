@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup MoonBit
+        uses: hustcer/setup-moonbit@v1.17
+        with:
+          version: latest
+          setup-core: true
+      - name: Run mbtcc tests
+        env:
+          QUICKJS: "1"
+          QUICKJS_TESTS: "1"
+          QUICKJS_TEST_LIST: "tests/test_closure.js tests/test_language.js tests/test_builtin.js tests/test_loop.js tests/test_bigint.js tests/test_cyclic_import.js tests/test_std.js"
+        run: scripts/run_mbtcc_ctest.sh
