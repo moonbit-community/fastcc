@@ -1215,9 +1215,8 @@ fn struct_size_align(
           Some(v) => v
         }
         let mut field_align = base_align
-        match field_align_override {
-          None => ()
-          Some(value) => field_align = value
+        if field_align_override is Some(value) {
+          field_align = value
         }
         if width == 0 {
           let used_bytes = (bit_pos + 7) / 8
@@ -1228,9 +1227,8 @@ fn struct_size_align(
         if packed && width != 0 {
           field_align = 1
         }
-        match field_align_override {
-          None => ()
-          Some(value) => field_align = value
+        if field_align_override is Some(value) {
+          field_align = value
         }
         align = if field_align > align { field_align } else { align }
         if field_align_override is Some(_) {
@@ -1316,9 +1314,10 @@ fn struct_size_align(
     size = size + (bit_pos + 7) / 8
   }
   let mut final_align = align
-  match attr_align_value(ctx, attrs, loc) {
-    None => ()
-    Some(value) => if value > final_align { final_align = value }
+  if attr_align_value(ctx, attrs, loc) is Some(value) {
+    if value > final_align {
+      final_align = value
+    }
   }
   size = align_to(size, final_align)
   (size, final_align)
@@ -1381,9 +1380,8 @@ fn union_size_align(
         }
     }
     let mut adjusted_align = if packed { 1 } else { field_align }
-    match field_align_override {
-      None => ()
-      Some(value) => adjusted_align = value
+    if field_align_override is Some(value) {
+      adjusted_align = value
     }
     if field_size > size {
       size = field_size
@@ -1393,9 +1391,10 @@ fn union_size_align(
     }
   }
   let mut final_align = align
-  match attr_align_value(ctx, attrs, loc) {
-    None => ()
-    Some(value) => if value > final_align { final_align = value }
+  if attr_align_value(ctx, attrs, loc) is Some(value) {
+    if value > final_align {
+      final_align = value
+    }
   }
   size = align_to(size, final_align)
   (size, final_align)
