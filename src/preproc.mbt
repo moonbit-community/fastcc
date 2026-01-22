@@ -776,7 +776,9 @@ fn prefix_tokens(tokens : Array[Token], end : Int) -> Array[Token] {
   if end <= 0 {
     return []
   }
-  let out : Array[Token] = Array::new(capacity=end)
+  let total_len = tokens.length()
+  let capacity = if total_len > end { total_len } else { end }
+  let out : Array[Token] = Array::new(capacity=capacity)
   let mut i = 0
   while i < end {
     out.push(tokens[i])

@@ -1616,17 +1616,21 @@ fn parse_field_declarator(
 
 ///|
 fn parse_initializer(p : Parser) -> Initializer {
-  if match_token(p, LBrace) is Some(lbrace) {
+  if p.current.kind == LBrace {
+    let lbrace = advance_token(p)
     let items : Array[InitItem] = Array::new(capacity=4)
-    if match_token(p, RBrace) is Some(_) {
+    if p.current.kind == RBrace {
+      advance_token(p) |> ignore
       return Initializer::List(items~, loc=lbrace.loc)
     }
     while true {
       let (designators, item_loc) = parse_designator_list(p)
       let value = parse_initializer(p)
       items.push({ designators, value, loc: item_loc })
-      if match_token(p, Comma) is Some(_) {
-        if match_token(p, RBrace) is Some(_) {
+      if p.current.kind == Comma {
+        advance_token(p) |> ignore
+        if p.current.kind == RBrace {
+          advance_token(p) |> ignore
           break
         }
         continue
@@ -1645,7 +1649,8 @@ fn parse_designator_list(p : Parser) -> (Array[InitDesignator], SrcLoc) {
   let designators : Array[InitDesignator] = Array::new(capacity=2)
   let mut start_loc = peek_token(p).loc
   while true {
-    if match_token(p, Dot) is Some(dot_tok) {
+    if p.current.kind == Dot {
+      let dot_tok = advance_token(p)
       start_loc = dot_tok.loc
       let (name, id) = match expect_ident(p, "expected field name") {
         None => ("", 0)
@@ -1654,11 +1659,13 @@ fn parse_designator_list(p : Parser) -> (Array[InitDesignator], SrcLoc) {
       designators.push(InitDesignator::Field(name~, id~, loc=dot_tok.loc))
       continue
     }
-    if match_token(p, LBracket) is Some(lbrack) {
+    if p.current.kind == LBracket {
+      let lbrack = advance_token(p)
       start_loc = lbrack.loc
       let start = parse_expr_cond(p)
       let end_expr =
-        if match_token(p, Ellipsis) is Some(_) {
+        if p.current.kind == Ellipsis {
+          advance_token(p) |> ignore
           Some(parse_expr_cond(p))
         } else {
           None
