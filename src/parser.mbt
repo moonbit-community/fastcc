@@ -2139,33 +2139,30 @@ fn parse_struct_fields(p : Parser) -> Array[RecordItem] {
           } else {
             None
           }
-          match decl {
-            None => ()
-            Some(field_decl) => {
-              let stripped = strip_type_qualifiers(field_decl.ty)
-              let allow_anon = field_decl.name == "" &&
-                bit_width is None &&
-                (stripped is CType::Struct(..) || stripped is CType::Union(..))
-              if field_decl.name != "" || bit_width is Some(_) || allow_anon {
-                any_field = true
-                let combined_attrs = merge_attrs(specs.attrs, field_decl.attrs)
-                let adjusted_ty = apply_call_conv_to_type(
-                  field_decl.ty,
-                  normalize_call_conv(combined_attrs.call_conv),
-                )
-                items.push(
-                  RecordItem::Field({
-                    name: field_decl.name,
-                    id: field_decl.id,
-                    ty: adjusted_ty,
-                    bit_width,
-                    attrs: combined_attrs,
-                    loc: field_decl.loc,
-                  }),
-                )
-              } else {
-                add_parse_error(p, loc, "expected field declarator")
-              }
+          if decl is Some(field_decl) {
+            let stripped = strip_type_qualifiers(field_decl.ty)
+            let allow_anon = field_decl.name == "" &&
+              bit_width is None &&
+              (stripped is CType::Struct(..) || stripped is CType::Union(..))
+            if field_decl.name != "" || bit_width is Some(_) || allow_anon {
+              any_field = true
+              let combined_attrs = merge_attrs(specs.attrs, field_decl.attrs)
+              let adjusted_ty = apply_call_conv_to_type(
+                field_decl.ty,
+                normalize_call_conv(combined_attrs.call_conv),
+              )
+              items.push(
+                RecordItem::Field({
+                  name: field_decl.name,
+                  id: field_decl.id,
+                  ty: adjusted_ty,
+                  bit_width,
+                  attrs: combined_attrs,
+                  loc: field_decl.loc,
+                }),
+              )
+            } else {
+              add_parse_error(p, loc, "expected field declarator")
             }
           }
           if match_token(p, Comma) is Some(_) {
@@ -2220,21 +2217,18 @@ fn parse_enum_items(p : Parser) -> Array[EnumItem] {
   }
   while true {
     let name_tok = expect_ident(p, "expected enumerator name")
-    match name_tok {
-      None => ()
-      Some(tok) => {
-        let value = if match_token(p, Assign) is Some(_) {
-          Some(parse_expr_cond(p))
-        } else {
-          None
-        }
-        items.push({
-          name: token_lexeme(p, tok),
-          id: tok.id,
-          value,
-          loc: tok.loc,
-        })
+    if name_tok is Some(tok) {
+      let value = if match_token(p, Assign) is Some(_) {
+        Some(parse_expr_cond(p))
+      } else {
+        None
       }
+      items.push({
+        name: token_lexeme(p, tok),
+        id: tok.id,
+        value,
+        loc: tok.loc,
+      })
     }
     if match_token(p, Comma) is Some(_) {
       if peek_token(p).kind == RBrace {
@@ -3319,17 +3313,17 @@ fn parse_expr_primary(p : Parser) -> Expr {
             }
             expect(p, Comma, "expected ',' in __builtin_offsetof") |> ignore
             let path : Array[String] = []
-            match expect_ident(p, "expected member name in __builtin_offsetof") {
-              None => ()
-              Some(id) => path.push(token_lexeme(p, id))
+            if expect_ident(p, "expected member name in __builtin_offsetof") is Some(id) {
+              path.push(token_lexeme(p, id))
             }
             while true {
               match p.current.kind {
                 Dot => {
                   advance_token(p) |> ignore
-                  match expect_ident(p, "expected member name in __builtin_offsetof") {
-                    None => break
-                    Some(id) => path.push(token_lexeme(p, id))
+                  if expect_ident(p, "expected member name in __builtin_offsetof") is Some(id) {
+                    path.push(token_lexeme(p, id))
+                  } else {
+                    break
                   }
                 }
                 _ => break
