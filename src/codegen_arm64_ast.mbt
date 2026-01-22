@@ -4692,17 +4692,17 @@ fn call_arg_slot_count(
 ) -> Int? {
   match strip_top_qualifiers(ty) {
     CType::Struct(..) | CType::Union(..) =>
-      match type_size_align_or_error(alloc.sem, ty, loc) {
-        None => None
-        Some((size, _)) =>
-          if size <= 8 {
-            Some(1)
-          } else if size <= 16 {
-            Some(2)
-          } else {
-            add_error(bag, loc, "codegen: struct args >16 bytes not supported yet")
-            None
-          }
+      if type_size_align_or_error(alloc.sem, ty, loc) is Some((size, _)) {
+        if size <= 8 {
+          Some(1)
+        } else if size <= 16 {
+          Some(2)
+        } else {
+          add_error(bag, loc, "codegen: struct args >16 bytes not supported yet")
+          None
+        }
+      } else {
+        None
       }
     _ => Some(1)
   }
@@ -4750,26 +4750,24 @@ fn store_call_arg_to_slot(
     None =>
       match strip_top_qualifiers(ty) {
         CType::Struct(..) | CType::Union(..) =>
-          match type_size_align_or_error(alloc.sem, ty, loc) {
-            None => ()
-            Some((size, _)) =>
-              if size <= 16 {
-                gen_agg_expr_to_addr(
-                  emitter,
-                  alloc,
-                  syms,
-                  pool,
-                  cstrings,
-                  arg,
-                  31,
-                  slot_off.to_int(),
-                  ty,
-                  loc,
-                  bag,
-                )
-              } else {
-                add_error(bag, loc, "codegen: struct args >16 bytes not supported yet")
-              }
+          if type_size_align_or_error(alloc.sem, ty, loc) is Some((size, _)) {
+            if size <= 16 {
+              gen_agg_expr_to_addr(
+                emitter,
+                alloc,
+                syms,
+                pool,
+                cstrings,
+                arg,
+                31,
+                slot_off.to_int(),
+                ty,
+                loc,
+                bag,
+              )
+            } else {
+              add_error(bag, loc, "codegen: struct args >16 bytes not supported yet")
+            }
           }
         _ => {
           let tmp = take_reg(pool) catch {
@@ -5108,13 +5106,10 @@ fn gen_call_with_layout(
   if layout.ret_loc == 1 {
     match sret_addr {
       None =>
-        match type_size_align_or_error(alloc.sem, ret_ty, loc) {
-          None => ()
-          Some((ret_size, ret_align)) => {
-            let aligned = align_up(scratch_off, ret_align)
-            sret_addr = Some({ base_reg: 31, off: aligned })
-            scratch_off = aligned + ret_size
-          }
+        if type_size_align_or_error(alloc.sem, ret_ty, loc) is Some((ret_size, ret_align)) {
+          let aligned = align_up(scratch_off, ret_align)
+          sret_addr = Some({ base_reg: 31, off: aligned })
+          scratch_off = aligned + ret_size
         }
       Some(_) => ()
     }
@@ -5129,16 +5124,13 @@ fn gen_call_with_layout(
   }
 
   if layout.ret_loc == 1 {
-    match sret_addr {
-      None => ()
-      Some(addr) => {
-        let base = addr.base_reg
-        let mut off = addr.off
-        if base == 31 {
-          off = off + total_stack
-        }
-        emit_addr_reg(emitter, 8, base, off, loc, bag)
+    if sret_addr is Some(addr) {
+      let base = addr.base_reg
+      let mut off = addr.off
+      if base == 31 {
+        off = off + total_stack
       }
+      emit_addr_reg(emitter, 8, base, off, loc, bag)
     }
   }
 
@@ -5451,9 +5443,8 @@ fn gen_atomic_builtin_call(
           CType::Pointer(pointee) => {
             if atom_type is None {
               atom_type = Some(pointee)
-              match type_size_align(alloc.sem, pointee, loc) {
-                None => ()
-                Some((size, _)) => atom_size = size
+              if type_size_align(alloc.sem, pointee, loc) is Some((size, _)) {
+                atom_size = size
               }
             }
           }
@@ -5528,23 +5519,20 @@ fn gen_atomic_builtin_call(
     emit_call_fn,
     layout=None,
   )
-  match save_arg {
-    None => ()
-    Some(dest) => {
-      let addr = take_reg(pool) catch {
-        err => {
-          add_error(bag, loc, err.to_string())
-          return true
-        }
+  if save_arg is Some(dest) {
+    let addr = take_reg(pool) catch {
+      err => {
+        add_error(bag, loc, err.to_string())
+        return true
       }
-      gen_expr_ptr(emitter, alloc, syms, pool, cstrings, dest, addr, bag)
-      let store_ty = match atom_type {
-        Some(at) => at
-        None => ret_ty
-      }
-      emit_store_scalar_at(emitter, alloc.sem, store_ty, 0, addr, 0, loc, bag)
-      give_reg(pool, addr)
     }
+    gen_expr_ptr(emitter, alloc, syms, pool, cstrings, dest, addr, bag)
+    let store_ty = match atom_type {
+      Some(at) => at
+      None => ret_ty
+    }
+    emit_store_scalar_at(emitter, alloc.sem, store_ty, 0, addr, 0, loc, bag)
+    give_reg(pool, addr)
   }
   true
 }
