@@ -1141,9 +1141,8 @@ fn collect_static_locals_in_stmt(
     Stmt::If(cond~, then_branch~, else_branch~, ..) => {
       collect_static_locals_in_expr(func_name, cond, locals, decls, init_maps)
       collect_static_locals_in_stmt(func_name, then_branch, locals, decls, init_maps)
-      match else_branch {
-        None => ()
-        Some(s) => collect_static_locals_in_stmt(func_name, s, locals, decls, init_maps)
+      if else_branch is Some(s) {
+        collect_static_locals_in_stmt(func_name, s, locals, decls, init_maps)
       }
     }
     Stmt::While(cond~, body~, ..) => {
@@ -1155,17 +1154,14 @@ fn collect_static_locals_in_stmt(
       collect_static_locals_in_expr(func_name, cond, locals, decls, init_maps)
     }
     Stmt::For(init~, cond~, step~, body~, ..) => {
-      match init {
-        None => ()
-        Some(s) => collect_static_locals_in_stmt(func_name, s, locals, decls, init_maps)
+      if init is Some(s) {
+        collect_static_locals_in_stmt(func_name, s, locals, decls, init_maps)
       }
-      match cond {
-        None => ()
-        Some(e) => collect_static_locals_in_expr(func_name, e, locals, decls, init_maps)
+      if cond is Some(e) {
+        collect_static_locals_in_expr(func_name, e, locals, decls, init_maps)
       }
-      match step {
-        None => ()
-        Some(e) => collect_static_locals_in_expr(func_name, e, locals, decls, init_maps)
+      if step is Some(e) {
+        collect_static_locals_in_expr(func_name, e, locals, decls, init_maps)
       }
       collect_static_locals_in_stmt(func_name, body, locals, decls, init_maps)
     }
@@ -1175,9 +1171,8 @@ fn collect_static_locals_in_stmt(
     }
     Stmt::Case(expr~, end_expr~, body~, ..) => {
       collect_static_locals_in_expr(func_name, expr, locals, decls, init_maps)
-      match end_expr {
-        None => ()
-        Some(e) => collect_static_locals_in_expr(func_name, e, locals, decls, init_maps)
+      if end_expr is Some(e) {
+        collect_static_locals_in_expr(func_name, e, locals, decls, init_maps)
       }
       collect_static_locals_in_stmt(func_name, body, locals, decls, init_maps)
     }
@@ -1186,9 +1181,8 @@ fn collect_static_locals_in_stmt(
     Stmt::Label(body=body, ..) =>
       collect_static_locals_in_stmt(func_name, body, locals, decls, init_maps)
     Stmt::Return(value~, ..) =>
-      match value {
-        None => ()
-        Some(expr) => collect_static_locals_in_expr(func_name, expr, locals, decls, init_maps)
+      if value is Some(expr) {
+        collect_static_locals_in_expr(func_name, expr, locals, decls, init_maps)
       }
     Stmt::Asm(asm_stmt) => {
       for op in asm_stmt.outputs {
@@ -1279,18 +1273,16 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt, walk_exprs : Bool) -> Unit {
               _ => ()
             }
         }
-        match d.init {
-          None => ()
-          Some(init) => layout_initializer(alloc, init, walk_exprs)
+        if d.init is Some(init) {
+          layout_initializer(alloc, init, walk_exprs)
         }
       }
     }
     Stmt::If(cond~, then_branch~, else_branch~, ..) => {
       layout_expr(alloc, cond, walk_exprs)
       layout_stmt(alloc, then_branch, walk_exprs)
-      match else_branch {
-        None => ()
-        Some(s) => layout_stmt(alloc, s, walk_exprs)
+      if else_branch is Some(s) {
+        layout_stmt(alloc, s, walk_exprs)
       }
     }
     Stmt::While(cond~, body~, ..) => {
@@ -1309,17 +1301,14 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt, walk_exprs : Bool) -> Unit {
       if needs_scope {
         cg_push_scope(alloc)
       }
-      match init {
-        None => ()
-        Some(s) => layout_stmt(alloc, s, walk_exprs)
+      if init is Some(s) {
+        layout_stmt(alloc, s, walk_exprs)
       }
-      match cond {
-        None => ()
-        Some(e) => layout_expr(alloc, e, walk_exprs)
+      if cond is Some(e) {
+        layout_expr(alloc, e, walk_exprs)
       }
-      match step {
-        None => ()
-        Some(e) => layout_expr(alloc, e, walk_exprs)
+      if step is Some(e) {
+        layout_expr(alloc, e, walk_exprs)
       }
       layout_stmt(alloc, body, walk_exprs)
       if needs_scope {
@@ -1332,18 +1321,16 @@ fn layout_stmt(alloc : LocalAlloc, stmt : Stmt, walk_exprs : Bool) -> Unit {
     }
     Stmt::Case(expr~, end_expr~, body~, ..) => {
       layout_expr(alloc, expr, walk_exprs)
-      match end_expr {
-        None => ()
-        Some(e) => layout_expr(alloc, e, walk_exprs)
+      if end_expr is Some(e) {
+        layout_expr(alloc, e, walk_exprs)
       }
       layout_stmt(alloc, body, walk_exprs)
     }
     Stmt::Default(body~, ..) => layout_stmt(alloc, body, walk_exprs)
     Stmt::Label(body=body, ..) => layout_stmt(alloc, body, walk_exprs)
     Stmt::Return(value~, ..) =>
-      match value {
-        None => ()
-        Some(e) => layout_expr(alloc, e, walk_exprs)
+      if value is Some(e) {
+        layout_expr(alloc, e, walk_exprs)
       }
     Stmt::ExprStmt(expr~, ..) => layout_expr(alloc, expr, walk_exprs)
     Stmt::Asm(_) |
@@ -1461,17 +1448,15 @@ fn reserve_compound_literals_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
       }
     Stmt::DeclStmt(decls~, ..) =>
       for d in decls {
-        match d.init {
-          None => ()
-          Some(init) => reserve_compound_literals_initializer(alloc, init)
+        if d.init is Some(init) {
+          reserve_compound_literals_initializer(alloc, init)
         }
       }
     Stmt::If(cond~, then_branch~, else_branch~, ..) => {
       reserve_compound_literals_expr(alloc, cond)
       reserve_compound_literals_stmt(alloc, then_branch)
-      match else_branch {
-        None => ()
-        Some(s) => reserve_compound_literals_stmt(alloc, s)
+      if else_branch is Some(s) {
+        reserve_compound_literals_stmt(alloc, s)
       }
     }
     Stmt::While(cond~, body~, ..) => {
@@ -1483,17 +1468,14 @@ fn reserve_compound_literals_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
       reserve_compound_literals_expr(alloc, cond)
     }
     Stmt::For(init~, cond~, step~, body~, ..) => {
-      match init {
-        None => ()
-        Some(s) => reserve_compound_literals_stmt(alloc, s)
+      if init is Some(s) {
+        reserve_compound_literals_stmt(alloc, s)
       }
-      match cond {
-        None => ()
-        Some(e) => reserve_compound_literals_expr(alloc, e)
+      if cond is Some(e) {
+        reserve_compound_literals_expr(alloc, e)
       }
-      match step {
-        None => ()
-        Some(e) => reserve_compound_literals_expr(alloc, e)
+      if step is Some(e) {
+        reserve_compound_literals_expr(alloc, e)
       }
       reserve_compound_literals_stmt(alloc, body)
     }
@@ -1503,18 +1485,16 @@ fn reserve_compound_literals_stmt(alloc : LocalAlloc, stmt : Stmt) -> Unit {
     }
     Stmt::Case(expr~, end_expr~, body~, ..) => {
       reserve_compound_literals_expr(alloc, expr)
-      match end_expr {
-        None => ()
-        Some(e) => reserve_compound_literals_expr(alloc, e)
+      if end_expr is Some(e) {
+        reserve_compound_literals_expr(alloc, e)
       }
       reserve_compound_literals_stmt(alloc, body)
     }
     Stmt::Default(body~, ..) => reserve_compound_literals_stmt(alloc, body)
     Stmt::Label(body=body, ..) => reserve_compound_literals_stmt(alloc, body)
     Stmt::Return(value~, ..) =>
-      match value {
-        None => ()
-        Some(e) => reserve_compound_literals_expr(alloc, e)
+      if value is Some(e) {
+        reserve_compound_literals_expr(alloc, e)
       }
     Stmt::Asm(stmt) => {
       for op in stmt.outputs {
