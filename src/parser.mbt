@@ -527,9 +527,8 @@ fn parse_type_qualifiers(p : Parser) -> TypeQual {
     let tok = peek_token(p)
     let mut kind = tok.kind
     if kind == Ident {
-      match special_ident_kind(tok, p.pp.keyword_ids) {
-        Some(mapped) => kind = mapped
-        None => ()
+      if special_ident_kind(tok, p.pp.keyword_ids) is Some(mapped) {
+        kind = mapped
       }
     }
     match kind {
@@ -597,9 +596,8 @@ fn parse_type_specifiers(
     let tok = peek_token(p)
     let mut kind = tok.kind
     if kind == Ident {
-      match special_ident_kind(tok, p.pp.keyword_ids) {
-        Some(mapped) => kind = mapped
-        None => ()
+      if special_ident_kind(tok, p.pp.keyword_ids) is Some(mapped) {
+        kind = mapped
       }
     }
     match kind {
@@ -847,27 +845,25 @@ fn parse_type_specifiers(
             }
         }
       Ident =>
-        match lookup_typedef(p, tok) {
-          Some(aliased) =>
-            if base is Some(_) ||
-              saw_void ||
-              saw_bool ||
-              saw_float ||
-              saw_double ||
-              saw_char ||
-              saw_int ||
-              short_seen ||
-              long_count > 0 ||
-              signedness != 0 {
-              break
-            } else {
-              ignore(advance_token(p))
-              base = Some(aliased)
-              start_loc = tok.loc
-              saw_any = true
-              continue
-            }
-          None => ()
+        if lookup_typedef(p, tok) is Some(aliased) {
+          if base is Some(_) ||
+            saw_void ||
+            saw_bool ||
+            saw_float ||
+            saw_double ||
+            saw_char ||
+            saw_int ||
+            short_seen ||
+            long_count > 0 ||
+            signedness != 0 {
+            break
+          } else {
+            ignore(advance_token(p))
+            base = Some(aliased)
+            start_loc = tok.loc
+            saw_any = true
+            continue
+          }
         }
       _ => ()
     }
@@ -950,9 +946,8 @@ fn is_type_spec_start(p : Parser) -> Bool {
   let tok = peek_token(p)
   let mut kind = tok.kind
   if kind == Ident {
-    match special_ident_kind(tok, p.pp.keyword_ids) {
-      Some(mapped) => kind = mapped
-      None => ()
+    if special_ident_kind(tok, p.pp.keyword_ids) is Some(mapped) {
+      kind = mapped
     }
   }
   match kind {
@@ -2287,18 +2282,14 @@ fn parse_param_list(p : Parser) -> (Array[Param], Bool, Bool) {
     if match_token(p, RParen) is Some(_) {
       return (params, varargs, false)
     }
-    match parse_param_after_base(p, CType::Void, empty_attrs(), void_tok.loc) {
-      Some(param) => params.push(param)
-      None => ()
+    if parse_param_after_base(p, CType::Void, empty_attrs(), void_tok.loc) is Some(param) {
+      params.push(param)
     }
   } else {
-    match parse_type_specifiers(p, allow_storage=false, allow_typedef=false) {
-      Some(specs) =>
-        match parse_param_after_base(p, specs.ty, specs.attrs, specs.loc) {
-          Some(param) => params.push(param)
-          None => ()
-        }
-      None => ()
+    if parse_type_specifiers(p, allow_storage=false, allow_typedef=false) is Some(specs) {
+      if parse_param_after_base(p, specs.ty, specs.attrs, specs.loc) is Some(param) {
+        params.push(param)
+      }
     }
   }
   while true {
@@ -2308,13 +2299,10 @@ fn parse_param_list(p : Parser) -> (Array[Param], Bool, Bool) {
         expect(p, RParen, "expected ')' after '...'") |> ignore
         break
       }
-      match parse_type_specifiers(p, allow_storage=false, allow_typedef=false) {
-        Some(specs) =>
-          match parse_param_after_base(p, specs.ty, specs.attrs, specs.loc) {
-            Some(param) => params.push(param)
-            None => ()
-          }
-        None => ()
+      if parse_type_specifiers(p, allow_storage=false, allow_typedef=false) is Some(specs) {
+        if parse_param_after_base(p, specs.ty, specs.attrs, specs.loc) is Some(param) {
+          params.push(param)
+        }
       }
       continue
     }

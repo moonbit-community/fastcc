@@ -328,21 +328,18 @@ fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
   let idx = vtop_index()
   if idx >= 1 {
     let left_idx = idx - 1
-    match arm64_iconst(left_idx) {
-      Some(val) => {
-        gv(emitter, RC_INT) |> ignore
-        let a = intr(vstack[idx].r)
-        let saved = vpop_value()
-        let x = get_reg(RC_INT)
-        vstack.push(saved)
-        if arm64_gen_opic(emitter, op, l, rev, val, intr(x), a) {
-          vstack[idx].r = x
-          vswap()
-          vpop()
-          return
-        }
+    if arm64_iconst(left_idx) is Some(val) {
+      gv(emitter, RC_INT) |> ignore
+      let a = intr(vstack[idx].r)
+      let saved = vpop_value()
+      let x = get_reg(RC_INT)
+      vstack.push(saved)
+      if arm64_gen_opic(emitter, op, l, rev, val, intr(x), a) {
+        vstack[idx].r = x
+        vswap()
+        vpop()
+        return
       }
-      None => ()
     }
   }
   if !rev {
