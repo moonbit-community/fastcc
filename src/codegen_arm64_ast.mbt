@@ -11634,14 +11634,11 @@ fn patch_label_addr_uses(
   loc : SrcLoc,
   bag : DiagBag,
 ) -> Unit {
-  match labels.addr_patches.get(name) {
-    None => ()
-    Some(entries) => {
-      for at in entries {
-        patch_adr(emitter, at, addr, loc, bag)
-      }
-      labels.addr_patches.remove(name)
+  if labels.addr_patches.get(name) is Some(entries) {
+    for at in entries {
+      patch_adr(emitter, at, addr, loc, bag)
     }
+    labels.addr_patches.remove(name)
   }
 }
 
@@ -11987,20 +11984,17 @@ fn gen_switch_body(
         Some(_) => add_error(bag, loc, "codegen: duplicate label")
         None => ()
       }
-      match labels.chains.get(name) {
-        None => ()
-        Some(chain) =>
-          if chain != 0 {
-            gsym_addr(emitter, chain, addr) catch {
-              err => add_error(bag, loc, err.to_string())
-            }
+      if labels.chains.get(name) is Some(chain) {
+        if chain != 0 {
+          gsym_addr(emitter, chain, addr) catch {
+            err => add_error(bag, loc, err.to_string())
           }
+        }
       }
       labels.addrs.set(name, addr)
       labels.chains.set(name, 0)
-      match current_scope_vla_loc(alloc) {
-        None => ()
-        Some(off) => emit_vla_sp_restore(emitter, off)
+      if current_scope_vla_loc(alloc) is Some(off) {
+        emit_vla_sp_restore(emitter, off)
       }
       gen_switch_body(
         emitter,
@@ -12114,79 +12108,70 @@ fn gen_stmt(
             }
           _ => ()
         }
-        match alloc_local(alloc, d.name, d.id, decl_ty, d.loc) {
-          None => ()
-          Some(slot) => {
-            let mut slot0 = slot
-            let mut slot_stripped = strip_top_qualifiers(slot0.ty)
-            match slot_stripped {
-              CType::Array(size=None, size_expr=Some(_), ..) => {
-                let size_off = alloc_hidden_slot(alloc, 8, 8)
-                let updated = {
-                  offset: slot0.offset,
-                  ty: slot0.ty,
-                  vla_size_offset: Some(size_off),
-                  byref: slot0.byref,
-                  type_size: slot0.type_size,
-                  type_align: slot0.type_align,
-                }
-                if d.id > 0 {
-                  let scope_idx = alloc.scopes.length() - 1
-                  alloc.scopes[scope_idx].set(d.id, updated)
-                }
-                update_local_slot(alloc, d.name, d.id, updated)
-                slot0 = updated
-                slot_stripped = strip_top_qualifiers(slot0.ty)
-                match vla_record_decl(alloc, slot0.offset) {
-                  None => ()
-                  Some(off) => emit_vla_sp_save(emitter, off)
-                }
+        if alloc_local(alloc, d.name, d.id, decl_ty, d.loc) is Some(slot) {
+          let mut slot0 = slot
+          let mut slot_stripped = strip_top_qualifiers(slot0.ty)
+          match slot_stripped {
+            CType::Array(size=None, size_expr=Some(_), ..) => {
+              let size_off = alloc_hidden_slot(alloc, 8, 8)
+              let updated = {
+                offset: slot0.offset,
+                ty: slot0.ty,
+                vla_size_offset: Some(size_off),
+                byref: slot0.byref,
+                type_size: slot0.type_size,
+                type_align: slot0.type_align,
               }
-              _ => ()
-            }
-            match slot_stripped {
-              CType::Array(elem=_elem_ty, size=None, size_expr=Some(_expr)) =>
-                gen_vla_alloc_to_local_slot(
-                  emitter,
-                  alloc,
-                  syms,
-                  pool,
-                  cstrings,
-                  slot0.offset,
-                  slot0.vla_size_offset,
-                  slot0.ty,
-                  d.loc,
-                  bag,
-                )
-              _ => ()
-            }
-            match d.init {
-              None => ()
-              Some(init) => {
-                let needs_zero = type_is_aggregate(slot0.ty)
-                if needs_zero {
-                  match slot_type_size_align(alloc, slot0, d.loc) {
-                    None => ()
-                    Some((size, _)) =>
-                      if size > 0 {
-                        emit_zero_bytes(emitter, 29, slot0.offset, size)
-                      }
-                  }
-                }
-                gen_initializer_to_addr(
-                  emitter,
-                  alloc,
-                  syms,
-                  pool,
-                  cstrings,
-                  29,
-                  slot0.offset,
-                  slot0.ty,
-                  init,
-                  bag,
-                )
+              if d.id > 0 {
+                let scope_idx = alloc.scopes.length() - 1
+                alloc.scopes[scope_idx].set(d.id, updated)
+              }
+              update_local_slot(alloc, d.name, d.id, updated)
+              slot0 = updated
+              slot_stripped = strip_top_qualifiers(slot0.ty)
+              if vla_record_decl(alloc, slot0.offset) is Some(off) {
+                emit_vla_sp_save(emitter, off)
               }
             }
+            _ => ()
+          }
+          match slot_stripped {
+            CType::Array(elem=_elem_ty, size=None, size_expr=Some(_expr)) =>
+              gen_vla_alloc_to_local_slot(
+                emitter,
+                alloc,
+                syms,
+                pool,
+                cstrings,
+                slot0.offset,
+                slot0.vla_size_offset,
+                slot0.ty,
+                d.loc,
+                bag,
+              )
+            _ => ()
+          }
+          if d.init is Some(init) {
+            let needs_zero = type_is_aggregate(slot0.ty)
+            if needs_zero {
+              if slot_type_size_align(alloc, slot0, d.loc) is Some((size, _)) {
+                if size > 0 {
+                  emit_zero_bytes(emitter, 29, slot0.offset, size)
+                }
+              }
+            }
+            gen_initializer_to_addr(
+              emitter,
+              alloc,
+              syms,
+              pool,
+              cstrings,
+              29,
+              slot0.offset,
+              slot0.ty,
+              init,
+              bag,
+            )
           }
         }
       }
@@ -12348,23 +12333,21 @@ fn gen_stmt(
 	      let cont_depth = alloc.scopes.length()
 	      let break_depth = cont_depth - 1
 	      let mut chain0 = return_chain
-	      match init {
-        None => ()
-        Some(s) =>
-          chain0 = gen_stmt(
-            emitter,
-            alloc,
-            syms,
-            pool,
-            loops,
-            switches,
-            breakables,
-            labels,
-            cstrings,
-            s,
-            bag,
-            chain0,
-          )
+      if init is Some(s) {
+        chain0 = gen_stmt(
+          emitter,
+          alloc,
+          syms,
+          pool,
+          loops,
+          switches,
+          breakables,
+          labels,
+          cstrings,
+          s,
+          bag,
+          chain0,
+        )
       }
       let cond_pc = emitter_pc(emitter)
       let br_end = match cond {
@@ -12408,20 +12391,17 @@ fn gen_stmt(
 	      gsym_addr(emitter, loop_info.cont_chain, continue_target) catch {
 	        err => add_error(bag, loc, err.to_string())
       }
-      match step {
-        None => ()
-        Some(e) => gen_expr_discard(emitter, alloc, syms, pool, cstrings, e, bag)
+      if step is Some(e) {
+        gen_expr_discard(emitter, alloc, syms, pool, cstrings, e, bag)
       }
       gjmp_addr(emitter, cond_pc) catch {
         err => add_error(bag, loc, err.to_string())
       }
       let end_pc = emitter_pc(emitter)
-      match br_end {
-        None => ()
-        Some(at) =>
-          patch_b_cond(emitter, at, end_pc, ARM64_COND_EQ) catch {
-            err => add_error(bag, loc, err.to_string())
-          }
+      if br_end is Some(at) {
+        patch_b_cond(emitter, at, end_pc, ARM64_COND_EQ) catch {
+          err => add_error(bag, loc, err.to_string())
+        }
       }
       gsym_addr(emitter, loop_info.break_chain, end_pc) catch {
         err => add_error(bag, loc, err.to_string())
@@ -12596,21 +12576,18 @@ fn gen_stmt(
         Some(_) => add_error(bag, loc, "codegen: duplicate label")
         None => ()
       }
-      match labels.chains.get(name) {
-        None => ()
-        Some(chain) =>
-          if chain != 0 {
-            gsym_addr(emitter, chain, addr) catch {
-              err => add_error(bag, loc, err.to_string())
-            }
+      if labels.chains.get(name) is Some(chain) {
+        if chain != 0 {
+          gsym_addr(emitter, chain, addr) catch {
+            err => add_error(bag, loc, err.to_string())
           }
+        }
       }
       labels.addrs.set(name, addr)
       labels.chains.set(name, 0)
       patch_label_addr_uses(emitter, labels, name, addr, loc, bag)
-      match current_scope_vla_loc(alloc) {
-        None => ()
-        Some(off) => emit_vla_sp_restore(emitter, off)
+      if current_scope_vla_loc(alloc) is Some(off) {
+        emit_vla_sp_restore(emitter, off)
       }
       gen_stmt(
         emitter,
@@ -12707,12 +12684,10 @@ fn gen_stmt(
             None =>
               match rt {
                 CType::Struct(..) | CType::Union(..) =>
-                  match type_size_align_or_error(alloc.sem, rt, loc) {
-                    None => ()
-                    Some((size, _)) =>
-                      if size == 0 {
-                        ()
-                      } else {
+                  if type_size_align_or_error(alloc.sem, rt, loc) is Some((size, _)) {
+                    if size == 0 {
+                      ()
+                    } else {
                         let ret_loc = cached_ret_loc(alloc, loc, bag)
                         if ret_loc == 1 {
                           match alloc.sret_offset {
@@ -12932,24 +12907,18 @@ fn compute_frame_plan(
     } else {
       sem.func_compound_literals.get(func.name)
     }
-  match compound_keys {
-    None => ()
-    Some(keys) =>
-      for key in keys {
-        match alloc.compound_literal_slots.get(key) {
-          Some(_) => ()
-          None =>
-            match sem.compound_literal_sizes.get(key) {
-              None => ()
-              Some((size, align)) =>
-                if size > 0 {
-                  let slot_align = if align <= 0 { 1 } else { align }
-                  let offset = alloc_hidden_slot(alloc, size, slot_align)
-                  alloc.compound_literal_slots.set(key, offset)
-                }
-            }
+  if compound_keys is Some(keys) {
+    for key in keys {
+      if alloc.compound_literal_slots.get(key) is None {
+        if sem.compound_literal_sizes.get(key) is Some((size, align)) {
+          if size > 0 {
+            let slot_align = if align <= 0 { 1 } else { align }
+            let offset = alloc_hidden_slot(alloc, size, slot_align)
+            alloc.compound_literal_slots.set(key, offset)
+          }
         }
       }
+    }
   }
   let agg_temps =
     if func_id > 0 {
@@ -12957,12 +12926,9 @@ fn compute_frame_plan(
     } else {
       sem.func_agg_temps.get(func.name)
     }
-  match agg_temps {
-    None => ()
-    Some((size, align)) => {
-      alloc.agg_temp_size = size
-      alloc.agg_temp_align = align
-    }
+  if agg_temps is Some((size, align)) {
+    alloc.agg_temp_size = size
+    alloc.agg_temp_align = align
   }
   if alloc.agg_temp_size > 0 && alloc.agg_temp_offset is None {
     let align = if alloc.agg_temp_align <= 0 { 1 } else { alloc.agg_temp_align }
@@ -13110,16 +13076,14 @@ fn gen_func_def(
   emit_prologue(emitter, frame_size)
 
   let pool = new_reg_pool()
-  match alloc.sret_offset {
-    None => ()
-    Some(off) =>
-      arm64_strx(
-        emitter,
-        3,
-        (8 : UInt),
-        (29 : UInt),
-        off.to_int64().reinterpret_as_uint64(),
-      )
+  if alloc.sret_offset is Some(off) {
+    arm64_strx(
+      emitter,
+      3,
+      (8 : UInt),
+      (29 : UInt),
+      off.to_int64().reinterpret_as_uint64(),
+    )
   }
   if func.varargs {
     alloc.varargs_stack_size = plan.stack_size
@@ -13140,151 +13104,145 @@ fn gen_func_def(
       } else {
         alloc_local(alloc, p.name, p.id, param_ty, p.loc)
       }
-    match slot {
-      None => ()
-      Some(slot) =>
-        if byref {
-          if loc_i < 16 {
-            arm64_strx(
-              emitter,
-              3,
-              (loc_i >> 1).reinterpret_as_uint(),
-              (29 : UInt),
-              slot.offset.to_int64().reinterpret_as_uint64(),
-            )
-          } else if loc_i >= 32 {
-            let stack_off = (loc_i & (0xfffffffe : Int)) - 32
-            let tmp = take_reg(pool) catch {
-              err => {
-                add_error(bag, p.loc, err.to_string())
-                i = i + 1
-                continue
-              }
+    if slot is Some(slot) {
+      if byref {
+        if loc_i < 16 {
+          arm64_strx(
+            emitter,
+            3,
+            (loc_i >> 1).reinterpret_as_uint(),
+            (29 : UInt),
+            slot.offset.to_int64().reinterpret_as_uint64(),
+          )
+        } else if loc_i >= 32 {
+          let stack_off = (loc_i & (0xfffffffe : Int)) - 32
+          let tmp = take_reg(pool) catch {
+            err => {
+              add_error(bag, p.loc, err.to_string())
+              i = i + 1
+              continue
             }
-            arm64_ldrx(
-              emitter,
-              false,
-              3,
-              tmp.reinterpret_as_uint(),
-              (29 : UInt),
-              (16 + stack_off).to_int64().reinterpret_as_uint64(),
-            )
-            arm64_strx(
-              emitter,
-              3,
-              tmp.reinterpret_as_uint(),
-              (29 : UInt),
-              slot.offset.to_int64().reinterpret_as_uint64(),
-            )
-            give_reg(pool, tmp)
           }
-        } else if loc_i < 16 {
-          let reg = loc_i >> 1
-          match strip_top_qualifiers(slot.ty) {
-            CType::Struct(..) | CType::Union(..) =>
-              match slot_type_size_align(alloc, slot, p.loc) {
-                None => ()
-                Some((size, _)) =>
-                  emit_store_gp_regs_to_addr(
-                    emitter,
-                    reg,
-                    reg + 1,
-                    size,
-                    29,
-                    slot.offset,
-                    p.loc,
-                    bag,
-                  )
-              }
-            _ =>
-              emit_store_local_scalar(
+          arm64_ldrx(
+            emitter,
+            false,
+            3,
+            tmp.reinterpret_as_uint(),
+            (29 : UInt),
+            (16 + stack_off).to_int64().reinterpret_as_uint64(),
+          )
+          arm64_strx(
+            emitter,
+            3,
+            tmp.reinterpret_as_uint(),
+            (29 : UInt),
+            slot.offset.to_int64().reinterpret_as_uint64(),
+          )
+          give_reg(pool, tmp)
+        }
+      } else if loc_i < 16 {
+        let reg = loc_i >> 1
+        match strip_top_qualifiers(slot.ty) {
+          CType::Struct(..) | CType::Union(..) =>
+            if slot_type_size_align(alloc, slot, p.loc) is Some((size, _)) {
+              emit_store_gp_regs_to_addr(
                 emitter,
-                alloc.sem,
-                slot.ty,
                 reg,
+                reg + 1,
+                size,
+                29,
                 slot.offset,
                 p.loc,
                 bag,
               )
-          }
-        } else if loc_i < 32 {
-          let fp_reg = (loc_i >> 1) - 8
-          match arm64_hfa(alloc.sem, slot.ty, p.loc, bag) {
-            Some((count, fsize)) => {
-              let mut j = 0
-              while j < count {
-                let tmp = take_reg(pool) catch {
-                  err => {
-                    add_error(bag, p.loc, err.to_string())
-                    j = count
-                    continue
-                  }
-                }
-                if fsize == 8 {
-                  emit_fmov_d_to_x(emitter, tmp, fp_reg + j)
-                  arm64_strx(
-                    emitter,
-                    3,
-                    tmp.reinterpret_as_uint(),
-                    (29 : UInt),
-                    (slot.offset + j * 8).to_int64().reinterpret_as_uint64(),
-                  )
-                } else {
-                  emit_fmov_s_to_w(emitter, tmp, fp_reg + j)
-                  arm64_strx(
-                    emitter,
-                    2,
-                    tmp.reinterpret_as_uint(),
-                    (29 : UInt),
-                    (slot.offset + j * 4).to_int64().reinterpret_as_uint64(),
-                  )
-                }
-                give_reg(pool, tmp)
-                j = j + 1
-              }
             }
-            None =>
-              match float_kind_of_type(slot.ty) {
-                Some(k) => {
-                  let tmp_reg : Int = 16
-                  if k == CFloatKind::Double || k == CFloatKind::LongDouble {
-                    emit_fmov_d_to_x(emitter, tmp_reg, fp_reg)
-                  } else {
-                    emit_fmov_s_to_w(emitter, tmp_reg, fp_reg)
-                  }
-                  emit_store_local_scalar(
-                    emitter,
-                    alloc.sem,
-                    slot.ty,
-                    tmp_reg,
-                    slot.offset,
-                    p.loc,
-                    bag,
-                  )
+          _ =>
+            emit_store_local_scalar(
+              emitter,
+              alloc.sem,
+              slot.ty,
+              reg,
+              slot.offset,
+              p.loc,
+              bag,
+            )
+        }
+      } else if loc_i < 32 {
+        let fp_reg = (loc_i >> 1) - 8
+        match arm64_hfa(alloc.sem, slot.ty, p.loc, bag) {
+          Some((count, fsize)) => {
+            let mut j = 0
+            while j < count {
+              let tmp = take_reg(pool) catch {
+                err => {
+                  add_error(bag, p.loc, err.to_string())
+                  j = count
+                  continue
                 }
-                None => ()
               }
-          }
-        } else if loc_i >= 32 {
-          match slot_type_size_align(alloc, slot, p.loc) {
-            None => ()
-            Some((size, _)) =>
-              if size > 0 {
-                let stack_off = (loc_i & (0xfffffffe : Int)) - 32
-                emit_copy_bytes(
+              if fsize == 8 {
+                emit_fmov_d_to_x(emitter, tmp, fp_reg + j)
+                arm64_strx(
                   emitter,
-                  pool,
-                  29,
-                  16 + stack_off,
-                  29,
+                  3,
+                  tmp.reinterpret_as_uint(),
+                  (29 : UInt),
+                  (slot.offset + j * 8).to_int64().reinterpret_as_uint64(),
+                )
+              } else {
+                emit_fmov_s_to_w(emitter, tmp, fp_reg + j)
+                arm64_strx(
+                  emitter,
+                  2,
+                  tmp.reinterpret_as_uint(),
+                  (29 : UInt),
+                  (slot.offset + j * 4).to_int64().reinterpret_as_uint64(),
+                )
+              }
+              give_reg(pool, tmp)
+              j = j + 1
+            }
+          }
+          None =>
+            match float_kind_of_type(slot.ty) {
+              Some(k) => {
+                let tmp_reg : Int = 16
+                if k == CFloatKind::Double || k == CFloatKind::LongDouble {
+                  emit_fmov_d_to_x(emitter, tmp_reg, fp_reg)
+                } else {
+                  emit_fmov_s_to_w(emitter, tmp_reg, fp_reg)
+                }
+                emit_store_local_scalar(
+                  emitter,
+                  alloc.sem,
+                  slot.ty,
+                  tmp_reg,
                   slot.offset,
-                  size,
                   p.loc,
                   bag,
                 )
               }
+              None => ()
+            }
+        }
+      } else if loc_i >= 32 {
+        if slot_type_size_align(alloc, slot, p.loc) is Some((size, _)) {
+          if size > 0 {
+            let stack_off = (loc_i & (0xfffffffe : Int)) - 32
+            emit_copy_bytes(
+              emitter,
+              pool,
+              29,
+              16 + stack_off,
+              29,
+              slot.offset,
+              size,
+              p.loc,
+              bag,
+            )
           }
         }
+      }
     }
     i = i + 1
   }
@@ -13814,14 +13772,11 @@ fn fill_global_initializer_bytes(
             if item.designators.length() > 0 {
               match item.designators[0] {
                 InitDesignator::Index(expr~, loc=des_loc) =>
-                  match const_int_from_expr(sem, expr, des_loc) {
-                    None => ()
-                    Some(v) => {
-                      idx = v
-                      has_index = true
-                      if idx < 0 || idx >= n {
-                        add_error(bag, des_loc, "codegen: array designator out of bounds")
-                      }
+                  if const_int_from_expr(sem, expr, des_loc) is Some(v) {
+                    idx = v
+                    has_index = true
+                    if idx < 0 || idx >= n {
+                      add_error(bag, des_loc, "codegen: array designator out of bounds")
                     }
                   }
                 InitDesignator::IndexRange(start~, end~, loc=des_loc) =>
@@ -14057,9 +14012,8 @@ fn fill_global_initializer_bytes(
               }
               match item.designators[0] {
                 InitDesignator::Field(name~, id~, ..) =>
-                  match find_field_index_cached(sem, ty, name, id, item.loc) {
-                    None => ()
-                    Some(idx) => index = idx + 1
+                  if find_field_index_cached(sem, ty, name, id, item.loc) is Some(idx) {
+                    index = idx + 1
                   }
                 _ => ()
               }
@@ -14139,30 +14093,27 @@ fn fill_global_initializer_bytes(
                       match record_field_access_info(sem, ty, field.name, field.id, item.loc) {
                         None => add_error(bag, item.loc, "codegen: missing bitfield info")
                         Some(info) =>
-                          match info.bit_width {
-                            None => ()
-                            Some(width) => {
-                              match item.value {
-                                Initializer::Expr(expr~, ..) =>
-                                  match const_int_from_expr(sem, expr, item.loc) {
-                                    None =>
-                                      add_error(
-                                        bag,
-                                        item.loc,
-                                        "codegen: non-constant bitfield initializer",
-                                      )
-                                    Some(v) =>
-                                      store_bitfield_init_le(
-                                        bytes,
-                                        base_off,
-                                        info,
-                                        width,
-                                        v,
-                                      )
-                                  }
-                                _ =>
-                                  add_error(bag, item.loc, "codegen: bitfield initializer must be scalar")
-                              }
+                          if info.bit_width is Some(width) {
+                            match item.value {
+                              Initializer::Expr(expr~, ..) =>
+                                match const_int_from_expr(sem, expr, item.loc) {
+                                  None =>
+                                    add_error(
+                                      bag,
+                                      item.loc,
+                                      "codegen: non-constant bitfield initializer",
+                                    )
+                                  Some(v) =>
+                                    store_bitfield_init_le(
+                                      bytes,
+                                      base_off,
+                                      info,
+                                      width,
+                                      v,
+                                    )
+                                }
+                              _ =>
+                                add_error(bag, item.loc, "codegen: bitfield initializer must be scalar")
                             }
                           }
                       }
@@ -14268,30 +14219,27 @@ fn fill_global_initializer_bytes(
               match record_field_access_info(sem, ty, field.name, field.id, first.loc) {
                 None => add_error(bag, first.loc, "codegen: missing bitfield info")
                 Some(info) =>
-                  match info.bit_width {
-                    None => ()
-                    Some(width) => {
-                      match first.value {
-                        Initializer::Expr(expr~, ..) =>
-                          match const_int_from_expr(sem, expr, first.loc) {
-                            None =>
-                              add_error(
+                  if info.bit_width is Some(width) {
+                    match first.value {
+                      Initializer::Expr(expr~, ..) =>
+                        match const_int_from_expr(sem, expr, first.loc) {
+                          None =>
+                            add_error(
                               bag,
                               first.loc,
                               "codegen: non-constant bitfield initializer",
                             )
                           Some(v) =>
-                              store_bitfield_init_le(
-                                bytes,
-                                base_off,
-                                info,
-                                width,
-                                v,
-                              )
+                            store_bitfield_init_le(
+                              bytes,
+                              base_off,
+                              info,
+                              width,
+                              v,
+                            )
                         }
-                        _ =>
-                          add_error(bag, first.loc, "codegen: bitfield initializer must be scalar")
-                      }
+                      _ =>
+                        add_error(bag, first.loc, "codegen: bitfield initializer must be scalar")
                     }
                   }
               }
@@ -14804,13 +14752,11 @@ fn codegen_arm64_object_bytes_with_sem(
 
   let text = section_from_emitter_take(".text", emitter)
   let sections : Array[Section] = [text]
-  match rodata_section {
-    None => ()
-    Some(sec) => sections.push(sec)
+  if rodata_section is Some(sec) {
+    sections.push(sec)
   }
-  match cstring_section {
-    None => ()
-    Some(sec) => sections.push(sec)
+  if cstring_section is Some(sec) {
+    sections.push(sec)
   }
   if data_words.length() > 0 {
     sections.push({
