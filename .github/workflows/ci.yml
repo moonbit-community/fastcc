@@ -13,10 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Setup MoonBit
-        uses: hustcer/setup-moonbit@v1.17
-        with:
-          version: latest
-          setup-core: true
+        uses: moonbit-community/setup-moonbit@main
       - name: Run mbtcc tests
         env:
           QUICKJS: "1"
