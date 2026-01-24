@@ -3,7 +3,7 @@
 	url = https://github.com/TinyCC/tinycc.git
 [submodule "refs/mbtcc"]
 	path = refs/mbtcc
-	url = git@github.com:moonbitlang/mbtcc.git
+	url = https://github.com/moonbitlang/mbtcc.git
 [submodule "refs/vc"]
 	path = refs/vc
 	url = https://github.com/vlang/vc.git
