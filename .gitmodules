@@ -4,12 +4,16 @@
 [submodule "refs/mbtcc"]
 	path = refs/mbtcc
 	url = https://github.com/moonbitlang/mbtcc.git
+	shallow = true
 [submodule "refs/vc"]
 	path = refs/vc
 	url = https://github.com/vlang/vc.git
+	shallow = true
 [submodule "refs/quickjs"]
 	path = refs/quickjs
 	url = https://github.com/bellard/quickjs.git
+	shallow = true
 [submodule "refs/sqlite"]
 	path = refs/sqlite
 	url = https://github.com/sqlite/sqlite.git
+	shallow = true
