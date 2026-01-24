@@ -16,6 +16,8 @@ jobs:
         uses: moonbit-community/setup-moonbit@main
       - name: Update MoonBit package index
         run: moon update
+      - name: Init and update git submodules
+        run: git submodule init && git submodule update
       - name: Run mbtcc tests
         env:
           QUICKJS: "1"
