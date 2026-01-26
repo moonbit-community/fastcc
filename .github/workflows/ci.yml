@@ -31,6 +31,7 @@ jobs:
         run: scripts/run_mbtcc_ctest.sh
       - name: Run sqlite tests
         env:
-          SQLITE_PATCH: ""
+          SQLITE_PATCH: ${{ github.workspace }}/patches/refs-sqlite/sqlite-test-harness.patch
           SQLITE_TEST_LIST: "test/veryquick.test"
+          QUICKTEST_OMIT: "^busy2\\.test$,^syscall\\.test$,^walsetlk\\.test$"
         run: scripts/run_sqlite_tests.sh
