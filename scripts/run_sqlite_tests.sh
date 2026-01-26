@@ -14,7 +14,7 @@ HOST_CC="${HOST_CC:-clang}"
 TCLSH_CMD="${TCLSH_CMD:-tclsh}"
 TCL_CONFIG_SH="${TCL_CONFIG_SH:-}"
 MAKE_ASSUME_OLD="${MAKE_ASSUME_OLD:-sqlite3.o}"
-SQLITE_PATCH="${SQLITE_PATCH:-${ROOT_DIR}/patches/refs-sqlite/sqlite-test-harness.patch}"
+SQLITE_PATCH="${SQLITE_PATCH:-}"
 sqlite_patch_applied=0
 
 usage() {
@@ -31,6 +31,7 @@ Env vars:
   HOST_CC=clang           Host compiler for sqlite build tools/testfixture
   TCLSH_CMD=tclsh         Tcl interpreter for sqlite build
   TCL_CONFIG_SH=path      Path to tclConfig.sh (auto-detected if unset)
+  SQLITE_PATCH=path       Optional patch to apply to refs/sqlite before tests
   MAKE_ASSUME_OLD="..."   Space-separated make targets to treat as up-to-date when building testfixture
   BUILD_MBT=0|1           Build tinycc.mbt before compiling sqlite3.c (default: 1)
   TINYCC_MBT_BIN=path     Path to tinycc.mbt executable

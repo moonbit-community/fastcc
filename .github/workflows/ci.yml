@@ -18,9 +18,19 @@ jobs:
         run: moon update
       - name: Init and update git submodules
         run: git submodule init && git submodule update
+      - name: Install sqlite test dependencies
+        run: |
+          if ! command -v tclsh >/dev/null 2>&1; then
+            brew install tcl-tk
+          fi
       - name: Run mbtcc tests
         env:
           QUICKJS: "1"
           QUICKJS_TESTS: "1"
           QUICKJS_TEST_LIST: "tests/test_closure.js tests/test_language.js tests/test_builtin.js tests/test_loop.js tests/test_bigint.js tests/test_cyclic_import.js tests/test_std.js"
         run: scripts/run_mbtcc_ctest.sh
+      - name: Run sqlite tests
+        env:
+          SQLITE_PATCH: ""
+          SQLITE_TEST_LIST: "test/veryquick.test"
+        run: scripts/run_sqlite_tests.sh
