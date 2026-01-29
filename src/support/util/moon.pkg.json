@@ -1,1 +1,5 @@
-{}
+{
+  "import": [
+    "hackwaly/tinycc/support/util/util_core"
+  ]
+}
