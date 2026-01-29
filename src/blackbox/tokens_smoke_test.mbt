@@ -8,6 +8,7 @@ test "tokens kind text and len" {
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::RBrace), "}")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::LBracket), "[")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::RBracket), "]")
+  assert_eq(@tokens.token_kind_text(@tokens.TokenKind::Comma), ",")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::Colon), ":")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::Question), "?")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::Minus), "-")
@@ -21,6 +22,8 @@ test "tokens kind text and len" {
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::ShiftLeft), "<<")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::ShiftRight), ">>")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::ShiftLeftAssign), "<<=")
+  assert_eq(@tokens.token_kind_text(@tokens.TokenKind::ShiftRightAssign), ">>=")
+  assert_eq(@tokens.token_kind_text(@tokens.TokenKind::Eq), "==")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::HashHash), "##")
 
   let ellipsis = @tokens.TokenKind::Ellipsis
