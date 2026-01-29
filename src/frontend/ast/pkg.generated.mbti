@@ -8,17 +8,29 @@ import {
 // Values
 pub fn apply_call_conv_to_type(CType, CallConv) -> CType
 
+pub fn apply_qualifiers(CType, TypeQual) -> CType
+
 pub fn apply_type_attrs(CType, Attributes) -> CType
 
 pub fn attrs_is_empty(Attributes) -> Bool
 
 pub fn attrs_with(aligned? : AlignSpec?, packed? : Bool, weak? : Bool, visibility? : Visibility?, section? : String?, alias_name? : String?, asm_label? : String?, cleanup? : String?, noreturn? : Bool, constructor_attr? : Bool, destructor? : Bool, always_inline? : Bool, call_conv? : CallConv?, dll_import? : Bool, dll_export? : Bool, nodecorate? : Bool, nodebug? : Bool) -> Attributes
 
+pub fn const_i64_from_expr(Expr) -> Int64?
+
+pub fn default_int_type() -> CType
+
 pub fn empty_attrs() -> Attributes
+
+pub fn empty_qual() -> TypeQual
 
 pub fn expr_is_lvalue_simple(Expr) -> Bool
 
+pub fn expr_loc(Expr) -> @source.SrcLoc
+
 pub fn expr_may_call(Expr) -> Bool
+
+pub fn expr_node_id(Expr) -> Int
 
 pub fn has_type_attrs(Attributes) -> Bool
 
@@ -26,9 +38,21 @@ pub fn merge_attrs(Attributes, Attributes) -> Attributes
 
 pub fn merge_call_conv(CallConv, CallConv) -> CallConv
 
+pub fn merge_qual(TypeQual, TypeQual) -> TypeQual
+
 pub fn normalize_call_conv(CallConv?) -> CallConv
 
+pub fn parse_int64_literal(String) -> Int64?
+
 pub fn type_attrs_from(Attributes) -> Attributes
+
+pub fn with_atomic(TypeQual) -> TypeQual
+
+pub fn with_const(TypeQual) -> TypeQual
+
+pub fn with_restrict(TypeQual) -> TypeQual
+
+pub fn with_volatile(TypeQual) -> TypeQual
 
 // Errors
 

@@ -131,7 +131,7 @@ fn special_ident_kind(tok : @tokens.Token, ids : @tokens.KeywordIds) -> @tokens.
 }
 
 ///|
-fn parse_translation_unit(pp : @preproc.Preprocessor) -> @ast.TranslationUnit {
+pub fn parse_translation_unit(pp : @preproc.Preprocessor) -> @ast.TranslationUnit {
   let parser = new_parser(pp)
   parse_translation_unit_with(parser)
 }
@@ -379,7 +379,7 @@ fn parse_old_style_param_decls(
   params : Array[@ast.Param],
 ) -> Array[@ast.Param] {
   let updated = params
-  let param_map : FastMap[String, Int] = fast_map_new()
+  let param_map : @util.FastMap[String, Int] = @util.fast_map_new()
   for i = 0; i < params.length(); i = i + 1 {
     let name = params[i].name
     if name == "" {
@@ -391,7 +391,7 @@ fn parse_old_style_param_decls(
       param_map.set(name, i)
     }
   }
-  let seen : FastMap[String, Bool] = fast_map_new()
+  let seen : @util.FastMap[String, Bool] = @util.fast_map_new()
   while is_type_start(p, peek_token(p)) {
     match parse_decl_specs(p) {
       None => break
@@ -461,79 +461,6 @@ fn parse_old_style_param_decls(
   updated
 }
 
-///|
-fn empty_qual() -> @ast.TypeQual {
-  { is_const: false, is_volatile: false, is_restrict: false, is_atomic: false }
-}
-
-///|
-fn merge_qual(a : @ast.TypeQual, b : @ast.TypeQual) -> @ast.TypeQual {
-  {
-    is_const: a.is_const || b.is_const,
-    is_volatile: a.is_volatile || b.is_volatile,
-    is_restrict: a.is_restrict || b.is_restrict,
-    is_atomic: a.is_atomic || b.is_atomic,
-  }
-}
-
-///|
-fn qual_is_empty(qual : @ast.TypeQual) -> Bool {
-  !qual.is_const && !qual.is_volatile && !qual.is_restrict && !qual.is_atomic
-}
-
-///|
-fn with_const(qual : @ast.TypeQual) -> @ast.TypeQual {
-  {
-    is_const: true,
-    is_volatile: qual.is_volatile,
-    is_restrict: qual.is_restrict,
-    is_atomic: qual.is_atomic,
-  }
-}
-
-///|
-fn with_volatile(qual : @ast.TypeQual) -> @ast.TypeQual {
-  {
-    is_const: qual.is_const,
-    is_volatile: true,
-    is_restrict: qual.is_restrict,
-    is_atomic: qual.is_atomic,
-  }
-}
-
-///|
-fn with_restrict(qual : @ast.TypeQual) -> @ast.TypeQual {
-  {
-    is_const: qual.is_const,
-    is_volatile: qual.is_volatile,
-    is_restrict: true,
-    is_atomic: qual.is_atomic,
-  }
-}
-
-///|
-fn with_atomic(qual : @ast.TypeQual) -> @ast.TypeQual {
-  {
-    is_const: qual.is_const,
-    is_volatile: qual.is_volatile,
-    is_restrict: qual.is_restrict,
-    is_atomic: true,
-  }
-}
-
-///|
-fn apply_qualifiers(ty : @ast.CType, qual : @ast.TypeQual) -> @ast.CType {
-  if qual_is_empty(qual) {
-    return ty
-  }
-  match ty {
-    @ast.CType::Qualified(qual=existing, base~) =>
-      @ast.CType::Qualified(qual=merge_qual(existing, qual), base~)
-    _ => @ast.CType::Qualified(qual~, base=ty)
-  }
-}
-
-///|
 fn strip_type_qualifiers(ty : @ast.CType) -> @ast.CType {
   match ty {
     @ast.CType::Qualified(base~, ..) => strip_type_qualifiers(base)
@@ -544,7 +471,7 @@ fn strip_type_qualifiers(ty : @ast.CType) -> @ast.CType {
 
 ///|
 fn parse_type_qualifiers(p : Parser) -> @ast.TypeQual {
-  let mut qual = empty_qual()
+  let mut qual = @ast.empty_qual()
   while true {
     let tok = peek_token(p)
     let mut kind = tok.kind
@@ -555,22 +482,22 @@ fn parse_type_qualifiers(p : Parser) -> @ast.TypeQual {
     }
     match kind {
       @tokens.TokenKind::KwConst => {
-        qual = with_const(qual)
+        qual = @ast.with_const(qual)
         ignore(advance_token(p))
         continue
       }
       @tokens.TokenKind::KwVolatile => {
-        qual = with_volatile(qual)
+        qual = @ast.with_volatile(qual)
         ignore(advance_token(p))
         continue
       }
       @tokens.TokenKind::KwRestrict => {
-        qual = with_restrict(qual)
+        qual = @ast.with_restrict(qual)
         ignore(advance_token(p))
         continue
       }
       @tokens.TokenKind::KwAtomic => {
-        qual = with_atomic(qual)
+        qual = @ast.with_atomic(qual)
         ignore(advance_token(p))
         continue
       }
@@ -602,7 +529,7 @@ fn parse_type_specifiers(
   let mut is_inline = false
   let mut saw_any = false
   let mut start_loc = peek_token(p).loc
-  let mut qual = empty_qual()
+  let mut qual = @ast.empty_qual()
   let mut attrs = @ast.empty_attrs()
   let mut signedness = 0
   let mut short_seen = false
@@ -698,28 +625,28 @@ fn parse_type_specifiers(
                 base = Some(ty)
                 start_loc = tok.loc
               }
-              qual = with_atomic(qual)
+              qual = @ast.with_atomic(qual)
             }
           }
         } else {
-          qual = with_atomic(qual)
+          qual = @ast.with_atomic(qual)
         }
         continue
       }
       @tokens.TokenKind::KwConst => {
-        qual = with_const(qual)
+        qual = @ast.with_const(qual)
         ignore(advance_token(p))
         saw_any = true
         continue
       }
       @tokens.TokenKind::KwVolatile => {
-        qual = with_volatile(qual)
+        qual = @ast.with_volatile(qual)
         ignore(advance_token(p))
         saw_any = true
         continue
       }
       @tokens.TokenKind::KwRestrict => {
-        qual = with_restrict(qual)
+        qual = @ast.with_restrict(qual)
         ignore(advance_token(p))
         saw_any = true
         continue
@@ -951,7 +878,7 @@ fn parse_type_specifiers(
   if ty is @ast.CType::Bool && signedness != 0 {
     add_parse_error(p, start_loc, "invalid modifiers for _Bool")
   }
-  let qualified = apply_qualifiers(ty, qual)
+  let qualified = @ast.apply_qualifiers(ty, qual)
   let final_ty = @ast.apply_type_attrs(qualified, @ast.type_attrs_from(attrs))
   Some({ ty: final_ty, loc: start_loc, is_typedef, storage, is_inline, attrs })
 }
@@ -1465,7 +1392,7 @@ fn parse_pointer_chain(p : Parser, ty_in : @ast.CType) -> (@ast.CType, @ast.Attr
     let pointer_attrs = parse_attributes(p)
     attrs = @ast.merge_attrs(attrs, pointer_attrs)
     ty = @ast.CType::Pointer(ty)
-    ty = apply_qualifiers(ty, qual)
+    ty = @ast.apply_qualifiers(ty, qual)
   }
   (ty, attrs)
 }
@@ -1649,7 +1576,7 @@ fn parse_initializer(p : Parser) -> @ast.Initializer {
     return @ast.Initializer::List(items~, loc=lbrace.loc)
   }
   let expr = parse_expr_eq(p)
-  @ast.Initializer::Expr(expr~, loc=expr_loc(expr))
+  @ast.Initializer::Expr(expr~, loc=@ast.expr_loc(expr))
 }
 
 ///|
@@ -1768,7 +1695,7 @@ fn apply_decl_wrappers(base : @ast.CType, wrappers : Array[DeclWrapper]) -> @ast
     match wrappers[i] {
       DeclWrapper::Pointer(qual) => {
         ty = @ast.CType::Pointer(ty)
-        ty = apply_qualifiers(ty, qual)
+        ty = @ast.apply_qualifiers(ty, qual)
       }
       DeclWrapper::Array(size, size_expr) =>
         ty = @ast.CType::Array(elem=ty, size~, size_expr~)
@@ -2031,7 +1958,7 @@ fn parse_array_size(p : Parser) -> (Int?, @ast.Expr?) {
   if peek_token(p).kind is @tokens.TokenKind::IntLit && peek_kind(p, 1) is @tokens.TokenKind::RBracket {
     let tok = advance_token(p)
     let text = token_lexeme(p, tok)
-    match parse_int64_literal(text) {
+    match @ast.parse_int64_literal(text) {
       Some(v) =>
         if v < 0 {
           add_parse_error(p, loc, "invalid array size")
@@ -2047,7 +1974,7 @@ fn parse_array_size(p : Parser) -> (Int?, @ast.Expr?) {
     }
   }
   let expr = parse_expr_cond(p)
-  let size = match const_i64_from_expr(expr) {
+  let size = match @ast.const_i64_from_expr(expr) {
     None => None
     Some(v) =>
       if v < 0 {
@@ -2649,7 +2576,7 @@ fn parse_stmt(p : Parser) -> @ast.Stmt {
   }
   let expr = parse_expr(p)
   expect(p, @tokens.TokenKind::Semicolon, "expected ';' after expression") |> ignore
-  @ast.Stmt::ExprStmt(expr~, loc=expr_loc(expr))
+  @ast.Stmt::ExprStmt(expr~, loc=@ast.expr_loc(expr))
 }
 
 ///|
@@ -2834,7 +2761,7 @@ fn parse_for_init(p : Parser) -> @ast.Stmt? {
   }
   let expr = parse_expr(p)
   expect(p, @tokens.TokenKind::Semicolon, "expected ';' after for init") |> ignore
-  Some(@ast.Stmt::ExprStmt(expr~, loc=expr_loc(expr)))
+  Some(@ast.Stmt::ExprStmt(expr~, loc=@ast.expr_loc(expr)))
 }
 
 ///|
@@ -3285,7 +3212,7 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
             let a = match parse_type_name(p) {
               None => {
                 add_parse_error(p, tok.loc, "expected type name in builtin")
-                default_int_type()
+                @ast.default_int_type()
               }
               Some(ty) => ty
             }
@@ -3294,7 +3221,7 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
             let b = match parse_type_name(p) {
               None => {
                 add_parse_error(p, tok.loc, "expected type name in builtin")
-                default_int_type()
+                @ast.default_int_type()
               }
               Some(ty) => ty
             }
@@ -3314,7 +3241,7 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
             let ty = match parse_type_name(p) {
               None => {
                 add_parse_error(p, tok.loc, "expected type name in __builtin_offsetof")
-                default_int_type()
+                @ast.default_int_type()
               }
               Some(v) => v
             }
@@ -3350,7 +3277,7 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
             let ty = match parse_type_name(p) {
               None => {
                 add_parse_error(p, tok.loc, "expected type name in builtin")
-                default_int_type()
+                @ast.default_int_type()
               }
               Some(v) => v
             }
@@ -3545,7 +3472,7 @@ fn parse_hex_escape(
   let mut saw = false
   while i < text.length() {
     let code = text[i]
-    let digit = hex_digit_value(code)
+    let digit = @util.hex_digit_value(code)
     match digit {
       None => break
       Some(v) => {
@@ -3584,20 +3511,6 @@ fn is_oct_digit(code : UInt16) -> Bool {
 }
 
 ///|
-fn hex_digit_value(code : UInt16) -> Int? {
-  if code >= 48 && code <= 57 {
-    return Some(code.to_int() - 48)
-  }
-  if code >= 65 && code <= 70 {
-    return Some(code.to_int() - 65 + 10)
-  }
-  if code >= 97 && code <= 102 {
-    return Some(code.to_int() - 97 + 10)
-  }
-  None
-}
-
-///|
 fn is_type_start(p : Parser, tok : @tokens.Token) -> Bool {
   match tok.kind {
     @tokens.TokenKind::KwVoid => true
@@ -3626,62 +3539,6 @@ fn is_type_start(p : Parser, tok : @tokens.Token) -> Bool {
     @tokens.TokenKind::KwTypedef => true
     @tokens.TokenKind::Ident => has_typedef(p, tok)
     _ => false
-  }
-}
-
-///|
-fn expr_loc(expr : @ast.Expr) -> @source.SrcLoc {
-  match expr {
-    @ast.Expr::IntLit(loc~, ..) => loc
-    @ast.Expr::FloatLit(loc~, ..) => loc
-    @ast.Expr::CharLit(loc~, ..) => loc
-    @ast.Expr::StringLit(loc~, ..) => loc
-    @ast.Expr::Ident(loc~, ..) => loc
-    @ast.Expr::LabelAddr(loc~, ..) => loc
-    @ast.Expr::BuiltinTypesCompatibleP(loc~, ..) => loc
-    @ast.Expr::BuiltinOffsetof(loc~, ..) => loc
-    @ast.Expr::BuiltinVaArg(loc~, ..) => loc
-    @ast.Expr::Unary(loc~, ..) => loc
-    @ast.Expr::Cast(loc~, ..) => loc
-    @ast.Expr::CompoundLiteral(loc~, ..) => loc
-    @ast.Expr::StmtExpr(loc~, ..) => loc
-    @ast.Expr::SizeofExpr(loc~, ..) => loc
-    @ast.Expr::SizeofType(loc~, ..) => loc
-    @ast.Expr::AlignofExpr(loc~, ..) => loc
-    @ast.Expr::AlignofType(loc~, ..) => loc
-    @ast.Expr::Binary(loc~, ..) => loc
-    @ast.Expr::Conditional(loc~, ..) => loc
-    @ast.Expr::Call(loc~, ..) => loc
-    @ast.Expr::Index(loc~, ..) => loc
-    @ast.Expr::Member(loc~, ..) => loc
-  }
-}
-
-///|
-fn expr_node_id(expr : @ast.Expr) -> Int {
-  match expr {
-    @ast.Expr::IntLit(node_id~, ..) => node_id
-    @ast.Expr::FloatLit(node_id~, ..) => node_id
-    @ast.Expr::CharLit(node_id~, ..) => node_id
-    @ast.Expr::StringLit(node_id~, ..) => node_id
-    @ast.Expr::Ident(node_id~, ..) => node_id
-    @ast.Expr::LabelAddr(node_id~, ..) => node_id
-    @ast.Expr::BuiltinTypesCompatibleP(node_id~, ..) => node_id
-    @ast.Expr::BuiltinOffsetof(node_id~, ..) => node_id
-    @ast.Expr::BuiltinVaArg(node_id~, ..) => node_id
-    @ast.Expr::Unary(node_id~, ..) => node_id
-    @ast.Expr::Cast(node_id~, ..) => node_id
-    @ast.Expr::CompoundLiteral(node_id~, ..) => node_id
-    @ast.Expr::StmtExpr(node_id~, ..) => node_id
-    @ast.Expr::SizeofExpr(node_id~, ..) => node_id
-    @ast.Expr::SizeofType(node_id~, ..) => node_id
-    @ast.Expr::AlignofExpr(node_id~, ..) => node_id
-    @ast.Expr::AlignofType(node_id~, ..) => node_id
-    @ast.Expr::Binary(node_id~, ..) => node_id
-    @ast.Expr::Conditional(node_id~, ..) => node_id
-    @ast.Expr::Call(node_id~, ..) => node_id
-    @ast.Expr::Index(node_id~, ..) => node_id
-    @ast.Expr::Member(node_id~, ..) => node_id
   }
 }
 

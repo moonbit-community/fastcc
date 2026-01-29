@@ -374,9 +374,6 @@ fn attrs_layout_empty(attrs : @ast.Attributes) -> Bool {
 }
 
 ///|
-let default_int_type_value : @ast.CType =
-  @ast.CType::Int(kind=@ast.CIntKind::Int, unsigned=false)
-
 ///|
 let size_t_type_value : @ast.CType =
   @ast.CType::Int(kind=@ast.CIntKind::Long, unsigned=true)
@@ -396,7 +393,7 @@ let char_pointer_type_value : @ast.CType =
 
 ///|
 fn default_int_type() -> @ast.CType {
-  default_int_type_value
+  @ast.default_int_type()
 }
 
 ///|
@@ -558,7 +555,7 @@ fn split_top_qual(ty : @ast.CType) -> (@ast.TypeQual, @ast.CType) {
   match ty {
     @ast.CType::Qualified(qual~, base~) => (qual, base)
     @ast.CType::Attributed(base~, ..) => split_top_qual(base)
-    _ => (empty_qual(), ty)
+    _ => (@ast.empty_qual(), ty)
   }
 }
 
@@ -929,11 +926,11 @@ fn type_size_align(ctx : SemContext, ty : @ast.CType, loc : @source.SrcLoc) -> (
               None
             }
             Some(expr) =>
-              match const_int_from_expr(ctx, expr, expr_loc(expr)) {
+              match const_int_from_expr(ctx, expr, @ast.expr_loc(expr)) {
                 None => None
                 Some(n) =>
                   if n < 0 {
-                    add_sem_error(ctx, expr_loc(expr), "invalid array size")
+                    add_sem_error(ctx, @ast.expr_loc(expr), "invalid array size")
                     None
                   } else {
                     Some((elem_size * n, elem_align))
@@ -1059,7 +1056,7 @@ fn maybe_record_agg_temp_for_expr(
   match strip_top_qualifiers(ty) {
     @ast.CType::Struct(..) | @ast.CType::Union(..) =>
       if !@ast.expr_is_lvalue_simple(expr) {
-        record_agg_temp_for_type(ctx, ty, expr_loc(expr))
+        record_agg_temp_for_type(ctx, ty, @ast.expr_loc(expr))
       }
     _ => ()
   }
@@ -1497,7 +1494,7 @@ fn resolve_type_inner(ctx : SemContext, ty : @ast.CType, loc : @source.SrcLoc) -
     }
     @ast.CType::TypeofExpr(expr~) => {
       let resolved = type_for_typeof(ctx, expr)
-      let (final_ty, _) = resolve_type_inner(ctx, resolved, expr_loc(expr))
+      let (final_ty, _) = resolve_type_inner(ctx, resolved, @ast.expr_loc(expr))
       (final_ty, true)
     }
     _ => (ty, false)
@@ -1568,11 +1565,11 @@ fn resolve_array_sizes_for_decl(
             Some(expr) =>
               if decl_allows_vla(is_local, storage) {
                 if is_constant_expr_for_builtin(ctx, expr) {
-                  let (value, ok) = eval_const_expr_value(ctx, expr, expr_loc(expr))
+                  let (value, ok) = eval_const_expr_value(ctx, expr, @ast.expr_loc(expr))
                   if !ok {
                     @ast.CType::Array(elem=resolved_elem, size=None, size_expr~)
                   } else if value < 0 {
-                    add_sem_error(ctx, expr_loc(expr), "invalid array size")
+                    add_sem_error(ctx, @ast.expr_loc(expr), "invalid array size")
                     @ast.CType::Array(elem=resolved_elem, size=None, size_expr~)
                   } else {
                     @ast.CType::Array(elem=resolved_elem, size=Some(value), size_expr~)
@@ -1582,18 +1579,18 @@ fn resolve_array_sizes_for_decl(
                   if !is_int_like(expr_ty) {
                     add_sem_error(
                       ctx,
-                      expr_loc(expr),
+                      @ast.expr_loc(expr),
                       "size of variable length array should be an integer",
                     )
                   }
                   @ast.CType::Array(elem=resolved_elem, size=None, size_expr~)
                 }
               } else {
-                match const_int_from_expr(ctx, expr, expr_loc(expr)) {
+                match const_int_from_expr(ctx, expr, @ast.expr_loc(expr)) {
                   None => @ast.CType::Array(elem=resolved_elem, size=None, size_expr~)
                   Some(value) =>
                     if value < 0 {
-                      add_sem_error(ctx, expr_loc(expr), "invalid array size")
+                      add_sem_error(ctx, @ast.expr_loc(expr), "invalid array size")
                       @ast.CType::Array(elem=resolved_elem, size=None, size_expr~)
                     } else {
                       @ast.CType::Array(elem=resolved_elem, size=Some(value), size_expr~)
@@ -3148,7 +3145,7 @@ fn check_func_def(ctx : SemContext, func_def : @ast.FuncDef) -> Unit {
   ctx.switch_depth = 0
   push_scope(ctx)
   let func_name_ty = @ast.CType::Array(
-    elem=apply_qualifiers(char_type(), with_const(empty_qual())),
+    elem=@ast.apply_qualifiers(char_type(), @ast.with_const(@ast.empty_qual())),
     size=Some(func_def.name.length() + 1),
     size_expr=None,
   )
@@ -4148,20 +4145,20 @@ fn check_stmt(ctx : SemContext, stmt : @ast.Stmt, return_type : @ast.CType) -> U
     }
     @ast.Stmt::Case(expr~, end_expr~, body~, ..) => {
       if ctx.switch_depth == 0 {
-        add_sem_error(ctx, expr_loc(expr), "case outside of switch")
+        add_sem_error(ctx, @ast.expr_loc(expr), "case outside of switch")
       }
-      let start = const_int_from_expr(ctx, expr, expr_loc(expr))
+      let start = const_int_from_expr(ctx, expr, @ast.expr_loc(expr))
       if start is None {
-        add_sem_error(ctx, expr_loc(expr), "case label is not constant")
+        add_sem_error(ctx, @ast.expr_loc(expr), "case label is not constant")
       }
       let end = match end_expr {
         None => start
         Some(end_value) => {
-          let end_val = const_int_from_expr(ctx, end_value, expr_loc(end_value))
+          let end_val = const_int_from_expr(ctx, end_value, @ast.expr_loc(end_value))
           if end_val is None {
             add_sem_error(
               ctx,
-              expr_loc(end_value),
+              @ast.expr_loc(end_value),
               "case label is not constant",
             )
           }
@@ -4169,7 +4166,7 @@ fn check_stmt(ctx : SemContext, stmt : @ast.Stmt, return_type : @ast.CType) -> U
         }
       }
       match (start, end) {
-        (Some(v1), Some(v2)) => register_case_range(ctx, v1, v2, expr_loc(expr))
+        (Some(v1), Some(v2)) => register_case_range(ctx, v1, v2, @ast.expr_loc(expr))
         _ => ()
       }
       check_stmt(ctx, body, return_type)
@@ -4249,7 +4246,7 @@ fn check_stmt(ctx : SemContext, stmt : @ast.Stmt, return_type : @ast.CType) -> U
 fn check_cond_expr(ctx : SemContext, expr : @ast.Expr) -> Unit {
   let ty = type_of_expr(ctx, expr)
   if !is_scalar(ty) {
-    add_sem_error(ctx, expr_loc(expr), "condition expression must be scalar")
+    add_sem_error(ctx, @ast.expr_loc(expr), "condition expression must be scalar")
   }
 }
 
@@ -4962,13 +4959,13 @@ fn collect_member_cache_from_fields(
 ) -> Unit {
   for field in fields {
     let (field_qual, _) = split_top_qual(field.ty)
-    let combined = merge_qual(qual, field_qual)
+    let combined = @ast.merge_qual(qual, field_qual)
     if field.name != "" {
       if !cache_by_name.contains(field.name) {
-        cache_by_name.set(field.name, apply_qualifiers(field.ty, qual))
+        cache_by_name.set(field.name, @ast.apply_qualifiers(field.ty, qual))
       }
       if field.id > 0 && !cache_by_id.contains(field.id) {
-        cache_by_id.set(field.id, apply_qualifiers(field.ty, qual))
+        cache_by_id.set(field.id, @ast.apply_qualifiers(field.ty, qual))
       }
       continue
     }
@@ -5029,7 +5026,7 @@ fn build_member_caches(
   collect_member_cache_from_fields(
     ctx,
     fields,
-    empty_qual(),
+    @ast.empty_qual(),
     loc,
     cache_by_name,
     cache_by_id,
@@ -5061,9 +5058,9 @@ fn member_access_search(
         Some(def_val) => {
           for field in def_val.fields {
             let (field_qual, _) = split_top_qual(field.ty)
-            let combined = merge_qual(qual, field_qual)
+            let combined = @ast.merge_qual(qual, field_qual)
             if (id > 0 && field.id == id) || field.name == name {
-              return Some(apply_qualifiers(field.ty, qual))
+              return Some(@ast.apply_qualifiers(field.ty, qual))
             }
             if field.name == "" {
               if member_access_search(ctx, field.ty, combined, name, id, loc) is Some(found) {
@@ -5089,9 +5086,9 @@ fn member_access_search(
         Some(def_val) => {
           for field in def_val.fields {
             let (field_qual, _) = split_top_qual(field.ty)
-            let combined = merge_qual(qual, field_qual)
+            let combined = @ast.merge_qual(qual, field_qual)
             if (id > 0 && field.id == id) || field.name == name {
-              return Some(apply_qualifiers(field.ty, qual))
+              return Some(@ast.apply_qualifiers(field.ty, qual))
             }
             if field.name == "" {
               if member_access_search(ctx, field.ty, combined, name, id, loc) is Some(found) {
@@ -5153,7 +5150,7 @@ fn member_access_type(
                 }
               }
               match cache.get(id) {
-                Some(ty) => Some(apply_qualifiers(ty, obj_qual))
+                Some(ty) => Some(@ast.apply_qualifiers(ty, obj_qual))
                 None => {
                   let msg = "unknown field '\{name}' in \{type_to_string(obj_base)}"
                   add_sem_error(ctx, loc, msg)
@@ -5173,7 +5170,7 @@ fn member_access_type(
                 }
               }
               match cache.get(name) {
-                Some(ty) => Some(apply_qualifiers(ty, obj_qual))
+                Some(ty) => Some(@ast.apply_qualifiers(ty, obj_qual))
                 None => {
                   let msg = "unknown field '\{name}' in \{type_to_string(obj_base)}"
                   add_sem_error(ctx, loc, msg)
@@ -5217,7 +5214,7 @@ fn member_access_type(
                 }
               }
               match cache.get(id) {
-                Some(ty) => Some(apply_qualifiers(ty, obj_qual))
+                Some(ty) => Some(@ast.apply_qualifiers(ty, obj_qual))
                 None => {
                   let msg = "unknown field '\{name}' in \{type_to_string(obj_base)}"
                   add_sem_error(ctx, loc, msg)
@@ -5237,7 +5234,7 @@ fn member_access_type(
                 }
               }
               match cache.get(name) {
-                Some(ty) => Some(apply_qualifiers(ty, obj_qual))
+                Some(ty) => Some(@ast.apply_qualifiers(ty, obj_qual))
                 None => {
                   let msg = "unknown field '\{name}' in \{type_to_string(obj_base)}"
                   add_sem_error(ctx, loc, msg)
@@ -5342,7 +5339,7 @@ fn type_of_lvalue(ctx : SemContext, expr : @ast.Expr) -> @ast.CType? {
     @ast.Expr::StmtExpr(stmts~, loc~, ..) =>
       stmt_expr_lvalue_type(ctx, stmts, loc)
     _ => {
-      add_sem_error(ctx, expr_loc(expr), "expression is not assignable")
+      add_sem_error(ctx, @ast.expr_loc(expr), "expression is not assignable")
       None
     }
   }
@@ -5490,7 +5487,7 @@ fn ensure_expr_type_cache(ctx : SemContext, id : Int) -> Unit {
 ///|
 ///|
 fn type_of_expr(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
-  let id = expr_node_id(expr)
+  let id = @ast.expr_node_id(expr)
   let ty = if id > 0 {
     let idx = id - 1
     let cache_len = ctx.expr_type_cache.length()
@@ -5643,7 +5640,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
       let ty = type_for_sizeof(ctx, expr)
       match strip_top_qualifiers(ty) {
         @ast.CType::Array(size=None, size_expr=Some(_), ..) => ()
-        _ => type_size_align(ctx, ty, expr_loc(expr)) |> ignore
+        _ => type_size_align(ctx, ty, @ast.expr_loc(expr)) |> ignore
       }
       default_int_type()
     }
@@ -5963,7 +5960,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
                 _ =>
                   add_sem_error(
                     ctx,
-                    expr_loc(args[0]),
+                    @ast.expr_loc(args[0]),
                     "__builtin_va_start expects a local variable",
                   )
               }
@@ -6768,14 +6765,14 @@ fn lookup_value(ctx : SemContext, name : String, id : Int) -> @ast.CType? {
     if enum_const_exists(ctx, name, id) {
       found = Some(default_int_type())
     } else if name == "__func__" {
-      let elem = apply_qualifiers(char_type(), with_const(empty_qual()))
+      let elem = @ast.apply_qualifiers(char_type(), @ast.with_const(@ast.empty_qual()))
       let len = match ctx.current_func_name {
         None => 1
         Some(func) => func.length() + 1
       }
       found = Some(@ast.CType::Array(elem~, size=Some(len), size_expr=None))
     } else if name == "__FUNCTION__" || name == "__PRETTY_FUNCTION__" {
-      let elem = apply_qualifiers(char_type(), with_const(empty_qual()))
+      let elem = @ast.apply_qualifiers(char_type(), @ast.with_const(@ast.empty_qual()))
       let len = match ctx.current_func_name {
         None => 1
         Some(func) => func.length() + 1

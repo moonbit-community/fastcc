@@ -1,8 +1,16 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "hackwaly/tinycc/support/util"
 
+import {
+  "moonbitlang/core/hashmap",
+}
+
 // Values
 pub let char_is_unsigned : Bool
+
+pub fn[K, V] fast_map_new(capacity? : Int) -> @hashmap.HashMap[K, V]
+
+pub fn hex_digit_value(UInt16) -> Int?
 
 pub fn int_literal_base(String) -> Int
 
@@ -25,6 +33,7 @@ pub fn slice_string(String, Int, Int) -> String
 // Types and methods
 
 // Type aliases
+pub using @hashmap {type HashMap as FastMap}
 
 // Traits
 

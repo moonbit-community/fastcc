@@ -19,8 +19,6 @@ pub impl Eq for BuiltinCallKind
 pub impl Show for BuiltinCallKind
 pub impl ToJson for BuiltinCallKind
 
-type BuiltinIds
-
 type CliConfig
 
 type CliMacroAction
@@ -31,12 +29,6 @@ pub impl ToJson for CliMacroAction
 type CliParse
 
 type CstringPool
-
-type DeclSpecs
-
-type DeclWrapper
-
-type Declarator
 
 type FieldAccessInfo
 
@@ -66,10 +58,6 @@ type MachoSectionLayout
 type MachoSegmentLayout
 
 type ObjSymbol
-
-type ParenDeclParts
-
-type Parser
 
 type RecordDef
 

@@ -374,7 +374,7 @@ fn parse_hex_float_literal_value(text : String) -> Double? {
       j = j + 1
       continue
     }
-    let digit = match hex_digit_value(code) {
+    let digit = match @util.hex_digit_value(code) {
       None => return None
       Some(v) => v
     }
@@ -936,12 +936,12 @@ fn infer_array_size_from_init_items(items : Array[@ast.InitItem]) -> Int {
     if item.designators.length() > 0 {
       match item.designators[0] {
         @ast.InitDesignator::Index(expr~, ..) =>
-          if const_i64_from_expr(expr) is Some(v) {
+          if @ast.const_i64_from_expr(expr) is Some(v) {
             idx = v.to_int()
             has_index = true
           }
         @ast.InitDesignator::IndexRange(start~, end~, ..) =>
-          match (const_i64_from_expr(start), const_i64_from_expr(end)) {
+          match (@ast.const_i64_from_expr(start), @ast.const_i64_from_expr(end)) {
             (Some(start_val), Some(end_val)) => {
               idx = start_val.to_int()
               has_index = true
@@ -2013,7 +2013,7 @@ fn gen_cond_expr_cmp_zero(
   let cond_ty = type_of_expr(alloc.sem, cond)
   let tmp = take_reg(pool) catch {
     err => {
-      @diag.add_error(bag, expr_loc(cond), err.to_string())
+      @diag.add_error(bag, @ast.expr_loc(cond), err.to_string())
       return
     }
   }
@@ -2055,7 +2055,7 @@ fn gen_cond_expr_cmp_zero(
           bag,
           expr_ty=cond_ty,
         )
-        let is64 = match scalar_size_signed_or_error(alloc.sem, cond_ty, expr_loc(cond)) {
+        let is64 = match scalar_size_signed_or_error(alloc.sem, cond_ty, @ast.expr_loc(cond)) {
           None => false
           Some((size, _)) => size == 8
         }
@@ -2520,7 +2520,7 @@ fn gen_agg_expr_to_addr(
         bag,
       )
     @ast.Expr::IntLit(value~, loc~, ..) =>
-      match parse_int64_literal(value) {
+      match @ast.parse_int64_literal(value) {
         Some(v) =>
           if v == 0 {
             emit_zero_bytes(emitter, dst_reg, dst_off, size)
@@ -4225,7 +4225,7 @@ fn gen_builtin_va_arg_load(
   dst : Int,
   bag : @diag.DiagBag,
 ) -> Bool {
-  let loc = expr_loc(list_expr)
+  let loc = @ast.expr_loc(list_expr)
   let ap_addr = take_reg(pool) catch {
     err => {
       @diag.add_error(bag, loc, err.to_string())
@@ -5451,7 +5451,7 @@ fn gen_atomic_builtin_call(
           op=@ast.UnaryOp::Deref,
           expr=arg,
           node_id=0,
-          loc=expr_loc(arg),
+          loc=@ast.expr_loc(arg),
         )
         call_args.push(deref)
         let ty = match atom_type {
@@ -6248,7 +6248,7 @@ fn gen_lvalue_addr(
         }
       }
     }
-    _ => @diag.add_error(bag, expr_loc(expr), "codegen: unsupported lvalue for now")
+    _ => @diag.add_error(bag, @ast.expr_loc(expr), "codegen: unsupported lvalue for now")
   }
 }
 
@@ -7775,7 +7775,7 @@ fn store_lvalue_scalar(
   value_ty : @ast.CType,
   bag : @diag.DiagBag,
 ) -> Unit {
-  let loc = expr_loc(lvalue)
+  let loc = @ast.expr_loc(lvalue)
   let (value_size, _) = match scalar_size_signed_or_error(alloc.sem, value_ty, loc) {
     None => return
     Some(v) => v
@@ -7902,7 +7902,7 @@ fn gen_expr_to_float_kind_bits_with_type(
 ) -> Unit {
   let norm_target = normalize_float_kind(target_kind)
   if !float_kind_supported(norm_target) {
-    @diag.add_error(bag, expr_loc(expr), "codegen: unsupported float type")
+    @diag.add_error(bag, @ast.expr_loc(expr), "codegen: unsupported float type")
     return
   }
   match float_kind_of_type(src_ty) {
@@ -7923,7 +7923,7 @@ fn gen_expr_to_float_kind_bits_with_type(
         emit32(emitter, (0x1e624000 : UInt))
         emit_fmov_s_to_w(emitter, dst, 0)
       } else {
-        @diag.add_error(bag, expr_loc(expr), "codegen: unsupported float conversion")
+        @diag.add_error(bag, @ast.expr_loc(expr), "codegen: unsupported float conversion")
       }
     }
     None => {
@@ -7943,7 +7943,7 @@ fn gen_expr_to_float_kind_bits_with_type(
         @ast.CType::Int(unsigned~, ..) => unsigned
         _ => false
       }
-      let src_size = match scalar_size_signed_or_error(alloc.sem, src_ty, expr_loc(expr)) {
+      let src_size = match scalar_size_signed_or_error(alloc.sem, src_ty, @ast.expr_loc(expr)) {
         None => return
         Some((size, _)) => size
       }
@@ -8016,7 +8016,7 @@ fn gen_expr_floatbits(
 ) -> Unit {
   let kind = normalize_float_kind(kind_raw)
   if !float_kind_supported(kind) {
-    @diag.add_error(bag, expr_loc(expr), "codegen: unsupported float type")
+    @diag.add_error(bag, @ast.expr_loc(expr), "codegen: unsupported float type")
     return
   }
   let is_double = float_is_double(kind)
@@ -8416,7 +8416,7 @@ fn gen_expr_floatbits(
         err => @diag.add_error(bag, loc, err.to_string())
       }
     }
-    _ => @diag.add_error(bag, expr_loc(expr), "codegen: unsupported float expression")
+    _ => @diag.add_error(bag, @ast.expr_loc(expr), "codegen: unsupported float expression")
   }
 }
 
@@ -8434,7 +8434,7 @@ fn gen_expr_int32(
 ) -> Unit {
   match expr {
     @ast.Expr::IntLit(value~, loc~, ..) =>
-      match parse_int64_literal(value) {
+      match @ast.parse_int64_literal(value) {
         None => @diag.add_error(bag, loc, "codegen: invalid integer literal")
         Some(v) => arm64_movimm(emitter, dst.reinterpret_as_uint(), v.reinterpret_as_uint64())
       }
@@ -9753,7 +9753,7 @@ fn gen_expr_int32(
                 let left_is64 = match scalar_size_signed_or_error(
                   alloc.sem,
                   left_ty,
-                  expr_loc(left),
+                  @ast.expr_loc(left),
                 ) {
                   None => false
                   Some((size, _)) => size == 8
@@ -9813,7 +9813,7 @@ fn gen_expr_int32(
                 let right_is64 = match scalar_size_signed_or_error(
                   alloc.sem,
                   right_ty,
-                  expr_loc(right),
+                  @ast.expr_loc(right),
                 ) {
                   None => false
                   Some((size, _)) => size == 8
@@ -10134,7 +10134,7 @@ fn gen_expr_int32(
               let is64 = res_size == 8
               emit_int_cast(emitter, alloc.sem, left_ty, result_ty, tmp, loc, bag)
               emit_int_extend_to_64(emitter, alloc.sem, right_ty, dst, loc, bag)
-              match const_i64_from_expr(right) {
+              match @ast.const_i64_from_expr(right) {
                 None => {
                   let base_raw : Int =
                     if op == @ast.BinaryOp::Shl {
@@ -10517,7 +10517,7 @@ fn gen_expr_int32(
       )
     }
     _ =>
-      @diag.add_error(bag, expr_loc(expr), "codegen: unsupported expression")
+      @diag.add_error(bag, @ast.expr_loc(expr), "codegen: unsupported expression")
   }
 }
 
@@ -10551,7 +10551,7 @@ fn gen_expr_ptr(
 ) -> Unit {
   match expr {
     @ast.Expr::IntLit(value~, loc~, ..) =>
-      match parse_int64_literal(value) {
+      match @ast.parse_int64_literal(value) {
         None => @diag.add_error(bag, loc, "codegen: invalid integer literal")
         Some(v) =>
           arm64_movimm(emitter, dst.reinterpret_as_uint(), v.reinterpret_as_uint64())
@@ -11328,7 +11328,7 @@ fn gen_expr_ptr(
         err => @diag.add_error(bag, loc, err.to_string())
       }
     }
-    _ => @diag.add_error(bag, expr_loc(expr), "codegen: unsupported pointer expression")
+    _ => @diag.add_error(bag, @ast.expr_loc(expr), "codegen: unsupported pointer expression")
   }
 }
 
@@ -11462,7 +11462,7 @@ fn gen_expr_discard(
       }
     _ =>
       if type_is_aggregate(ty) {
-        let loc = expr_loc(expr)
+        let loc = @ast.expr_loc(expr)
         let (size, _) = match type_size_align_or_error(alloc.sem, ty, loc) {
           None => return
           Some(v) => v
@@ -11755,10 +11755,10 @@ fn collect_switch_labels(
   ) -> Bool {
     match stmt {
       @ast.Stmt::Case(expr~, end_expr~, body~, ..) => {
-        let start = const_int64_from_expr(sem, expr, expr_loc(expr)).unwrap_or(0)
+        let start = const_int64_from_expr(sem, expr, @ast.expr_loc(expr)).unwrap_or(0)
         let end = match end_expr {
           None => start
-          Some(e) => const_int64_from_expr(sem, e, expr_loc(e)).unwrap_or(start)
+          Some(e) => const_int64_from_expr(sem, e, @ast.expr_loc(e)).unwrap_or(start)
         }
         cases.push({ start, end })
         walk(sem, body, cases, has_default)
@@ -13441,7 +13441,7 @@ fn const_pointer_from_lvalue(
       }
     }
     @ast.Expr::Index(base~, index~, loc~, ..) => {
-      match const_int_from_expr(sem, index, expr_loc(index)) {
+      match const_int_from_expr(sem, index, @ast.expr_loc(index)) {
         None => None
         Some(idx) =>
           match const_pointer_from_expr(sem, syms, cstrings, static_locals, base, label_ctx=label_ctx) {

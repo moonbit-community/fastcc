@@ -602,3 +602,12 @@ pub(all) enum Stmt {
   StaticAssert(StaticAssert)
   Empty(loc~ : @source.SrcLoc)
 } derive(Show, Eq, ToJson)
+
+///|
+let default_int_type_value : CType =
+  CType::Int(kind=CIntKind::Int, unsigned=false)
+
+///|
+pub fn default_int_type() -> CType {
+  default_int_type_value
+}

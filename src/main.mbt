@@ -634,7 +634,7 @@ fn compile_to_object_path(
       let bench_enabled = cfg.bench
       let total_start = if bench_enabled { bench_now_ns() } else { 0UL }
       let parse_start = total_start
-      let unit = parse_translation_unit(pp)
+      let unit = @parser.parse_translation_unit(pp)
       @preproc.finalize_preprocessor(pp)
       if bench_enabled {
         let parse_end = bench_now_ns()

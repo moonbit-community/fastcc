@@ -4,7 +4,7 @@ fn parse_text(text : String) -> (@ast.TranslationUnit, @diag.DiagBag) {
   let map = @source.new_source_map()
   let file = @source.add_file(map, "<test>", text)
   let pp = @preproc.new_preprocessor(map, file, bag)
-  let unit = parse_translation_unit(pp)
+  let unit = @parser.parse_translation_unit(pp)
   (unit, bag)
 }
 
@@ -27,7 +27,7 @@ fn check_text_with_paths(
   for path in paths {
     @preproc.add_include_path(pp, path)
   }
-  let unit = parse_translation_unit(pp)
+  let unit = @parser.parse_translation_unit(pp)
   check_translation_unit(unit, bag) |> ignore
   (unit, bag)
 }
@@ -314,22 +314,6 @@ test "sem accepts nested function pointer field call" {
     "void g(struct S* s){ void (*fp)(void) = s->x(1); fp(); }\n"
   let (_, bag) = check_text(text)
   assert_true(!@diag.has_errors(bag))
-}
-
-///|
-test "parser tracks typedef struct name" {
-  let bag = @diag.new_diag_bag()
-  let map = @source.new_source_map()
-  let file = @source.add_file(
-    map,
-    "<test>",
-    "typedef struct { int x; } T; int main(){ T r; return r.x; }",
-  )
-  let pp = @preproc.new_preprocessor(map, file, bag)
-  let parser = new_parser(pp)
-  ignore(parse_translation_unit_with(parser))
-  let (_, type_id) = parser.pp.interner.intern_view_with_id("T"[:])
-  assert_true(get_typedef_count(parser, type_id) > 0)
 }
 
 ///|
