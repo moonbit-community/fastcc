@@ -232,8 +232,6 @@ pub impl ToJson for StorageClass
 
 type StringEntry
 
-type StringInterner
-
 type SwitchCaseInfo
 
 type SwitchChains

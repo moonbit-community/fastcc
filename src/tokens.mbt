@@ -218,7 +218,7 @@ struct KeywordIds {
 }
 
 ///|
-fn init_keyword_ids(interner : StringInterner) -> KeywordIds {
+fn init_keyword_ids(interner : @intern.StringInterner) -> KeywordIds {
   let (_, kw_if) = interner.intern_view_with_id("if"[:])
   let (_, kw_do) = interner.intern_view_with_id("do"[:])
   let (_, kw_for) = interner.intern_view_with_id("for"[:])
@@ -475,7 +475,7 @@ fn token_kind_text_len(kind : TokenKind) -> Int {
 
 ///|
 fn token_text_with(
-  interner : StringInterner,
+  interner : @intern.StringInterner,
   pool : LexemePool,
   tok : Token,
 ) -> String {
@@ -492,7 +492,7 @@ fn token_text_with(
 
 ///|
 fn token_text_len_with(
-  interner : StringInterner,
+  interner : @intern.StringInterner,
   pool : LexemePool,
   tok : Token,
 ) -> Int {

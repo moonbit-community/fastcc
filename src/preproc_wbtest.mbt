@@ -1,6 +1,6 @@
 ///|
 fn pp_tokens(text : String) ->
-  (Array[Token], @diag.DiagBag, StringInterner, LexemePool) {
+  (Array[Token], @diag.DiagBag, @intern.StringInterner, LexemePool) {
   let bag = @diag.new_diag_bag()
   let map = @source.new_source_map()
   let file = @source.add_file(map, "<test>", text)
@@ -13,7 +13,7 @@ fn pp_tokens(text : String) ->
 fn pp_tokens_with_paths(
   text : String,
   paths : Array[String],
-) -> (Array[Token], @diag.DiagBag, StringInterner, LexemePool) {
+) -> (Array[Token], @diag.DiagBag, @intern.StringInterner, LexemePool) {
   let bag = @diag.new_diag_bag()
   let map = @source.new_source_map()
   let file = @source.add_file(map, "<test>", text)
@@ -28,7 +28,7 @@ fn pp_tokens_with_paths(
 ///|
 fn pp_items(
   toks : Array[Token],
-  interner : StringInterner,
+  interner : @intern.StringInterner,
   lexeme_pool : LexemePool,
 ) -> Array[String] {
   toks.map(

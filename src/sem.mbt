@@ -403,7 +403,7 @@ let size_t_type_value : CType =
 
 ///|
 let char_type_value : CType =
-  CType::Int(kind=CIntKind::Char, unsigned=char_is_unsigned)
+  CType::Int(kind=CIntKind::Char, unsigned=@util.char_is_unsigned)
 
 ///|
 let void_pointer_type_value : CType =

@@ -1,9 +1,9 @@
 ///|
-fn lex_tokens(text : String) -> (Array[Token], @diag.DiagBag, StringInterner, LexemePool) {
+fn lex_tokens(text : String) -> (Array[Token], @diag.DiagBag, @intern.StringInterner, LexemePool) {
   let bag = @diag.new_diag_bag()
   let map = @source.new_source_map()
   let file = @source.add_file(map, "<test>", text)
-  let interner = new_string_interner_with_capacity()
+  let interner = @intern.new_string_interner_with_capacity()
   let keyword_ids = init_keyword_ids(interner)
   let lexeme_pool = new_lexeme_pool()
   let lexer = new_lexer(file, bag, interner, keyword_ids, lexeme_pool)

@@ -1,0 +1,29 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/support/intern"
+
+// Values
+pub fn new_string_interner_with_capacity(capacity? : Int) -> StringInterner
+
+pub let tok_hash_init : UInt
+
+pub fn tok_hash_step(UInt, UInt16) -> UInt
+
+// Errors
+
+// Types and methods
+pub(all) struct StringInterner {
+  buckets : Array[Int]
+  next_by_id : Array[Int]
+  strings : Array[String]
+  views : Array[StringView]
+  hashes : Array[UInt]
+}
+pub fn StringInterner::get(Self, Int) -> String
+pub fn StringInterner::intern_view(Self, StringView) -> String
+pub fn StringInterner::intern_view_with_id(Self, StringView) -> (String, Int)
+pub fn StringInterner::intern_view_with_id_hash(Self, StringView, UInt) -> (String, Int)
+
+// Type aliases
+
+// Traits
+

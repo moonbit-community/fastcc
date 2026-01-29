@@ -938,7 +938,7 @@ fn parse_type_specifiers(
         }
         let unsigned =
           if kind == CIntKind::Char && signedness == 0 {
-            char_is_unsigned
+            @util.char_is_unsigned
           } else {
             signedness == 2
           }

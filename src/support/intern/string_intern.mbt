@@ -1,5 +1,5 @@
 ///|
-struct StringInterner {
+pub(all) struct StringInterner {
   buckets : Array[Int]
   next_by_id : Array[Int]
   strings : Array[String]
@@ -14,10 +14,10 @@ let tok_hash_size : Int = 65536
 let tok_hash_mask : UInt = 65535
 
 ///|
-let tok_hash_init : UInt = 1
+pub let tok_hash_init : UInt = 1
 
 ///|
-fn tok_hash_step(h : UInt, code : UInt16) -> UInt {
+pub fn tok_hash_step(h : UInt, code : UInt16) -> UInt {
   h + (h << 5) + (h >> 27) + code.to_uint()
 }
 
@@ -32,7 +32,7 @@ fn tok_hash_view(view : StringView) -> UInt {
   h
 }
 
-fn new_string_interner_with_capacity(capacity? : Int) -> StringInterner {
+pub fn new_string_interner_with_capacity(capacity? : Int) -> StringInterner {
   match capacity {
     None => {
       buckets: Array::make(tok_hash_size, 0),
@@ -55,7 +55,7 @@ fn new_string_interner_with_capacity(capacity? : Int) -> StringInterner {
 }
 
 ///|
-fn StringInterner::intern_view_with_id(
+pub fn StringInterner::intern_view_with_id(
   self : StringInterner,
   view : StringView,
 ) -> (String, Int) {
@@ -64,7 +64,7 @@ fn StringInterner::intern_view_with_id(
 }
 
 ///|
-fn StringInterner::intern_view_with_id_hash(
+pub fn StringInterner::intern_view_with_id_hash(
   self : StringInterner,
   view : StringView,
   hash : UInt,
@@ -93,13 +93,13 @@ fn StringInterner::intern_view_with_id_hash(
 }
 
 ///|
-fn StringInterner::intern_view(self : StringInterner, view : StringView) -> String {
+pub fn StringInterner::intern_view(self : StringInterner, view : StringView) -> String {
   let (value, _) = self.intern_view_with_id(view)
   value
 }
 
 ///|
-fn StringInterner::get(self : StringInterner, id : Int) -> String {
+pub fn StringInterner::get(self : StringInterner, id : Int) -> String {
   if id <= 0 || id > self.strings.length() {
     return ""
   }

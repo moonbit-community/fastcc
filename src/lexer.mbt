@@ -8,7 +8,7 @@ struct Lexer {
   mut col : Int
   mut line_start : Bool
   diags : @diag.DiagBag
-  interner : StringInterner
+  interner : @intern.StringInterner
   keyword_ids : KeywordIds
   lexeme_pool : LexemePool
 }
@@ -17,7 +17,7 @@ struct Lexer {
 fn new_lexer(
   file : @source.SourceFile,
   diags : @diag.DiagBag,
-  interner : StringInterner,
+  interner : @intern.StringInterner,
   keyword_ids : KeywordIds,
   lexeme_pool : LexemePool,
 ) -> Lexer {
@@ -308,11 +308,11 @@ fn lex_ident(lex : Lexer, loc : @source.SrcLoc, line_start : Bool) -> Token {
   let start = lex.index
   let text = lex.text
   let len = lex.text_len
-  let mut hash : UInt = tok_hash_init
+  let mut hash : UInt = @intern.tok_hash_init
   let mut idx = start + 1
-  hash = tok_hash_step(hash, text[start])
+  hash = @intern.tok_hash_step(hash, text[start])
   while idx < len && is_ident_continue(text[idx]) {
-    hash = tok_hash_step(hash, text[idx])
+    hash = @intern.tok_hash_step(hash, text[idx])
     idx = idx + 1
   }
   lex.index = idx

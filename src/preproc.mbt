@@ -85,7 +85,7 @@ struct Preprocessor {
   expanding_guards : Array[ExpandingGuard]
   date_literal : String
   time_literal : String
-  interner : StringInterner
+  interner : @intern.StringInterner
   keyword_ids : KeywordIds
   lexeme_pool : LexemePool
   hidden_pool : HiddenPool
@@ -265,7 +265,7 @@ fn init_builtin_macros(pp : Preprocessor) -> Unit {
   define_words_macro(pp, "__uint128_t", ["long", "double"])
 
   define_int_macro(pp, "__CHAR_BIT__", 8)
-  if char_is_unsigned {
+  if @util.char_is_unsigned {
     define_int_macro(pp, "__CHAR_UNSIGNED__", 1)
   }
   define_int_macro(pp, "__SIZEOF_POINTER__", 8)
@@ -343,7 +343,7 @@ fn new_preprocessor(map : @source.SourceMap, file : @source.SourceFile, diags : 
   }
   let include_stack_capacity = 16
   let cond_capacity = 64
-  let interner = new_string_interner_with_capacity(capacity=interner_capacity)
+  let interner = @intern.new_string_interner_with_capacity(capacity=interner_capacity)
   let keyword_ids = init_keyword_ids(interner)
   let (_, line_macro_id) = interner.intern_view_with_id("__LINE__"[:])
   let (_, file_macro_id) = interner.intern_view_with_id("__FILE__"[:])
