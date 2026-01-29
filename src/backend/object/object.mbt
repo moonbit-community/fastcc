@@ -32,8 +32,9 @@ pub fn reloc_addend(rel : Reloc) -> Int64 {
 
 ///|
 pub fn section_size_bytes(sec : Section) -> Int {
-  if sec.size_bytes > 0 {
-    sec.size_bytes
+  let size_bytes = sec.size_bytes
+  if size_bytes > 0 {
+    size_bytes
   } else {
     sec.data.length() << 2
   }
@@ -41,8 +42,9 @@ pub fn section_size_bytes(sec : Section) -> Int {
 
 ///|
 pub fn section_word_len(sec : Section) -> Int {
-  if sec.size_bytes > 0 {
-    sec.size_bytes >> 2
+  let size_bytes = sec.size_bytes
+  if size_bytes > 0 {
+    size_bytes >> 2
   } else {
     sec.data.length()
   }
