@@ -4,5 +4,5 @@ test "diag core collects errors" {
   assert_true(!@diag_core.has_errors(bag))
   @diag_core.add_error(bag, @source.dummy_loc(0), "err")
   assert_true(@diag_core.has_errors(bag))
-  inspect(bag.diags.length(), content="1")
+  inspect(@diag_core.error_count(bag), content="1")
 }

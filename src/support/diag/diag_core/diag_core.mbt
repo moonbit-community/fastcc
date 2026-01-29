@@ -26,7 +26,7 @@ pub fn error_count(bag : DiagBag) -> Int {
 
 ///|
 pub fn has_errors(bag : DiagBag) -> Bool {
-  error_count(bag) > 0
+  bag.diags.length() > 0
 }
 
 ///|
