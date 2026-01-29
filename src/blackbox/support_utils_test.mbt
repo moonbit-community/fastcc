@@ -43,3 +43,26 @@ test "support util strings and intern" {
   assert_eq(interner.get(0), "")
   assert_eq(interner.get(id + 1), "")
 }
+
+///|
+test "support util fast map" {
+  let map : @util.FastMap[String, Int] = @util.fast_map_new()
+  assert_true(map.is_empty())
+  map["a"] = 1
+  assert_eq(map.length(), 1)
+  assert_eq(map["a"], 1)
+
+  let map2 : @util.FastMap[String, Int] = @util.fast_map_new(capacity=4)
+  map2["b"] = 2
+  assert_true(map2.contains("b"))
+}
+
+///|
+test "support util char unsigned flag" {
+  let flag = @util.char_is_unsigned
+  if flag {
+    assert_true(flag)
+  } else {
+    assert_true(!flag)
+  }
+}
