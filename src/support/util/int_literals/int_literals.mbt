@@ -44,6 +44,7 @@ pub fn int_literal_base_from(text : String, end : Int) -> Int {
 ///|
 pub fn parse_uint64_literal(text : String, base : Int) -> UInt64 {
   let mut value : UInt64 = 0
+  let base_u64 = base.to_uint64()
   let mut i = 0
   let len = text.length()
   if base == 16 &&
@@ -68,7 +69,7 @@ pub fn parse_uint64_literal(text : String, base : Int) -> UInt64 {
     if digit >= base {
       break
     }
-    value = value * base.to_uint64() + digit.to_uint64()
+    value = value * base_u64 + digit.to_uint64()
     i = i + 1
   }
   value
@@ -77,6 +78,7 @@ pub fn parse_uint64_literal(text : String, base : Int) -> UInt64 {
 ///|
 pub fn parse_uint64_literal_prefix(text : String, base : Int, end : Int) -> UInt64 {
   let mut value : UInt64 = 0
+  let base_u64 = base.to_uint64()
   let mut i = 0
   if base == 16 && end >= 2 && text[0] == 48 &&
     (text[1] == 120 || text[1] == 88) {
@@ -96,7 +98,7 @@ pub fn parse_uint64_literal_prefix(text : String, base : Int, end : Int) -> UInt
     if digit >= base {
       break
     }
-    value = value * base.to_uint64() + digit.to_uint64()
+    value = value * base_u64 + digit.to_uint64()
     i = i + 1
   }
   value
