@@ -67,6 +67,12 @@ test "preproc if expr unsigned ops" {
     tok_int(pp, "5U"),
     tok_kind(@tokens.TokenKind::Ge),
     tok_int(pp, "5U"),
+    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_int(pp, "5"),
+    tok_kind(@tokens.TokenKind::Minus),
+    tok_int(pp, "3"),
+    tok_kind(@tokens.TokenKind::Eq),
+    tok_int(pp, "2"),
   ]
   let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
   assert_true(ok)
@@ -100,6 +106,14 @@ test "preproc if expr char escapes" {
     tok_char(pp, "'\\q'"),
     tok_kind(@tokens.TokenKind::Eq),
     tok_int(pp, "113"),
+    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_char(pp, "'\\\\'"),
+    tok_kind(@tokens.TokenKind::Eq),
+    tok_int(pp, "92"),
+    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_char(pp, "'\\xAf'"),
+    tok_kind(@tokens.TokenKind::Eq),
+    tok_int(pp, "175"),
   ]
   let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
   assert_true(ok)
@@ -113,6 +127,25 @@ test "preproc if expr macro int value" {
   let tokens : Array[@tokens.Token] = [tok_ident(pp, "MACRO_INT")]
   let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
   assert_true(ok)
+  assert_true(!@diag.has_errors(bag))
+}
+
+///|
+test "preproc if expr macro non-int" {
+  let (pp, bag) = new_pp()
+  @preproc.define_func_macro_zero(pp, "MACRO_FN")
+  let tokens : Array[@tokens.Token] = [tok_ident(pp, "MACRO_FN")]
+  let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
+  assert_true(!ok)
+  assert_true(!@diag.has_errors(bag))
+}
+
+///|
+test "preproc if expr macro invalid id" {
+  let (pp, bag) = new_pp()
+  let tokens : Array[@tokens.Token] = [@preproc.make_builtin_token(@tokens.TokenKind::Ident)]
+  let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
+  assert_true(!ok)
   assert_true(!@diag.has_errors(bag))
 }
 
