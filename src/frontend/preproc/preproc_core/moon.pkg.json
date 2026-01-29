@@ -1,13 +1,12 @@
 {
   "import": [
-    "hackwaly/tinycc/frontend/preproc/preproc_core",
+    "hackwaly/tinycc/frontend/lexer",
     "hackwaly/tinycc/frontend/tokens",
     "hackwaly/tinycc/support/diag",
+    "hackwaly/tinycc/support/intern",
     "hackwaly/tinycc/support/source",
+    "hackwaly/tinycc/support/util",
+    "moonbitlang/x/fs",
     "moonbitlang/x/time"
-  ],
-  "test-import": [
-    "hackwaly/tinycc/support/diag",
-    "hackwaly/tinycc/support/source"
   ]
 }

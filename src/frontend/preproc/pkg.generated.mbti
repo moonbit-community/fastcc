@@ -2,138 +2,137 @@
 package "hackwaly/tinycc/frontend/preproc"
 
 import {
-  "hackwaly/tinycc/frontend/lexer",
+  "hackwaly/tinycc/frontend/preproc/preproc_core",
   "hackwaly/tinycc/frontend/tokens",
   "hackwaly/tinycc/support/diag",
-  "hackwaly/tinycc/support/intern",
   "hackwaly/tinycc/support/source",
   "moonbitlang/x/time",
 }
 
 // Values
-pub fn add_hidden(Preprocessor, @tokens.Token, Int) -> @tokens.Token
+pub fn add_hidden(@preproc_core.Preprocessor, @tokens.Token, Int) -> @tokens.Token
 
-pub fn add_hidden_tokens(Preprocessor, Array[@tokens.Token], Int) -> Array[@tokens.Token]
+pub fn add_hidden_tokens(@preproc_core.Preprocessor, Array[@tokens.Token], Int) -> Array[@tokens.Token]
 
-pub fn add_include_path(Preprocessor, String) -> Unit
+pub fn add_include_path(@preproc_core.Preprocessor, String) -> Unit
 
-pub fn add_pp_error(Preprocessor, @source.SrcLoc, String) -> Unit
+pub fn add_pp_error(@preproc_core.Preprocessor, @source.SrcLoc, String) -> Unit
 
-pub fn advance_if(IfParser) -> @tokens.Token?
+pub fn advance_if(@preproc_core.IfParser) -> @tokens.Token?
 
-pub fn builtin_macro_tokens(Preprocessor, @tokens.Token) -> Array[@tokens.Token]?
+pub fn builtin_macro_tokens(@preproc_core.Preprocessor, @tokens.Token) -> Array[@tokens.Token]?
 
-pub fn clear_hidden_pool(HiddenPool) -> Unit
+pub fn clear_hidden_pool(@preproc_core.HiddenPool) -> Unit
 
-pub fn current_active(Preprocessor) -> Bool
+pub fn current_active(@preproc_core.Preprocessor) -> Bool
 
-pub fn decode_pp_escape_value(Preprocessor, String, Int, @source.SrcLoc) -> (Int, Int)
+pub fn decode_pp_escape_value(@preproc_core.Preprocessor, String, Int, @source.SrcLoc) -> (Int, Int)
 
-pub fn define_func_macro_empty(Preprocessor, String) -> Unit
+pub fn define_func_macro_empty(@preproc_core.Preprocessor, String) -> Unit
 
-pub fn define_func_macro_zero(Preprocessor, String) -> Unit
+pub fn define_func_macro_zero(@preproc_core.Preprocessor, String) -> Unit
 
-pub fn define_int_macro(Preprocessor, String, Int) -> Unit
+pub fn define_int_macro(@preproc_core.Preprocessor, String, Int) -> Unit
 
-pub fn define_macro(Preprocessor, String, Array[@tokens.Token]) -> Unit
+pub fn define_macro(@preproc_core.Preprocessor, String, Array[@tokens.Token]) -> Unit
 
-pub fn define_words_macro(Preprocessor, String, Array[String]) -> Unit
+pub fn define_words_macro(@preproc_core.Preprocessor, String, Array[String]) -> Unit
 
 pub fn dir_name(String) -> String
 
-pub fn dump_tokens(Preprocessor, Int) -> Array[@tokens.Token]
+pub fn dump_tokens(@preproc_core.Preprocessor, Int) -> Array[@tokens.Token]
 
-pub fn ensure_expanded_arg(Preprocessor, Array[Array[@tokens.Token]], Array[Array[@tokens.Token]?], Int) -> Array[@tokens.Token]
+pub fn ensure_expanded_arg(@preproc_core.Preprocessor, Array[Array[@tokens.Token]], Array[Array[@tokens.Token]?], Int) -> Array[@tokens.Token]
 
-pub fn ensure_hidden_singleton_slot(HiddenPool, Int) -> Unit
+pub fn ensure_hidden_singleton_slot(@preproc_core.HiddenPool, Int) -> Unit
 
-pub fn ensure_macro_capacity(Preprocessor, Int) -> Unit
+pub fn ensure_macro_capacity(@preproc_core.Preprocessor, Int) -> Unit
 
 pub fn escape_string(String) -> String
 
-pub fn eval_has_include(Preprocessor, Array[@tokens.Token], include_next~ : Bool) -> Int
+pub fn eval_has_include(@preproc_core.Preprocessor, Array[@tokens.Token], include_next~ : Bool) -> Int
 
-pub fn eval_if_expr(Preprocessor, Array[@tokens.Token], @source.SrcLoc) -> Bool
+pub fn eval_if_expr(@preproc_core.Preprocessor, Array[@tokens.Token], @source.SrcLoc) -> Bool
 
-pub fn expand_if_tokens(Preprocessor, Array[@tokens.Token]) -> Array[@tokens.Token]
+pub fn expand_if_tokens(@preproc_core.Preprocessor, Array[@tokens.Token]) -> Array[@tokens.Token]
 
-pub fn expand_tokens(Preprocessor, Array[@tokens.Token]) -> Array[@tokens.Token]
+pub fn expand_tokens(@preproc_core.Preprocessor, Array[@tokens.Token]) -> Array[@tokens.Token]
 
-pub fn finalize_preprocessor(Preprocessor) -> Unit
+pub fn finalize_preprocessor(@preproc_core.Preprocessor) -> Unit
 
 pub fn format_date(@time.ZonedDateTime) -> String
 
 pub fn format_time(@time.ZonedDateTime) -> String
 
-pub fn get_macro(Preprocessor, Int) -> Macro?
+pub fn get_macro(@preproc_core.Preprocessor, Int) -> @preproc_core.Macro?
 
-pub fn handle_directive(Preprocessor, @tokens.Token) -> Unit
+pub fn handle_directive(@preproc_core.Preprocessor, @tokens.Token) -> Unit
 
-pub fn handle_line_directive(Preprocessor, Array[@tokens.Token], @source.SrcLoc) -> Unit
+pub fn handle_line_directive(@preproc_core.Preprocessor, Array[@tokens.Token], @source.SrcLoc) -> Unit
 
-pub fn has_macro(Preprocessor, Int) -> Bool
+pub fn has_macro(@preproc_core.Preprocessor, Int) -> Bool
 
-pub fn hidden_add(HiddenPool, Int, Int) -> Int
+pub fn hidden_add(@preproc_core.HiddenPool, Int, Int) -> Int
 
-pub fn hidden_contains(HiddenPool, Int, Int) -> Bool
+pub fn hidden_contains(@preproc_core.HiddenPool, Int, Int) -> Bool
 
 pub fn hidden_is_empty(Int) -> Bool
 
-pub fn include_file(Preprocessor, IncludeSpec, @source.SrcLoc, include_next~ : Bool) -> Unit
+pub fn include_file(@preproc_core.Preprocessor, @preproc_core.IncludeSpec, @source.SrcLoc, include_next~ : Bool) -> Unit
 
-pub fn init_builtin_macros(Preprocessor) -> Unit
+pub fn init_builtin_macros(@preproc_core.Preprocessor) -> Unit
 
 pub fn init_datetime_literals() -> (String, String)
 
-pub fn is_adjacent(Preprocessor, @tokens.Token, @tokens.Token) -> Bool
+pub fn is_adjacent(@preproc_core.Preprocessor, @tokens.Token, @tokens.Token) -> Bool
 
-pub fn is_builtin_macro_id(Preprocessor, Int) -> Bool
+pub fn is_builtin_macro_id(@preproc_core.Preprocessor, Int) -> Bool
 
-pub fn is_expanding(Preprocessor, Int) -> Bool
+pub fn is_expanding(@preproc_core.Preprocessor, Int) -> Bool
 
 pub fn is_macro_name_token(@tokens.Token) -> Bool
 
 pub fn join_path(String, String) -> String
 
-pub fn lex_paste_tokens(Preprocessor, String, String, String, @source.SrcLoc, Int) -> Array[@tokens.Token]
+pub fn lex_paste_tokens(@preproc_core.Preprocessor, String, String, String, @source.SrcLoc, Int) -> Array[@tokens.Token]
 
-pub fn logical_line(Preprocessor, @source.SrcLoc) -> Int
+pub fn logical_line(@preproc_core.Preprocessor, @source.SrcLoc) -> Int
 
 pub fn lookup_param_index(Array[Int], Int) -> Int?
 
-pub fn macro_id_from_name(Preprocessor, String) -> Int
+pub fn macro_id_from_name(@preproc_core.Preprocessor, String) -> Int
 
-pub fn macro_id_from_token(Preprocessor, @tokens.Token) -> Int
+pub fn macro_id_from_token(@preproc_core.Preprocessor, @tokens.Token) -> Int
 
-pub fn macro_int_value(Preprocessor, @tokens.Token, @source.SrcLoc) -> PpValue?
+pub fn macro_int_value(@preproc_core.Preprocessor, @tokens.Token, @source.SrcLoc) -> @preproc_core.PpValue?
 
-pub fn macro_replacement_needs_expand(Preprocessor, Int, Macro) -> Bool
+pub fn macro_replacement_needs_expand(@preproc_core.Preprocessor, Int, @preproc_core.Macro) -> Bool
 
 pub fn make_builtin_token(@tokens.TokenKind, id? : Int, lexeme_id? : Int) -> @tokens.Token
 
-pub fn make_builtin_word_token(Preprocessor, String) -> @tokens.Token
+pub fn make_builtin_word_token(@preproc_core.Preprocessor, String) -> @tokens.Token
 
-pub fn make_int_literal_token(Preprocessor, Int, @source.SrcLoc) -> @tokens.Token
+pub fn make_int_literal_token(@preproc_core.Preprocessor, Int, @source.SrcLoc) -> @tokens.Token
 
-pub fn make_string_literal(Preprocessor, String, @source.SrcLoc) -> @tokens.Token
+pub fn make_string_literal(@preproc_core.Preprocessor, String, @source.SrcLoc) -> @tokens.Token
 
-pub fn match_kind(IfParser, @tokens.TokenKind) -> Bool
+pub fn match_kind(@preproc_core.IfParser, @tokens.TokenKind) -> Bool
 
-pub fn merge_hidden(HiddenPool, Int, Int) -> Int
+pub fn merge_hidden(@preproc_core.HiddenPool, Int, Int) -> Int
 
 pub fn month_name(Int) -> String
 
-pub fn new_hidden_pool() -> HiddenPool
+pub fn new_hidden_pool() -> @preproc_core.HiddenPool
 
-pub fn new_preprocessor(@source.SourceMap, @source.SourceFile, @diag.DiagBag) -> Preprocessor
+pub fn new_preprocessor(@source.SourceMap, @source.SourceFile, @diag.DiagBag) -> @preproc_core.Preprocessor
 
-pub fn next_input_token(Preprocessor) -> @tokens.Token
+pub fn next_input_token(@preproc_core.Preprocessor) -> @tokens.Token
 
-pub fn next_pp_token(Preprocessor) -> @tokens.Token
+pub fn next_pp_token(@preproc_core.Preprocessor) -> @tokens.Token
 
-pub fn next_raw_token(Preprocessor) -> @tokens.Token
+pub fn next_raw_token(@preproc_core.Preprocessor) -> @tokens.Token
 
-pub fn normalize_macro_args(Macro, Array[Array[@tokens.Token]], @source.SrcLoc) -> Array[Array[@tokens.Token]]?
+pub fn normalize_macro_args(@preproc_core.Macro, Array[Array[@tokens.Token]], @source.SrcLoc) -> Array[Array[@tokens.Token]]?
 
 pub fn normalize_macro_tokens(Array[@tokens.Token]) -> Array[@tokens.Token]
 
@@ -141,232 +140,150 @@ pub fn pad2(Int) -> String
 
 pub fn pad2_space(Int) -> String
 
-pub fn parse_add(IfParser, @source.SrcLoc) -> PpValue
+pub fn parse_add(@preproc_core.IfParser, @source.SrcLoc) -> @preproc_core.PpValue
 
-pub fn parse_bit_and(IfParser, @source.SrcLoc) -> PpValue
+pub fn parse_bit_and(@preproc_core.IfParser, @source.SrcLoc) -> @preproc_core.PpValue
 
-pub fn parse_bit_or(IfParser, @source.SrcLoc) -> PpValue
+pub fn parse_bit_or(@preproc_core.IfParser, @source.SrcLoc) -> @preproc_core.PpValue
 
-pub fn parse_bit_xor(IfParser, @source.SrcLoc) -> PpValue
+pub fn parse_bit_xor(@preproc_core.IfParser, @source.SrcLoc) -> @preproc_core.PpValue
 
-pub fn parse_define_macro(Preprocessor, @tokens.Token, Array[@tokens.Token], @source.SrcLoc) -> Macro?
+pub fn parse_define_macro(@preproc_core.Preprocessor, @tokens.Token, Array[@tokens.Token], @source.SrcLoc) -> @preproc_core.Macro?
 
-pub fn parse_defined(IfParser, @source.SrcLoc) -> PpValue
+pub fn parse_defined(@preproc_core.IfParser, @source.SrcLoc) -> @preproc_core.PpValue
 
-pub fn parse_eq(IfParser, @source.SrcLoc) -> PpValue
+pub fn parse_eq(@preproc_core.IfParser, @source.SrcLoc) -> @preproc_core.PpValue
 
-pub fn parse_has_include_path(Preprocessor, Array[@tokens.Token]) -> IncludeSpec?
+pub fn parse_has_include_path(@preproc_core.Preprocessor, Array[@tokens.Token]) -> @preproc_core.IncludeSpec?
 
-pub fn parse_include_path(Preprocessor, Array[@tokens.Token], @source.SrcLoc) -> IncludeSpec?
+pub fn parse_include_path(@preproc_core.Preprocessor, Array[@tokens.Token], @source.SrcLoc) -> @preproc_core.IncludeSpec?
 
-pub fn parse_line_int_literal(Preprocessor, String, @source.SrcLoc) -> Int
+pub fn parse_line_int_literal(@preproc_core.Preprocessor, String, @source.SrcLoc) -> Int
 
-pub fn parse_logical_and(IfParser, @source.SrcLoc) -> PpValue
+pub fn parse_logical_and(@preproc_core.IfParser, @source.SrcLoc) -> @preproc_core.PpValue
 
-pub fn parse_logical_or(IfParser, @source.SrcLoc) -> PpValue
+pub fn parse_logical_or(@preproc_core.IfParser, @source.SrcLoc) -> @preproc_core.PpValue
 
-pub fn parse_macro_params(Preprocessor, Array[@tokens.Token], @source.SrcLoc) -> (Array[Int], Bool, Array[@tokens.Token])?
+pub fn parse_macro_params(@preproc_core.Preprocessor, Array[@tokens.Token], @source.SrcLoc) -> (Array[Int], Bool, Array[@tokens.Token])?
 
-pub fn parse_mul(IfParser, @source.SrcLoc) -> PpValue
+pub fn parse_mul(@preproc_core.IfParser, @source.SrcLoc) -> @preproc_core.PpValue
 
-pub fn parse_pp_char_literal(Preprocessor, @tokens.Token) -> PpValue
+pub fn parse_pp_char_literal(@preproc_core.Preprocessor, @tokens.Token) -> @preproc_core.PpValue
 
-pub fn parse_pp_hex_escape(Preprocessor, String, Int, @source.SrcLoc) -> (Int, Int)
+pub fn parse_pp_hex_escape(@preproc_core.Preprocessor, String, Int, @source.SrcLoc) -> (Int, Int)
 
-pub fn parse_pp_int_literal(Preprocessor, String, @source.SrcLoc) -> PpValue
+pub fn parse_pp_int_literal(@preproc_core.Preprocessor, String, @source.SrcLoc) -> @preproc_core.PpValue
 
 pub fn parse_pp_octal_escape(String, Int) -> (Int, Int)
 
-pub fn parse_primary(IfParser, @source.SrcLoc) -> PpValue
+pub fn parse_primary(@preproc_core.IfParser, @source.SrcLoc) -> @preproc_core.PpValue
 
-pub fn parse_rel(IfParser, @source.SrcLoc) -> PpValue
+pub fn parse_rel(@preproc_core.IfParser, @source.SrcLoc) -> @preproc_core.PpValue
 
-pub fn parse_shift(IfParser, @source.SrcLoc) -> PpValue
+pub fn parse_shift(@preproc_core.IfParser, @source.SrcLoc) -> @preproc_core.PpValue
 
-pub fn parse_unary(IfParser, @source.SrcLoc) -> PpValue
+pub fn parse_unary(@preproc_core.IfParser, @source.SrcLoc) -> @preproc_core.PpValue
 
-pub fn peek_if(IfParser) -> @tokens.Token?
+pub fn peek_if(@preproc_core.IfParser) -> @tokens.Token?
 
-pub fn peek_is_rparen(IfParser) -> Bool
+pub fn peek_is_rparen(@preproc_core.IfParser) -> Bool
 
-pub fn pop_cond(Preprocessor, @source.SrcLoc) -> Unit
+pub fn pop_cond(@preproc_core.Preprocessor, @source.SrcLoc) -> Unit
 
-pub fn pop_expanding(Preprocessor) -> Unit
+pub fn pop_expanding(@preproc_core.Preprocessor) -> Unit
 
-pub fn pp_bool_value(Bool) -> PpValue
+pub fn pp_bool_value(Bool) -> @preproc_core.PpValue
 
 pub fn pp_hex_digit_value(UInt16) -> Int?
 
 pub fn pp_is_oct_digit(UInt16) -> Bool
 
-pub fn pp_is_zero(PpValue) -> Bool
+pub fn pp_is_zero(@preproc_core.PpValue) -> Bool
 
-pub fn pp_shift_count(PpValue) -> Int
+pub fn pp_shift_count(@preproc_core.PpValue) -> Int
 
-pub fn pp_token_lexeme(Preprocessor, @tokens.Token) -> String
+pub fn pp_token_lexeme(@preproc_core.Preprocessor, @tokens.Token) -> String
 
-pub fn pp_token_lexeme_len(Preprocessor, @tokens.Token) -> Int
+pub fn pp_token_lexeme_len(@preproc_core.Preprocessor, @tokens.Token) -> Int
 
-pub fn pp_unsigned_result(PpValue, PpValue) -> Bool
+pub fn pp_unsigned_result(@preproc_core.PpValue, @preproc_core.PpValue) -> Bool
 
 pub fn prefix_tokens(Array[@tokens.Token], Int) -> Array[@tokens.Token]
 
-pub fn push_back(Preprocessor, @tokens.Token) -> Unit
+pub fn push_back(@preproc_core.Preprocessor, @tokens.Token) -> Unit
 
-pub fn push_cond(Preprocessor, Bool) -> Unit
+pub fn push_cond(@preproc_core.Preprocessor, Bool) -> Unit
 
-pub fn push_expanding(Preprocessor, Int) -> Unit
+pub fn push_expanding(@preproc_core.Preprocessor, Int) -> Unit
 
-pub fn push_tokens(Preprocessor, Array[@tokens.Token]) -> Unit
+pub fn push_tokens(@preproc_core.Preprocessor, Array[@tokens.Token]) -> Unit
 
-pub fn read_directive_head_token(Preprocessor) -> @tokens.Token?
+pub fn read_directive_head_token(@preproc_core.Preprocessor) -> @tokens.Token?
 
-pub fn read_directive_text(Preprocessor) -> String
+pub fn read_directive_text(@preproc_core.Preprocessor) -> String
 
-pub fn read_directive_tokens(Preprocessor) -> Array[@tokens.Token]
+pub fn read_directive_tokens(@preproc_core.Preprocessor) -> Array[@tokens.Token]
 
-pub fn read_macro_args(Preprocessor, @source.SrcLoc) -> Array[Array[@tokens.Token]]?
+pub fn read_macro_args(@preproc_core.Preprocessor, @source.SrcLoc) -> Array[Array[@tokens.Token]]?
 
-pub fn read_macro_args_from_tokens(Preprocessor, Array[@tokens.Token], Int, @source.SrcLoc) -> (Array[Array[@tokens.Token]], Int)?
+pub fn read_macro_args_from_tokens(@preproc_core.Preprocessor, Array[@tokens.Token], Int, @source.SrcLoc) -> (Array[Array[@tokens.Token]], Int)?
 
-pub fn release_expanding_guards(Preprocessor) -> Unit
+pub fn release_expanding_guards(@preproc_core.Preprocessor) -> Unit
 
-pub fn remove_macro(Preprocessor, Int) -> Unit
+pub fn remove_macro(@preproc_core.Preprocessor, Int) -> Unit
 
-pub fn resolve_include_path(Preprocessor, String, Bool, include_next~ : Bool) -> String?
+pub fn resolve_include_path(@preproc_core.Preprocessor, String, Bool, include_next~ : Bool) -> String?
 
-pub fn set_macro(Preprocessor, Int, Macro) -> Unit
+pub fn set_macro(@preproc_core.Preprocessor, Int, @preproc_core.Macro) -> Unit
 
-pub fn skip_directive_line(Preprocessor) -> Unit
+pub fn skip_directive_line(@preproc_core.Preprocessor) -> Unit
 
-pub fn skip_inactive(Preprocessor) -> Unit
+pub fn skip_inactive(@preproc_core.Preprocessor) -> Unit
 
-pub fn skip_paren_expr(IfParser, @source.SrcLoc) -> Unit
+pub fn skip_paren_expr(@preproc_core.IfParser, @source.SrcLoc) -> Unit
 
 pub fn slice_tokens(Array[@tokens.Token], Int) -> Array[@tokens.Token]
 
-pub fn stringize_tokens(Preprocessor, Array[@tokens.Token]) -> String
+pub fn stringize_tokens(@preproc_core.Preprocessor, Array[@tokens.Token]) -> String
 
 pub fn strip_quotes(String) -> String
 
-pub fn substitute_macro(Preprocessor, Macro, Array[Array[@tokens.Token]], @source.SrcLoc) -> (Array[@tokens.Token], Bool)
+pub fn substitute_macro(@preproc_core.Preprocessor, @preproc_core.Macro, Array[Array[@tokens.Token]], @source.SrcLoc) -> (Array[@tokens.Token], Bool)
 
-pub fn token_needs_expansion(Preprocessor, @tokens.Token) -> Bool
+pub fn token_needs_expansion(@preproc_core.Preprocessor, @tokens.Token) -> Bool
 
 pub fn tokens_have_id(Array[@tokens.Token]) -> Bool
 
-pub fn tokens_need_expansion(Preprocessor, Array[@tokens.Token]) -> Bool
+pub fn tokens_need_expansion(@preproc_core.Preprocessor, Array[@tokens.Token]) -> Bool
 
-pub fn update_elif(Preprocessor, Bool, @source.SrcLoc) -> Unit
+pub fn update_elif(@preproc_core.Preprocessor, Bool, @source.SrcLoc) -> Unit
 
-pub fn update_else(Preprocessor, @source.SrcLoc) -> Unit
+pub fn update_else(@preproc_core.Preprocessor, @source.SrcLoc) -> Unit
 
 // Errors
 
 // Types and methods
-pub(all) struct CondState {
-  parent_active : Bool
-  mut taken : Bool
-  mut active : Bool
-}
-
-pub(all) struct ExpandingGuard {
-  restore_len : Int
-}
-
-pub(all) struct HiddenNode {
-  id : Int
-  next : Int
-}
-
-pub(all) struct HiddenPool {
-  nodes : Array[HiddenNode]
-  singleton_by_id : Array[Int]
-}
-
-pub(all) struct IfParser {
-  tokens : Array[@tokens.Token]
-  mut index : Int
-  pp : Preprocessor
-}
-
-pub(all) struct IncludeSpec {
-  path : String
-  is_angle : Bool
-}
-
-pub(all) struct Macro {
-  params : Array[Int]
-  is_variadic : Bool
-  is_function : Bool
-  replacement : Array[@tokens.Token]
-  replacement_has_id : Bool
-  replacement_needs_expand : Bool
-  replacement_needs_epoch : Int
-}
-
-pub(all) struct PpValue {
-  value : UInt64
-  is_unsigned : Bool
-}
-
-pub(all) struct PreprocBuiltinIds {
-  line_macro : Int
-  file_macro : Int
-  date_macro : Int
-  time_macro : Int
-  defined : Int
-  has_include : Int
-  has_include_next : Int
-  dir_define : Int
-  dir_undef : Int
-  dir_if : Int
-  dir_ifdef : Int
-  dir_ifndef : Int
-  dir_elif : Int
-  dir_else : Int
-  dir_endif : Int
-  dir_include : Int
-  dir_include_next : Int
-  dir_line : Int
-  dir_error : Int
-  dir_warning : Int
-  dir_pragma : Int
-}
-
-pub(all) struct Preprocessor {
-  mut lexer : @lexer.Lexer
-  lexer_stack : Array[@lexer.Lexer]
-  held_stack : Array[@tokens.Token?]
-  path_stack : Array[String]
-  dir_stack : Array[String]
-  mut current_path : String
-  mut current_dir : String
-  mut logical_path : String
-  logical_path_stack : Array[String]
-  mut line_adjust : Int
-  line_adjust_stack : Array[Int]
-  include_paths : Array[String]
-  diags : @diag.DiagBag
-  map : @source.SourceMap
-  macros : Array[Macro?]
-  mut macro_epoch : Int
-  pending : Array[@tokens.Token]
-  mut held : @tokens.Token?
-  cond_stack : Array[CondState]
-  mut active : Bool
-  expanding : Array[Int]
-  expanding_guards : Array[ExpandingGuard]
-  date_literal : String
-  time_literal : String
-  interner : @intern.StringInterner
-  keyword_ids : @tokens.KeywordIds
-  lexeme_pool : @tokens.LexemePool
-  hidden_pool : HiddenPool
-  builtin_ids : PreprocBuiltinIds
-}
 
 // Type aliases
+pub using @preproc_core {type CondState}
+
+pub using @preproc_core {type ExpandingGuard}
+
+pub using @preproc_core {type HiddenNode}
+
+pub using @preproc_core {type HiddenPool}
+
+pub using @preproc_core {type IfParser}
+
+pub using @preproc_core {type IncludeSpec}
+
+pub using @preproc_core {type Macro}
+
+pub using @preproc_core {type PpValue}
+
+pub using @preproc_core {type PreprocBuiltinIds}
+
+pub using @preproc_core {type Preprocessor}
 
 // Traits
 
