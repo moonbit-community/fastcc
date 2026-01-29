@@ -4,6 +4,7 @@
     "hackwaly/tinycc/backend/codegen",
     "hackwaly/tinycc/driver",
     "hackwaly/tinycc/ffi",
+    "hackwaly/tinycc/frontend/ast",
     "hackwaly/tinycc/frontend/parser",
     "hackwaly/tinycc/frontend/preproc",
     "hackwaly/tinycc/frontend/tokens",
