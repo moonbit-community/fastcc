@@ -109,3 +109,27 @@ test "macho symtab missing section" {
   let bytes = @macho.encode_macho_object([], symbols)
   assert_true(bytes.length() > 0)
 }
+
+///|
+test "macho bss section encode and write" {
+  let sec_bss : @object.Section = {
+    name: ".bss",
+    data: [],
+    relocs: [],
+    align: 0,
+    size_bytes: 16,
+  }
+  let bytes = @macho.encode_macho_object([sec_bss], [])
+  assert_true(bytes.length() > 0)
+
+  let case_dir = macho_make_case_dir("macho-bss")
+  let path = macho_join_path(case_dir, "bss.o")
+  @macho.write_macho_object(path, [sec_bss], [])
+  assert_true(@fs.path_exists(path))
+}
+
+///|
+test "macho encode empty object" {
+  let bytes = @macho.encode_macho_object([], [])
+  assert_true(bytes.length() > 0)
+}
