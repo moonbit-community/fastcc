@@ -6,13 +6,16 @@ test "tokens kind text and len" {
 
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::LBrace), "{")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::RBrace), "}")
+  assert_eq(@tokens.token_kind_text(@tokens.TokenKind::LBracket), "[")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::Colon), ":")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::Question), "?")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::Minus), "-")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::Percent), "%")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::PlusPlus), "++")
+  assert_eq(@tokens.token_kind_text(@tokens.TokenKind::MinusMinus), "--")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::MinusAssign), "-=")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::StarAssign), "*=")
+  assert_eq(@tokens.token_kind_text(@tokens.TokenKind::SlashAssign), "/=")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::ShiftLeft), "<<")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::ShiftRight), ">>")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::HashHash), "##")
@@ -27,6 +30,8 @@ test "tokens kind text and len" {
 
   let shift_right_assign = @tokens.TokenKind::ShiftRightAssign
   assert_eq(@tokens.token_kind_text_len(shift_right_assign), 3)
+  let shift_left_assign = @tokens.TokenKind::ShiftLeftAssign
+  assert_eq(@tokens.token_kind_text_len(shift_left_assign), 3)
 }
 
 ///|
