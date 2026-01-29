@@ -115,3 +115,83 @@ test "parser typeof and default int" {
     _ => fail("expected default int type")
   }
 }
+
+///|
+test "parser attributes and qualifiers" {
+  let source =
+    "__attribute__((aligned(16), packed, weak, noreturn, constructor, destructor, always_inline, section(\"sec\" \"2\"), alias(\"ali\"), visibility(\"hidden\"), cleanup(cleanup_fn), cdecl, stdcall, fastcall, thiscall, regparm(2), dllimport, dllexport, nodecorate, nodebug)) int * volatile restrict p;\n_Atomic int q;\n"
+  let (unit, bag) = parse_unit(source)
+  assert_true(!@diag.has_errors(bag))
+
+  match find_var_decl(unit, "p") {
+    Some(_) => ()
+    None => fail("expected p declaration")
+  }
+  match find_var_decl(unit, "q") {
+    Some(_) => ()
+    None => fail("expected q declaration")
+  }
+}
+
+///|
+test "parser attribute and typeof errors" {
+  let source =
+    "__attribute__ int a;\n__attribute__((123)) int b;\n__attribute__((section(1))) int c;\ntypeof int d;\ntypeof(struct) e;\nsigned unsigned int bad;\nint ok;\n"
+  let (unit, bag) = parse_unit(source)
+  assert_true(@diag.has_errors(bag))
+
+  match find_var_decl(unit, "ok") {
+    Some(_) => ()
+    None => fail("expected ok declaration")
+  }
+}
+
+///|
+test "parser old-style parameter diagnostics" {
+  let source =
+    "int f(a, a, b)\nint a;\nint a;\nint ;\nstatic int b;\ninline int a;\ntypedef int t;\nint c;\n{ return 0; }\n"
+  let (_unit, bag) = parse_unit(source)
+  assert_true(@diag.has_errors(bag))
+}
+
+///|
+test "parser arrays and varargs" {
+  let source = "int arr[3];\nint arr_empty[1] = {};\nint (*fp)[2];\nint v(...);\n"
+  let (unit, bag) = parse_unit(source)
+  assert_true(!@diag.has_errors(bag))
+
+  match find_var_decl(unit, "arr") {
+    Some(_) => ()
+    None => fail("expected arr declaration")
+  }
+  match find_var_decl(unit, "arr_empty") {
+    Some(_) => ()
+    None => fail("expected arr_empty declaration")
+  }
+  match find_var_decl(unit, "fp") {
+    Some(_) => ()
+    None => fail("expected fp declaration")
+  }
+}
+
+///|
+test "parser syncs after stray tokens" {
+  let source = ";\nint ok;\n"
+  let (unit, bag) = parse_unit(source)
+  assert_true(!@diag.has_errors(bag))
+  match find_var_decl(unit, "ok") {
+    Some(_) => ()
+    None => fail("expected ok declaration")
+  }
+}
+
+///|
+test "parser enum and struct errors" {
+  let source = "enum Empty {};\nstruct ;\nint ok;\n"
+  let (unit, bag) = parse_unit(source)
+  assert_true(@diag.has_errors(bag))
+  match find_var_decl(unit, "ok") {
+    Some(_) => ()
+    None => fail("expected ok declaration")
+  }
+}
