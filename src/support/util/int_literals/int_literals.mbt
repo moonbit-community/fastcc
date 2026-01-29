@@ -23,18 +23,7 @@ pub fn int_literal_end(text : String) -> Int {
 
 ///|
 pub fn int_literal_base(text : String) -> Int {
-  let trimmed = @string_utils.slice_string(text, 0, int_literal_end(text))
-  if trimmed.length() >= 2 && trimmed[0] == 48 {
-    let next = trimmed[1]
-    if next == 120 || next == 88 {
-      return 16
-    }
-    if next == 98 || next == 66 {
-      return 2
-    }
-    return 8
-  }
-  10
+  int_literal_base_from(text, int_literal_end(text))
 }
 
 ///|
@@ -56,20 +45,21 @@ pub fn int_literal_base_from(text : String, end : Int) -> Int {
 pub fn parse_uint64_literal(text : String, base : Int) -> UInt64 {
   let mut value : UInt64 = 0
   let mut i = 0
+  let len = text.length()
   if base == 16 &&
-    text.length() >= 2 &&
+    len >= 2 &&
     text[0] == 48 &&
     (text[1] == 120 || text[1] == 88) {
     i = 2
   } else if base == 2 &&
-    text.length() >= 2 &&
+    len >= 2 &&
     text[0] == 48 &&
     (text[1] == 98 || text[1] == 66) {
     i = 2
-  } else if base == 8 && text.length() > 1 && text[0] == 48 {
+  } else if base == 8 && len > 1 && text[0] == 48 {
     i = 1
   }
-  while i < text.length() {
+  while i < len {
     let code = text[i]
     let digit = match digit_value(code) {
       None => break

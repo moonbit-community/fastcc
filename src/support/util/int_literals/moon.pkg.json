@@ -1,5 +1,1 @@
-{
-  "import": [
-    "hackwaly/tinycc/support/util/string_utils"
-  ]
-}
+{}
