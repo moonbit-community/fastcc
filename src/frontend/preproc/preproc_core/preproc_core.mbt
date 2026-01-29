@@ -846,7 +846,8 @@ pub fn parse_include_path(
   args : Array[@tokens.Token],
   loc : @source.SrcLoc,
 ) -> IncludeSpec? {
-  if args.length() == 0 {
+  let len = args.length()
+  if len == 0 {
     add_pp_error(pp, loc, "missing include path")
     return None
   }
@@ -859,7 +860,7 @@ pub fn parse_include_path(
   if args[0].kind == @tokens.TokenKind::Lt {
     let sb = StringBuilder::new()
     let mut i = 1
-    while i < args.length() {
+    while i < len {
       if args[i].kind == @tokens.TokenKind::Gt {
         return Some({ path: sb.to_string(), is_angle: true })
       }
@@ -875,7 +876,8 @@ pub fn parse_include_path(
 
 ///|
 pub fn parse_has_include_path(pp : Preprocessor, args : Array[@tokens.Token]) -> IncludeSpec? {
-  if args.length() == 0 {
+  let len = args.length()
+  if len == 0 {
     return None
   }
   if args[0].kind == @tokens.TokenKind::StrLit {
@@ -887,7 +889,7 @@ pub fn parse_has_include_path(pp : Preprocessor, args : Array[@tokens.Token]) ->
   if args[0].kind == @tokens.TokenKind::Lt {
     let sb = StringBuilder::new()
     let mut i = 1
-    while i < args.length() {
+    while i < len {
       if args[i].kind == @tokens.TokenKind::Gt {
         return Some({ path: sb.to_string(), is_angle: true })
       }
