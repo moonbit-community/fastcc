@@ -467,6 +467,59 @@ test "blackbox compare outputs" {
       headers: [],
       defines: [],
     },
+    {
+      name: "static_local",
+      source: (
+        #|#include <stdio.h>
+        #|int bump() {
+        #|  static int x = 3;
+        #|  return x++;
+        #|}
+        #|int main() {
+        #|  printf("%d %d\n", bump(), bump());
+        #|  return 0;
+        #|}
+      ),
+      headers: [],
+      defines: [],
+    },
+    {
+      name: "designated_init",
+      source: (
+        #|#include <stdio.h>
+        #|struct P { int x; int y; int z; };
+        #|int main() {
+        #|  struct P p = { .y = 4, .x = 1, .z = 2 };
+        #|  printf("%d %d %d\n", p.x, p.y, p.z);
+        #|  return 0;
+        #|}
+      ),
+      headers: [],
+      defines: [],
+    },
+    {
+      name: "varargs_sum",
+      source: (
+        #|#include <stdio.h>
+        #|#include <stdarg.h>
+        #|int sum(int n, ...) {
+        #|  va_list ap;
+        #|  va_start(ap, n);
+        #|  int s = 0;
+        #|  for (int i = 0; i < n; i++) {
+        #|    s += va_arg(ap, int);
+        #|  }
+        #|  va_end(ap);
+        #|  return s;
+        #|}
+        #|int main() {
+        #|  printf("%d\n", sum(4, 1, 2, 3, 4));
+        #|  return 0;
+        #|}
+      ),
+      headers: [],
+      defines: [],
+    },
   ]
 
   for case in cases {
