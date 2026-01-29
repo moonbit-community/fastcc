@@ -36,7 +36,8 @@ pub fn section_size_bytes(sec : Section) -> Int {
   if size_bytes > 0 {
     size_bytes
   } else {
-    sec.data.length() << 2
+    let data_len = sec.data.length()
+    data_len << 2
   }
 }
 
