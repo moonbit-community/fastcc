@@ -139,59 +139,43 @@ pub fn const_i64_from_expr(expr : Expr) -> Int64? {
 }
 
 ///|
-pub fn expr_loc(expr : Expr) -> @source.SrcLoc {
+fn expr_loc_and_node_id(expr : Expr) -> (@source.SrcLoc, Int) {
   match expr {
-    Expr::IntLit(loc~, ..) => loc
-    Expr::FloatLit(loc~, ..) => loc
-    Expr::CharLit(loc~, ..) => loc
-    Expr::StringLit(loc~, ..) => loc
-    Expr::Ident(loc~, ..) => loc
-    Expr::LabelAddr(loc~, ..) => loc
-    Expr::BuiltinTypesCompatibleP(loc~, ..) => loc
-    Expr::BuiltinOffsetof(loc~, ..) => loc
-    Expr::BuiltinVaArg(loc~, ..) => loc
-    Expr::Unary(loc~, ..) => loc
-    Expr::Cast(loc~, ..) => loc
-    Expr::CompoundLiteral(loc~, ..) => loc
-    Expr::StmtExpr(loc~, ..) => loc
-    Expr::SizeofExpr(loc~, ..) => loc
-    Expr::SizeofType(loc~, ..) => loc
-    Expr::AlignofExpr(loc~, ..) => loc
-    Expr::AlignofType(loc~, ..) => loc
-    Expr::Binary(loc~, ..) => loc
-    Expr::Conditional(loc~, ..) => loc
-    Expr::Call(loc~, ..) => loc
-    Expr::Index(loc~, ..) => loc
-    Expr::Member(loc~, ..) => loc
+    Expr::IntLit(loc~, node_id~, ..) => (loc, node_id)
+    Expr::FloatLit(loc~, node_id~, ..) => (loc, node_id)
+    Expr::CharLit(loc~, node_id~, ..) => (loc, node_id)
+    Expr::StringLit(loc~, node_id~, ..) => (loc, node_id)
+    Expr::Ident(loc~, node_id~, ..) => (loc, node_id)
+    Expr::LabelAddr(loc~, node_id~, ..) => (loc, node_id)
+    Expr::BuiltinTypesCompatibleP(loc~, node_id~, ..) => (loc, node_id)
+    Expr::BuiltinOffsetof(loc~, node_id~, ..) => (loc, node_id)
+    Expr::BuiltinVaArg(loc~, node_id~, ..) => (loc, node_id)
+    Expr::Unary(loc~, node_id~, ..) => (loc, node_id)
+    Expr::Cast(loc~, node_id~, ..) => (loc, node_id)
+    Expr::CompoundLiteral(loc~, node_id~, ..) => (loc, node_id)
+    Expr::StmtExpr(loc~, node_id~, ..) => (loc, node_id)
+    Expr::SizeofExpr(loc~, node_id~, ..) => (loc, node_id)
+    Expr::SizeofType(loc~, node_id~, ..) => (loc, node_id)
+    Expr::AlignofExpr(loc~, node_id~, ..) => (loc, node_id)
+    Expr::AlignofType(loc~, node_id~, ..) => (loc, node_id)
+    Expr::Binary(loc~, node_id~, ..) => (loc, node_id)
+    Expr::Conditional(loc~, node_id~, ..) => (loc, node_id)
+    Expr::Call(loc~, node_id~, ..) => (loc, node_id)
+    Expr::Index(loc~, node_id~, ..) => (loc, node_id)
+    Expr::Member(loc~, node_id~, ..) => (loc, node_id)
   }
 }
 
 ///|
+pub fn expr_loc(expr : Expr) -> @source.SrcLoc {
+  let (loc, _) = expr_loc_and_node_id(expr)
+  loc
+}
+
+///|
 pub fn expr_node_id(expr : Expr) -> Int {
-  match expr {
-    Expr::IntLit(node_id~, ..) => node_id
-    Expr::FloatLit(node_id~, ..) => node_id
-    Expr::CharLit(node_id~, ..) => node_id
-    Expr::StringLit(node_id~, ..) => node_id
-    Expr::Ident(node_id~, ..) => node_id
-    Expr::LabelAddr(node_id~, ..) => node_id
-    Expr::BuiltinTypesCompatibleP(node_id~, ..) => node_id
-    Expr::BuiltinOffsetof(node_id~, ..) => node_id
-    Expr::BuiltinVaArg(node_id~, ..) => node_id
-    Expr::Unary(node_id~, ..) => node_id
-    Expr::Cast(node_id~, ..) => node_id
-    Expr::CompoundLiteral(node_id~, ..) => node_id
-    Expr::StmtExpr(node_id~, ..) => node_id
-    Expr::SizeofExpr(node_id~, ..) => node_id
-    Expr::SizeofType(node_id~, ..) => node_id
-    Expr::AlignofExpr(node_id~, ..) => node_id
-    Expr::AlignofType(node_id~, ..) => node_id
-    Expr::Binary(node_id~, ..) => node_id
-    Expr::Conditional(node_id~, ..) => node_id
-    Expr::Call(node_id~, ..) => node_id
-    Expr::Index(node_id~, ..) => node_id
-    Expr::Member(node_id~, ..) => node_id
-  }
+  let (_, node_id) = expr_loc_and_node_id(expr)
+  node_id
 }
 
 ///|

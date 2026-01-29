@@ -26,3 +26,19 @@ test "expr helpers" {
   assert_eq(@ast_core.expr_node_id(expr), 42)
   assert_true(@ast_core.parse_int64_literal("0x10") is Some(16))
 }
+
+///|
+test "expr helper variants" {
+  let loc = @source.dummy_loc(1)
+  let left = @ast_core.Expr::IntLit(value="2", node_id=7, loc=loc)
+  let right = @ast_core.Expr::IntLit(value="3", node_id=8, loc=loc)
+  let expr = @ast_core.Expr::Binary(
+    op=@ast_core.BinaryOp::Add,
+    left=left,
+    right=right,
+    node_id=99,
+    loc=loc,
+  )
+  assert_true(@ast_core.expr_loc(expr) == loc)
+  assert_eq(@ast_core.expr_node_id(expr), 99)
+}
