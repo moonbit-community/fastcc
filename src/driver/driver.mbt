@@ -194,9 +194,10 @@ fn write_shell_quoted_arg(buf : @buffer.Buffer, arg : String) -> Unit {
 
 ///|
 fn build_shell_command_bytes(args : Array[String]) -> Bytes {
-  let buf = @buffer.new(size_hint=args.length() * 16)
+  let len = args.length()
+  let buf = @buffer.new(size_hint=len * 16)
   let mut i = 0
-  while i < args.length() {
+  while i < len {
     if i > 0 {
       buf.write_byte((32 : Byte))
     }
