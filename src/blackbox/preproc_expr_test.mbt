@@ -1,0 +1,143 @@
+///|
+fn new_pp() -> (@preproc.Preprocessor, @diag.DiagBag) {
+  let bag = @diag.new_diag_bag()
+  let map = @source.new_source_map()
+  let file = @source.add_file(map, "<pp-expr>", "")
+  let pp = @preproc.new_preprocessor(map, file, bag)
+  (pp, bag)
+}
+
+///|
+fn tok_kind(kind : @tokens.TokenKind) -> @tokens.Token {
+  @preproc.make_builtin_token(kind)
+}
+
+///|
+fn tok_int(pp : @preproc.Preprocessor, text : String) -> @tokens.Token {
+  let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, text)
+  @preproc.make_builtin_token(@tokens.TokenKind::IntLit, lexeme_id=lexeme_id)
+}
+
+///|
+fn tok_char(pp : @preproc.Preprocessor, text : String) -> @tokens.Token {
+  let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, text)
+  @preproc.make_builtin_token(@tokens.TokenKind::CharLit, lexeme_id=lexeme_id)
+}
+
+///|
+fn tok_ident(pp : @preproc.Preprocessor, name : String) -> @tokens.Token {
+  let (_, id) = pp.interner.intern_view_with_id(name[:])
+  @preproc.make_builtin_token(@tokens.TokenKind::Ident, id=id)
+}
+
+///|
+test "preproc if expr unsigned ops" {
+  let (pp, bag) = new_pp()
+  let tokens : Array[@tokens.Token] = [
+    tok_int(pp, "6U"),
+    tok_kind(@tokens.TokenKind::Slash),
+    tok_int(pp, "3U"),
+    tok_kind(@tokens.TokenKind::Eq),
+    tok_int(pp, "2"),
+    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_int(pp, "7U"),
+    tok_kind(@tokens.TokenKind::Percent),
+    tok_int(pp, "3U"),
+    tok_kind(@tokens.TokenKind::Eq),
+    tok_int(pp, "1"),
+    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_int(pp, "8U"),
+    tok_kind(@tokens.TokenKind::ShiftRight),
+    tok_int(pp, "2"),
+    tok_kind(@tokens.TokenKind::Eq),
+    tok_int(pp, "2"),
+    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_int(pp, "3U"),
+    tok_kind(@tokens.TokenKind::Lt),
+    tok_int(pp, "4U"),
+    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_int(pp, "4U"),
+    tok_kind(@tokens.TokenKind::Le),
+    tok_int(pp, "4U"),
+    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_int(pp, "5U"),
+    tok_kind(@tokens.TokenKind::Gt),
+    tok_int(pp, "4U"),
+    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_int(pp, "5U"),
+    tok_kind(@tokens.TokenKind::Ge),
+    tok_int(pp, "5U"),
+  ]
+  let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
+  assert_true(ok)
+  assert_true(!@diag.has_errors(bag))
+}
+
+///|
+test "preproc if expr char escapes" {
+  let (pp, bag) = new_pp()
+  let tokens : Array[@tokens.Token] = [
+    tok_char(pp, "'\\a'"),
+    tok_kind(@tokens.TokenKind::Eq),
+    tok_int(pp, "7"),
+    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_char(pp, "'\\b'"),
+    tok_kind(@tokens.TokenKind::Eq),
+    tok_int(pp, "8"),
+    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_char(pp, "'\\f'"),
+    tok_kind(@tokens.TokenKind::Eq),
+    tok_int(pp, "12"),
+    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_char(pp, "'\\r'"),
+    tok_kind(@tokens.TokenKind::Eq),
+    tok_int(pp, "13"),
+    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_char(pp, "'\\v'"),
+    tok_kind(@tokens.TokenKind::Eq),
+    tok_int(pp, "11"),
+    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_char(pp, "'\\q'"),
+    tok_kind(@tokens.TokenKind::Eq),
+    tok_int(pp, "113"),
+  ]
+  let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
+  assert_true(ok)
+  assert_true(!@diag.has_errors(bag))
+}
+
+///|
+test "preproc if expr macro int value" {
+  let (pp, bag) = new_pp()
+  @preproc.define_int_macro(pp, "MACRO_INT", 7)
+  let tokens : Array[@tokens.Token] = [tok_ident(pp, "MACRO_INT")]
+  let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
+  assert_true(ok)
+  assert_true(!@diag.has_errors(bag))
+}
+
+///|
+test "preproc if expr defined missing ident" {
+  let (pp, bag) = new_pp()
+  let tokens : Array[@tokens.Token] = [tok_ident(pp, "defined")]
+  let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
+  assert_true(!ok)
+  assert_true(@diag.has_errors(bag))
+}
+
+///|
+test "preproc char literal errors" {
+  let (pp_short, bag_short) = new_pp()
+  let short_tok = tok_char(pp_short, "''")
+  let _ = @preproc.parse_pp_char_literal(pp_short, short_tok)
+  assert_true(@diag.has_errors(bag_short))
+
+  let (pp_multi, bag_multi) = new_pp()
+  let multi_tok = tok_char(pp_multi, "'\\12x'")
+  let _ = @preproc.parse_pp_char_literal(pp_multi, multi_tok)
+  assert_true(@diag.has_errors(bag_multi))
+
+  let (pp_escape, bag_escape) = new_pp()
+  let _ = @preproc.decode_pp_escape_value(pp_escape, "\\", 1, @source.dummy_loc(0))
+  assert_true(@diag.has_errors(bag_escape))
+}

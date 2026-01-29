@@ -1,0 +1,15 @@
+{
+  "test-import": [
+    "hackwaly/tinycc/backend/arm64",
+    "hackwaly/tinycc/backend/codegen",
+    "hackwaly/tinycc/driver",
+    "hackwaly/tinycc/ffi",
+    "hackwaly/tinycc/frontend/parser",
+    "hackwaly/tinycc/frontend/preproc",
+    "hackwaly/tinycc/frontend/tokens",
+    "hackwaly/tinycc/sem",
+    "hackwaly/tinycc/support/diag",
+    "hackwaly/tinycc/support/source",
+    "moonbitlang/x/fs"
+  ]
+}
