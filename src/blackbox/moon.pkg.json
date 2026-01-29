@@ -2,6 +2,8 @@
   "test-import": [
     "hackwaly/tinycc/backend/arm64",
     "hackwaly/tinycc/backend/codegen",
+    "hackwaly/tinycc/backend/macho",
+    "hackwaly/tinycc/backend/object",
     "hackwaly/tinycc/driver",
     "hackwaly/tinycc/ffi",
     "hackwaly/tinycc/frontend/ast",
