@@ -488,11 +488,11 @@ pub fn lex_string_literal(
 ///|
 pub fn lex_punct(lex : Lexer, loc : @source.SrcLoc, line_start : Bool) -> @tokens.Token {
   let idx = lex.index
-  if idx >= lex.text_len {
+  let len = lex.text_len
+  if idx >= len {
     return make_token(@tokens.TokenKind::Eof, loc, line_start)
   }
   let text = lex.text
-  let len = lex.text_len
   let code = text[idx]
   lex.index = idx + 1
   if code == 10 {
