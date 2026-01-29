@@ -1,6 +1,7 @@
 {
   "import": [
     "hackwaly/tinycc/backend/codegen",
+    "hackwaly/tinycc/ffi",
     "hackwaly/tinycc/frontend/lexer",
     "hackwaly/tinycc/frontend/parser",
     "hackwaly/tinycc/frontend/preproc",
@@ -11,13 +12,5 @@
     "hackwaly/tinycc/support/util",
     "moonbitlang/x/fs",
     "moonbitlang/x/sys"
-  ],
-  "native-stub": [
-    "bench_timer.c",
-    "run_command.c"
-  ],
-  "targets": {
-    "bench_timer_native.mbt": ["native"],
-    "bench_timer_stub.mbt": ["not", "native"]
-  }
+  ]
 }

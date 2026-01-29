@@ -1,0 +1,16 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/ffi"
+
+// Values
+pub fn bench_now_ns() -> UInt64
+
+pub fn run_command(Bytes) -> Int
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

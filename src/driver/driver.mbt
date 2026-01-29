@@ -543,10 +543,6 @@ fn apply_cli_macros(pp : @preproc.Preprocessor, actions : Array[CliMacroAction])
 }
 
 ///|
-#borrow(cmd)
-extern "C" fn run_command(cmd : Bytes) -> Int = "tinyccmbt_run_command"
-
-///|
 fn write_shell_quoted_arg(buf : @buffer.Buffer, arg : String) -> Unit {
   buf.write_byte((39 : Byte))
   for b in @encoding/utf8.encode(arg) {
@@ -579,7 +575,7 @@ fn build_shell_command_bytes(args : Array[String]) -> Bytes {
 
 ///|
 fn run_shell_command(args : Array[String]) -> Int {
-  run_command(build_shell_command_bytes(args))
+  @ffi.run_command(build_shell_command_bytes(args))
 }
 
 ///|
@@ -603,7 +599,7 @@ fn join_temp_path(dir : String, name : String) -> String {
 
 ///|
 fn run_temp_base() -> String {
-  let stamp = bench_now_ns()
+  let stamp = @ffi.bench_now_ns()
   join_temp_path(temp_dir(), "tinycc.mbt.run.\{stamp}")
 }
 
@@ -632,26 +628,26 @@ fn compile_to_object_path(
       let mut total_ns = 0UL
       let mut sem_ctx : @sem.SemContext? = None
       let bench_enabled = cfg.bench
-      let total_start = if bench_enabled { bench_now_ns() } else { 0UL }
+      let total_start = if bench_enabled { @ffi.bench_now_ns() } else { 0UL }
       let parse_start = total_start
       let unit = @parser.parse_translation_unit(pp)
       @preproc.finalize_preprocessor(pp)
       if bench_enabled {
-        let parse_end = bench_now_ns()
+        let parse_end = @ffi.bench_now_ns()
         parse_ns = bench_delta_ns(parse_start, parse_end)
       }
       if !@diag.has_errors(bag) {
         if bench_enabled {
-          let sem_start = bench_now_ns()
+          let sem_start = @ffi.bench_now_ns()
           sem_ctx = Some(@sem.check_translation_unit(unit, bag))
-          let sem_end = bench_now_ns()
+          let sem_end = @ffi.bench_now_ns()
           sem_ns = bench_delta_ns(sem_start, sem_end)
         } else {
           sem_ctx = Some(@sem.check_translation_unit(unit, bag))
         }
       }
       if !@diag.has_errors(bag) {
-        let codegen_start = if bench_enabled { bench_now_ns() } else { 0UL }
+        let codegen_start = if bench_enabled { @ffi.bench_now_ns() } else { 0UL }
         if sem_ctx is Some(ctx) {
           if @codegen.codegen_arm64_object_bytes_with_sem(unit, ctx, bag) is Some(bytes) {
             @fs.write_bytes_to_file(output_path, bytes) catch {
@@ -660,12 +656,12 @@ fn compile_to_object_path(
           }
         }
         if bench_enabled {
-          let codegen_end = bench_now_ns()
+          let codegen_end = @ffi.bench_now_ns()
           codegen_ns = bench_delta_ns(codegen_start, codegen_end)
         }
       }
       if bench_enabled {
-        let total_end = bench_now_ns()
+        let total_end = @ffi.bench_now_ns()
         total_ns = bench_delta_ns(total_start, total_end)
         if bench_stats is Some(stats) {
           bench_stats_add(stats, parse_ns, sem_ns, codegen_ns, total_ns)

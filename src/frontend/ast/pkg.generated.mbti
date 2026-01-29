@@ -3,7 +3,7 @@ package "hackwaly/tinycc/frontend/ast"
 
 import {
   "hackwaly/tinycc/frontend/ast/ast_core",
-  "hackwaly/tinycc/support/source",
+  "hackwaly/tinycc/support/source/source_core",
 }
 
 // Values
@@ -27,7 +27,7 @@ pub fn empty_qual() -> @ast_core.TypeQual
 
 pub fn expr_is_lvalue_simple(@ast_core.Expr) -> Bool
 
-pub fn expr_loc(@ast_core.Expr) -> @source.SrcLoc
+pub fn expr_loc(@ast_core.Expr) -> @source_core.SrcLoc
 
 pub fn expr_may_call(@ast_core.Expr) -> Bool
 

@@ -2,12 +2,12 @@
 package "hackwaly/tinycc/frontend/parser"
 
 import {
-  "hackwaly/tinycc/frontend/ast",
+  "hackwaly/tinycc/frontend/ast/ast_core",
   "hackwaly/tinycc/frontend/preproc/preproc_core",
 }
 
 // Values
-pub fn parse_translation_unit(@preproc_core.Preprocessor) -> @ast.TranslationUnit
+pub fn parse_translation_unit(@preproc_core.Preprocessor) -> @ast_core.TranslationUnit
 
 // Errors
 

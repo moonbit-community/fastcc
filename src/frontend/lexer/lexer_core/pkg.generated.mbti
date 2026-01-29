@@ -2,14 +2,14 @@
 package "hackwaly/tinycc/frontend/lexer/lexer_core"
 
 import {
-  "hackwaly/tinycc/frontend/tokens",
-  "hackwaly/tinycc/support/diag",
-  "hackwaly/tinycc/support/intern",
-  "hackwaly/tinycc/support/source",
+  "hackwaly/tinycc/frontend/tokens/tokens_core",
+  "hackwaly/tinycc/support/diag/diag_core",
+  "hackwaly/tinycc/support/intern/intern_core",
+  "hackwaly/tinycc/support/source/source_core",
 }
 
 // Values
-pub fn add_lex_error(Lexer, @source.SrcLoc, String) -> Unit
+pub fn add_lex_error(Lexer, @source_core.SrcLoc, String) -> Unit
 
 pub fn advance(Lexer) -> UInt16?
 
@@ -27,31 +27,31 @@ pub fn is_ident_start(UInt16) -> Bool
 
 pub fn is_ws_no_newline(UInt16) -> Bool
 
-pub fn lex_ident(Lexer, @source.SrcLoc, Bool) -> @tokens.Token
+pub fn lex_ident(Lexer, @source_core.SrcLoc, Bool) -> @tokens_core.Token
 
-pub fn lex_number(Lexer, @source.SrcLoc, Bool, Bool) -> @tokens.Token
+pub fn lex_number(Lexer, @source_core.SrcLoc, Bool, Bool) -> @tokens_core.Token
 
-pub fn lex_punct(Lexer, @source.SrcLoc, Bool) -> @tokens.Token
+pub fn lex_punct(Lexer, @source_core.SrcLoc, Bool) -> @tokens_core.Token
 
-pub fn lex_string_literal(Lexer, @source.SrcLoc, Bool, UInt16) -> @tokens.Token
+pub fn lex_string_literal(Lexer, @source_core.SrcLoc, Bool, UInt16) -> @tokens_core.Token
 
-pub fn lexer_loc(Lexer) -> @source.SrcLoc
+pub fn lexer_loc(Lexer) -> @source_core.SrcLoc
 
-pub fn make_token(@tokens.TokenKind, @source.SrcLoc, Bool, id? : Int, lexeme_id? : Int) -> @tokens.Token
+pub fn make_token(@tokens_core.TokenKind, @source_core.SrcLoc, Bool, id? : Int, lexeme_id? : Int) -> @tokens_core.Token
 
-pub fn new_lexer(@source.SourceFile, @diag.DiagBag, @intern.StringInterner, @tokens.KeywordIds, @tokens.LexemePool) -> Lexer
+pub fn new_lexer(@source_core.SourceFile, @diag_core.DiagBag, @intern_core.StringInterner, @tokens_core.KeywordIds, @tokens_core.LexemePool) -> Lexer
 
-pub fn next_token(Lexer) -> @tokens.Token
+pub fn next_token(Lexer) -> @tokens_core.Token
 
 pub fn peek_char(Lexer) -> UInt16?
 
 pub fn peek_char_offset(Lexer, Int) -> UInt16?
 
-pub fn skip_block_comment(Lexer, @source.SrcLoc) -> Unit
+pub fn skip_block_comment(Lexer, @source_core.SrcLoc) -> Unit
 
 pub fn skip_line_comment(Lexer) -> Unit
 
-pub fn skip_string_literal(Lexer, @source.SrcLoc, UInt16) -> Unit
+pub fn skip_string_literal(Lexer, @source_core.SrcLoc, UInt16) -> Unit
 
 pub fn skip_ws(Lexer) -> Unit
 
@@ -68,10 +68,10 @@ pub(all) struct Lexer {
   mut line : Int
   mut col : Int
   mut line_start : Bool
-  diags : @diag.DiagBag
-  interner : @intern.StringInterner
-  keyword_ids : @tokens.KeywordIds
-  lexeme_pool : @tokens.LexemePool
+  diags : @diag_core.DiagBag
+  interner : @intern_core.StringInterner
+  keyword_ids : @tokens_core.KeywordIds
+  lexeme_pool : @tokens_core.LexemePool
 }
 
 // Type aliases

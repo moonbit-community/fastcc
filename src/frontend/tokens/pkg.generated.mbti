@@ -3,13 +3,13 @@ package "hackwaly/tinycc/frontend/tokens"
 
 import {
   "hackwaly/tinycc/frontend/tokens/tokens_core",
-  "hackwaly/tinycc/support/intern",
+  "hackwaly/tinycc/support/intern/intern_core",
 }
 
 // Values
 pub let empty_hidden : Int
 
-pub fn init_keyword_ids(@intern.StringInterner) -> @tokens_core.KeywordIds
+pub fn init_keyword_ids(@intern_core.StringInterner) -> @tokens_core.KeywordIds
 
 pub fn keyword_kind_from_id(Int, @tokens_core.KeywordIds) -> @tokens_core.TokenKind?
 
@@ -33,9 +33,9 @@ pub fn token_kind_text_len(@tokens_core.TokenKind) -> Int
 
 pub fn token_lexeme_id(@tokens_core.Token) -> Int
 
-pub fn token_text_len_with(@intern.StringInterner, @tokens_core.LexemePool, @tokens_core.Token) -> Int
+pub fn token_text_len_with(@intern_core.StringInterner, @tokens_core.LexemePool, @tokens_core.Token) -> Int
 
-pub fn token_text_with(@intern.StringInterner, @tokens_core.LexemePool, @tokens_core.Token) -> String
+pub fn token_text_with(@intern_core.StringInterner, @tokens_core.LexemePool, @tokens_core.Token) -> String
 
 pub fn token_value_from_parts(Int, Int) -> Int
 
