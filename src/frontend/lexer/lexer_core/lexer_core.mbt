@@ -297,8 +297,6 @@ pub fn is_bin_digit(code : UInt16) -> Bool {
   code == 48 || code == 49
 }
 
-///|
-///|
 pub fn slice_to_view(text : String, start : Int, end : Int) -> StringView {
   text.view(start_offset=start, end_offset=end)
 }
@@ -419,8 +417,6 @@ pub fn lex_number(
   make_token(kind, loc, line_start, lexeme_id=lexeme_id)
 }
 
-///|
-///|
 pub fn skip_string_literal(lex : Lexer, loc : @source.SrcLoc, quote : UInt16) -> Unit {
   let text = lex.text
   let len = lex.text_len
