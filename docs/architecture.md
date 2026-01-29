@@ -20,7 +20,8 @@ CLI args
 ```
 
 Key entrypoints:
-- `main` lives in `src/main.mbt` and delegates to `@driver.run_main`.
+- `main` lives in `src/cmd/tinycc/main.mbt`; root `src/main.mbt` delegates to
+  `@cmd_tinycc.run_main` for compatibility with existing scripts.
 - Compilation pipeline uses `compile_to_object_path` in `src/driver/driver.mbt`.
 - Preprocessor entry: `@preproc.new_preprocessor` + `@parser.parse_translation_unit`.
 - Semantic analysis entry: `@sem.check_translation_unit` in `src/sem/sem.mbt`.
@@ -30,8 +31,8 @@ Key entrypoints:
 ## Directory layout (current)
 
 Top-level:
-- `src/`: compiler implementation split into packages (driver, frontend/*, sem,
-  backend/*, support/*, ffi).
+- `src/`: compiler implementation split into packages (cmd/tinycc, driver,
+  frontend/*, sem, backend/*, support/*, ffi).
 - `compat/include/`: libc-style headers for compilation.
 - `refs/`: reference projects (tinycc, quickjs, sqlite, etc.).
 - `tests/`: C tests and support files.
@@ -108,7 +109,8 @@ Top-level:
 ## Driver and CLI
 
 - CLI parsing lives in `src/driver/driver.mbt` (`CliConfig`, `parse_cli_args`).
-- `src/main.mbt` is a thin entrypoint that delegates to `@driver.run_main`.
+- `src/cmd/tinycc/main.mbt` is the primary entrypoint, and root `src/main.mbt`
+  delegates to it for compatibility.
 - `compile_to_object_path` in `src/driver/driver.mbt` orchestrates
   preprocess -> parse -> sem -> codegen and writes an `.o` file.
 - Default (no `-c`) currently dumps preprocessed tokens to stdout.

@@ -1,4 +1,4 @@
 ///|
 fn main {
-  @driver.run_main()
+  @cmd_tinycc.run_main()
 }
