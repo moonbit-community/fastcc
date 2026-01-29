@@ -6,16 +6,6 @@ package "hackwaly/tinycc"
 // Errors
 
 // Types and methods
-type BenchStats
-
-type CliConfig
-
-type CliMacroAction
-pub impl Eq for CliMacroAction
-pub impl Show for CliMacroAction
-pub impl ToJson for CliMacroAction
-
-type CliParse
 
 // Type aliases
 
