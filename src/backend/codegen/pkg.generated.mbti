@@ -1,0 +1,57 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/backend/codegen"
+
+import {
+  "hackwaly/tinycc/frontend/ast",
+  "hackwaly/tinycc/sem",
+  "hackwaly/tinycc/support/diag",
+}
+
+// Values
+pub fn codegen_arm64_object_bytes(@ast.TranslationUnit, @diag.DiagBag) -> Bytes?
+
+pub fn codegen_arm64_object_bytes_with_sem(@ast.TranslationUnit, @sem.SemContext, @diag.DiagBag) -> Bytes?
+
+pub fn touch_unused_symbols() -> Unit
+
+// Errors
+
+// Types and methods
+type Arm64PcsAuxInfo
+
+type Arm64PcsLayout
+
+type CstringPool
+
+type FramePlan
+
+type LabelAddrContext
+
+type LabelCtx
+
+type LocalAlloc
+
+type LocalSlot
+
+type LoopChains
+
+type RegPool
+
+type SRetAddr
+
+type StaticLocalInfo
+
+type StringEntry
+
+type SwitchCaseInfo
+
+type SwitchChains
+
+type SymTable
+
+type VlaScopeInfo
+
+// Type aliases
+
+// Traits
+

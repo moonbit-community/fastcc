@@ -1,5 +1,19 @@
 ///|
-const MH_MAGIC_64 : UInt = 0xfeedfacf
+pub type Section = @object.Section
+
+///|
+pub type Reloc = @object.Reloc
+
+///|
+type FastMap[K, V] = @util.FastMap[K, V]
+
+///|
+fn[K, V] fast_map_new(capacity? : Int) -> FastMap[K, V] {
+  @util.fast_map_new(capacity?)
+}
+
+///|
+pub const MH_MAGIC_64 : UInt = 0xfeedfacf
 
 ///|
 const MH_OBJECT : UInt = 0x1
@@ -83,7 +97,7 @@ const ARM64_RELOC_GOT_LOAD_PAGE21 : Int = 5
 const ARM64_RELOC_GOT_LOAD_PAGEOFF12 : Int = 6
 
 ///|
-struct ObjSymbol {
+pub(all) struct ObjSymbol {
   id : Int
   name : String
   section : String?
@@ -294,15 +308,15 @@ fn build_symtab(
 ///|
 fn macho_reloc_type(kind : Int) -> (Int, Bool) {
   match kind {
-    R_AARCH64_ADR_GOT_PAGE => (ARM64_RELOC_GOT_LOAD_PAGE21, true)
-    R_AARCH64_LD64_GOT_LO12_NC => (ARM64_RELOC_GOT_LOAD_PAGEOFF12, false)
-    R_AARCH64_CALL26 => (ARM64_RELOC_BRANCH26, true)
-    R_AARCH64_JUMP26 => (ARM64_RELOC_BRANCH26, true)
-    R_AARCH64_ADR_PREL_PG_HI21 => (ARM64_RELOC_PAGE21, true)
-    R_AARCH64_ADR_PREL_PG_HI21_NC => (ARM64_RELOC_PAGE21, true)
-    R_AARCH64_ADD_ABS_LO12_NC => (ARM64_RELOC_PAGEOFF12, false)
-    R_AARCH64_LDST8_ABS_LO12_NC => (ARM64_RELOC_PAGEOFF12, false)
-    R_AARCH64_POINTER => (ARM64_RELOC_UNSIGNED, false)
+    @arm64.R_AARCH64_ADR_GOT_PAGE => (ARM64_RELOC_GOT_LOAD_PAGE21, true)
+    @arm64.R_AARCH64_LD64_GOT_LO12_NC => (ARM64_RELOC_GOT_LOAD_PAGEOFF12, false)
+    @arm64.R_AARCH64_CALL26 => (ARM64_RELOC_BRANCH26, true)
+    @arm64.R_AARCH64_JUMP26 => (ARM64_RELOC_BRANCH26, true)
+    @arm64.R_AARCH64_ADR_PREL_PG_HI21 => (ARM64_RELOC_PAGE21, true)
+    @arm64.R_AARCH64_ADR_PREL_PG_HI21_NC => (ARM64_RELOC_PAGE21, true)
+    @arm64.R_AARCH64_ADD_ABS_LO12_NC => (ARM64_RELOC_PAGEOFF12, false)
+    @arm64.R_AARCH64_LDST8_ABS_LO12_NC => (ARM64_RELOC_PAGEOFF12, false)
+    @arm64.R_AARCH64_POINTER => (ARM64_RELOC_UNSIGNED, false)
     _ => (ARM64_RELOC_UNSIGNED, false)
   }
 }
@@ -310,7 +324,7 @@ fn macho_reloc_type(kind : Int) -> (Int, Bool) {
 ///|
 fn reloc_length(kind : Int) -> Int {
   match kind {
-    R_AARCH64_POINTER => 3
+    @arm64.R_AARCH64_POINTER => 3
     _ => 2
   }
 }
@@ -336,7 +350,7 @@ fn pack_reloc_info(
 }
 
 ///|
-fn encode_macho_object(
+pub fn encode_macho_object(
   sections : Array[Section],
   symbols : Array[ObjSymbol],
 ) -> Bytes {
@@ -357,7 +371,7 @@ fn encode_macho_object(
       info,
       align_log2: align_log2(align),
       offset: 0,
-      size: section_size_bytes(sec),
+      size: @object.section_size_bytes(sec),
       reloff: 0,
       nreloc: 0,
       index: 0,
@@ -520,7 +534,7 @@ fn encode_macho_object(
           out.write_byte(0)
           fileoff = fileoff + 1
         }
-        let word_len = section_word_len(layout.section)
+        let word_len = @object.section_word_len(layout.section)
         let mut i = 0
         while i < word_len {
           out.write_uint_le(layout.section.data[i])
@@ -615,7 +629,7 @@ fn segment_prot(name : String) -> (Int, Int) {
 }
 
 ///|
-fn write_macho_object(
+pub fn write_macho_object(
   path : String,
   sections : Array[Section],
   symbols : Array[ObjSymbol],

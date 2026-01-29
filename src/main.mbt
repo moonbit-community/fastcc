@@ -653,7 +653,7 @@ fn compile_to_object_path(
       if !@diag.has_errors(bag) {
         let codegen_start = if bench_enabled { bench_now_ns() } else { 0UL }
         if sem_ctx is Some(ctx) {
-          if codegen_arm64_object_bytes_with_sem(unit, ctx, bag) is Some(bytes) {
+          if @codegen.codegen_arm64_object_bytes_with_sem(unit, ctx, bag) is Some(bytes) {
             @fs.write_bytes_to_file(output_path, bytes) catch {
               err => @diag.add_error(bag, @source.dummy_loc(0), err.to_string())
             }
@@ -710,7 +710,7 @@ fn build_clang_link_args(
 
 ///|
 fn main {
-  touch_unused_symbols()
+  @codegen.touch_unused_symbols()
   match parse_cli_args(@env.args()) {
     CliParse::Help => ()
     CliParse::Error => @sys.exit(1)

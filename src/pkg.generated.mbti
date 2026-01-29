@@ -6,12 +6,6 @@ package "hackwaly/tinycc"
 // Errors
 
 // Types and methods
-type Arm64Emitter
-
-type Arm64PcsAuxInfo
-
-type Arm64PcsLayout
-
 type BenchStats
 
 type CliConfig
@@ -22,52 +16,6 @@ pub impl Show for CliMacroAction
 pub impl ToJson for CliMacroAction
 
 type CliParse
-
-type CstringPool
-
-type FramePlan
-
-type LabelAddrContext
-
-type LabelCtx
-
-type LocalAlloc
-
-type LocalSlot
-
-type LoopChains
-
-type MachoSectionInfo
-
-type MachoSectionLayout
-
-type MachoSegmentLayout
-
-type ObjSymbol
-
-type RegPool
-
-type Reloc
-
-type SRetAddr
-
-type SValue
-
-type Section
-
-type StaticLocalInfo
-
-type StringEntry
-
-type SwitchCaseInfo
-
-type SwitchChains
-
-type Sym
-
-type SymTable
-
-type VlaScopeInfo
 
 // Type aliases
 

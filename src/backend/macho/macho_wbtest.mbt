@@ -19,7 +19,7 @@ fn decode_reloc_info(info : UInt) -> (Int, Bool, Int, Bool, Int) {
 
 ///|
 test "macho header has segment and symtab" {
-  let sec = new_section(".text")
+  let sec = @object.new_section(".text")
   sec.data.push((0x14000000 : UInt))
   let symbols = [
     {
@@ -40,12 +40,12 @@ test "macho header has segment and symtab" {
 
 ///|
 test "macho section records reloc count" {
-  let sec = new_section(".text")
-  let reloc_sym = { id: 2 }
+  let sec = @object.new_section(".text")
+  let reloc_sym = @object.Sym::{ id: 2 }
   sec.data.push((0x14000000 : UInt))
   sec.relocs.push({
     offset: 0,
-    kind: R_AARCH64_ADR_GOT_PAGE,
+    kind: @arm64.R_AARCH64_ADR_GOT_PAGE,
     sym: reloc_sym,
     addend: 0,
   })
@@ -58,37 +58,37 @@ test "macho section records reloc count" {
 
 ///|
 test "macho maps arm64 relocation kinds" {
-  assert_eq(macho_reloc_type(R_AARCH64_CALL26), (ARM64_RELOC_BRANCH26, true))
-  assert_eq(macho_reloc_type(R_AARCH64_JUMP26), (ARM64_RELOC_BRANCH26, true))
+  assert_eq(macho_reloc_type(@arm64.R_AARCH64_CALL26), (ARM64_RELOC_BRANCH26, true))
+  assert_eq(macho_reloc_type(@arm64.R_AARCH64_JUMP26), (ARM64_RELOC_BRANCH26, true))
   assert_eq(
-    macho_reloc_type(R_AARCH64_ADR_PREL_PG_HI21),
+    macho_reloc_type(@arm64.R_AARCH64_ADR_PREL_PG_HI21),
     (ARM64_RELOC_PAGE21, true),
   )
   assert_eq(
-    macho_reloc_type(R_AARCH64_ADD_ABS_LO12_NC),
+    macho_reloc_type(@arm64.R_AARCH64_ADD_ABS_LO12_NC),
     (ARM64_RELOC_PAGEOFF12, false),
   )
   assert_eq(
-    macho_reloc_type(R_AARCH64_LDST8_ABS_LO12_NC),
+    macho_reloc_type(@arm64.R_AARCH64_LDST8_ABS_LO12_NC),
     (ARM64_RELOC_PAGEOFF12, false),
   )
 }
 
 ///|
 test "macho encodes GOT relocations as extern symbol relocs" {
-  let sec = new_section(".text")
-  let reloc_sym = { id: 2 }
+  let sec = @object.new_section(".text")
+  let reloc_sym = @object.Sym::{ id: 2 }
   sec.data.push((0x90000000 : UInt))
   sec.data.push((0xf9400000 : UInt))
   sec.relocs.push({
     offset: 0,
-    kind: R_AARCH64_ADR_GOT_PAGE,
+    kind: @arm64.R_AARCH64_ADR_GOT_PAGE,
     sym: reloc_sym,
     addend: 0,
   })
   sec.relocs.push({
     offset: 4,
-    kind: R_AARCH64_LD64_GOT_LO12_NC,
+    kind: @arm64.R_AARCH64_LD64_GOT_LO12_NC,
     sym: reloc_sym,
     addend: 0,
   })

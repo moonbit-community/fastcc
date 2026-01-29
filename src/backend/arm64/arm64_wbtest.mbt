@@ -143,7 +143,7 @@ test "arm64 gen opic add immediate" {
 ///|
 test "arm64 sym emits relocations" {
   let emitter = new_arm64_emitter()
-  let sym = { id: 7 }
+  let sym = Sym::{ id: 7 }
   arm64_sym(emitter, 0, sym, 0)
   assert_eq(emitter.code_len, 2)
   assert_eq(emitter.code[0], (0x90000000 : UInt))
@@ -159,7 +159,7 @@ test "arm64 sym emits relocations" {
 ///|
 test "section_from_emitter copies code and relocs" {
   let emitter = new_arm64_emitter()
-  let sym = { id: 3 }
+  let sym = Sym::{ id: 3 }
   emit32(emitter, (0x14000000 : UInt))
   greloca(emitter, sym, 0, R_AARCH64_ADR_GOT_PAGE, 0)
   let sec = section_from_emitter(".text", emitter)

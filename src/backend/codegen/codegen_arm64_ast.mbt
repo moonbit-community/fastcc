@@ -1,4 +1,27 @@
 ///|
+type Arm64Emitter = @arm64.Arm64Emitter
+
+///|
+type Sym = @object.Sym
+
+///|
+type Section = @object.Section
+
+///|
+type Reloc = @object.Reloc
+
+///|
+type ObjSymbol = @macho.ObjSymbol
+
+///|
+type FastMap[K, V] = @util.FastMap[K, V]
+
+///|
+fn[K, V] fast_map_new(capacity? : Int) -> FastMap[K, V] {
+  @util.fast_map_new(capacity?)
+}
+
+///|
 struct RegPool {
   free : Array[Int]
 }
@@ -275,7 +298,7 @@ fn arm64_add_imm(emitter : Arm64Emitter, dst : Int, src : Int, imm : Int) ->
   if imm < 0 || imm > 4095 {
     return
   }
-  emit32(
+  @arm64.emit32(
     emitter,
     (0x91000000 : Int)
     .lor((imm << 10))
@@ -640,8 +663,8 @@ fn cached_ret_loc(alloc : LocalAlloc, loc : @source.SrcLoc, bag : @diag.DiagBag)
 
 ///|
 fn emit_vla_sp_save(emitter : Arm64Emitter, slot_offset : Int) -> Unit {
-  emit32(emitter, (0x910003e0 : Int).lor(30).reinterpret_as_uint())
-  arm64_strx(
+  @arm64.emit32(emitter, (0x910003e0 : Int).lor(30).reinterpret_as_uint())
+  @arm64.arm64_strx(
     emitter,
     3,
     (30 : UInt),
@@ -652,7 +675,7 @@ fn emit_vla_sp_save(emitter : Arm64Emitter, slot_offset : Int) -> Unit {
 
 ///|
 fn emit_vla_sp_restore(emitter : Arm64Emitter, slot_offset : Int) -> Unit {
-  arm64_ldrx(
+  @arm64.arm64_ldrx(
     emitter,
     false,
     3,
@@ -660,7 +683,7 @@ fn emit_vla_sp_restore(emitter : Arm64Emitter, slot_offset : Int) -> Unit {
     (29 : UInt),
     slot_offset.to_int64().reinterpret_as_uint64(),
   )
-  emit32(emitter, (0x9100001f : Int).lor(30 << 5).reinterpret_as_uint())
+  @arm64.emit32(emitter, (0x9100001f : Int).lor(30 << 5).reinterpret_as_uint())
 }
 
 ///|
@@ -755,7 +778,7 @@ fn gen_type_size_bytes_to_reg(
         loc,
         bag,
       )
-      emit32(
+      @arm64.emit32(
         emitter,
         (0x9b007c00 : Int)
         .lor(dst)
@@ -770,7 +793,7 @@ fn gen_type_size_bytes_to_reg(
   }
 
   if type_size_align(alloc.sem, ty, loc) is Some((size, _)) {
-    arm64_movimm(emitter, dst.reinterpret_as_uint(), size.to_uint64())
+    @arm64.arm64_movimm(emitter, dst.reinterpret_as_uint(), size.to_uint64())
     return
   }
 
@@ -794,8 +817,8 @@ fn gen_type_size_bytes_to_reg(
             return
           }
         }
-        arm64_movimm(emitter, scale.reinterpret_as_uint(), n.to_uint64())
-        emit32(
+        @arm64.arm64_movimm(emitter, scale.reinterpret_as_uint(), n.to_uint64())
+        @arm64.emit32(
           emitter,
           (0x9b007c00 : Int)
           .lor(dst)
@@ -847,7 +870,7 @@ fn gen_vla_alloc_to_local_slot(
   )
 
   if size_slot_offset is Some(off) {
-    arm64_strx(
+    @arm64.arm64_strx(
       emitter,
       3,
       bytes_reg.reinterpret_as_uint(),
@@ -857,7 +880,7 @@ fn gen_vla_alloc_to_local_slot(
   }
 
   // Round allocation up to 16 to preserve AArch64 stack alignment.
-  emit32(
+  @arm64.emit32(
     emitter,
     (0x91000000 : Int)
     .lor(bytes_reg)
@@ -865,21 +888,21 @@ fn gen_vla_alloc_to_local_slot(
     .lor(15 << 10)
     .reinterpret_as_uint(),
   )
-  emit32(
+  @arm64.emit32(
     emitter,
     (0x927cec00 : Int)
     .lor(bytes_reg)
     .lor(bytes_reg << 5)
     .reinterpret_as_uint(),
   )
-  emit32(
+  @arm64.emit32(
     emitter,
     (0xcb2063ff : Int).lor(bytes_reg << 16).reinterpret_as_uint(),
   )
 
   // Store the resulting base pointer (sp) into the fixed local slot.
-  emit32(emitter, (0x910003e0 : Int).lor(bytes_reg).reinterpret_as_uint())
-  arm64_strx(
+  @arm64.emit32(emitter, (0x910003e0 : Int).lor(bytes_reg).reinterpret_as_uint())
+  @arm64.arm64_strx(
     emitter,
     3,
     bytes_reg.reinterpret_as_uint(),
@@ -1532,18 +1555,18 @@ fn layout_expr(alloc : LocalAlloc, expr : @ast.Expr, walk_exprs : Bool) -> Unit 
 ///|
 fn emit_mov(emitter : Arm64Emitter, is64 : Bool, dst : Int, src : Int) -> Unit {
   let base : Int = if is64 { 0xaa0003e0 } else { 0x2a0003e0 }
-  emit32(emitter, base.lor(dst).lor(src << 16).reinterpret_as_uint())
+  @arm64.emit32(emitter, base.lor(dst).lor(src << 16).reinterpret_as_uint())
 }
 
 ///|
 fn emit_cmp(emitter : Arm64Emitter, is64 : Bool, a : Int, b : Int) -> Unit {
   let base : Int = if is64 { 0xeb00001f } else { 0x6b00001f }
-  emit32(emitter, base.lor(a << 5).lor(b << 16).reinterpret_as_uint())
+  @arm64.emit32(emitter, base.lor(a << 5).lor(b << 16).reinterpret_as_uint())
 }
 
 ///|
 fn emit_fmov_w_to_s(emitter : Arm64Emitter, sdst : Int, wsrc : Int) -> Unit {
-  emit32(
+  @arm64.emit32(
     emitter,
     (0x1e270000 : Int)
     .lor(sdst)
@@ -1554,7 +1577,7 @@ fn emit_fmov_w_to_s(emitter : Arm64Emitter, sdst : Int, wsrc : Int) -> Unit {
 
 ///|
 fn emit_fmov_s_to_w(emitter : Arm64Emitter, wdst : Int, ssrc : Int) -> Unit {
-  emit32(
+  @arm64.emit32(
     emitter,
     (0x1e260000 : Int)
     .lor(wdst)
@@ -1565,7 +1588,7 @@ fn emit_fmov_s_to_w(emitter : Arm64Emitter, wdst : Int, ssrc : Int) -> Unit {
 
 ///|
 fn emit_fmov_x_to_d(emitter : Arm64Emitter, ddst : Int, xsrc : Int) -> Unit {
-  emit32(
+  @arm64.emit32(
     emitter,
     (0x9e670000 : Int)
     .lor(ddst)
@@ -1576,7 +1599,7 @@ fn emit_fmov_x_to_d(emitter : Arm64Emitter, ddst : Int, xsrc : Int) -> Unit {
 
 ///|
 fn emit_fmov_d_to_x(emitter : Arm64Emitter, xdst : Int, dsrc : Int) -> Unit {
-  emit32(
+  @arm64.emit32(
     emitter,
     (0x9e660000 : Int)
     .lor(xdst)
@@ -1596,7 +1619,7 @@ fn emit_fp_binop(
   rhs : Int,
 ) -> Unit {
   let base = if is_double { base_d } else { base_s }
-  emit32(
+  @arm64.emit32(
     emitter,
     (base : Int)
     .lor(dst)
@@ -1629,13 +1652,13 @@ fn emit_fdiv(emitter : Arm64Emitter, is_double : Bool, dst : Int, lhs : Int, rhs
 ///|
 fn emit_fneg(emitter : Arm64Emitter, is_double : Bool, dst : Int, src : Int) -> Unit {
   let base : Int = if is_double { 0x1e614000 } else { 0x1e214000 }
-  emit32(emitter, base.lor(dst).lor(src << 5).reinterpret_as_uint())
+  @arm64.emit32(emitter, base.lor(dst).lor(src << 5).reinterpret_as_uint())
 }
 
 ///|
 fn emit_fcmp(emitter : Arm64Emitter, is_double : Bool, lhs : Int, rhs : Int) -> Unit {
   let base : Int = if is_double { 0x1e602000 } else { 0x1e202000 }
-  emit32(
+  @arm64.emit32(
     emitter,
     (base : Int)
     .lor(lhs << 5)
@@ -1647,12 +1670,12 @@ fn emit_fcmp(emitter : Arm64Emitter, is_double : Bool, lhs : Int, rhs : Int) -> 
 ///|
 fn emit_fcmp_zero(emitter : Arm64Emitter, is_double : Bool, lhs : Int) -> Unit {
   let base : Int = if is_double { 0x1e602008 } else { 0x1e202008 }
-  emit32(emitter, base.lor(lhs << 5).reinterpret_as_uint())
+  @arm64.emit32(emitter, base.lor(lhs << 5).reinterpret_as_uint())
 }
 
 ///|
 fn emit_sxtw(emitter : Arm64Emitter, dst : Int, src : Int) -> Unit {
-  emit32(
+  @arm64.emit32(
     emitter,
     (0x93407c00 : Int).lor(dst).lor(src << 5).reinterpret_as_uint(),
   )
@@ -1678,7 +1701,7 @@ fn emit_int_extend_to_64(
   if shift <= 0 {
     return
   }
-  if !arm64_gen_opic(
+  if !@arm64.arm64_gen_opic(
     emitter,
     TOK_SHL,
     1,
@@ -1691,7 +1714,7 @@ fn emit_int_extend_to_64(
     return
   }
   let tok = if from_signed { TOK_SAR } else { TOK_SHR }
-  if !arm64_gen_opic(
+  if !@arm64.arm64_gen_opic(
     emitter,
     tok,
     1,
@@ -1726,7 +1749,7 @@ fn emit_int_cast(
   if shift <= 0 {
     return
   }
-  if !arm64_gen_opic(
+  if !@arm64.arm64_gen_opic(
     emitter,
     TOK_SHL,
     1,
@@ -1739,7 +1762,7 @@ fn emit_int_cast(
     return
   }
   let tok = if to_signed { TOK_SAR } else { TOK_SHR }
-  if !arm64_gen_opic(
+  if !@arm64.arm64_gen_opic(
     emitter,
     tok,
     1,
@@ -1773,11 +1796,11 @@ fn emit_cast_value(
       }
       if from_kind == @ast.CFloatKind::Float && to_kind == @ast.CFloatKind::Double {
         emit_fmov_w_to_s(emitter, 0, reg)
-        emit32(emitter, (0x1e22c000 : UInt))
+        @arm64.emit32(emitter, (0x1e22c000 : UInt))
         emit_fmov_d_to_x(emitter, reg, 0)
       } else if from_kind == @ast.CFloatKind::Double && to_kind == @ast.CFloatKind::Float {
         emit_fmov_x_to_d(emitter, 0, reg)
-        emit32(emitter, (0x1e624000 : UInt))
+        @arm64.emit32(emitter, (0x1e624000 : UInt))
         emit_fmov_s_to_w(emitter, reg, 0)
       } else {
         @diag.add_error(bag, loc, "codegen: unsupported float conversion")
@@ -1814,7 +1837,7 @@ fn emit_cast_value(
       if from_kind_raw != @ast.CFloatKind::Float {
         inst = inst.lor(0x00400000)
       }
-      emit32(
+      @arm64.emit32(
         emitter,
         inst
         .lor(reg)
@@ -1840,7 +1863,7 @@ fn emit_cast_value(
       let norm_target = normalize_float_kind(to_kind_raw)
       if norm_target == @ast.CFloatKind::Float {
         let base : Int = if is_unsigned { 0x1e230000 } else { 0x1e220000 }
-        emit32(
+        @arm64.emit32(
           emitter,
           base
           .lor(sf_bit)
@@ -1851,7 +1874,7 @@ fn emit_cast_value(
         emit_fmov_s_to_w(emitter, reg, 0)
       } else {
         let base : Int = if is_unsigned { 0x1e630000 } else { 0x1e620000 }
-        emit32(
+        @arm64.emit32(
           emitter,
           base
           .lor(sf_bit)
@@ -1901,8 +1924,8 @@ const ARM64_COND_LE : Int = 13
 
 ///|
 fn emit_b_cond_placeholder(emitter : Arm64Emitter, cond : Int) -> Int {
-  let at = emitter_pc(emitter)
-  emit32(
+  let at = @arm64.emitter_pc(emitter)
+  @arm64.emit32(
     emitter,
     (0x54000000 : Int).lor(cond & 0xf).reinterpret_as_uint(),
   )
@@ -1937,7 +1960,7 @@ fn patch_b_cond(
 ///|
 fn emit_cset(emitter : Arm64Emitter, cond : Int, dst : Int) -> Unit {
   let cond_inv = cond ^ 1
-  emit32(
+  @arm64.emit32(
     emitter,
     (0x1a9f07e0 : Int)
     .lor(dst)
@@ -1978,7 +2001,7 @@ fn emit_cset_from_fp_tok(emitter : Arm64Emitter, tok : Int, dst : Int) -> Unit r
     TOK_GE => 0x1a9fb7e0
     _ => fail("codegen: unsupported fp comparison token")
   }
-  emit32(emitter, base.lor(dst).reinterpret_as_uint())
+  @arm64.emit32(emitter, base.lor(dst).reinterpret_as_uint())
 }
 
 ///|
@@ -2137,7 +2160,7 @@ fn emit_zero_bytes(
 ) -> Unit {
   let mut off = 0
   while off + 8 <= size_bytes {
-    arm64_strx(
+    @arm64.arm64_strx(
       emitter,
       3,
       (31 : UInt),
@@ -2147,7 +2170,7 @@ fn emit_zero_bytes(
     off = off + 8
   }
   if off + 4 <= size_bytes {
-    arm64_strx(
+    @arm64.arm64_strx(
       emitter,
       2,
       (31 : UInt),
@@ -2157,7 +2180,7 @@ fn emit_zero_bytes(
     off = off + 4
   }
   if off + 2 <= size_bytes {
-    arm64_strx(
+    @arm64.arm64_strx(
       emitter,
       1,
       (31 : UInt),
@@ -2167,7 +2190,7 @@ fn emit_zero_bytes(
     off = off + 2
   }
   while off < size_bytes {
-    arm64_strx(
+    @arm64.arm64_strx(
       emitter,
       0,
       (31 : UInt),
@@ -2198,7 +2221,7 @@ fn emit_copy_bytes(
   }
   let mut off = 0
   while off + 8 <= size_bytes {
-    arm64_ldrx(
+    @arm64.arm64_ldrx(
       emitter,
       false,
       3,
@@ -2206,7 +2229,7 @@ fn emit_copy_bytes(
       src_reg.reinterpret_as_uint(),
       (src_off + off).to_int64().reinterpret_as_uint64(),
     )
-    arm64_strx(
+    @arm64.arm64_strx(
       emitter,
       3,
       tmp.reinterpret_as_uint(),
@@ -2216,7 +2239,7 @@ fn emit_copy_bytes(
     off = off + 8
   }
   if off + 4 <= size_bytes {
-    arm64_ldrx(
+    @arm64.arm64_ldrx(
       emitter,
       false,
       2,
@@ -2224,7 +2247,7 @@ fn emit_copy_bytes(
       src_reg.reinterpret_as_uint(),
       (src_off + off).to_int64().reinterpret_as_uint64(),
     )
-    arm64_strx(
+    @arm64.arm64_strx(
       emitter,
       2,
       tmp.reinterpret_as_uint(),
@@ -2234,7 +2257,7 @@ fn emit_copy_bytes(
     off = off + 4
   }
   if off + 2 <= size_bytes {
-    arm64_ldrx(
+    @arm64.arm64_ldrx(
       emitter,
       false,
       1,
@@ -2242,7 +2265,7 @@ fn emit_copy_bytes(
       src_reg.reinterpret_as_uint(),
       (src_off + off).to_int64().reinterpret_as_uint64(),
     )
-    arm64_strx(
+    @arm64.arm64_strx(
       emitter,
       1,
       tmp.reinterpret_as_uint(),
@@ -2252,7 +2275,7 @@ fn emit_copy_bytes(
     off = off + 2
   }
   while off < size_bytes {
-    arm64_ldrx(
+    @arm64.arm64_ldrx(
       emitter,
       false,
       0,
@@ -2260,7 +2283,7 @@ fn emit_copy_bytes(
       src_reg.reinterpret_as_uint(),
       (src_off + off).to_int64().reinterpret_as_uint64(),
     )
-    arm64_strx(
+    @arm64.arm64_strx(
       emitter,
       0,
       tmp.reinterpret_as_uint(),
@@ -2315,7 +2338,7 @@ fn emit_store_gp_regs_to_addr(
       return
     }
     if off + 8 <= len {
-      arm64_strx(
+      @arm64.arm64_strx(
         emitter,
         3,
         reg.reinterpret_as_uint(),
@@ -2325,7 +2348,7 @@ fn emit_store_gp_regs_to_addr(
       off = off + 8
     }
     if off + 4 <= len {
-      arm64_strx(
+      @arm64.arm64_strx(
         emitter,
         2,
         reg.reinterpret_as_uint(),
@@ -2335,7 +2358,7 @@ fn emit_store_gp_regs_to_addr(
       off = off + 4
     }
     if off + 2 <= len {
-      arm64_strx(
+      @arm64.arm64_strx(
         emitter,
         1,
         reg.reinterpret_as_uint(),
@@ -2345,7 +2368,7 @@ fn emit_store_gp_regs_to_addr(
       off = off + 2
     }
     while off < len {
-      arm64_strx(
+      @arm64.arm64_strx(
         emitter,
         0,
         reg.reinterpret_as_uint(),
@@ -2429,7 +2452,7 @@ fn gen_agg_expr_to_addr(
               }
               if fsize == 8 {
                 emit_fmov_d_to_x(emitter, tmp, i)
-                arm64_strx(
+                @arm64.arm64_strx(
                   emitter,
                   3,
                   tmp.reinterpret_as_uint(),
@@ -2438,7 +2461,7 @@ fn gen_agg_expr_to_addr(
                 )
               } else {
                 emit_fmov_s_to_w(emitter, tmp, i)
-                arm64_strx(
+                @arm64.arm64_strx(
                   emitter,
                   2,
                   tmp.reinterpret_as_uint(),
@@ -2551,8 +2574,8 @@ fn gen_agg_expr_to_addr(
         loc,
         bag,
       )
-      let br_end = gjmp(emitter, 0)
-      let else_pc = emitter_pc(emitter)
+      let br_end = @arm64.gjmp(emitter, 0)
+      let else_pc = @arm64.emitter_pc(emitter)
       patch_b_cond(emitter, br_else, else_pc, ARM64_COND_EQ) catch {
         err => @diag.add_error(bag, loc, err.to_string())
       }
@@ -2569,8 +2592,8 @@ fn gen_agg_expr_to_addr(
         loc,
         bag,
       )
-      let end_pc = emitter_pc(emitter)
-      gsym_addr(emitter, br_end, end_pc) catch {
+      let end_pc = @arm64.emitter_pc(emitter)
+      @arm64.gsym_addr(emitter, br_end, end_pc) catch {
         err => @diag.add_error(bag, loc, err.to_string())
       }
     }
@@ -2647,7 +2670,7 @@ fn emit_store_scalar_at(
     }
     Some(v) => v
   }
-  arm64_strx(
+  @arm64.arm64_strx(
     emitter,
     sz,
     value_reg.reinterpret_as_uint(),
@@ -2911,7 +2934,7 @@ fn gen_string_init_to_addr(
   emit_addr_global(emitter, syms, sym, src_reg)
   let mut i = 0
   while i < length {
-    arm64_ldrx(
+    @arm64.arm64_ldrx(
       emitter,
       false,
       0,
@@ -2919,7 +2942,7 @@ fn gen_string_init_to_addr(
       src_reg.reinterpret_as_uint(),
       i.to_uint64(),
     )
-    arm64_strx(
+    @arm64.arm64_strx(
       emitter,
       0,
       (0 : UInt),
@@ -3827,7 +3850,7 @@ fn emit_load_local_int32(
   off : Int,
 ) -> Unit {
   let off_u64 = off.to_int64().reinterpret_as_uint64()
-  arm64_ldrx(emitter, false, 2, dst.reinterpret_as_uint(), (29 : UInt), off_u64)
+  @arm64.arm64_ldrx(emitter, false, 2, dst.reinterpret_as_uint(), (29 : UInt), off_u64)
 }
 
 ///|
@@ -3837,7 +3860,7 @@ fn emit_store_local_int32(
   off : Int,
 ) -> Unit {
   let off_u64 = off.to_int64().reinterpret_as_uint64()
-  arm64_strx(emitter, 2, src.reinterpret_as_uint(), (29 : UInt), off_u64)
+  @arm64.arm64_strx(emitter, 2, src.reinterpret_as_uint(), (29 : UInt), off_u64)
 }
 
 ///|
@@ -3862,7 +3885,7 @@ fn emit_load_local_scalar(
     Some(v) => v
   }
   let off_u64 = off.to_int64().reinterpret_as_uint64()
-  arm64_ldrx(emitter, signed, sz, dst.reinterpret_as_uint(), (29 : UInt), off_u64)
+  @arm64.arm64_ldrx(emitter, signed, sz, dst.reinterpret_as_uint(), (29 : UInt), off_u64)
 }
 
 ///|
@@ -3887,7 +3910,7 @@ fn emit_store_local_scalar(
     Some(v) => v
   }
   let off_u64 = off.to_int64().reinterpret_as_uint64()
-  arm64_strx(emitter, sz, src.reinterpret_as_uint(), (29 : UInt), off_u64)
+  @arm64.arm64_strx(emitter, sz, src.reinterpret_as_uint(), (29 : UInt), off_u64)
 }
 
 ///|
@@ -3901,7 +3924,7 @@ fn emit_addr_local(
   let imm = if off < 0 { -off } else { off }
   if imm <= 0xfff {
     if off < 0 {
-      emit32(
+      @arm64.emit32(
         emitter,
         (0xd1000000 : Int)
         .lor(dst)
@@ -3910,7 +3933,7 @@ fn emit_addr_local(
         .reinterpret_as_uint(),
       )
     } else {
-      emit32(
+      @arm64.emit32(
         emitter,
         (0x91000000 : Int)
         .lor(dst)
@@ -3922,9 +3945,9 @@ fn emit_addr_local(
     return
   }
 
-  arm64_movimm(emitter, dst.reinterpret_as_uint(), imm.to_uint64())
+  @arm64.arm64_movimm(emitter, dst.reinterpret_as_uint(), imm.to_uint64())
   let base = if off < 0 { 0xcb000000 } else { 0x8b000000 }
-  emit32(
+  @arm64.emit32(
     emitter,
     (base : Int)
     .lor(dst)
@@ -3942,12 +3965,12 @@ fn emit_addr_global(
   dst : Int,
 ) -> Unit {
   if sym_is_external(syms, sym) {
-    let ind0 = emitter_pc(emitter)
-    greloca(emitter, sym, ind0, R_AARCH64_ADR_GOT_PAGE, 0)
-    emit32(emitter, (0x90000000 : UInt64).lor(dst.to_uint64()).to_uint())
-    let ind1 = emitter_pc(emitter)
-    greloca(emitter, sym, ind1, R_AARCH64_LD64_GOT_LO12_NC, 0)
-    emit32(
+    let ind0 = @arm64.emitter_pc(emitter)
+    @arm64.greloca(emitter, sym, ind0, @arm64.R_AARCH64_ADR_GOT_PAGE, 0)
+    @arm64.emit32(emitter, (0x90000000 : UInt64).lor(dst.to_uint64()).to_uint())
+    let ind1 = @arm64.emitter_pc(emitter)
+    @arm64.greloca(emitter, sym, ind1, @arm64.R_AARCH64_LD64_GOT_LO12_NC, 0)
+    @arm64.emit32(
       emitter,
       (0xf9400000 : UInt64)
       .lor(dst.to_uint64())
@@ -3955,12 +3978,12 @@ fn emit_addr_global(
       .to_uint(),
     )
   } else {
-    let adrp_off = emitter_pc(emitter)
-    greloca(emitter, sym, adrp_off, R_AARCH64_ADR_PREL_PG_HI21, 0)
-    emit32(emitter, (0x90000000 : UInt64).lor(dst.to_uint64()).to_uint())
-    let add_off = emitter_pc(emitter)
-    greloca(emitter, sym, add_off, R_AARCH64_ADD_ABS_LO12_NC, 0)
-    emit32(
+    let adrp_off = @arm64.emitter_pc(emitter)
+    @arm64.greloca(emitter, sym, adrp_off, @arm64.R_AARCH64_ADR_PREL_PG_HI21, 0)
+    @arm64.emit32(emitter, (0x90000000 : UInt64).lor(dst.to_uint64()).to_uint())
+    let add_off = @arm64.emitter_pc(emitter)
+    @arm64.greloca(emitter, sym, add_off, @arm64.R_AARCH64_ADD_ABS_LO12_NC, 0)
+    @arm64.emit32(
       emitter,
       (0x91000000 : UInt64)
       .lor(dst.to_uint64())
@@ -3981,7 +4004,7 @@ fn emit_addr_sp(
   let imm = if off < 0 { -off } else { off }
   if imm <= 0xfff {
     if off < 0 {
-      emit32(
+      @arm64.emit32(
         emitter,
         (0xd1000000 : Int)
         .lor(dst)
@@ -3993,9 +4016,9 @@ fn emit_addr_sp(
       arm64_add_imm(emitter, dst, 31, imm)
     }
   } else {
-    arm64_movimm(emitter, dst.reinterpret_as_uint(), imm.to_uint64())
+    @arm64.arm64_movimm(emitter, dst.reinterpret_as_uint(), imm.to_uint64())
     let base : Int = if off < 0 { 0xcb000000 } else { 0x8b000000 }
-    emit32(
+    @arm64.emit32(
       emitter,
       (base : Int)
       .lor(dst)
@@ -4026,7 +4049,7 @@ fn emit_addr_reg(
   let imm = if off < 0 { -off } else { off }
   if imm <= 0xfff {
     let base : Int = if off < 0 { 0xd1000000 } else { 0x91000000 }
-    emit32(
+    @arm64.emit32(
       emitter,
       (base : Int)
       .lor(dst)
@@ -4035,9 +4058,9 @@ fn emit_addr_reg(
       .reinterpret_as_uint(),
     )
   } else {
-    arm64_movimm(emitter, dst.reinterpret_as_uint(), imm.to_uint64())
+    @arm64.arm64_movimm(emitter, dst.reinterpret_as_uint(), imm.to_uint64())
     let base : Int = if off < 0 { 0xcb000000 } else { 0x8b000000 }
-    emit32(
+    @arm64.emit32(
       emitter,
       (base : Int)
       .lor(dst)
@@ -4051,9 +4074,9 @@ fn emit_addr_reg(
 ///|
 ///|
 fn emit_call(emitter : Arm64Emitter, sym : Sym) -> Unit {
-  let ind = emitter_pc(emitter)
-  greloca(emitter, sym, ind, R_AARCH64_CALL26, 0)
-  emit32(emitter, (0x94000000 : UInt))
+  let ind = @arm64.emitter_pc(emitter)
+  @arm64.greloca(emitter, sym, ind, @arm64.R_AARCH64_CALL26, 0)
+  @arm64.emit32(emitter, (0x94000000 : UInt))
 }
 
 ///|
@@ -4087,7 +4110,7 @@ fn gen_builtin_va_start(
   }
   let stack_offset = 16 + alloc.varargs_stack_size
   emit_addr_reg(emitter, base, 29, stack_offset, loc, bag)
-  arm64_strx(
+  @arm64.arm64_strx(
     emitter,
     3,
     base.reinterpret_as_uint(),
@@ -4127,7 +4150,7 @@ fn gen_builtin_va_copy(
       return
     }
   }
-  arm64_ldrx(
+  @arm64.arm64_ldrx(
     emitter,
     false,
     3,
@@ -4144,7 +4167,7 @@ fn gen_builtin_va_copy(
     }
   }
   gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, args[0], dst_addr, bag)
-  arm64_strx(
+  @arm64.arm64_strx(
     emitter,
     3,
     tmp.reinterpret_as_uint(),
@@ -4180,7 +4203,7 @@ fn gen_builtin_alloca(
   gen_expr_int32(emitter, alloc, syms, pool, cstrings, args[0], size_reg, bag)
 
   // Round allocation up to 16 to preserve AArch64 stack alignment.
-  emit32(
+  @arm64.emit32(
     emitter,
     (0x91000000 : Int)
     .lor(size_reg)
@@ -4188,18 +4211,18 @@ fn gen_builtin_alloca(
     .lor(15 << 10)
     .reinterpret_as_uint(),
   )
-  emit32(
+  @arm64.emit32(
     emitter,
     (0x927cec00 : Int)
     .lor(size_reg)
     .lor(size_reg << 5)
     .reinterpret_as_uint(),
   )
-  emit32(
+  @arm64.emit32(
     emitter,
     (0xcb2063ff : Int).lor(size_reg << 16).reinterpret_as_uint(),
   )
-  emit32(emitter, (0x910003e0 : Int).lor(0).reinterpret_as_uint())
+  @arm64.emit32(emitter, (0x910003e0 : Int).lor(0).reinterpret_as_uint())
   give_reg(pool, size_reg)
 }
 
@@ -4230,7 +4253,7 @@ fn gen_builtin_va_arg_load(
       return false
     }
   }
-  arm64_ldrx(
+  @arm64.arm64_ldrx(
     emitter,
     false,
     3,
@@ -4268,7 +4291,7 @@ fn gen_builtin_va_arg_load(
     }
     Some(v) => v
   }
-  arm64_ldrx(
+  @arm64.arm64_ldrx(
     emitter,
     signed,
     load_sz,
@@ -4278,7 +4301,7 @@ fn gen_builtin_va_arg_load(
   )
   let bump = align_up(size, 8)
   arm64_add_imm(emitter, cur, cur, bump)
-  arm64_strx(
+  @arm64.arm64_strx(
     emitter,
     3,
     cur.reinterpret_as_uint(),
@@ -4722,9 +4745,9 @@ fn store_call_arg_to_slot(
         bag,
       )
       if k == @ast.CFloatKind::Double {
-        arm64_strx(emitter, 3, tmp.reinterpret_as_uint(), (31 : UInt), slot_off)
+        @arm64.arm64_strx(emitter, 3, tmp.reinterpret_as_uint(), (31 : UInt), slot_off)
       } else {
-        arm64_strx(emitter, 2, tmp.reinterpret_as_uint(), (31 : UInt), slot_off)
+        @arm64.arm64_strx(emitter, 2, tmp.reinterpret_as_uint(), (31 : UInt), slot_off)
       }
       give_reg(pool, tmp)
     }
@@ -4774,7 +4797,7 @@ fn store_call_arg_to_slot(
             )
             emit_int_cast(emitter, alloc.sem, from_ty, ty, tmp, loc, bag)
           }
-          arm64_strx(emitter, 3, tmp.reinterpret_as_uint(), (31 : UInt), slot_off)
+          @arm64.arm64_strx(emitter, 3, tmp.reinterpret_as_uint(), (31 : UInt), slot_off)
           give_reg(pool, tmp)
         }
       }
@@ -4932,7 +4955,7 @@ fn gen_call_direct(
 
 ///|
 fn emit_blr(emitter : Arm64Emitter, reg : Int) -> Unit {
-  emit32(
+  @arm64.emit32(
     emitter,
     (0xd63f0000 : Int)
     .lor(reg << 5)
@@ -4942,7 +4965,7 @@ fn emit_blr(emitter : Arm64Emitter, reg : Int) -> Unit {
 
 ///|
 fn emit_br(emitter : Arm64Emitter, reg : Int) -> Unit {
-  emit32(
+  @arm64.emit32(
     emitter,
     (0xd61f0000 : Int)
     .lor(reg << 5)
@@ -4976,7 +4999,7 @@ fn emit_adr(
   bag : @diag.DiagBag,
 ) -> Unit {
   match encode_adr(rd, diff) {
-    Some(insn) => emit32(emitter, insn)
+    Some(insn) => @arm64.emit32(emitter, insn)
     None => @diag.add_error(bag, loc, "codegen: label address out of range")
   }
 }
@@ -5101,7 +5124,7 @@ fn gen_call_with_layout(
   let total_stack = align_up(scratch_off, 16)
   if total_stack > 0 {
     let off = (0 : UInt64) - total_stack.to_uint64()
-    arm64_spoff(emitter, (31 : UInt), off)
+    @arm64.arm64_spoff(emitter, (31 : UInt), off)
   }
 
   if layout.ret_loc == 1 {
@@ -5144,7 +5167,7 @@ fn gen_call_with_layout(
       }
       emit_addr_sp(emitter, tmp, copy_off, loc, bag)
       if is_stack {
-        arm64_strx(
+        @arm64.arm64_strx(
           emitter,
           3,
           tmp.reinterpret_as_uint(),
@@ -5153,7 +5176,7 @@ fn gen_call_with_layout(
         )
       } else {
         let spill = spill_offs[i].unwrap_or(0)
-        arm64_strx(
+        @arm64.arm64_strx(
           emitter,
           3,
           tmp.reinterpret_as_uint(),
@@ -5194,9 +5217,9 @@ fn gen_call_with_layout(
       if arg_is_agg[i] {
         let size = arg_sizes[i]
         emit_addr_sp(emitter, reg, spill_off, loc, bag)
-        arm64_ldrs(emitter, reg.reinterpret_as_uint(), size)
+        @arm64.arm64_ldrs(emitter, reg.reinterpret_as_uint(), size)
       } else {
-        arm64_ldrx(
+        @arm64.arm64_ldrx(
           emitter,
           false,
           3,
@@ -5220,7 +5243,7 @@ fn gen_call_with_layout(
             }
           }
           if hfa_size == 8 {
-            arm64_ldrx(
+            @arm64.arm64_ldrx(
               emitter,
               false,
               3,
@@ -5230,7 +5253,7 @@ fn gen_call_with_layout(
             )
             emit_fmov_x_to_d(emitter, fp_base + j, tmp)
           } else {
-            arm64_ldrx(
+            @arm64.arm64_ldrx(
               emitter,
               false,
               2,
@@ -5252,7 +5275,7 @@ fn gen_call_with_layout(
         }
         if float_kind_of_type(arg_tys[i]) is Some(k) {
           if k == @ast.CFloatKind::Double || k == @ast.CFloatKind::LongDouble {
-            arm64_ldrx(
+            @arm64.arm64_ldrx(
               emitter,
               false,
               3,
@@ -5262,7 +5285,7 @@ fn gen_call_with_layout(
             )
             emit_fmov_x_to_d(emitter, fp_base, tmp)
           } else {
-            arm64_ldrx(
+            @arm64.arm64_ldrx(
               emitter,
               false,
               2,
@@ -5285,7 +5308,7 @@ fn gen_call_with_layout(
     let reg = caller_saved_regs[i]
     if !pool.free.contains(reg) {
       let off = caller_save_off + i * 8
-      arm64_strx(
+      @arm64.arm64_strx(
         emitter,
         3,
         reg.reinterpret_as_uint(),
@@ -5302,7 +5325,7 @@ fn gen_call_with_layout(
   i = 0
   while i < used_caller_regs.length() {
     let (reg, off) = used_caller_regs[i]
-    arm64_ldrx(
+    @arm64.arm64_ldrx(
       emitter,
       false,
       3,
@@ -5314,7 +5337,7 @@ fn gen_call_with_layout(
   }
 
   if total_stack > 0 {
-    arm64_spoff(emitter, (31 : UInt), total_stack.to_uint64())
+    @arm64.arm64_spoff(emitter, (31 : UInt), total_stack.to_uint64())
   }
 }
 
@@ -5354,7 +5377,7 @@ fn gen_builtin_frame_address(
   emit_mov(emitter, true, tmp, 29)
   let mut i = 0
   while i < level {
-    arm64_ldrx(
+    @arm64.arm64_ldrx(
       emitter,
       false,
       3,
@@ -5365,7 +5388,7 @@ fn gen_builtin_frame_address(
     i = i + 1
   }
   if is_return {
-    arm64_ldrx(
+    @arm64.arm64_ldrx(
       emitter,
       false,
       3,
@@ -5596,7 +5619,7 @@ fn gen_call_expr_impl(
         if args.length() != 0 {
           @diag.add_error(bag, loc, "__sync_synchronize expects no args")
         }
-        emit32(emitter, (0xd5033bbf : UInt))
+        @arm64.emit32(emitter, (0xd5033bbf : UInt))
         return
       }
       Some(BuiltinCallKind::FrameAddress) => {
@@ -5824,12 +5847,12 @@ fn gen_func_name_addr(
     return false
   }
   let sym = cstring_sym_or_add(cstrings, syms, alloc.func_name)
-  let adrp_off = emitter_pc(emitter)
-  greloca(emitter, sym, adrp_off, R_AARCH64_ADR_PREL_PG_HI21, 0)
-  emit32(emitter, (0x90000000 : UInt64).lor(dst.to_uint64()).to_uint())
-  let add_off = emitter_pc(emitter)
-  greloca(emitter, sym, add_off, R_AARCH64_ADD_ABS_LO12_NC, 0)
-  emit32(
+  let adrp_off = @arm64.emitter_pc(emitter)
+  @arm64.greloca(emitter, sym, adrp_off, @arm64.R_AARCH64_ADR_PREL_PG_HI21, 0)
+  @arm64.emit32(emitter, (0x90000000 : UInt64).lor(dst.to_uint64()).to_uint())
+  let add_off = @arm64.emitter_pc(emitter)
+  @arm64.greloca(emitter, sym, add_off, @arm64.R_AARCH64_ADD_ABS_LO12_NC, 0)
+  @arm64.emit32(
     emitter,
     (0x91000000 : UInt64)
     .lor(dst.to_uint64())
@@ -5936,7 +5959,7 @@ fn gen_index_addr_with_elem_type(
   }
   match elem_size_reg {
     Some(scale) => {
-      emit32(
+      @arm64.emit32(
         emitter,
         (0x9b007c00 : Int)
         .lor(idx)
@@ -5959,12 +5982,12 @@ fn gen_index_addr_with_elem_type(
               return None
             }
           }
-          arm64_movimm(
+          @arm64.arm64_movimm(
             emitter,
             scale.reinterpret_as_uint(),
             elem_size.to_uint64(),
           )
-          emit32(
+          @arm64.emit32(
             emitter,
             (0x9b007c00 : Int)
             .lor(idx)
@@ -5976,7 +5999,7 @@ fn gen_index_addr_with_elem_type(
         }
       }
   }
-  emit32(
+  @arm64.emit32(
     emitter,
     (0x8b000000 : Int)
     .lor(base_reg)
@@ -6064,7 +6087,7 @@ fn gen_lvalue_addr(
       match lookup_local(alloc, name, id) {
         Some(slot) =>
           if slot.byref {
-            arm64_ldrx(
+            @arm64.arm64_ldrx(
               emitter,
               false,
               3,
@@ -6075,7 +6098,7 @@ fn gen_lvalue_addr(
           } else {
             match strip_top_qualifiers(slot.ty) {
               @ast.CType::Array(size=None, size_expr=Some(_), ..) =>
-                arm64_ldrx(
+                @arm64.arm64_ldrx(
                   emitter,
                   false,
                   3,
@@ -6208,7 +6231,7 @@ fn gen_lvalue_addr(
       }
       if off != 0 {
         if off >= 0 && off <= 0xfff {
-          emit32(
+          @arm64.emit32(
             emitter,
             (0x91000000 : Int)
             .lor(dst)
@@ -6224,9 +6247,9 @@ fn gen_lvalue_addr(
             }
           }
           let imm = if off < 0 { -off } else { off }
-          arm64_movimm(emitter, tmp.reinterpret_as_uint(), imm.to_uint64())
+          @arm64.arm64_movimm(emitter, tmp.reinterpret_as_uint(), imm.to_uint64())
           let base = if off < 0 { 0xcb000000 } else { 0x8b000000 }
-          emit32(
+          @arm64.emit32(
             emitter,
             (base : Int)
             .lor(dst)
@@ -7114,7 +7137,7 @@ fn gen_member_addr_with_info(
   let off = info.offset
   if off != 0 {
     if off >= 0 && off <= 0xfff {
-      emit32(
+      @arm64.emit32(
         emitter,
         (0x91000000 : Int)
         .lor(dst)
@@ -7130,9 +7153,9 @@ fn gen_member_addr_with_info(
         }
       }
       let imm = if off < 0 { -off } else { off }
-      arm64_movimm(emitter, tmp.reinterpret_as_uint(), imm.to_uint64())
+      @arm64.arm64_movimm(emitter, tmp.reinterpret_as_uint(), imm.to_uint64())
       let base_inst = if off < 0 { 0xcb000000 } else { 0x8b000000 }
-      emit32(
+      @arm64.emit32(
         emitter,
         (base_inst : Int)
         .lor(dst)
@@ -7229,7 +7252,7 @@ fn adjust_bitfield_access_info(
 ///|
 fn emit_and_reg(emitter : Arm64Emitter, is64 : Bool, dst : Int, lhs : Int, rhs : Int) -> Unit {
   let base : Int = if is64 { 0x8a000000 } else { 0x0a000000 }
-  emit32(
+  @arm64.emit32(
     emitter,
     (base : Int)
     .lor(dst)
@@ -7242,7 +7265,7 @@ fn emit_and_reg(emitter : Arm64Emitter, is64 : Bool, dst : Int, lhs : Int, rhs :
 ///|
 fn emit_or_reg(emitter : Arm64Emitter, is64 : Bool, dst : Int, lhs : Int, rhs : Int) -> Unit {
   let base : Int = if is64 { 0xaa000000 } else { 0x2a000000 }
-  emit32(
+  @arm64.emit32(
     emitter,
     (base : Int)
     .lor(dst)
@@ -7272,7 +7295,7 @@ fn emit_bitfield_load_packed(
     Some(v) => v
   }
   if width <= 0 {
-    arm64_movimm(emitter, dst.reinterpret_as_uint(), 0)
+    @arm64.arm64_movimm(emitter, dst.reinterpret_as_uint(), 0)
     return
   }
   let (_decl_size, signed) = match scalar_size_signed_or_error(alloc.sem, info.ty, loc) {
@@ -7282,7 +7305,7 @@ fn emit_bitfield_load_packed(
   let is64 = _decl_size == 8 || width > 32
   let l = if is64 { 1 } else { 0 }
   let unit_bits = if is64 { 64 } else { 32 }
-  arm64_movimm(emitter, dst.reinterpret_as_uint(), 0)
+  @arm64.arm64_movimm(emitter, dst.reinterpret_as_uint(), 0)
   let tmp = take_reg(pool) catch {
     err => {
       @diag.add_error(bag, loc, err.to_string())
@@ -7294,7 +7317,7 @@ fn emit_bitfield_load_packed(
   let mut bit_in = bit_off & 7
   let mut byte_off = bit_off / 8
   while remaining > 0 {
-    arm64_ldrx(
+    @arm64.arm64_ldrx(
       emitter,
       false,
       0,
@@ -7303,7 +7326,7 @@ fn emit_bitfield_load_packed(
       (info.offset + byte_off).to_int64().reinterpret_as_uint64(),
     )
     if bit_in > 0 {
-      arm64_gen_opic(
+      @arm64.arm64_gen_opic(
         emitter,
         TOK_SHR,
         l,
@@ -7316,7 +7339,7 @@ fn emit_bitfield_load_packed(
     let n = if remaining < 8 - bit_in { remaining } else { 8 - bit_in }
     if n < 8 {
       let mask : UInt64 = ((1 : UInt64) << n) - (1 : UInt64)
-      if !arm64_gen_opic(emitter, TOK_AND, l, false, mask, tmp, tmp) {
+      if !@arm64.arm64_gen_opic(emitter, TOK_AND, l, false, mask, tmp, tmp) {
         let mask_reg = take_reg(pool) catch {
           err => {
             @diag.add_error(bag, loc, err.to_string())
@@ -7324,13 +7347,13 @@ fn emit_bitfield_load_packed(
             return
           }
         }
-        arm64_movimm(emitter, mask_reg.reinterpret_as_uint(), mask)
+        @arm64.arm64_movimm(emitter, mask_reg.reinterpret_as_uint(), mask)
         emit_and_reg(emitter, is64, tmp, tmp, mask_reg)
         give_reg(pool, mask_reg)
       }
     }
     if bits_collected > 0 {
-      arm64_gen_opic(
+      @arm64.arm64_gen_opic(
         emitter,
         TOK_SHL,
         l,
@@ -7349,7 +7372,7 @@ fn emit_bitfield_load_packed(
   give_reg(pool, tmp)
   if signed && width < unit_bits {
     let shift = unit_bits - width
-    arm64_gen_opic(
+    @arm64.arm64_gen_opic(
       emitter,
       TOK_SHL,
       l,
@@ -7358,7 +7381,7 @@ fn emit_bitfield_load_packed(
       dst,
       dst,
     ) |> ignore
-    arm64_gen_opic(
+    @arm64.arm64_gen_opic(
       emitter,
       TOK_SAR,
       l,
@@ -7419,7 +7442,7 @@ fn emit_bitfield_store_packed(
     let n = if remaining < 8 - bit_in { remaining } else { 8 - bit_in }
     emit_mov(emitter, is64, chunk, value_reg)
     if bits_used > 0 {
-      arm64_gen_opic(
+      @arm64.arm64_gen_opic(
         emitter,
         TOK_SHR,
         l,
@@ -7430,7 +7453,7 @@ fn emit_bitfield_store_packed(
       ) |> ignore
     }
     if bit_in > 0 {
-      arm64_gen_opic(
+      @arm64.arm64_gen_opic(
         emitter,
         TOK_SHL,
         l,
@@ -7442,7 +7465,7 @@ fn emit_bitfield_store_packed(
     }
     let mask : UInt64 = (((1 : UInt64) << n) - (1 : UInt64)) << bit_in
     if n < 8 {
-      if !arm64_gen_opic(emitter, TOK_AND, l, false, mask, chunk, chunk) {
+      if !@arm64.arm64_gen_opic(emitter, TOK_AND, l, false, mask, chunk, chunk) {
         let mask_reg = take_reg(pool) catch {
           err => {
             @diag.add_error(bag, loc, err.to_string())
@@ -7451,13 +7474,13 @@ fn emit_bitfield_store_packed(
             return
           }
         }
-        arm64_movimm(emitter, mask_reg.reinterpret_as_uint(), mask)
+        @arm64.arm64_movimm(emitter, mask_reg.reinterpret_as_uint(), mask)
         emit_and_reg(emitter, is64, chunk, chunk, mask_reg)
         give_reg(pool, mask_reg)
       }
     }
     if n == 8 && bit_in == 0 {
-      arm64_strx(
+      @arm64.arm64_strx(
         emitter,
         0,
         chunk.reinterpret_as_uint(),
@@ -7465,7 +7488,7 @@ fn emit_bitfield_store_packed(
         (info.offset + byte_off).to_int64().reinterpret_as_uint64(),
       )
     } else {
-      arm64_ldrx(
+      @arm64.arm64_ldrx(
         emitter,
         false,
         0,
@@ -7474,7 +7497,7 @@ fn emit_bitfield_store_packed(
         (info.offset + byte_off).to_int64().reinterpret_as_uint64(),
       )
       let inv_mask : UInt64 = (0xff : UInt64) & mask.lnot()
-      if !arm64_gen_opic(emitter, TOK_AND, l, false, inv_mask, tmp, tmp) {
+      if !@arm64.arm64_gen_opic(emitter, TOK_AND, l, false, inv_mask, tmp, tmp) {
         let mask_reg = take_reg(pool) catch {
           err => {
             @diag.add_error(bag, loc, err.to_string())
@@ -7483,12 +7506,12 @@ fn emit_bitfield_store_packed(
             return
           }
         }
-        arm64_movimm(emitter, mask_reg.reinterpret_as_uint(), inv_mask)
+        @arm64.arm64_movimm(emitter, mask_reg.reinterpret_as_uint(), inv_mask)
         emit_and_reg(emitter, is64, tmp, tmp, mask_reg)
         give_reg(pool, mask_reg)
       }
       emit_or_reg(emitter, is64, tmp, tmp, chunk)
-      arm64_strx(
+      @arm64.arm64_strx(
         emitter,
         0,
         tmp.reinterpret_as_uint(),
@@ -7525,7 +7548,7 @@ fn emit_bitfield_load(
     Some(v) => v
   }
   if width <= 0 {
-    arm64_movimm(emitter, dst.reinterpret_as_uint(), 0)
+    @arm64.arm64_movimm(emitter, dst.reinterpret_as_uint(), 0)
     return
   }
   let (_decl_size, signed) = match scalar_size_signed_or_error(alloc.sem, info.ty, loc) {
@@ -7547,7 +7570,7 @@ fn emit_bitfield_load(
     }
     Some(v) => v
   }
-  arm64_ldrx(
+  @arm64.arm64_ldrx(
     emitter,
     false,
     sz,
@@ -7557,7 +7580,7 @@ fn emit_bitfield_load(
   )
   let l = if unit_size == 8 { 1 } else { 0 }
   if bit_off > 0 {
-    arm64_gen_opic(
+    @arm64.arm64_gen_opic(
       emitter,
       TOK_SHR,
       l,
@@ -7573,21 +7596,21 @@ fn emit_bitfield_load(
     } else {
       ((1 : UInt64) << width) - (1 : UInt64)
     }
-    if !arm64_gen_opic(emitter, TOK_AND, l, false, mask, dst, dst) {
+    if !@arm64.arm64_gen_opic(emitter, TOK_AND, l, false, mask, dst, dst) {
       let tmp = take_reg(pool) catch {
         err => {
           @diag.add_error(bag, loc, err.to_string())
           return
         }
       }
-      arm64_movimm(emitter, tmp.reinterpret_as_uint(), mask)
+      @arm64.arm64_movimm(emitter, tmp.reinterpret_as_uint(), mask)
       emit_and_reg(emitter, l != 0, dst, dst, tmp)
       give_reg(pool, tmp)
     }
   }
   if signed && width < unit_bits {
     let shift = unit_bits - width
-    arm64_gen_opic(
+    @arm64.arm64_gen_opic(
       emitter,
       TOK_SHL,
       l,
@@ -7596,7 +7619,7 @@ fn emit_bitfield_load(
       dst,
       dst,
     ) |> ignore
-    arm64_gen_opic(
+    @arm64.arm64_gen_opic(
       emitter,
       TOK_SAR,
       l,
@@ -7651,7 +7674,7 @@ fn emit_bitfield_store(
   }
   let is64 = unit_size == 8
   if width == unit_bits && bit_off == 0 {
-    arm64_strx(
+    @arm64.arm64_strx(
       emitter,
       sz,
       value_reg.reinterpret_as_uint(),
@@ -7666,7 +7689,7 @@ fn emit_bitfield_store(
       return
     }
   }
-  arm64_ldrx(
+  @arm64.arm64_ldrx(
     emitter,
     false,
     sz,
@@ -7689,7 +7712,7 @@ fn emit_bitfield_store(
     } else {
       ((1 : UInt64) << width) - (1 : UInt64)
     }
-    if !arm64_gen_opic(emitter, TOK_AND, l, false, mask, val_reg, val_reg) {
+    if !@arm64.arm64_gen_opic(emitter, TOK_AND, l, false, mask, val_reg, val_reg) {
       let tmp = take_reg(pool) catch {
         err => {
           @diag.add_error(bag, loc, err.to_string())
@@ -7698,13 +7721,13 @@ fn emit_bitfield_store(
           return
         }
       }
-      arm64_movimm(emitter, tmp.reinterpret_as_uint(), mask)
+      @arm64.arm64_movimm(emitter, tmp.reinterpret_as_uint(), mask)
       emit_and_reg(emitter, is64, val_reg, val_reg, tmp)
       give_reg(pool, tmp)
     }
   }
   if bit_off > 0 {
-    arm64_gen_opic(
+    @arm64.arm64_gen_opic(
       emitter,
       TOK_SHL,
       l,
@@ -7727,7 +7750,7 @@ fn emit_bitfield_store(
       ((1 : UInt64) << unit_bits) - (1 : UInt64)
     }
     let inv_mask = unit_mask & (mask_shift.lnot())
-    if !arm64_gen_opic(emitter, TOK_AND, l, false, inv_mask, unit_reg, unit_reg) {
+    if !@arm64.arm64_gen_opic(emitter, TOK_AND, l, false, inv_mask, unit_reg, unit_reg) {
       let tmp = take_reg(pool) catch {
         err => {
           @diag.add_error(bag, loc, err.to_string())
@@ -7736,13 +7759,13 @@ fn emit_bitfield_store(
           return
         }
       }
-      arm64_movimm(emitter, tmp.reinterpret_as_uint(), inv_mask)
+      @arm64.arm64_movimm(emitter, tmp.reinterpret_as_uint(), inv_mask)
       emit_and_reg(emitter, is64, unit_reg, unit_reg, tmp)
       give_reg(pool, tmp)
     }
   }
   emit_or_reg(emitter, is64, unit_reg, unit_reg, val_reg)
-  arm64_strx(
+  @arm64.arm64_strx(
     emitter,
     sz,
     unit_reg.reinterpret_as_uint(),
@@ -7831,7 +7854,7 @@ fn store_lvalue_scalar(
             }
             Some(v) => v
           }
-          arm64_strx(
+          @arm64.arm64_strx(
             emitter,
             sz,
             store_reg.reinterpret_as_uint(),
@@ -7862,7 +7885,7 @@ fn store_lvalue_scalar(
         }
         Some(v) => v
       }
-      arm64_strx(
+      @arm64.arm64_strx(
         emitter,
         sz,
         store_reg.reinterpret_as_uint(),
@@ -7905,12 +7928,12 @@ fn gen_expr_to_float_kind_bits_with_type(
       if src_kind == @ast.CFloatKind::Float && norm_target == @ast.CFloatKind::Double {
         // float -> double
         emit_fmov_w_to_s(emitter, 0, dst)
-        emit32(emitter, (0x1e22c000 : UInt))
+        @arm64.emit32(emitter, (0x1e22c000 : UInt))
         emit_fmov_d_to_x(emitter, dst, 0)
       } else if src_kind == @ast.CFloatKind::Double && norm_target == @ast.CFloatKind::Float {
         // double -> float
         emit_fmov_x_to_d(emitter, 0, dst)
-        emit32(emitter, (0x1e624000 : UInt))
+        @arm64.emit32(emitter, (0x1e624000 : UInt))
         emit_fmov_s_to_w(emitter, dst, 0)
       } else {
         @diag.add_error(bag, @ast.expr_loc(expr), "codegen: unsupported float conversion")
@@ -7940,7 +7963,7 @@ fn gen_expr_to_float_kind_bits_with_type(
       let sf_bit : Int = if src_size == 8 { 0x80000000 } else { 0 }
       if norm_target == @ast.CFloatKind::Float {
         let base : Int = if is_unsigned { 0x1e230000 } else { 0x1e220000 }
-        emit32(
+        @arm64.emit32(
           emitter,
           base
           .lor(sf_bit)
@@ -7951,7 +7974,7 @@ fn gen_expr_to_float_kind_bits_with_type(
         emit_fmov_s_to_w(emitter, dst, 0)
       } else {
         let base : Int = if is_unsigned { 0x1e630000 } else { 0x1e620000 }
-        emit32(
+        @arm64.emit32(
           emitter,
           base
           .lor(sf_bit)
@@ -8014,7 +8037,7 @@ fn gen_expr_floatbits(
     @ast.Expr::FloatLit(value~, loc~, ..) =>
       match parse_float_literal_bits(value, kind) {
         None => @diag.add_error(bag, loc, "codegen: invalid float literal")
-        Some(bits) => arm64_movimm(emitter, dst.reinterpret_as_uint(), bits)
+        Some(bits) => @arm64.arm64_movimm(emitter, dst.reinterpret_as_uint(), bits)
       }
     @ast.Expr::StmtExpr(stmts~, loc~, ..) =>
       gen_stmt_expr_with(
@@ -8077,7 +8100,7 @@ fn gen_expr_floatbits(
             }
             Some(v) => v
           }
-          arm64_ldrx(
+          @arm64.arm64_ldrx(
             emitter,
             false,
             sz,
@@ -8105,7 +8128,7 @@ fn gen_expr_floatbits(
         }
         Some(v) => v
       }
-       arm64_ldrx(
+       @arm64.arm64_ldrx(
          emitter,
          false,
          sz,
@@ -8293,7 +8316,7 @@ fn gen_expr_floatbits(
             }
             Some(v) => v
           }
-          arm64_ldrx(
+          @arm64.arm64_ldrx(
             emitter,
             false,
             sz,
@@ -8331,7 +8354,7 @@ fn gen_expr_floatbits(
           } else {
             emit_fmov_s_to_w(emitter, dst, 0)
           }
-          arm64_strx(
+          @arm64.arm64_strx(
             emitter,
             sz,
             dst.reinterpret_as_uint(),
@@ -8385,8 +8408,8 @@ fn gen_expr_floatbits(
         dst,
         bag,
       )
-      let br_end = gjmp(emitter, 0)
-      let else_pc = emitter_pc(emitter)
+      let br_end = @arm64.gjmp(emitter, 0)
+      let else_pc = @arm64.emitter_pc(emitter)
       patch_b_cond(emitter, br_else, else_pc, ARM64_COND_EQ) catch {
         err => @diag.add_error(bag, loc, err.to_string())
       }
@@ -8401,8 +8424,8 @@ fn gen_expr_floatbits(
         dst,
         bag,
       )
-      let end_pc = emitter_pc(emitter)
-      gsym_addr(emitter, br_end, end_pc) catch {
+      let end_pc = @arm64.emitter_pc(emitter)
+      @arm64.gsym_addr(emitter, br_end, end_pc) catch {
         err => @diag.add_error(bag, loc, err.to_string())
       }
     }
@@ -8426,10 +8449,10 @@ fn gen_expr_int32(
     @ast.Expr::IntLit(value~, loc~, ..) =>
       match @ast.parse_int64_literal(value) {
         None => @diag.add_error(bag, loc, "codegen: invalid integer literal")
-        Some(v) => arm64_movimm(emitter, dst.reinterpret_as_uint(), v.reinterpret_as_uint64())
+        Some(v) => @arm64.arm64_movimm(emitter, dst.reinterpret_as_uint(), v.reinterpret_as_uint64())
       }
     @ast.Expr::CharLit(value~, ..) =>
-      arm64_movimm(emitter, dst.reinterpret_as_uint(), value.to_uint64())
+      @arm64.arm64_movimm(emitter, dst.reinterpret_as_uint(), value.to_uint64())
     @ast.Expr::StmtExpr(stmts~, loc~, ..) =>
       gen_stmt_expr_with(
         emitter,
@@ -8447,7 +8470,7 @@ fn gen_expr_int32(
       )
     @ast.Expr::Ident(name~, id~, loc~, ..) => {
       if enum_const_value(alloc.sem, name, id) is Some(v) {
-        arm64_movimm(emitter, dst.reinterpret_as_uint(), v.to_uint64())
+        @arm64.arm64_movimm(emitter, dst.reinterpret_as_uint(), v.to_uint64())
         return
       }
       if is_func_name_ident(name) {
@@ -8475,7 +8498,7 @@ fn gen_expr_int32(
                 }
                 Some(v) => v
               }
-              arm64_ldrx(
+              @arm64.arm64_ldrx(
                 emitter,
                 signed,
                 sz,
@@ -8511,7 +8534,7 @@ fn gen_expr_int32(
                 }
                 Some(v) => v
               }
-              arm64_ldrx(
+              @arm64.arm64_ldrx(
                 emitter,
                 signed,
                 sz,
@@ -8563,7 +8586,7 @@ fn gen_expr_int32(
         }
         Some(v) => v
       }
-      arm64_ldrx(
+      @arm64.arm64_ldrx(
         emitter,
         signed,
         sz,
@@ -8648,7 +8671,7 @@ fn gen_expr_int32(
             }
             Some(v) => v
           }
-          arm64_ldrx(
+          @arm64.arm64_ldrx(
             emitter,
             signed,
             sz,
@@ -8678,7 +8701,7 @@ fn gen_expr_int32(
             }
             Some(v) => v
           }
-          arm64_ldrx(
+          @arm64.arm64_ldrx(
             emitter,
             signed,
             sz,
@@ -8735,7 +8758,7 @@ fn gen_expr_int32(
         }
         Some(v) => v
       }
-      arm64_ldrx(
+      @arm64.arm64_ldrx(
         emitter,
         signed,
         sz,
@@ -8768,7 +8791,7 @@ fn gen_expr_int32(
       match eval_builtin_offsetof(alloc.sem, ty, path, loc) {
         None => @diag.add_error(bag, loc, "codegen: unsupported expression")
         Some(off) =>
-          arm64_movimm(emitter, dst.reinterpret_as_uint(), off.to_uint64())
+          @arm64.arm64_movimm(emitter, dst.reinterpret_as_uint(), off.to_uint64())
       }
     }
     @ast.Expr::Unary(op~, expr=inner, loc~, ..) => {
@@ -8786,7 +8809,7 @@ fn gen_expr_int32(
             Some(v) => v
           }
           let base : Int = if size == 8 { 0xcb0003e0 } else { 0x4b0003e0 }
-          emit32(
+          @arm64.emit32(
             emitter,
             base.lor(dst).lor(dst << 16).reinterpret_as_uint(),
           )
@@ -8802,14 +8825,14 @@ fn gen_expr_int32(
             Some(v) => v
           }
           let base : Int = if size == 8 { 0xaa2003e0 } else { 0x2a2003e0 }
-          emit32(
+          @arm64.emit32(
             emitter,
             base.lor(dst).lor(dst << 16).reinterpret_as_uint(),
           )
         }
         @ast.UnaryOp::Not => {
           gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, inner, bag)
-          emit32(
+          @arm64.emit32(
             emitter,
             (0x1a9f17e0 : Int).lor(dst).reinterpret_as_uint(),
           )
@@ -8847,7 +8870,7 @@ fn gen_expr_int32(
             }
             Some(v) => v
           }
-          arm64_ldrx(
+          @arm64.arm64_ldrx(
             emitter,
             signed,
             sz,
@@ -8892,7 +8915,7 @@ fn gen_expr_int32(
                   return
                 }
               }
-              arm64_movimm(emitter, one.reinterpret_as_uint(), 1)
+              @arm64.arm64_movimm(emitter, one.reinterpret_as_uint(), 1)
               if op == @ast.UnaryOp::PostInc || op == @ast.UnaryOp::PostDec {
                 let updated = take_reg(pool) catch {
                   err => {
@@ -8908,7 +8931,7 @@ fn gen_expr_int32(
                 } else {
                   if is64 { 0x8b000000 } else { 0x0b000000 }
                 }
-                emit32(
+                @arm64.emit32(
                   emitter,
                   (base_post : Int)
                   .lor(updated)
@@ -8924,7 +8947,7 @@ fn gen_expr_int32(
                 } else {
                   if is64 { 0x8b000000 } else { 0x0b000000 }
                 }
-                emit32(
+                @arm64.emit32(
                   emitter,
                   (base_pre : Int)
                   .lor(dst)
@@ -8971,7 +8994,7 @@ fn gen_expr_int32(
               }
               Some(v) => v
             }
-            arm64_ldrx(
+            @arm64.arm64_ldrx(
               emitter,
               false,
               sz,
@@ -8986,7 +9009,7 @@ fn gen_expr_int32(
                 return
               }
             }
-            arm64_movimm(emitter, delta_reg.reinterpret_as_uint(), elem_size.to_uint64())
+            @arm64.arm64_movimm(emitter, delta_reg.reinterpret_as_uint(), elem_size.to_uint64())
             let mut updated_reg = dst
             if op == @ast.UnaryOp::PostInc || op == @ast.UnaryOp::PostDec {
               updated_reg = take_reg(pool) catch {
@@ -9004,7 +9027,7 @@ fn gen_expr_int32(
             } else {
               0x8b000000
             }
-            emit32(
+            @arm64.emit32(
               emitter,
               (base : Int)
               .lor(updated_reg)
@@ -9012,7 +9035,7 @@ fn gen_expr_int32(
               .lor(delta_reg << 16)
               .reinterpret_as_uint(),
             )
-            arm64_strx(
+            @arm64.arm64_strx(
               emitter,
               sz,
               updated_reg.reinterpret_as_uint(),
@@ -9045,7 +9068,7 @@ fn gen_expr_int32(
             }
           }
           gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, inner, addr, bag)
-          arm64_ldrx(
+          @arm64.arm64_ldrx(
             emitter,
             signed,
             sz,
@@ -9060,7 +9083,7 @@ fn gen_expr_int32(
               return
             }
           }
-          arm64_movimm(emitter, one.reinterpret_as_uint(), 1)
+          @arm64.arm64_movimm(emitter, one.reinterpret_as_uint(), 1)
           if op == @ast.UnaryOp::PostInc || op == @ast.UnaryOp::PostDec {
             let updated = take_reg(pool) catch {
               err => {
@@ -9076,7 +9099,7 @@ fn gen_expr_int32(
             } else {
               if is64 { 0xcb000000 } else { 0x4b000000 }
             }
-            emit32(
+            @arm64.emit32(
               emitter,
               (base_post : Int)
               .lor(updated)
@@ -9084,7 +9107,7 @@ fn gen_expr_int32(
               .lor(one << 16)
               .reinterpret_as_uint(),
             )
-            arm64_strx(
+            @arm64.arm64_strx(
               emitter,
               sz,
               updated.reinterpret_as_uint(),
@@ -9098,7 +9121,7 @@ fn gen_expr_int32(
             } else {
               if is64 { 0xcb000000 } else { 0x4b000000 }
             }
-            emit32(
+            @arm64.emit32(
               emitter,
               (base_pre : Int)
               .lor(dst)
@@ -9106,7 +9129,7 @@ fn gen_expr_int32(
               .lor(one << 16)
               .reinterpret_as_uint(),
             )
-            arm64_strx(
+            @arm64.arm64_strx(
               emitter,
               sz,
               dst.reinterpret_as_uint(),
@@ -9253,7 +9276,7 @@ fn gen_expr_int32(
                     return
                   }
                 }
-                arm64_ldrx(
+                @arm64.arm64_ldrx(
                   emitter,
                   false,
                   3,
@@ -9308,12 +9331,12 @@ fn gen_expr_int32(
                       return
                     }
                   }
-                  arm64_movimm(
+                  @arm64.arm64_movimm(
                     emitter,
                     scale.reinterpret_as_uint(),
                     elem_size.to_uint64(),
                   )
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (0x9b007c00 : Int)
                     .lor(idx)
@@ -9324,7 +9347,7 @@ fn gen_expr_int32(
                   give_reg(pool, scale)
                 }
                 let base : Int = if op == @ast.BinaryOp::AddAssign { 0x8b000000 } else { 0xcb000000 }
-                emit32(
+                @arm64.emit32(
                   emitter,
                   (base : Int)
                   .lor(dst)
@@ -9332,7 +9355,7 @@ fn gen_expr_int32(
                   .lor(idx << 16)
                   .reinterpret_as_uint(),
                 )
-                arm64_strx(
+                @arm64.arm64_strx(
                   emitter,
                   3,
                   dst.reinterpret_as_uint(),
@@ -9404,7 +9427,7 @@ fn gen_expr_int32(
               }
               match op {
                 @ast.BinaryOp::AddAssign =>
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (if is64 { 0x8b000000 } else { 0x0b000000 } : Int)
                     .lor(dst)
@@ -9413,7 +9436,7 @@ fn gen_expr_int32(
                     .reinterpret_as_uint(),
                   )
                 @ast.BinaryOp::SubAssign =>
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (if is64 { 0xcb000000 } else { 0x4b000000 } : Int)
                     .lor(dst)
@@ -9422,7 +9445,7 @@ fn gen_expr_int32(
                     .reinterpret_as_uint(),
                   )
                 @ast.BinaryOp::MulAssign =>
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (if is64 { 0x9b007c00 } else { 0x1b007c00 } : Int)
                     .lor(dst)
@@ -9431,7 +9454,7 @@ fn gen_expr_int32(
                     .reinterpret_as_uint(),
                   )
                 @ast.BinaryOp::DivAssign =>
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (if is_unsigned {
                       if is64 { 0x9ac00800 } else { 0x1ac00800 }
@@ -9444,7 +9467,7 @@ fn gen_expr_int32(
                     .reinterpret_as_uint(),
                   )
                 @ast.BinaryOp::ModAssign => {
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (if is_unsigned {
                       if is64 { 0x9ac00800 } else { 0x1ac00800 }
@@ -9456,7 +9479,7 @@ fn gen_expr_int32(
                     .lor(dst << 16)
                     .reinterpret_as_uint(),
                   )
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (if is64 { 0x9b008000 } else { 0x1b008000 } : Int)
                     .lor(dst)
@@ -9467,7 +9490,7 @@ fn gen_expr_int32(
                   )
                 }
                 @ast.BinaryOp::ShlAssign =>
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     ((0x1ac02000 : Int).lor(if is64 { 0x80000000 } else { 0 }))
                     .lor(dst)
@@ -9478,7 +9501,7 @@ fn gen_expr_int32(
                 @ast.BinaryOp::ShrAssign => {
                   let base : Int = if is_unsigned { 0x1ac02400 } else { 0x1ac02800 }
                   let base64 = if is64 { base.lor(0x80000000) } else { base }
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     base64
                     .lor(dst)
@@ -9488,7 +9511,7 @@ fn gen_expr_int32(
                   )
                 }
                 @ast.BinaryOp::BitAndAssign =>
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (if is64 { 0x8a000000 } else { 0x0a000000 } : Int)
                     .lor(dst)
@@ -9497,7 +9520,7 @@ fn gen_expr_int32(
                     .reinterpret_as_uint(),
                   )
                 @ast.BinaryOp::BitOrAssign =>
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (if is64 { 0xaa000000 } else { 0x2a000000 } : Int)
                     .lor(dst)
@@ -9506,7 +9529,7 @@ fn gen_expr_int32(
                     .reinterpret_as_uint(),
                   )
                 @ast.BinaryOp::BitXorAssign =>
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (if is64 { 0xca000000 } else { 0x4a000000 } : Int)
                     .lor(dst)
@@ -9541,7 +9564,7 @@ fn gen_expr_int32(
             }
           }
           gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, left, addr, bag)
-          arm64_ldrx(
+          @arm64.arm64_ldrx(
             emitter,
             lhs_signed,
             sz,
@@ -9574,7 +9597,7 @@ fn gen_expr_int32(
           }
           match op {
             @ast.BinaryOp::AddAssign =>
-              emit32(
+              @arm64.emit32(
                 emitter,
                 (if is64 { 0x8b000000 } else { 0x0b000000 } : Int)
                 .lor(dst)
@@ -9583,7 +9606,7 @@ fn gen_expr_int32(
                 .reinterpret_as_uint(),
               )
             @ast.BinaryOp::SubAssign =>
-              emit32(
+              @arm64.emit32(
                 emitter,
                 (if is64 { 0xcb000000 } else { 0x4b000000 } : Int)
                 .lor(dst)
@@ -9592,7 +9615,7 @@ fn gen_expr_int32(
                 .reinterpret_as_uint(),
               )
             @ast.BinaryOp::MulAssign =>
-              emit32(
+              @arm64.emit32(
                 emitter,
                 (if is64 { 0x9b007c00 } else { 0x1b007c00 } : Int)
                 .lor(dst)
@@ -9601,7 +9624,7 @@ fn gen_expr_int32(
                 .reinterpret_as_uint(),
               )
             @ast.BinaryOp::DivAssign =>
-              emit32(
+              @arm64.emit32(
                 emitter,
                 (if is_unsigned {
                   if is64 { 0x9ac00800 } else { 0x1ac00800 }
@@ -9614,7 +9637,7 @@ fn gen_expr_int32(
                 .reinterpret_as_uint(),
               )
             @ast.BinaryOp::ModAssign => {
-              emit32(
+              @arm64.emit32(
                 emitter,
                 (if is_unsigned {
                   if is64 { 0x9ac00800 } else { 0x1ac00800 }
@@ -9626,7 +9649,7 @@ fn gen_expr_int32(
                 .lor(dst << 16)
                 .reinterpret_as_uint(),
               )
-              emit32(
+              @arm64.emit32(
                 emitter,
                 (if is64 { 0x9b008000 } else { 0x1b008000 } : Int)
                 .lor(dst)
@@ -9637,7 +9660,7 @@ fn gen_expr_int32(
               )
             }
             @ast.BinaryOp::ShlAssign =>
-              emit32(
+              @arm64.emit32(
                 emitter,
                 ((0x1ac02000 : Int).lor(if is64 { 0x80000000 } else { 0 }))
                 .lor(dst)
@@ -9648,7 +9671,7 @@ fn gen_expr_int32(
             @ast.BinaryOp::ShrAssign => {
               let base : Int = if is_unsigned { 0x1ac02400 } else { 0x1ac02800 }
               let base64 = if is64 { base.lor(0x80000000) } else { base }
-              emit32(
+              @arm64.emit32(
                 emitter,
                 base64
                 .lor(dst)
@@ -9658,7 +9681,7 @@ fn gen_expr_int32(
               )
             }
             @ast.BinaryOp::BitAndAssign =>
-              emit32(
+              @arm64.emit32(
                 emitter,
                 (if is64 { 0x8a000000 } else { 0x0a000000 } : Int)
                 .lor(dst)
@@ -9667,7 +9690,7 @@ fn gen_expr_int32(
                 .reinterpret_as_uint(),
               )
             @ast.BinaryOp::BitOrAssign =>
-              emit32(
+              @arm64.emit32(
                 emitter,
                 (if is64 { 0xaa000000 } else { 0x2a000000 } : Int)
                 .lor(dst)
@@ -9676,7 +9699,7 @@ fn gen_expr_int32(
                 .reinterpret_as_uint(),
               )
             @ast.BinaryOp::BitXorAssign =>
-              emit32(
+              @arm64.emit32(
                 emitter,
                 (if is64 { 0xca000000 } else { 0x4a000000 } : Int)
                 .lor(dst)
@@ -9686,7 +9709,7 @@ fn gen_expr_int32(
               )
             _ => ()
           }
-          arm64_strx(
+          @arm64.arm64_strx(
             emitter,
             sz,
             dst.reinterpret_as_uint(),
@@ -9822,8 +9845,8 @@ fn gen_expr_int32(
             }
           }
 
-          let br_end = gjmp(emitter, 0)
-          let short_pc = emitter_pc(emitter)
+          let br_end = @arm64.gjmp(emitter, 0)
+          let short_pc = @arm64.emitter_pc(emitter)
           patch_b_cond(
             emitter,
             br_short,
@@ -9832,14 +9855,14 @@ fn gen_expr_int32(
           )
           catch { err => @diag.add_error(bag, loc, err.to_string()) }
 
-          arm64_movimm(
+          @arm64.arm64_movimm(
             emitter,
             dst.reinterpret_as_uint(),
             if op == @ast.BinaryOp::LogAnd { 0 } else { 1 },
           )
 
-          let end_pc = emitter_pc(emitter)
-          gsym_addr(emitter, br_end, end_pc) catch {
+          let end_pc = @arm64.emitter_pc(emitter)
+          @arm64.gsym_addr(emitter, br_end, end_pc) catch {
             err => @diag.add_error(bag, loc, err.to_string())
           }
         }
@@ -10006,7 +10029,7 @@ fn gen_expr_int32(
                     }
                     Some(v) => v
                   }
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (0xcb000000 : Int)
                     .lor(dst)
@@ -10022,12 +10045,12 @@ fn gen_expr_int32(
                         return
                       }
                     }
-                    arm64_movimm(
+                    @arm64.arm64_movimm(
                       emitter,
                       scale.reinterpret_as_uint(),
                       elem_size.to_uint64(),
                     )
-                    emit32(
+                    @arm64.emit32(
                       emitter,
                       (0x9ac00c00 : Int)
                       .lor(dst)
@@ -10135,7 +10158,7 @@ fn gen_expr_int32(
                       0x1ac02400
                     }
                   let base = if is64 { base_raw.lor(0x80000000) } else { base_raw }
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     base
                     .lor(dst)
@@ -10153,7 +10176,7 @@ fn gen_expr_int32(
                     } else {
                       TOK_SHR
                     }
-                  let _ = arm64_gen_opic(
+                  let _ = @arm64.arm64_gen_opic(
                     emitter,
                     shift_tok,
                     if is64 { 1 } else { 0 },
@@ -10183,7 +10206,7 @@ fn gen_expr_int32(
               emit_int_cast(emitter, alloc.sem, right_ty, result_ty, dst, loc, bag)
               match op {
                 @ast.BinaryOp::Add =>
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (if is64 { 0x8b000000 } else { 0x0b000000 } : Int)
                     .lor(dst)
@@ -10192,7 +10215,7 @@ fn gen_expr_int32(
                     .reinterpret_as_uint(),
                   )
                 @ast.BinaryOp::Sub =>
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (if is64 { 0xcb000000 } else { 0x4b000000 } : Int)
                     .lor(dst)
@@ -10201,7 +10224,7 @@ fn gen_expr_int32(
                     .reinterpret_as_uint(),
                   )
                 @ast.BinaryOp::Mul =>
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (if is64 { 0x9b007c00 } else { 0x1b007c00 } : Int)
                     .lor(dst)
@@ -10210,7 +10233,7 @@ fn gen_expr_int32(
                     .reinterpret_as_uint(),
                   )
                 @ast.BinaryOp::Div =>
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (if is_unsigned {
                       if is64 { 0x9ac00800 } else { 0x1ac00800 }
@@ -10223,7 +10246,7 @@ fn gen_expr_int32(
                     .reinterpret_as_uint(),
                   )
                 @ast.BinaryOp::Mod => {
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (if is_unsigned {
                       if is64 { 0x9ac00800 } else { 0x1ac00800 }
@@ -10235,7 +10258,7 @@ fn gen_expr_int32(
                     .lor(dst << 16)
                     .reinterpret_as_uint(),
                   )
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (if is64 { 0x9b008000 } else { 0x1b008000 } : Int)
                     .lor(dst)
@@ -10246,7 +10269,7 @@ fn gen_expr_int32(
                   )
                 }
                 @ast.BinaryOp::BitAnd =>
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (if is64 { 0x8a000000 } else { 0x0a000000 } : Int)
                     .lor(dst)
@@ -10255,7 +10278,7 @@ fn gen_expr_int32(
                     .reinterpret_as_uint(),
                   )
                 @ast.BinaryOp::BitOr =>
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (if is64 { 0xaa000000 } else { 0x2a000000 } : Int)
                     .lor(dst)
@@ -10264,7 +10287,7 @@ fn gen_expr_int32(
                     .reinterpret_as_uint(),
                   )
                 @ast.BinaryOp::BitXor =>
-                  emit32(
+                  @arm64.emit32(
                     emitter,
                     (if is64 { 0xca000000 } else { 0x4a000000 } : Int)
                     .lor(dst)
@@ -10292,7 +10315,7 @@ fn gen_expr_int32(
 	            match strip_top_qualifiers(slot.ty) {
 	              @ast.CType::Array(size=None, size_expr=Some(_), ..) =>
 	                if slot.vla_size_offset is Some(off) {
-	                  arm64_ldrx(
+	                  @arm64.arm64_ldrx(
 	                    emitter,
 	                    false,
 	                    3,
@@ -10326,7 +10349,7 @@ fn gen_expr_int32(
 	          )
 	        _ =>
 	          if type_size_align_or_error(alloc.sem, ty, loc) is Some((size, _)) {
-	            arm64_movimm(
+	            @arm64.arm64_movimm(
 	              emitter,
 	              dst.reinterpret_as_uint(),
 	              size.to_uint64(),
@@ -10351,7 +10374,7 @@ fn gen_expr_int32(
 	          )
 	        _ =>
 	          if type_size_align_or_error(alloc.sem, ty, loc) is Some((size, _)) {
-	            arm64_movimm(
+	            @arm64.arm64_movimm(
 	              emitter,
 	              dst.reinterpret_as_uint(),
 	              size.to_uint64(),
@@ -10404,7 +10427,7 @@ fn gen_expr_int32(
           if from_kind != @ast.CFloatKind::Float {
             inst = inst.lor(0x00400000)
           }
-          emit32(
+          @arm64.emit32(
             emitter,
             inst
             .lor(dst)
@@ -10466,8 +10489,8 @@ fn gen_expr_int32(
         expr_ty=then_ty,
       )
       emit_cast_value(emitter, alloc.sem, then_ty, result_ty, dst, loc, bag)
-      let br_end = gjmp(emitter, 0)
-      let else_pc = emitter_pc(emitter)
+      let br_end = @arm64.gjmp(emitter, 0)
+      let else_pc = @arm64.emitter_pc(emitter)
       patch_b_cond(emitter, br_else, else_pc, ARM64_COND_EQ) catch {
         err => @diag.add_error(bag, loc, err.to_string())
       }
@@ -10483,22 +10506,22 @@ fn gen_expr_int32(
         expr_ty=else_ty,
       )
       emit_cast_value(emitter, alloc.sem, else_ty, result_ty, dst, loc, bag)
-      let end_pc = emitter_pc(emitter)
-      gsym_addr(emitter, br_end, end_pc) catch {
+      let end_pc = @arm64.emitter_pc(emitter)
+      @arm64.gsym_addr(emitter, br_end, end_pc) catch {
         err => @diag.add_error(bag, loc, err.to_string())
       }
     }
     @ast.Expr::StringLit(value=value, ..) => {
       let sym = cstring_sym_or_add(cstrings, syms, value)
-      let adrp_off = emitter_pc(emitter)
-      greloca(emitter, sym, adrp_off, R_AARCH64_ADR_PREL_PG_HI21, 0)
-      emit32(
+      let adrp_off = @arm64.emitter_pc(emitter)
+      @arm64.greloca(emitter, sym, adrp_off, @arm64.R_AARCH64_ADR_PREL_PG_HI21, 0)
+      @arm64.emit32(
         emitter,
         (0x90000000 : UInt64).lor(dst.to_uint64()).to_uint(),
       )
-      let add_off = emitter_pc(emitter)
-      greloca(emitter, sym, add_off, R_AARCH64_ADD_ABS_LO12_NC, 0)
-      emit32(
+      let add_off = @arm64.emitter_pc(emitter)
+      @arm64.greloca(emitter, sym, add_off, @arm64.R_AARCH64_ADD_ABS_LO12_NC, 0)
+      @arm64.emit32(
         emitter,
         (0x91000000 : UInt64)
         .lor(dst.to_uint64())
@@ -10544,10 +10567,10 @@ fn gen_expr_ptr(
       match @ast.parse_int64_literal(value) {
         None => @diag.add_error(bag, loc, "codegen: invalid integer literal")
         Some(v) =>
-          arm64_movimm(emitter, dst.reinterpret_as_uint(), v.reinterpret_as_uint64())
+          @arm64.arm64_movimm(emitter, dst.reinterpret_as_uint(), v.reinterpret_as_uint64())
       }
     @ast.Expr::CharLit(value~, ..) =>
-      arm64_movimm(emitter, dst.reinterpret_as_uint(), value.to_uint64())
+      @arm64.arm64_movimm(emitter, dst.reinterpret_as_uint(), value.to_uint64())
     @ast.Expr::StmtExpr(stmts~, loc~, ..) =>
       gen_stmt_expr_with(
         emitter,
@@ -10570,10 +10593,10 @@ fn gen_expr_ptr(
     @ast.Expr::LabelAddr(name~, loc~, ..) =>
       match alloc.labels.addrs.get(name) {
         Some(addr) =>
-          emit_adr(emitter, dst, addr - emitter_pc(emitter), loc, bag)
+          emit_adr(emitter, dst, addr - @arm64.emitter_pc(emitter), loc, bag)
         None => {
-          let at = emitter_pc(emitter)
-          emit32(
+          let at = @arm64.emitter_pc(emitter)
+          @arm64.emit32(
             emitter,
             (0x10000000 : Int).lor(dst).reinterpret_as_uint(),
           )
@@ -10590,7 +10613,7 @@ fn gen_expr_ptr(
         Some(slot) =>
           match strip_top_qualifiers(slot.ty) {
             @ast.CType::Array(size=None, size_expr=Some(_), ..) =>
-              arm64_ldrx(
+              @arm64.arm64_ldrx(
                 emitter,
                 false,
                 3,
@@ -10619,7 +10642,7 @@ fn gen_expr_ptr(
                 @ast.CType::Array(..) | @ast.CType::Function(..) => return
                 _ => ()
               }
-              arm64_ldrx(
+              @arm64.arm64_ldrx(
                 emitter,
                 false,
                 3,
@@ -10650,7 +10673,7 @@ fn gen_expr_ptr(
                   _ => ()
                 }
               }
-              arm64_ldrx(
+              @arm64.arm64_ldrx(
                 emitter,
                 false,
                 3,
@@ -10700,7 +10723,7 @@ fn gen_expr_ptr(
                 emit_mov(emitter, true, dst, addr)
               }
             _ =>
-              arm64_ldrx(
+              @arm64.arm64_ldrx(
                 emitter,
                 false,
                 3,
@@ -10719,7 +10742,7 @@ fn gen_expr_ptr(
                   emit_mov(emitter, true, dst, addr)
                 }
               _ =>
-                arm64_ldrx(
+                @arm64.arm64_ldrx(
                   emitter,
                   false,
                   3,
@@ -10764,7 +10787,7 @@ fn gen_expr_ptr(
             emit_mov(emitter, true, dst, addr)
           }
         _ =>
-          arm64_ldrx(
+          @arm64.arm64_ldrx(
             emitter,
             false,
             3,
@@ -10826,7 +10849,7 @@ fn gen_expr_ptr(
             }
             Some(v) => v
           }
-          arm64_ldrx(
+          @arm64.arm64_ldrx(
             emitter,
             signed,
             sz,
@@ -10861,7 +10884,7 @@ fn gen_expr_ptr(
         }
         Some(v) => v
       }
-          arm64_ldrx(
+          @arm64.arm64_ldrx(
             emitter,
             signed,
             sz,
@@ -10929,7 +10952,7 @@ fn gen_expr_ptr(
           } else {
             dst
           }
-          arm64_ldrx(
+          @arm64.arm64_ldrx(
             emitter,
             false,
             3,
@@ -10957,7 +10980,7 @@ fn gen_expr_ptr(
             if imm != 0 {
               if imm <= 0xfff {
                 let base : Int = if is_add { 0x91000000 } else { 0xd1000000 }
-                emit32(
+                @arm64.emit32(
                   emitter,
                   (base : Int)
                   .lor(updated)
@@ -10977,13 +11000,13 @@ fn gen_expr_ptr(
                     return
                   }
                 }
-                arm64_movimm(
+                @arm64.arm64_movimm(
                   emitter,
                   scale.reinterpret_as_uint(),
                   imm.to_uint64(),
                 )
                 let base : Int = if is_add { 0x8b000000 } else { 0xcb000000 }
-                emit32(
+                @arm64.emit32(
                   emitter,
                   (base : Int)
                   .lor(updated)
@@ -10994,7 +11017,7 @@ fn gen_expr_ptr(
                 give_reg(pool, scale)
               }
             }
-            arm64_strx(
+            @arm64.arm64_strx(
               emitter,
               3,
               updated.reinterpret_as_uint(),
@@ -11010,7 +11033,7 @@ fn gen_expr_ptr(
             if imm != 0 {
               if imm <= 0xfff {
                 let base : Int = if is_add { 0x91000000 } else { 0xd1000000 }
-                emit32(
+                @arm64.emit32(
                   emitter,
                   (base : Int)
                   .lor(value_reg)
@@ -11029,13 +11052,13 @@ fn gen_expr_ptr(
                     return
                   }
                 }
-                arm64_movimm(
+                @arm64.arm64_movimm(
                   emitter,
                   scale.reinterpret_as_uint(),
                   imm.to_uint64(),
                 )
                 let base : Int = if is_add { 0x8b000000 } else { 0xcb000000 }
-                emit32(
+                @arm64.emit32(
                   emitter,
                   (base : Int)
                   .lor(value_reg)
@@ -11046,7 +11069,7 @@ fn gen_expr_ptr(
                 give_reg(pool, scale)
               }
             }
-            arm64_strx(
+            @arm64.arm64_strx(
               emitter,
               3,
               value_reg.reinterpret_as_uint(),
@@ -11120,7 +11143,7 @@ fn gen_expr_ptr(
               return
             }
           }
-          arm64_ldrx(
+          @arm64.arm64_ldrx(
             emitter,
             false,
             3,
@@ -11150,12 +11173,12 @@ fn gen_expr_ptr(
                 return
               }
             }
-            arm64_movimm(
+            @arm64.arm64_movimm(
               emitter,
               scale.reinterpret_as_uint(),
               elem_size.to_uint64(),
             )
-            emit32(
+            @arm64.emit32(
               emitter,
               (0x9b007c00 : Int)
               .lor(idx)
@@ -11167,7 +11190,7 @@ fn gen_expr_ptr(
           }
 
           let base : Int = if op == @ast.BinaryOp::AddAssign { 0x8b000000 } else { 0xcb000000 }
-          emit32(
+          @arm64.emit32(
             emitter,
             (base : Int)
             .lor(base_reg)
@@ -11175,7 +11198,7 @@ fn gen_expr_ptr(
             .lor(idx << 16)
             .reinterpret_as_uint(),
           )
-          arm64_strx(
+          @arm64.arm64_strx(
             emitter,
             3,
             base_reg.reinterpret_as_uint(),
@@ -11257,12 +11280,12 @@ fn gen_expr_ptr(
                 return
               }
             }
-            arm64_movimm(
+            @arm64.arm64_movimm(
               emitter,
               scale.reinterpret_as_uint(),
               elem_size.to_uint64(),
             )
-            emit32(
+            @arm64.emit32(
               emitter,
               (0x9b007c00 : Int)
               .lor(idx)
@@ -11273,7 +11296,7 @@ fn gen_expr_ptr(
             give_reg(pool, scale)
           }
           let base = if op == @ast.BinaryOp::Add { 0x8b000000 } else { 0xcb000000 }
-          emit32(
+          @arm64.emit32(
             emitter,
             (base : Int)
             .lor(dst)
@@ -11307,14 +11330,14 @@ fn gen_expr_ptr(
       gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, cond, bag)
       let br_else = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
       gen_expr_ptr(emitter, alloc, syms, pool, cstrings, then_expr, dst, bag)
-      let br_end = gjmp(emitter, 0)
-      let else_pc = emitter_pc(emitter)
+      let br_end = @arm64.gjmp(emitter, 0)
+      let else_pc = @arm64.emitter_pc(emitter)
       patch_b_cond(emitter, br_else, else_pc, ARM64_COND_EQ) catch {
         err => @diag.add_error(bag, loc, err.to_string())
       }
       gen_expr_ptr(emitter, alloc, syms, pool, cstrings, else_expr, dst, bag)
-      let end_pc = emitter_pc(emitter)
-      gsym_addr(emitter, br_end, end_pc) catch {
+      let end_pc = @arm64.emitter_pc(emitter)
+      @arm64.gsym_addr(emitter, br_end, end_pc) catch {
         err => @diag.add_error(bag, loc, err.to_string())
       }
     }
@@ -11415,14 +11438,14 @@ fn gen_expr_discard(
           gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, cond, bag)
           let br_else = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
           gen_expr_discard(emitter, alloc, syms, pool, cstrings, then_expr, bag)
-          let br_end = gjmp(emitter, 0)
-          let else_pc = emitter_pc(emitter)
+          let br_end = @arm64.gjmp(emitter, 0)
+          let else_pc = @arm64.emitter_pc(emitter)
           patch_b_cond(emitter, br_else, else_pc, ARM64_COND_EQ) catch {
             err => @diag.add_error(bag, loc, err.to_string())
           }
           gen_expr_discard(emitter, alloc, syms, pool, cstrings, else_expr, bag)
-          let end_pc = emitter_pc(emitter)
-          gsym_addr(emitter, br_end, end_pc) catch {
+          let end_pc = @arm64.emitter_pc(emitter)
+          @arm64.gsym_addr(emitter, br_end, end_pc) catch {
             err => @diag.add_error(bag, loc, err.to_string())
           }
         }
@@ -11647,7 +11670,7 @@ fn gen_stmt_expr_with(
     continue i + 1
   }
   if chain != 0 {
-    gsym(emitter, chain) catch {
+    @arm64.gsym(emitter, chain) catch {
       err => @diag.add_error(bag, loc, err.to_string())
     }
     @diag.add_error(bag, loc, "codegen: return in statement expression not supported")
@@ -11674,7 +11697,7 @@ fn loop_append_break(
   match loops.get(idx) {
     None => @diag.add_error(bag, loc, "codegen: break outside of loop")
     Some(info) => {
-      let chain = gjmp(emitter, info.break_chain)
+      let chain = @arm64.gjmp(emitter, info.break_chain)
       loops[idx] = {
         break_chain: chain,
         cont_chain: info.cont_chain,
@@ -11696,7 +11719,7 @@ fn loop_append_continue(
   match loops.get(idx) {
     None => @diag.add_error(bag, loc, "codegen: continue outside of loop")
     Some(info) => {
-      let chain = gjmp(emitter, info.cont_chain)
+      let chain = @arm64.gjmp(emitter, info.cont_chain)
       loops[idx] = {
         break_chain: info.break_chain,
         cont_chain: chain,
@@ -11718,7 +11741,7 @@ fn switch_append_break(
   match switches.get(idx) {
     None => @diag.add_error(bag, loc, "codegen: break outside of loop/switch")
     Some(info) => {
-      let chain = gjmp(emitter, info.break_chain)
+      let chain = @arm64.gjmp(emitter, info.break_chain)
       switches[idx] = { break_chain: chain, break_depth: info.break_depth }
     }
   }
@@ -11811,7 +11834,7 @@ fn gen_switch_body(
   match stmt {
     @ast.Stmt::Case(body=case_body, ..) => {
       if next_case0 < case_addrs.length() {
-        case_addrs[next_case0] = emitter_pc(emitter)
+        case_addrs[next_case0] = @arm64.emitter_pc(emitter)
         next_case0 = next_case0 + 1
       }
       let (chain, new_default, new_next) = gen_switch_body(
@@ -11834,7 +11857,7 @@ fn gen_switch_body(
       (chain, new_default, new_next)
     }
     @ast.Stmt::Default(body=def_body, ..) => {
-      default_addr0 = Some(emitter_pc(emitter))
+      default_addr0 = Some(@arm64.emitter_pc(emitter))
       let (chain, new_default, new_next) = gen_switch_body(
         emitter,
         alloc,
@@ -11906,13 +11929,13 @@ fn gen_switch_body(
       (chain, default_addr0, next_case0)
     }
     @ast.Stmt::Label(name~, body~, loc~) => {
-      let addr = emitter_pc(emitter)
+      let addr = @arm64.emitter_pc(emitter)
       if labels.addrs.get(name) is Some(_) {
         @diag.add_error(bag, loc, "codegen: duplicate label")
       }
       if labels.chains.get(name) is Some(chain) {
         if chain != 0 {
-          gsym_addr(emitter, chain, addr) catch {
+          @arm64.gsym_addr(emitter, chain, addr) catch {
             err => @diag.add_error(bag, loc, err.to_string())
           }
         }
@@ -12123,15 +12146,15 @@ fn gen_stmt(
       )
       match else_branch {
         None => {
-          let end_pc = emitter_pc(emitter)
+          let end_pc = @arm64.emitter_pc(emitter)
           patch_b_cond(emitter, br_false, end_pc, ARM64_COND_EQ) catch {
             err => @diag.add_error(bag, loc, err.to_string())
           }
           chain1
         }
         Some(else_stmt) => {
-          let after_then = gjmp(emitter, 0)
-          let else_pc = emitter_pc(emitter)
+          let after_then = @arm64.gjmp(emitter, 0)
+          let else_pc = @arm64.emitter_pc(emitter)
           patch_b_cond(emitter, br_false, else_pc, ARM64_COND_EQ) catch {
             err => @diag.add_error(bag, loc, err.to_string())
           }
@@ -12149,8 +12172,8 @@ fn gen_stmt(
             bag,
             chain1,
           )
-          let end_pc = emitter_pc(emitter)
-          gsym_addr(emitter, after_then, end_pc) catch {
+          let end_pc = @arm64.emitter_pc(emitter)
+          @arm64.gsym_addr(emitter, after_then, end_pc) catch {
             err => @diag.add_error(bag, loc, err.to_string())
           }
           chain2
@@ -12158,7 +12181,7 @@ fn gen_stmt(
       }
     }
 	    @ast.Stmt::While(cond~, body~, loc~) => {
-	      let start_pc = emitter_pc(emitter)
+	      let start_pc = @arm64.emitter_pc(emitter)
 	      gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, cond, bag)
 	      let br_end = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
 	
@@ -12192,23 +12215,23 @@ fn gen_stmt(
 	        cont_depth: 0,
 	      })
 	
-	      gsym_addr(emitter, loop_info.cont_chain, start_pc) catch {
+	      @arm64.gsym_addr(emitter, loop_info.cont_chain, start_pc) catch {
         err => @diag.add_error(bag, loc, err.to_string())
       }
-      gjmp_addr(emitter, start_pc) catch {
+      @arm64.gjmp_addr(emitter, start_pc) catch {
         err => @diag.add_error(bag, loc, err.to_string())
       }
-      let end_pc = emitter_pc(emitter)
+      let end_pc = @arm64.emitter_pc(emitter)
       patch_b_cond(emitter, br_end, end_pc, ARM64_COND_EQ) catch {
         err => @diag.add_error(bag, loc, err.to_string())
       }
-      gsym_addr(emitter, loop_info.break_chain, end_pc) catch {
+      @arm64.gsym_addr(emitter, loop_info.break_chain, end_pc) catch {
         err => @diag.add_error(bag, loc, err.to_string())
       }
       chain1
     }
 	    @ast.Stmt::DoWhile(cond~, body~, loc~) => {
-	      let start_pc = emitter_pc(emitter)
+	      let start_pc = @arm64.emitter_pc(emitter)
 	      let loop_depth = alloc.scopes.length()
 	      loops.push({
 	        break_chain: 0,
@@ -12232,14 +12255,14 @@ fn gen_stmt(
         return_chain,
 	      )
 	      breakables.pop() |> ignore
-	      let cond_pc = emitter_pc(emitter)
+	      let cond_pc = @arm64.emitter_pc(emitter)
 	      let loop_info = loops.pop().unwrap_or({
 	        break_chain: 0,
 	        cont_chain: 0,
 	        break_depth: 0,
 	        cont_depth: 0,
 	      })
-	      gsym_addr(emitter, loop_info.cont_chain, cond_pc) catch {
+	      @arm64.gsym_addr(emitter, loop_info.cont_chain, cond_pc) catch {
 	        err => @diag.add_error(bag, loc, err.to_string())
       }
 
@@ -12248,8 +12271,8 @@ fn gen_stmt(
       patch_b_cond(emitter, br_back, start_pc, ARM64_COND_NE) catch {
         err => @diag.add_error(bag, loc, err.to_string())
       }
-      let end_pc = emitter_pc(emitter)
-      gsym_addr(emitter, loop_info.break_chain, end_pc) catch {
+      let end_pc = @arm64.emitter_pc(emitter)
+      @arm64.gsym_addr(emitter, loop_info.break_chain, end_pc) catch {
         err => @diag.add_error(bag, loc, err.to_string())
       }
       chain1
@@ -12275,7 +12298,7 @@ fn gen_stmt(
           chain0,
         )
       }
-      let cond_pc = emitter_pc(emitter)
+      let cond_pc = @arm64.emitter_pc(emitter)
       let br_end = match cond {
         None => None
         Some(e) => {
@@ -12305,7 +12328,7 @@ fn gen_stmt(
         bag,
         chain0,
       )
-	      let step_pc = emitter_pc(emitter)
+	      let step_pc = @arm64.emitter_pc(emitter)
 	      breakables.pop() |> ignore
 	      let loop_info = loops.pop().unwrap_or({
 	        break_chain: 0,
@@ -12314,22 +12337,22 @@ fn gen_stmt(
 	        cont_depth: 0,
 	      })
 	      let continue_target = if step is Some(_) { step_pc } else { cond_pc }
-	      gsym_addr(emitter, loop_info.cont_chain, continue_target) catch {
+	      @arm64.gsym_addr(emitter, loop_info.cont_chain, continue_target) catch {
 	        err => @diag.add_error(bag, loc, err.to_string())
       }
       if step is Some(e) {
         gen_expr_discard(emitter, alloc, syms, pool, cstrings, e, bag)
       }
-      gjmp_addr(emitter, cond_pc) catch {
+      @arm64.gjmp_addr(emitter, cond_pc) catch {
         err => @diag.add_error(bag, loc, err.to_string())
       }
-      let end_pc = emitter_pc(emitter)
+      let end_pc = @arm64.emitter_pc(emitter)
       if br_end is Some(at) {
         patch_b_cond(emitter, at, end_pc, ARM64_COND_EQ) catch {
           err => @diag.add_error(bag, loc, err.to_string())
         }
       }
-      gsym_addr(emitter, loop_info.break_chain, end_pc) catch {
+      @arm64.gsym_addr(emitter, loop_info.break_chain, end_pc) catch {
         err => @diag.add_error(bag, loc, err.to_string())
       }
 	      cg_pop_scope_codegen(emitter, alloc)
@@ -12377,7 +12400,7 @@ fn gen_stmt(
               9
             }
           }
-          arm64_movimm(
+          @arm64.arm64_movimm(
             emitter,
             tmp.reinterpret_as_uint(),
             info.start.reinterpret_as_uint64(),
@@ -12393,14 +12416,14 @@ fn gen_stmt(
               9
             }
           }
-          arm64_movimm(
+          @arm64.arm64_movimm(
             emitter,
             tmp.reinterpret_as_uint(),
             info.start.reinterpret_as_uint64(),
           )
           emit_cmp(emitter, cond_is64, 0, tmp)
           let skip1 = emit_b_cond_placeholder(emitter, range_cond_lt)
-          arm64_movimm(
+          @arm64.arm64_movimm(
             emitter,
             tmp.reinterpret_as_uint(),
             info.end.reinterpret_as_uint64(),
@@ -12409,9 +12432,9 @@ fn gen_stmt(
           let skip2 = emit_b_cond_placeholder(emitter, range_cond_gt)
           give_reg(pool, tmp)
 
-          let jmp = gjmp(emitter, 0)
+          let jmp = @arm64.gjmp(emitter, 0)
           range_jmps.push((jmp, i))
-          let next_pc = emitter_pc(emitter)
+          let next_pc = @arm64.emitter_pc(emitter)
           patch_b_cond(emitter, skip1, next_pc, range_cond_lt) catch {
             err => @diag.add_error(bag, loc, err.to_string())
           }
@@ -12421,7 +12444,7 @@ fn gen_stmt(
         }
       }
 
-      let default_jmp = gjmp(emitter, 0)
+      let default_jmp = @arm64.gjmp(emitter, 0)
 
       let break_depth = alloc.scopes.length()
       switches.push({ break_chain: 0, break_depth })
@@ -12445,15 +12468,15 @@ fn gen_stmt(
       )
       default_addr = new_default
 
-      let end_pc = emitter_pc(emitter)
+      let end_pc = @arm64.emitter_pc(emitter)
       breakables.pop() |> ignore
       let sw_info = switches.pop().unwrap_or({ break_chain: 0, break_depth: 0 })
-      gsym_addr(emitter, sw_info.break_chain, end_pc) catch {
+      @arm64.gsym_addr(emitter, sw_info.break_chain, end_pc) catch {
         err => @diag.add_error(bag, loc, err.to_string())
       }
 
       let default_target = default_addr.unwrap_or(end_pc)
-      gsym_addr(emitter, default_jmp, default_target) catch {
+      @arm64.gsym_addr(emitter, default_jmp, default_target) catch {
         err => @diag.add_error(bag, loc, err.to_string())
       }
 
@@ -12468,7 +12491,7 @@ fn gen_stmt(
       for item in range_jmps {
         let (jmp, idx) = item
         if idx < case_addrs.length() {
-          gsym_addr(emitter, jmp, case_addrs[idx]) catch {
+          @arm64.gsym_addr(emitter, jmp, case_addrs[idx]) catch {
             err => @diag.add_error(bag, loc, err.to_string())
           }
         }
@@ -12479,12 +12502,12 @@ fn gen_stmt(
       emit_vla_leave(emitter, alloc, 0)
       match labels.addrs.get(name) {
         Some(addr) =>
-          gjmp_addr(emitter, addr) catch {
+          @arm64.gjmp_addr(emitter, addr) catch {
             err => @diag.add_error(bag, loc, err.to_string())
           }
         None => {
           let chain = labels.chains.get(name).unwrap_or(0)
-          let new_chain = gjmp(emitter, chain)
+          let new_chain = @arm64.gjmp(emitter, chain)
           labels.chains.set(name, new_chain)
         }
       }
@@ -12497,13 +12520,13 @@ fn gen_stmt(
       return_chain
     }
     @ast.Stmt::Label(name~, body~, loc~) => {
-      let addr = emitter_pc(emitter)
+      let addr = @arm64.emitter_pc(emitter)
       if labels.addrs.get(name) is Some(_) {
         @diag.add_error(bag, loc, "codegen: duplicate label")
       }
       if labels.chains.get(name) is Some(chain) {
         if chain != 0 {
-          gsym_addr(emitter, chain, addr) catch {
+          @arm64.gsym_addr(emitter, chain, addr) catch {
             err => @diag.add_error(bag, loc, err.to_string())
           }
         }
@@ -12565,7 +12588,7 @@ fn gen_stmt(
     @ast.Stmt::Asm(stmt) => {
       // Treat inline asm as a barrier when it clobbers memory; otherwise ignore.
       if stmt.is_volatile || stmt.clobbers.contains("memory") {
-        emit32(emitter, (0xd5033bbf : Int).reinterpret_as_uint())
+        @arm64.emit32(emitter, (0xd5033bbf : Int).reinterpret_as_uint())
       }
       return_chain
     }
@@ -12575,14 +12598,14 @@ fn gen_stmt(
         None =>
           match float_kind_of_type(rt) {
             Some(k) => {
-              arm64_movimm(emitter, (0 : UInt), 0)
+              @arm64.arm64_movimm(emitter, (0 : UInt), 0)
               if k == @ast.CFloatKind::Double {
                 emit_fmov_x_to_d(emitter, 0, 0)
               } else {
                 emit_fmov_w_to_s(emitter, 0, 0)
               }
             }
-            None => arm64_movimm(emitter, (0 : UInt), 0)
+            None => @arm64.arm64_movimm(emitter, (0 : UInt), 0)
           }
         Some(expr) =>
           match float_kind_of_type(rt) {
@@ -12621,10 +12644,10 @@ fn gen_stmt(
                               let tmp = take_reg(pool) catch {
                                 err => {
                                   @diag.add_error(bag, loc, err.to_string())
-                                  return gjmp(emitter, return_chain)
+                                  return @arm64.gjmp(emitter, return_chain)
                                 }
                               }
-                              arm64_ldrx(
+                              @arm64.arm64_ldrx(
                                 emitter,
                                 false,
                                 3,
@@ -12659,7 +12682,7 @@ fn gen_stmt(
                               match alloc.agg_temp_offset {
                                 None => {
                                   @diag.add_error(bag, loc, "codegen: missing aggregate temp for return")
-                                  return gjmp(emitter, return_chain)
+                                  return @arm64.gjmp(emitter, return_chain)
                                 }
                                 Some(off) => {
                                   gen_agg_expr_to_addr(
@@ -12687,11 +12710,11 @@ fn gen_stmt(
                                   let tmp = take_reg(pool) catch {
                                     err => {
                                       @diag.add_error(bag, loc, err.to_string())
-                                      return gjmp(emitter, return_chain)
+                                      return @arm64.gjmp(emitter, return_chain)
                                     }
                                   }
                                   if fsize == 8 {
-                                    arm64_ldrx(
+                                    @arm64.arm64_ldrx(
                                       emitter,
                                       false,
                                       3,
@@ -12701,7 +12724,7 @@ fn gen_stmt(
                                     )
                                     emit_fmov_x_to_d(emitter, j, tmp)
                                   } else {
-                                    arm64_ldrx(
+                                    @arm64.arm64_ldrx(
                                       emitter,
                                       false,
                                       2,
@@ -12727,7 +12750,7 @@ fn gen_stmt(
                             match alloc.agg_temp_offset {
                               None => {
                                 @diag.add_error(bag, loc, "codegen: missing aggregate temp for return")
-                                return gjmp(emitter, return_chain)
+                                return @arm64.gjmp(emitter, return_chain)
                               }
                               Some(off) => {
                                 gen_agg_expr_to_addr(
@@ -12747,7 +12770,7 @@ fn gen_stmt(
                               }
                             }
                           }
-                          arm64_ldrs(emitter, base_reg.reinterpret_as_uint(), size)
+                          @arm64.arm64_ldrs(emitter, base_reg.reinterpret_as_uint(), size)
                         }
                       }
                   }
@@ -12769,7 +12792,7 @@ fn gen_stmt(
               }
           }
       }
-      gjmp(emitter, return_chain)
+      @arm64.gjmp(emitter, return_chain)
     }
     @ast.Stmt::Empty(..) => return_chain
     _ => {
@@ -12901,14 +12924,14 @@ fn callee_saved_regs() -> Array[Int] {
 
 ///|
 fn emit_prologue(emitter : Arm64Emitter, frame_size : Int) -> Unit {
-  emit32(emitter, (0xa9bf7bfd : UInt))
-  emit32(emitter, (0x910003fd : UInt))
+  @arm64.emit32(emitter, (0xa9bf7bfd : UInt))
+  @arm64.emit32(emitter, (0x910003fd : UInt))
   let regs = callee_saved_regs()
   let callee_save_bytes = regs.length() * 8
   let total_size = frame_size + callee_save_bytes
   if total_size > 0 {
     let off = (0 : UInt64) - total_size.to_uint64()
-    arm64_spoff(emitter, (31 : UInt), off)
+    @arm64.arm64_spoff(emitter, (31 : UInt), off)
   }
   // Save callee-saved registers used for temporaries at the bottom of the frame
   // (below locals) so local slots (fp-relative negatives) remain unchanged.
@@ -12916,7 +12939,7 @@ fn emit_prologue(emitter : Arm64Emitter, frame_size : Int) -> Unit {
   let mut i = 0
   while i < regs.length() {
     let off = base_off + (i * 8)
-    arm64_strx(
+    @arm64.arm64_strx(
       emitter,
       3,
       regs[i].reinterpret_as_uint(),
@@ -12937,7 +12960,7 @@ fn emit_epilogue(emitter : Arm64Emitter, frame_size : Int) -> Unit {
   let mut i = 0
   while i < regs.length() {
     let off = base_off + (i * 8)
-    arm64_ldrx(
+    @arm64.arm64_ldrx(
       emitter,
       false,
       3,
@@ -12948,10 +12971,10 @@ fn emit_epilogue(emitter : Arm64Emitter, frame_size : Int) -> Unit {
     i = i + 1
   }
   if total_size > 0 {
-    arm64_spoff(emitter, (31 : UInt), total_size.to_uint64())
+    @arm64.arm64_spoff(emitter, (31 : UInt), total_size.to_uint64())
   }
-  emit32(emitter, (0xa8c17bfd : UInt))
-  emit32(emitter, (0xd65f03c0 : UInt))
+  @arm64.emit32(emitter, (0xa8c17bfd : UInt))
+  @arm64.emit32(emitter, (0xd65f03c0 : UInt))
 }
 
 ///|
@@ -12962,9 +12985,9 @@ fn emit_restore_sp_to_frame_base(emitter : Arm64Emitter, frame_size : Int) -> Un
     return
   }
   // mov sp,fp; sub sp,sp,#total_size
-  emit32(emitter, (0x9100001f : Int).lor(29 << 5).reinterpret_as_uint())
+  @arm64.emit32(emitter, (0x9100001f : Int).lor(29 << 5).reinterpret_as_uint())
   let off = (0 : UInt64) - total_size.to_uint64()
-  arm64_spoff(emitter, (31 : UInt), off)
+  @arm64.arm64_spoff(emitter, (31 : UInt), off)
 }
 
 ///|
@@ -12981,7 +13004,7 @@ fn gen_func_def(
 ) -> Unit {
   let link = link_name(func.name)
   sym_for_name(syms, link) |> ignore
-  let start = emitter_pc(emitter)
+  let start = @arm64.emitter_pc(emitter)
   func_offsets.set(link, start)
 
   let plan = compute_frame_plan(sem, func, static_locals, bag)
@@ -13002,7 +13025,7 @@ fn gen_func_def(
 
   let pool = new_reg_pool()
   if alloc.sret_offset is Some(off) {
-    arm64_strx(
+    @arm64.arm64_strx(
       emitter,
       3,
       (8 : UInt),
@@ -13032,7 +13055,7 @@ fn gen_func_def(
     if slot is Some(slot) {
       if byref {
         if loc_i < 16 {
-          arm64_strx(
+          @arm64.arm64_strx(
             emitter,
             3,
             (loc_i >> 1).reinterpret_as_uint(),
@@ -13048,7 +13071,7 @@ fn gen_func_def(
               continue
             }
           }
-          arm64_ldrx(
+          @arm64.arm64_ldrx(
             emitter,
             false,
             3,
@@ -13056,7 +13079,7 @@ fn gen_func_def(
             (29 : UInt),
             (16 + stack_off).to_int64().reinterpret_as_uint64(),
           )
-          arm64_strx(
+          @arm64.arm64_strx(
             emitter,
             3,
             tmp.reinterpret_as_uint(),
@@ -13107,7 +13130,7 @@ fn gen_func_def(
               }
               if fsize == 8 {
                 emit_fmov_d_to_x(emitter, tmp, fp_reg + j)
-                arm64_strx(
+                @arm64.arm64_strx(
                   emitter,
                   3,
                   tmp.reinterpret_as_uint(),
@@ -13116,7 +13139,7 @@ fn gen_func_def(
                 )
               } else {
                 emit_fmov_s_to_w(emitter, tmp, fp_reg + j)
-                arm64_strx(
+                @arm64.arm64_strx(
                   emitter,
                   2,
                   tmp.reinterpret_as_uint(),
@@ -13194,7 +13217,7 @@ fn gen_func_def(
   )
   cg_pop_scope(alloc)
 
-  gsym(emitter, return_chain) catch {
+  @arm64.gsym(emitter, return_chain) catch {
     err => @diag.add_error(bag, func.loc, err.to_string())
   }
   emit_restore_sp_to_frame_base(emitter, frame_size)
@@ -13612,7 +13635,7 @@ fn fill_global_initializer_bytes(
                     }
                     relocs.push({
                       offset: base_off,
-                      kind: R_AARCH64_POINTER,
+                      kind: @arm64.R_AARCH64_POINTER,
                       sym,
                       addend: addend64,
                     })
@@ -14276,7 +14299,7 @@ fn codegen_arm64_object_bytes_from_ast(
 }
 
 ///|
-fn codegen_arm64_object_bytes_with_sem(
+pub fn codegen_arm64_object_bytes_with_sem(
   unit : @ast.TranslationUnit,
   sem : SemContext,
   bag : @diag.DiagBag,
@@ -14354,7 +14377,7 @@ fn codegen_arm64_object_bytes_with_sem(
     base_capacity
   }
   let reloc_capacity = func_count * 16
-  let emitter = new_arm64_emitter_with_capacity(code_capacity, reloc_capacity)
+  let emitter = @arm64.new_arm64_emitter_with_capacity(code_capacity, reloc_capacity)
   let func_offsets : FastMap[String, Int] = fast_map_new(capacity=func_count)
   let label_addrs_by_func : FastMap[String, FastMap[String, Int]] =
     fast_map_new(capacity=func_count)
@@ -14663,7 +14686,7 @@ fn codegen_arm64_object_bytes_with_sem(
     i = i + 1
   }
 
-  let text = section_from_emitter_take(".text", emitter)
+  let text = @arm64.section_from_emitter_take(".text", emitter)
   let sections : Array[Section] = [text]
   if rodata_section is Some(sec) {
     sections.push(sec)
@@ -14690,5 +14713,5 @@ fn codegen_arm64_object_bytes_with_sem(
     })
   }
 
-  Some(encode_macho_object(sections, symbols))
+  Some(@macho.encode_macho_object(sections, symbols))
 }

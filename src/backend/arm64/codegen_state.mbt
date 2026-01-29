@@ -1,4 +1,3 @@
-///|
 const VT_BTYPE : Int = 0x000f
 
 ///|
@@ -68,82 +67,82 @@ const VT_LVAL : Int = 0x0100
 const VT_SYM : Int = 0x0200
 
 ///|
-const TOK_LAND : Int = 0x90
+pub const TOK_LAND : Int = 0x90
 
 ///|
-const TOK_LOR : Int = 0x91
+pub const TOK_LOR : Int = 0x91
 
 ///|
-const TOK_ULT : Int = 0x92
+pub const TOK_ULT : Int = 0x92
 
 ///|
-const TOK_UGE : Int = 0x93
+pub const TOK_UGE : Int = 0x93
 
 ///|
-const TOK_EQ : Int = 0x94
+pub const TOK_EQ : Int = 0x94
 
 ///|
-const TOK_NE : Int = 0x95
+pub const TOK_NE : Int = 0x95
 
 ///|
-const TOK_ULE : Int = 0x96
+pub const TOK_ULE : Int = 0x96
 
 ///|
-const TOK_UGT : Int = 0x97
+pub const TOK_UGT : Int = 0x97
 
 ///|
-const TOK_LT : Int = 0x9c
+pub const TOK_LT : Int = 0x9c
 
 ///|
-const TOK_GE : Int = 0x9d
+pub const TOK_GE : Int = 0x9d
 
 ///|
-const TOK_LE : Int = 0x9e
+pub const TOK_LE : Int = 0x9e
 
 ///|
-const TOK_GT : Int = 0x9f
+pub const TOK_GT : Int = 0x9f
 
 ///|
-const TOK_UDIV : Int = 0x83
+pub const TOK_UDIV : Int = 0x83
 
 ///|
-const TOK_UMOD : Int = 0x84
+pub const TOK_UMOD : Int = 0x84
 
 ///|
-const TOK_PDIV : Int = 0x85
+pub const TOK_PDIV : Int = 0x85
 
 ///|
-const TOK_SHL : Int = 0x3c
+pub const TOK_SHL : Int = 0x3c
 
 ///|
-const TOK_SAR : Int = 0x3e
+pub const TOK_SAR : Int = 0x3e
 
 ///|
-const TOK_SHR : Int = 0x8b
+pub const TOK_SHR : Int = 0x8b
 
 ///|
-const TOK_ADD : Int = 0x2b
+pub const TOK_ADD : Int = 0x2b
 
 ///|
-const TOK_SUB : Int = 0x2d
+pub const TOK_SUB : Int = 0x2d
 
 ///|
-const TOK_MUL : Int = 0x2a
+pub const TOK_MUL : Int = 0x2a
 
 ///|
-const TOK_DIV : Int = 0x2f
+pub const TOK_DIV : Int = 0x2f
 
 ///|
-const TOK_MOD : Int = 0x25
+pub const TOK_MOD : Int = 0x25
 
 ///|
-const TOK_XOR : Int = 0x5e
+pub const TOK_XOR : Int = 0x5e
 
 ///|
-const TOK_AND : Int = 0x26
+pub const TOK_AND : Int = 0x26
 
 ///|
-const TOK_OR : Int = 0x7c
+pub const TOK_OR : Int = 0x7c
 
 ///|
 const RC_INT : Int = 1 << 0
@@ -155,18 +154,13 @@ const RC_FLOAT : Int = 1 << 1
 const RC_R30 : Int = 1 << 21
 
 ///|
-const RC_IRET : Int = 1 << 2
+pub const RC_IRET : Int = 1 << 2
 
 ///|
-const RC_FRET : Int = 1 << 22
+pub const RC_FRET : Int = 1 << 22
 
 ///|
-struct Sym {
-  id : Int
-}
-
-///|
-struct SValue {
+priv struct SValue {
   type_t : Int
   mut r : Int
   r2 : Int
@@ -217,7 +211,7 @@ fn vpop_value() -> SValue raise {
 }
 
 ///|
-fn vdup() -> Unit {
+pub fn vdup() -> Unit {
   let idx = vtop_index()
   if idx >= 0 {
     let val = vstack[idx]
