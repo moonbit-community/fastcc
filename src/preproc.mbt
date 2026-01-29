@@ -10,7 +10,7 @@ struct Macro {
   params : Array[Int]
   is_variadic : Bool
   is_function : Bool
-  replacement : Array[Token]
+  replacement : Array[@tokens.Token]
   replacement_has_id : Bool
   replacement_needs_expand : Bool
   replacement_needs_epoch : Int
@@ -63,7 +63,7 @@ struct HiddenPool {
 struct Preprocessor {
   mut lexer : Lexer
   lexer_stack : Array[Lexer]
-  held_stack : Array[Token?]
+  held_stack : Array[@tokens.Token?]
   path_stack : Array[String]
   dir_stack : Array[String]
   mut current_path : String
@@ -77,8 +77,8 @@ struct Preprocessor {
   map : @source.SourceMap
   macros : Array[Macro?]
   mut macro_epoch : Int
-  pending : Array[Token]
-  mut held : Token?
+  pending : Array[@tokens.Token]
+  mut held : @tokens.Token?
   cond_stack : Array[CondState]
   mut active : Bool
   expanding : Array[Int]
@@ -86,8 +86,8 @@ struct Preprocessor {
   date_literal : String
   time_literal : String
   interner : @intern.StringInterner
-  keyword_ids : KeywordIds
-  lexeme_pool : LexemePool
+  keyword_ids : @tokens.KeywordIds
+  lexeme_pool : @tokens.LexemePool
   hidden_pool : HiddenPool
   builtin_ids : PreprocBuiltinIds
 }
@@ -108,44 +108,44 @@ fn clear_hidden_pool(pool : HiddenPool) -> Unit {
 
 ///|
 fn make_builtin_token(
-  kind : TokenKind,
+  kind : @tokens.TokenKind,
   id? : Int = 0,
   lexeme_id? : Int = 0,
-) -> Token {
-  let value = token_value_from_parts(id, lexeme_id)
+) -> @tokens.Token {
+  let value = @tokens.token_value_from_parts(id, lexeme_id)
   {
     kind,
     value,
     loc: @source.dummy_loc(0),
     line_start: false,
-    hidden: empty_hidden,
+    hidden: @tokens.empty_hidden,
   }
 }
 
 ///|
-fn make_builtin_word_token(pp : Preprocessor, word : String) -> Token {
+fn make_builtin_word_token(pp : Preprocessor, word : String) -> @tokens.Token {
   let (_, id) = pp.interner.intern_view_with_id(word[:])
-  match keyword_kind_from_id(id, pp.keyword_ids) {
+  match @tokens.keyword_kind_from_id(id, pp.keyword_ids) {
     Some(kind) => make_builtin_token(kind, id=id)
-    None => make_builtin_token(Ident, id=id)
+    None => make_builtin_token(@tokens.TokenKind::Ident, id=id)
   }
 }
 
 ///|
-fn pp_token_lexeme(pp : Preprocessor, tok : Token) -> String {
-  token_text_with(pp.interner, pp.lexeme_pool, tok)
+fn pp_token_lexeme(pp : Preprocessor, tok : @tokens.Token) -> String {
+  @tokens.token_text_with(pp.interner, pp.lexeme_pool, tok)
 }
 
 ///|
-fn pp_token_lexeme_len(pp : Preprocessor, tok : Token) -> Int {
-  token_text_len_with(pp.interner, pp.lexeme_pool, tok)
+fn pp_token_lexeme_len(pp : Preprocessor, tok : @tokens.Token) -> Int {
+  @tokens.token_text_len_with(pp.interner, pp.lexeme_pool, tok)
 }
 
 ///|
 fn define_macro(
   pp : Preprocessor,
   name : String,
-  replacement : Array[Token],
+  replacement : Array[@tokens.Token],
 ) -> Unit {
   let id = macro_id_from_name(pp, name)
   if id == 0 {
@@ -172,8 +172,8 @@ fn define_words_macro(pp : Preprocessor, name : String, words : Array[String]) -
 
 ///|
 fn define_int_macro(pp : Preprocessor, name : String, value : Int) -> Unit {
-  let lexeme_id = lexeme_pool_intern(pp.lexeme_pool, value.to_string())
-  define_macro(pp, name, [make_builtin_token(IntLit, lexeme_id=lexeme_id)])
+  let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, value.to_string())
+  define_macro(pp, name, [make_builtin_token(@tokens.TokenKind::IntLit, lexeme_id=lexeme_id)])
 }
 
 ///|
@@ -183,8 +183,8 @@ fn define_func_macro_zero(pp : Preprocessor, name : String) -> Unit {
     return
   }
   let param_id = macro_id_from_name(pp, "x")
-  let lexeme_id = lexeme_pool_intern(pp.lexeme_pool, "0")
-  let replacement = [make_builtin_token(IntLit, lexeme_id=lexeme_id)]
+  let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, "0")
+  let replacement = [make_builtin_token(@tokens.TokenKind::IntLit, lexeme_id=lexeme_id)]
   set_macro(pp, id, {
     params: [param_id],
     is_variadic: true,
@@ -203,7 +203,7 @@ fn define_func_macro_empty(pp : Preprocessor, name : String) -> Unit {
     return
   }
   let param_id = macro_id_from_name(pp, "x")
-  let replacement : Array[Token] = []
+  let replacement : Array[@tokens.Token] = []
   set_macro(pp, id, {
     params: [param_id],
     is_variadic: true,
@@ -226,20 +226,20 @@ fn init_builtin_macros(pp : Preprocessor) -> Unit {
 
   define_macro(pp, "__ORDER_LITTLE_ENDIAN__", [
     make_builtin_token(
-      IntLit,
-      lexeme_id=lexeme_pool_intern(pp.lexeme_pool, "1234"),
+      @tokens.TokenKind::IntLit,
+      lexeme_id=@tokens.lexeme_pool_intern(pp.lexeme_pool, "1234"),
     ),
   ])
   define_macro(pp, "__ORDER_BIG_ENDIAN__", [
     make_builtin_token(
-      IntLit,
-      lexeme_id=lexeme_pool_intern(pp.lexeme_pool, "4321"),
+      @tokens.TokenKind::IntLit,
+      lexeme_id=@tokens.lexeme_pool_intern(pp.lexeme_pool, "4321"),
     ),
   ])
   define_macro(pp, "__ORDER_PDP_ENDIAN__", [
     make_builtin_token(
-      IntLit,
-      lexeme_id=lexeme_pool_intern(pp.lexeme_pool, "3412"),
+      @tokens.TokenKind::IntLit,
+      lexeme_id=@tokens.lexeme_pool_intern(pp.lexeme_pool, "3412"),
     ),
   ])
   define_macro(pp, "__BYTE_ORDER__", [
@@ -285,8 +285,8 @@ fn init_builtin_macros(pp : Preprocessor) -> Unit {
   define_int_macro(pp, "__STDC_HOSTED__", 1)
   define_macro(pp, "__STDC_VERSION__", [
     make_builtin_token(
-      IntLit,
-      lexeme_id=lexeme_pool_intern(pp.lexeme_pool, "201112"),
+      @tokens.TokenKind::IntLit,
+      lexeme_id=@tokens.lexeme_pool_intern(pp.lexeme_pool, "201112"),
     ),
   ])
 
@@ -344,7 +344,7 @@ fn new_preprocessor(map : @source.SourceMap, file : @source.SourceFile, diags : 
   let include_stack_capacity = 16
   let cond_capacity = 64
   let interner = @intern.new_string_interner_with_capacity(capacity=interner_capacity)
-  let keyword_ids = init_keyword_ids(interner)
+  let keyword_ids = @tokens.init_keyword_ids(interner)
   let (_, line_macro_id) = interner.intern_view_with_id("__LINE__"[:])
   let (_, file_macro_id) = interner.intern_view_with_id("__FILE__"[:])
   let (_, date_macro_id) = interner.intern_view_with_id("__DATE__"[:])
@@ -367,7 +367,7 @@ fn new_preprocessor(map : @source.SourceMap, file : @source.SourceFile, diags : 
   let (_, dir_error_id) = interner.intern_view_with_id("error"[:])
   let (_, dir_warning_id) = interner.intern_view_with_id("warning"[:])
   let (_, dir_pragma_id) = interner.intern_view_with_id("pragma"[:])
-  let lexeme_pool = new_lexeme_pool(capacity=lexeme_capacity)
+  let lexeme_pool = @tokens.new_lexeme_pool(capacity=lexeme_capacity)
   let pp = {
     lexer: new_lexer(file, diags, interner, keyword_ids, lexeme_pool),
     lexer_stack: Array::new(capacity=include_stack_capacity),
@@ -479,8 +479,8 @@ fn add_pp_error(pp : Preprocessor, loc : @source.SrcLoc, message : String) -> Un
 
 ///|
 ///|
-fn is_macro_name_token(tok : Token) -> Bool {
-  token_id(tok) > 0
+fn is_macro_name_token(tok : @tokens.Token) -> Bool {
+  @tokens.token_id(tok) > 0
 }
 
 ///|
@@ -493,8 +493,8 @@ fn macro_id_from_name(pp : Preprocessor, name : String) -> Int {
 }
 
 ///|
-fn macro_id_from_token(_pp : Preprocessor, tok : Token) -> Int {
-  token_id(tok)
+fn macro_id_from_token(_pp : Preprocessor, tok : @tokens.Token) -> Int {
+  @tokens.token_id(tok)
 }
 
 ///|
@@ -553,7 +553,7 @@ fn remove_macro(pp : Preprocessor, id : Int) -> Unit {
 }
 
 ///|
-fn next_input_token(pp : Preprocessor) -> Token {
+fn next_input_token(pp : Preprocessor) -> @tokens.Token {
   while true {
     match pp.held {
       Some(tok) => {
@@ -563,7 +563,7 @@ fn next_input_token(pp : Preprocessor) -> Token {
       None => {
         let tok = next_token(pp.lexer)
         match tok.kind {
-          Eof if pp.lexer_stack.length() > 0 => {
+          @tokens.TokenKind::Eof if pp.lexer_stack.length() > 0 => {
             if pp.lexer_stack.pop() is Some(prev) {
               pp.lexer = prev
             }
@@ -590,22 +590,22 @@ fn next_input_token(pp : Preprocessor) -> Token {
     }
   } else {
     {
-      kind: Eof,
+      kind: @tokens.TokenKind::Eof,
       value: 0,
       loc: lexer_loc(pp.lexer),
       line_start: false,
-      hidden: empty_hidden,
+      hidden: @tokens.empty_hidden,
     }
   }
 }
 
 ///|
-fn read_directive_tokens(pp : Preprocessor) -> Array[Token] {
-  let out : Array[Token] = []
+fn read_directive_tokens(pp : Preprocessor) -> Array[@tokens.Token] {
+  let out : Array[@tokens.Token] = []
   while true {
     let tok = next_input_token(pp)
     match tok.kind {
-      Eof => {
+      @tokens.TokenKind::Eof => {
         pp.held = Some(tok)
         break
       }
@@ -622,10 +622,10 @@ fn read_directive_tokens(pp : Preprocessor) -> Array[Token] {
 }
 
 ///|
-fn read_directive_head_token(pp : Preprocessor) -> Token? {
+fn read_directive_head_token(pp : Preprocessor) -> @tokens.Token? {
   let tok = next_input_token(pp)
   match tok.kind {
-    Eof => {
+    @tokens.TokenKind::Eof => {
       pp.held = Some(tok)
       None
     }
@@ -779,7 +779,7 @@ fn read_directive_text(pp : Preprocessor) -> String {
 }
 
 ///|
-fn slice_tokens(tokens : Array[Token], start : Int) -> Array[Token] {
+fn slice_tokens(tokens : Array[@tokens.Token], start : Int) -> Array[@tokens.Token] {
   if start <= 0 {
     return tokens
   }
@@ -790,13 +790,13 @@ fn slice_tokens(tokens : Array[Token], start : Int) -> Array[Token] {
 }
 
 ///|
-fn prefix_tokens(tokens : Array[Token], end : Int) -> Array[Token] {
+fn prefix_tokens(tokens : Array[@tokens.Token], end : Int) -> Array[@tokens.Token] {
   if end <= 0 {
     return []
   }
   let total_len = tokens.length()
   let capacity = if total_len > end { total_len } else { end }
-  let out : Array[Token] = Array::new(capacity=capacity)
+  let out : Array[@tokens.Token] = Array::new(capacity=capacity)
   let mut i = 0
   while i < end {
     out.push(tokens[i])
@@ -806,15 +806,11 @@ fn prefix_tokens(tokens : Array[Token], end : Int) -> Array[Token] {
 }
 
 ///|
-fn slice_string(text : String, start : Int, end : Int) -> String {
-  text.view(start_offset=start, end_offset=end).to_string()
-}
-
 ///|
 fn dir_name(path : String) -> String {
   match path.rev_find("/") {
     None => ""
-    Some(idx) => slice_string(path, 0, idx)
+    Some(idx) => @util.slice_string(path, 0, idx)
   }
 }
 
@@ -839,7 +835,7 @@ fn add_include_path(pp : Preprocessor, path : String) -> Unit {
 fn strip_quotes(lexeme : String) -> String {
   let len = lexeme.length()
   if len >= 2 && lexeme[0] == 34 && lexeme[len - 1] == 34 {
-    return slice_string(lexeme, 1, len - 1)
+    return @util.slice_string(lexeme, 1, len - 1)
   }
   lexeme
 }
@@ -847,24 +843,24 @@ fn strip_quotes(lexeme : String) -> String {
 ///|
 fn parse_include_path(
   pp : Preprocessor,
-  args : Array[Token],
+  args : Array[@tokens.Token],
   loc : @source.SrcLoc,
 ) -> IncludeSpec? {
   if args.length() == 0 {
     add_pp_error(pp, loc, "missing include path")
     return None
   }
-  if args[0].kind == StrLit {
+  if args[0].kind == @tokens.TokenKind::StrLit {
     return Some({
       path: strip_quotes(pp_token_lexeme(pp, args[0])),
       is_angle: false,
     })
   }
-  if args[0].kind == Lt {
+  if args[0].kind == @tokens.TokenKind::Lt {
     let sb = StringBuilder::new()
     let mut i = 1
     while i < args.length() {
-      if args[i].kind == Gt {
+      if args[i].kind == @tokens.TokenKind::Gt {
         return Some({ path: sb.to_string(), is_angle: true })
       }
       sb.write_string(pp_token_lexeme(pp, args[i]))
@@ -878,21 +874,21 @@ fn parse_include_path(
 }
 
 ///|
-fn parse_has_include_path(pp : Preprocessor, args : Array[Token]) -> IncludeSpec? {
+fn parse_has_include_path(pp : Preprocessor, args : Array[@tokens.Token]) -> IncludeSpec? {
   if args.length() == 0 {
     return None
   }
-  if args[0].kind == StrLit {
+  if args[0].kind == @tokens.TokenKind::StrLit {
     return Some({
       path: strip_quotes(pp_token_lexeme(pp, args[0])),
       is_angle: false,
     })
   }
-  if args[0].kind == Lt {
+  if args[0].kind == @tokens.TokenKind::Lt {
     let sb = StringBuilder::new()
     let mut i = 1
     while i < args.length() {
-      if args[i].kind == Gt {
+      if args[i].kind == @tokens.TokenKind::Gt {
         return Some({ path: sb.to_string(), is_angle: true })
       }
       sb.write_string(pp_token_lexeme(pp, args[i]))
@@ -905,7 +901,7 @@ fn parse_has_include_path(pp : Preprocessor, args : Array[Token]) -> IncludeSpec
 ///|
 fn eval_has_include(
   pp : Preprocessor,
-  args : Array[Token],
+  args : Array[@tokens.Token],
   include_next~ : Bool,
 ) -> Int {
   match parse_has_include_path(pp, args) {
@@ -994,12 +990,12 @@ fn include_file(
 ///|
 fn parse_define_macro(
   pp : Preprocessor,
-  name_tok : Token,
-  args : Array[Token],
+  name_tok : @tokens.Token,
+  args : Array[@tokens.Token],
   loc : @source.SrcLoc,
 ) -> Macro? {
   let is_function_like = args.length() > 0 &&
-    args[0].kind == LParen &&
+    args[0].kind == @tokens.TokenKind::LParen &&
     is_adjacent(pp, name_tok, args[0])
   if is_function_like {
     match parse_macro_params(pp, args, loc) {
@@ -1034,28 +1030,28 @@ fn parse_define_macro(
 ///|
 fn parse_macro_params(
   pp : Preprocessor,
-  args : Array[Token],
+  args : Array[@tokens.Token],
   loc : @source.SrcLoc,
-) -> (Array[Int], Bool, Array[Token])? {
+) -> (Array[Int], Bool, Array[@tokens.Token])? {
   let params : Array[Int] = []
   let mut i = 1
   let mut is_variadic = false
   while i < args.length() {
     let tok = args[i]
     match tok.kind {
-      RParen => {
+      @tokens.TokenKind::RParen => {
         i = i + 1
         let replacement = slice_tokens(args, i)
         return Some((params, is_variadic, replacement))
       }
-      Ellipsis => {
+      @tokens.TokenKind::Ellipsis => {
         is_variadic = true
         let varargs_id = macro_id_from_name(pp, "__VA_ARGS__")
         params.push(varargs_id)
         i = i + 1
         continue
       }
-      Ident => {
+      @tokens.TokenKind::Ident => {
         let param_id = macro_id_from_token(pp, tok)
         if param_id == 0 {
           add_pp_error(pp, loc, "invalid macro parameter")
@@ -1065,11 +1061,11 @@ fn parse_macro_params(
         i = i + 1
         if i < args.length() {
           match args[i].kind {
-            Comma => {
+            @tokens.TokenKind::Comma => {
               i = i + 1
               if i < args.length() {
                 match args[i].kind {
-                  Ellipsis => {
+                  @tokens.TokenKind::Ellipsis => {
                     is_variadic = true
                     let varargs_id = macro_id_from_name(pp, "__VA_ARGS__")
                     params.push(varargs_id)
@@ -1095,7 +1091,7 @@ fn parse_macro_params(
 }
 
 ///|
-fn next_raw_token(pp : Preprocessor) -> Token {
+fn next_raw_token(pp : Preprocessor) -> @tokens.Token {
   if pp.pending.length() > 0 {
     if pp.pending.pop() is Some(tok) {
       release_expanding_guards(pp)
@@ -1106,30 +1102,30 @@ fn next_raw_token(pp : Preprocessor) -> Token {
 }
 
 ///|
-fn push_back(pp : Preprocessor, tok : Token) -> Unit {
+fn push_back(pp : Preprocessor, tok : @tokens.Token) -> Unit {
   pp.pending.push(tok)
 }
 
 ///|
-fn read_macro_args(pp : Preprocessor, loc : @source.SrcLoc) -> Array[Array[Token]]? {
-  let args : Array[Array[Token]] = []
-  let mut current : Array[Token] = []
+fn read_macro_args(pp : Preprocessor, loc : @source.SrcLoc) -> Array[Array[@tokens.Token]]? {
+  let args : Array[Array[@tokens.Token]] = []
+  let mut current : Array[@tokens.Token] = []
   let mut depth_paren = 0
   let mut depth_brace = 0
   let mut depth_bracket = 0
   while true {
     let tok = next_raw_token(pp)
     match tok.kind {
-      Eof => {
+      @tokens.TokenKind::Eof => {
         add_pp_error(pp, loc, "unterminated macro invocation")
         return None
       }
-      LParen => {
+      @tokens.TokenKind::LParen => {
         depth_paren = depth_paren + 1
         current.push(tok)
         continue
       }
-      RParen => {
+      @tokens.TokenKind::RParen => {
         if depth_paren == 0 && depth_brace == 0 && depth_bracket == 0 {
           if current.length() > 0 || args.length() > 0 {
             args.push(current)
@@ -1140,31 +1136,31 @@ fn read_macro_args(pp : Preprocessor, loc : @source.SrcLoc) -> Array[Array[Token
         current.push(tok)
         continue
       }
-      LBrace => {
+      @tokens.TokenKind::LBrace => {
         depth_brace = depth_brace + 1
         current.push(tok)
         continue
       }
-      RBrace => {
+      @tokens.TokenKind::RBrace => {
         if depth_brace > 0 {
           depth_brace = depth_brace - 1
         }
         current.push(tok)
         continue
       }
-      LBracket => {
+      @tokens.TokenKind::LBracket => {
         depth_bracket = depth_bracket + 1
         current.push(tok)
         continue
       }
-      RBracket => {
+      @tokens.TokenKind::RBracket => {
         if depth_bracket > 0 {
           depth_bracket = depth_bracket - 1
         }
         current.push(tok)
         continue
       }
-      Comma =>
+      @tokens.TokenKind::Comma =>
         if depth_paren == 0 && depth_brace == 0 && depth_bracket == 0 {
           args.push(current)
           current = []
@@ -1181,9 +1177,9 @@ fn read_macro_args(pp : Preprocessor, loc : @source.SrcLoc) -> Array[Array[Token
 ///|
 fn normalize_macro_args(
   macro_def : Macro,
-  args : Array[Array[Token]],
+  args : Array[Array[@tokens.Token]],
   loc : @source.SrcLoc,
-) -> Array[Array[Token]]? {
+) -> Array[Array[@tokens.Token]]? {
   if !macro_def.is_function {
     return Some(args)
   }
@@ -1192,20 +1188,20 @@ fn normalize_macro_args(
     if args.length() < param_count - 1 {
       return None
     }
-    let out : Array[Array[Token]] = []
+    let out : Array[Array[@tokens.Token]] = []
     for i = 0; i < param_count - 1; i = i + 1 {
       out.push(args[i])
     }
-    let var_tokens : Array[Token] = []
+    let var_tokens : Array[@tokens.Token] = []
     for i = param_count - 1; i < args.length(); i = i + 1 {
       if var_tokens.length() > 0 {
         var_tokens.push(
           {
-            kind: Comma,
+            kind: @tokens.TokenKind::Comma,
             value: 0,
             loc,
             line_start: false,
-            hidden: empty_hidden,
+            hidden: @tokens.empty_hidden,
           },
         )
       }
@@ -1223,7 +1219,7 @@ fn normalize_macro_args(
 }
 
 ///|
-fn is_adjacent(pp : Preprocessor, left : Token, right : Token) -> Bool {
+fn is_adjacent(pp : Preprocessor, left : @tokens.Token, right : @tokens.Token) -> Bool {
   left.loc.file_id == right.loc.file_id &&
   right.loc.offset == left.loc.offset + pp_token_lexeme_len(pp, left)
 }
@@ -1249,7 +1245,7 @@ fn pop_expanding(pp : Preprocessor) -> Unit {
 }
 
 ///|
-fn stringize_tokens(pp : Preprocessor, tokens : Array[Token]) -> String {
+fn stringize_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> String {
   if tokens.length() == 0 {
     return ""
   }
@@ -1265,7 +1261,7 @@ fn stringize_tokens(pp : Preprocessor, tokens : Array[Token]) -> String {
   }
   let sb = StringBuilder::new(size_hint=size_hint)
   let mut first = true
-  let mut prev : Token? = None
+  let mut prev : @tokens.Token? = None
   for tok in tokens {
     if first {
       first = false
@@ -1286,16 +1282,16 @@ fn stringize_tokens(pp : Preprocessor, tokens : Array[Token]) -> String {
 }
 
 ///|
-fn make_string_literal(pp : Preprocessor, text : String, loc : @source.SrcLoc) -> Token {
+fn make_string_literal(pp : Preprocessor, text : String, loc : @source.SrcLoc) -> @tokens.Token {
   let escaped = escape_string(text)
-  let lexeme_id = lexeme_pool_intern(pp.lexeme_pool, "\"" + escaped + "\"")
-  let token_value = token_value_from_parts(0, lexeme_id)
+  let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, "\"" + escaped + "\"")
+  let token_value = @tokens.token_value_from_parts(0, lexeme_id)
   {
-    kind: StrLit,
+    kind: @tokens.TokenKind::StrLit,
     value: token_value,
     loc,
     line_start: false,
-    hidden: empty_hidden,
+    hidden: @tokens.empty_hidden,
   }
 }
 
@@ -1335,21 +1331,21 @@ fn logical_line(pp : Preprocessor, loc : @source.SrcLoc) -> Int {
 }
 
 ///|
-fn make_int_literal_token(pp : Preprocessor, value : Int, loc : @source.SrcLoc) -> Token {
-  let lexeme_id = lexeme_pool_intern(pp.lexeme_pool, value.to_string())
-  let token_value = token_value_from_parts(0, lexeme_id)
+fn make_int_literal_token(pp : Preprocessor, value : Int, loc : @source.SrcLoc) -> @tokens.Token {
+  let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, value.to_string())
+  let token_value = @tokens.token_value_from_parts(0, lexeme_id)
   {
-    kind: IntLit,
+    kind: @tokens.TokenKind::IntLit,
     value: token_value,
     loc,
     line_start: false,
-    hidden: empty_hidden,
+    hidden: @tokens.empty_hidden,
   }
 }
 
 ///|
-fn builtin_macro_tokens(pp : Preprocessor, tok : Token) -> Array[Token]? {
-  let id = token_id(tok)
+fn builtin_macro_tokens(pp : Preprocessor, tok : @tokens.Token) -> Array[@tokens.Token]? {
+  let id = @tokens.token_id(tok)
   if id == pp.builtin_ids.line_macro {
     return Some([
       make_int_literal_token(pp, logical_line(pp, tok.loc), tok.loc),
@@ -1381,7 +1377,7 @@ fn is_builtin_macro_id(pp : Preprocessor, id : Int) -> Bool {
 }
 
 ///|
-fn tokens_need_expansion(pp : Preprocessor, tokens : Array[Token]) -> Bool {
+fn tokens_need_expansion(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Bool {
   for tok in tokens {
     if token_needs_expansion(pp, tok) {
       return true
@@ -1391,8 +1387,8 @@ fn tokens_need_expansion(pp : Preprocessor, tokens : Array[Token]) -> Bool {
 }
 
 ///|
-fn token_needs_expansion(pp : Preprocessor, tok : Token) -> Bool {
-  let id = token_id(tok)
+fn token_needs_expansion(pp : Preprocessor, tok : @tokens.Token) -> Bool {
+  let id = @tokens.token_id(tok)
   id > 0 && (is_builtin_macro_id(pp, id) || get_macro(pp, id) is Some(_))
 }
 
@@ -1425,9 +1421,9 @@ fn macro_replacement_needs_expand(
 }
 
 ///|
-fn tokens_have_id(tokens : Array[Token]) -> Bool {
+fn tokens_have_id(tokens : Array[@tokens.Token]) -> Bool {
   for tok in tokens {
-    if token_has_id(tok) {
+    if @tokens.token_has_id(tok) {
       return true
     }
   }
@@ -1516,7 +1512,7 @@ fn lex_paste_tokens(
   right : String,
   loc : @source.SrcLoc,
   hidden : Int,
-) -> Array[Token] {
+) -> Array[@tokens.Token] {
   let file = @source.SourceFile::{ id: loc.file_id, path: ":paste:", text }
   let lex = new_lexer(
     file,
@@ -1525,11 +1521,11 @@ fn lex_paste_tokens(
     pp.keyword_ids,
     pp.lexeme_pool,
   )
-  let out : Array[Token] = []
+  let out : Array[@tokens.Token] = []
   while true {
     let tok = next_token(lex)
     match tok.kind {
-      Eof => break
+      @tokens.TokenKind::Eof => break
       _ =>
         out.push({
           kind: tok.kind,
@@ -1555,23 +1551,23 @@ fn lex_paste_tokens(
 fn substitute_macro(
   pp : Preprocessor,
   macro_def : Macro,
-  raw_args : Array[Array[Token]],
+  raw_args : Array[Array[@tokens.Token]],
   loc : @source.SrcLoc,
-) -> (Array[Token], Bool) {
+) -> (Array[@tokens.Token], Bool) {
   if !macro_def.is_function {
     return (macro_def.replacement, tokens_need_expansion(pp, macro_def.replacement))
   }
-  let out : Array[Token] = Array::new(capacity=macro_def.replacement.length())
+  let out : Array[@tokens.Token] = Array::new(capacity=macro_def.replacement.length())
   let mut needs_expand = false
   let params = macro_def.params
-  let expanded_cache : Array[Array[Token]?] = Array::make(raw_args.length(), None)
+  let expanded_cache : Array[Array[@tokens.Token]?] = Array::make(raw_args.length(), None)
   let mut i = 0
   while i < macro_def.replacement.length() {
     let tok = macro_def.replacement[i]
-    if tok.kind == Hash && i + 1 < macro_def.replacement.length() {
+    if tok.kind == @tokens.TokenKind::Hash && i + 1 < macro_def.replacement.length() {
       let next_tok = macro_def.replacement[i + 1]
-      if next_tok.kind == Ident {
-        let param_id = token_id(next_tok)
+      if next_tok.kind == @tokens.TokenKind::Ident {
+        let param_id = @tokens.token_id(next_tok)
         if param_id > 0 {
           if lookup_param_index(params, param_id) is Some(idx) {
             let arg_tokens = if idx < raw_args.length() {
@@ -1591,7 +1587,7 @@ fn substitute_macro(
         }
       }
     }
-    if tok.kind == HashHash &&
+    if tok.kind == @tokens.TokenKind::HashHash &&
       out.length() > 0 &&
       i + 1 < macro_def.replacement.length() {
       let last = match out.pop() {
@@ -1601,11 +1597,11 @@ fn substitute_macro(
           continue
         }
       }
-      let mut next_tokens : Array[Token] = []
+      let mut next_tokens : Array[@tokens.Token] = []
       let mut next_from_param = false
       let next_tok = macro_def.replacement[i + 1]
-      if next_tok.kind == Ident {
-        let param_id = token_id(next_tok)
+      if next_tok.kind == @tokens.TokenKind::Ident {
+        let param_id = @tokens.token_id(next_tok)
         if param_id > 0 {
           match lookup_param_index(params, param_id) {
             Some(idx) => {
@@ -1670,13 +1666,13 @@ fn substitute_macro(
       i = i + 2
       continue
     }
-    if tok.kind == Ident {
-      let param_id = token_id(tok)
+    if tok.kind == @tokens.TokenKind::Ident {
+      let param_id = @tokens.token_id(tok)
       if param_id > 0 {
         if lookup_param_index(params, param_id) is Some(idx) {
           let arg_tokens = ensure_expanded_arg(pp, raw_args, expanded_cache, idx)
           for t in arg_tokens {
-            let out_tok = {
+            let out_tok = @tokens.Token::{
               kind: t.kind,
               value: t.value,
               loc: t.loc,
@@ -1693,7 +1689,7 @@ fn substitute_macro(
         }
       }
     }
-    let out_tok = {
+    let out_tok = @tokens.Token::{
       kind: tok.kind,
       value: tok.value,
       loc,
@@ -1712,26 +1708,26 @@ fn substitute_macro(
 ///|
 fn read_macro_args_from_tokens(
   pp : Preprocessor,
-  tokens : Array[Token],
+  tokens : Array[@tokens.Token],
   start : Int,
   loc : @source.SrcLoc,
-) -> (Array[Array[Token]], Int)? {
+) -> (Array[Array[@tokens.Token]], Int)? {
   let len = tokens.length()
-  let args : Array[Array[Token]] = []
-  let mut current : Array[Token] = []
+  let args : Array[Array[@tokens.Token]] = []
+  let mut current : Array[@tokens.Token] = []
   let mut depth_paren = 0
   let mut depth_brace = 0
   let mut depth_bracket = 0
   let mut i = start
   while i < len {
     let tok = tokens[i]
-    if tok.kind == LParen {
+    if tok.kind == @tokens.TokenKind::LParen {
       depth_paren = depth_paren + 1
       current.push(tok)
       i = i + 1
       continue
     }
-    if tok.kind == RParen {
+    if tok.kind == @tokens.TokenKind::RParen {
       if depth_paren == 0 && depth_brace == 0 && depth_bracket == 0 {
         if current.length() > 0 || args.length() > 0 {
           args.push(current)
@@ -1743,13 +1739,13 @@ fn read_macro_args_from_tokens(
       i = i + 1
       continue
     }
-    if tok.kind == LBrace {
+    if tok.kind == @tokens.TokenKind::LBrace {
       depth_brace = depth_brace + 1
       current.push(tok)
       i = i + 1
       continue
     }
-    if tok.kind == RBrace {
+    if tok.kind == @tokens.TokenKind::RBrace {
       if depth_brace > 0 {
         depth_brace = depth_brace - 1
       }
@@ -1757,13 +1753,13 @@ fn read_macro_args_from_tokens(
       i = i + 1
       continue
     }
-    if tok.kind == LBracket {
+    if tok.kind == @tokens.TokenKind::LBracket {
       depth_bracket = depth_bracket + 1
       current.push(tok)
       i = i + 1
       continue
     }
-    if tok.kind == RBracket {
+    if tok.kind == @tokens.TokenKind::RBracket {
       if depth_bracket > 0 {
         depth_bracket = depth_bracket - 1
       }
@@ -1771,7 +1767,7 @@ fn read_macro_args_from_tokens(
       i = i + 1
       continue
     }
-    if tok.kind == Comma &&
+    if tok.kind == @tokens.TokenKind::Comma &&
       depth_paren == 0 &&
       depth_brace == 0 &&
       depth_bracket == 0 {
@@ -1790,10 +1786,10 @@ fn read_macro_args_from_tokens(
 ///|
 fn ensure_expanded_arg(
   pp : Preprocessor,
-  raw_args : Array[Array[Token]],
-  expanded_cache : Array[Array[Token]?],
+  raw_args : Array[Array[@tokens.Token]],
+  expanded_cache : Array[Array[@tokens.Token]?],
   idx : Int,
-) -> Array[Token] {
+) -> Array[@tokens.Token] {
   if idx < 0 || idx >= raw_args.length() {
     return []
   }
@@ -1808,14 +1804,14 @@ fn ensure_expanded_arg(
 }
 
 ///|
-fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
-  let mut out_opt : Array[Token]? = None
+fn expand_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Array[@tokens.Token] {
+  let mut out_opt : Array[@tokens.Token]? = None
   let mut changed = false
   let len = tokens.length()
   let mut i = 0
   while i < len {
     let tok = tokens[i]
-    let macro_id = token_id(tok)
+    let macro_id = @tokens.token_id(tok)
     let is_macro_name = macro_id > 0
     if is_macro_name {
       if builtin_macro_tokens(pp, tok) is Some(replacement) {
@@ -1848,7 +1844,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
             continue
           }
           if macro_def.is_function {
-            if i + 1 < len && tokens[i + 1].kind == LParen {
+            if i + 1 < len && tokens[i + 1].kind == @tokens.TokenKind::LParen {
               match read_macro_args_from_tokens(pp, tokens, i + 2, tok.loc) {
                 None => {
                   if out_opt is Some(arr) {
@@ -1868,10 +1864,10 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
                       continue
                     }
                     Some(norm_raw) => {
-                      if token_id(tok) == pp.builtin_ids.has_include ||
-                        token_id(tok) == pp.builtin_ids.has_include_next {
+                      if @tokens.token_id(tok) == pp.builtin_ids.has_include ||
+                        @tokens.token_id(tok) == pp.builtin_ids.has_include_next {
                         let include_next =
-                          token_id(tok) == pp.builtin_ids.has_include_next
+                          @tokens.token_id(tok) == pp.builtin_ids.has_include_next
                         let arg_tokens = if norm_raw.length() > 0 {
                           expand_tokens(pp, norm_raw[0])
                         } else {
@@ -2046,7 +2042,7 @@ fn pop_cond(pp : Preprocessor, loc : @source.SrcLoc) -> Unit {
 }
 
 ///|
-fn normalize_macro_tokens(tokens : Array[Token]) -> Array[Token] {
+fn normalize_macro_tokens(tokens : Array[@tokens.Token]) -> Array[@tokens.Token] {
   let mut needs_copy = false
   for tok in tokens {
     if tok.line_start {
@@ -2057,7 +2053,7 @@ fn normalize_macro_tokens(tokens : Array[Token]) -> Array[Token] {
   if !needs_copy {
     return tokens
   }
-  let out : Array[Token] = Array::new(capacity=tokens.length())
+  let out : Array[@tokens.Token] = Array::new(capacity=tokens.length())
   for tok in tokens {
     out.push({
       kind: tok.kind,
@@ -2071,10 +2067,10 @@ fn normalize_macro_tokens(tokens : Array[Token]) -> Array[Token] {
 }
 
 ///|
-fn expand_if_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
+fn expand_if_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Array[@tokens.Token] {
   let mut has_defined = false
   for tok in tokens {
-    if tok.kind == Ident && token_id(tok) == pp.builtin_ids.defined {
+    if tok.kind == @tokens.TokenKind::Ident && @tokens.token_id(tok) == pp.builtin_ids.defined {
       has_defined = true
       break
     }
@@ -2083,12 +2079,12 @@ fn expand_if_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
     return expand_tokens(pp, tokens)
   }
   let len = tokens.length()
-  let out : Array[Token] = Array::new(capacity=len)
-  let segment : Array[Token] = []
+  let out : Array[@tokens.Token] = Array::new(capacity=len)
+  let segment : Array[@tokens.Token] = []
   let mut i = 0
   while i < len {
     let tok = tokens[i]
-    if tok.kind == Ident && token_id(tok) == pp.builtin_ids.defined {
+    if tok.kind == @tokens.TokenKind::Ident && @tokens.token_id(tok) == pp.builtin_ids.defined {
       if segment.length() > 0 {
         let expanded = expand_tokens(pp, segment)
         for t in expanded {
@@ -2098,14 +2094,14 @@ fn expand_if_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
       }
       out.push(tok)
       i = i + 1
-      if i < len && tokens[i].kind == LParen {
+      if i < len && tokens[i].kind == @tokens.TokenKind::LParen {
         out.push(tokens[i])
         i = i + 1
         if i < len {
           out.push(tokens[i])
           i = i + 1
         }
-        if i < len && tokens[i].kind == RParen {
+        if i < len && tokens[i].kind == @tokens.TokenKind::RParen {
           out.push(tokens[i])
           i = i + 1
         }
@@ -2128,7 +2124,7 @@ fn expand_if_tokens(pp : Preprocessor, tokens : Array[Token]) -> Array[Token] {
 }
 
 ///|
-fn push_tokens(pp : Preprocessor, tokens : Array[Token]) -> Unit {
+fn push_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Unit {
   let mut i = tokens.length()
   while i > 0 {
     i = i - 1
@@ -2215,7 +2211,7 @@ fn merge_hidden(pool : HiddenPool, a : Int, b : Int) -> Int {
 }
 
 ///|
-fn add_hidden(pp : Preprocessor, tok : Token, id : Int) -> Token {
+fn add_hidden(pp : Preprocessor, tok : @tokens.Token, id : Int) -> @tokens.Token {
   let new_hidden = hidden_add(pp.hidden_pool, tok.hidden, id)
   if new_hidden == tok.hidden {
     tok
@@ -2233,10 +2229,10 @@ fn add_hidden(pp : Preprocessor, tok : Token, id : Int) -> Token {
 ///|
 fn add_hidden_tokens(
   pp : Preprocessor,
-  tokens : Array[Token],
+  tokens : Array[@tokens.Token],
   id : Int,
-) -> Array[Token] {
-  let out : Array[Token] = Array::new(capacity=tokens.length())
+) -> Array[@tokens.Token] {
+  let out : Array[@tokens.Token] = Array::new(capacity=tokens.length())
   for tok in tokens {
     out.push(add_hidden(pp, tok, id))
   }
@@ -2246,7 +2242,7 @@ fn add_hidden_tokens(
 ///|
 fn handle_line_directive(
   pp : Preprocessor,
-  tokens : Array[Token],
+  tokens : Array[@tokens.Token],
   loc : @source.SrcLoc,
 ) -> Unit {
   if tokens.length() == 0 {
@@ -2254,7 +2250,7 @@ fn handle_line_directive(
     return
   }
   let line_tok = tokens[0]
-  if line_tok.kind != IntLit {
+  if line_tok.kind != @tokens.TokenKind::IntLit {
     add_pp_error(pp, loc, "invalid line number in #line")
     return
   }
@@ -2268,7 +2264,7 @@ fn handle_line_directive(
     return
   }
   pp.line_adjust = line_val - (loc.line + 1)
-  if tokens.length() > 1 && tokens[1].kind == StrLit {
+  if tokens.length() > 1 && tokens[1].kind == @tokens.TokenKind::StrLit {
     pp.logical_path = strip_quotes(pp_token_lexeme(pp, tokens[1]))
   }
 }
@@ -2276,7 +2272,7 @@ fn handle_line_directive(
 ///|
 
 ///|
-fn eval_if_expr(pp : Preprocessor, tokens : Array[Token], loc : @source.SrcLoc) -> Bool {
+fn eval_if_expr(pp : Preprocessor, tokens : Array[@tokens.Token], loc : @source.SrcLoc) -> Bool {
   if tokens.length() == 0 {
     add_pp_error(pp, loc, "empty #if expression")
     return false
@@ -2288,7 +2284,7 @@ fn eval_if_expr(pp : Preprocessor, tokens : Array[Token], loc : @source.SrcLoc) 
 
 ///|
 struct IfParser {
-  tokens : Array[Token]
+  tokens : Array[@tokens.Token]
   mut index : Int
   pp : Preprocessor
 }
@@ -2320,7 +2316,7 @@ fn pp_shift_count(v : PpValue) -> Int {
 }
 
 ///|
-fn peek_if(p : IfParser) -> Token? {
+fn peek_if(p : IfParser) -> @tokens.Token? {
   if p.index >= p.tokens.length() {
     return None
   }
@@ -2328,7 +2324,7 @@ fn peek_if(p : IfParser) -> Token? {
 }
 
 ///|
-fn advance_if(p : IfParser) -> Token? {
+fn advance_if(p : IfParser) -> @tokens.Token? {
   match peek_if(p) {
     None => None
     Some(tok) => {
@@ -2339,7 +2335,7 @@ fn advance_if(p : IfParser) -> Token? {
 }
 
 ///|
-fn match_kind(p : IfParser, kind : TokenKind) -> Bool {
+fn match_kind(p : IfParser, kind : @tokens.TokenKind) -> Bool {
   match peek_if(p) {
     Some(tok) if tok.kind == kind => {
       p.index = p.index + 1
@@ -2357,7 +2353,7 @@ fn parse_line_int_literal(pp : Preprocessor, lexeme : String, loc : @source.SrcL
     return 0
   }
   if end < lexeme.length() {
-    let suffix = slice_string(lexeme, end, lexeme.length())
+    let suffix = @util.slice_string(lexeme, end, lexeme.length())
     for ch in suffix {
       if ch != 'u' && ch != 'U' && ch != 'l' && ch != 'L' {
         add_pp_error(pp, loc, "invalid integer in #line")
@@ -2365,7 +2361,7 @@ fn parse_line_int_literal(pp : Preprocessor, lexeme : String, loc : @source.SrcL
       }
     }
   }
-  let trimmed = slice_string(lexeme, 0, end)
+  let trimmed = @util.slice_string(lexeme, 0, end)
   let base = int_literal_base(lexeme)
   let value = parse_uint64_literal(trimmed, base)
   value.reinterpret_as_int64().to_int()
@@ -2383,7 +2379,7 @@ fn parse_pp_int_literal(
     return { value: 0, is_unsigned: false }
   }
   let suffix = if end < lexeme.length() {
-    slice_string(lexeme, end, lexeme.length())
+    @util.slice_string(lexeme, end, lexeme.length())
   } else {
     ""
   }
@@ -2393,7 +2389,7 @@ fn parse_pp_int_literal(
       return { value: 0, is_unsigned: false }
     }
   }
-  let trimmed = slice_string(lexeme, 0, end)
+  let trimmed = @util.slice_string(lexeme, 0, end)
   let base = int_literal_base(lexeme)
   let value = parse_uint64_literal(trimmed, base)
   let (_, unsigned_suffix) = parse_int_suffix(suffix)
@@ -2403,7 +2399,7 @@ fn parse_pp_int_literal(
 }
 
 ///|
-fn parse_pp_char_literal(pp : Preprocessor, tok : Token) -> PpValue {
+fn parse_pp_char_literal(pp : Preprocessor, tok : @tokens.Token) -> PpValue {
   let lexeme = pp_token_lexeme(pp, tok)
   if lexeme.length() < 3 {
     add_pp_error(pp, tok.loc, "invalid character literal in #if")
@@ -2532,7 +2528,7 @@ fn pp_hex_digit_value(code : UInt16) -> Int? {
 ///|
 fn macro_int_value(
   pp : Preprocessor,
-  tok : Token,
+  tok : @tokens.Token,
   loc : @source.SrcLoc,
 ) -> PpValue? {
   let id = macro_id_from_token(pp, tok)
@@ -2546,7 +2542,7 @@ fn macro_int_value(
         return None
       }
       if macro_def.replacement.length() == 1 &&
-        macro_def.replacement[0].kind == IntLit {
+        macro_def.replacement[0].kind == @tokens.TokenKind::IntLit {
         return Some(parse_pp_int_literal(
           pp,
           pp_token_lexeme(pp, macro_def.replacement[0]),
@@ -2566,24 +2562,24 @@ fn parse_primary(p : IfParser, loc : @source.SrcLoc) -> PpValue {
       { value: 0, is_unsigned: false }
     }
     Some(tok) => {
-      if tok.kind == RParen {
+      if tok.kind == @tokens.TokenKind::RParen {
         p.index = p.index - 1
         return { value: 0, is_unsigned: false }
       }
-      if tok.kind == IntLit {
+      if tok.kind == @tokens.TokenKind::IntLit {
         return parse_pp_int_literal(p.pp, pp_token_lexeme(p.pp, tok), tok.loc)
       }
-      if tok.kind == CharLit {
+      if tok.kind == @tokens.TokenKind::CharLit {
         return parse_pp_char_literal(p.pp, tok)
       }
-      if tok.kind == Ident {
-        if token_id(tok) == p.pp.builtin_ids.defined {
+      if tok.kind == @tokens.TokenKind::Ident {
+        if @tokens.token_id(tok) == p.pp.builtin_ids.defined {
           return parse_defined(p, loc)
         }
         match macro_int_value(p.pp, tok, tok.loc) {
           Some(v) => return v
           None => {
-            if match_kind(p, LParen) {
+            if match_kind(p, @tokens.TokenKind::LParen) {
               skip_paren_expr(p, tok.loc)
               return { value: 0, is_unsigned: false }
             }
@@ -2591,14 +2587,14 @@ fn parse_primary(p : IfParser, loc : @source.SrcLoc) -> PpValue {
           }
         }
       }
-      if tok.kind == LParen {
+      if tok.kind == @tokens.TokenKind::LParen {
         let value = parse_logical_or(p, loc)
-        if !match_kind(p, RParen) {
+        if !match_kind(p, @tokens.TokenKind::RParen) {
           // try to resync to a later ')', but don't hard-fail
           let mut idx = p.index
           while idx < p.tokens.length() {
             match p.tokens[idx] {
-              { kind: RParen, .. } => {
+              { kind: @tokens.TokenKind::RParen, .. } => {
                 idx = idx + 1
                 break
               }
@@ -2618,17 +2614,17 @@ fn parse_primary(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 ///|
 fn peek_is_rparen(p : IfParser) -> Bool {
   match peek_if(p) {
-    Some(tok) if tok.kind == RParen => true
+    Some(tok) if tok.kind == @tokens.TokenKind::RParen => true
     _ => false
   }
 }
 
 ///|
 fn parse_defined(p : IfParser, loc : @source.SrcLoc) -> PpValue {
-  if match_kind(p, LParen) {
+  if match_kind(p, @tokens.TokenKind::LParen) {
     match advance_if(p) {
       Some(tok) if is_macro_name_token(tok) => {
-        if !match_kind(p, RParen) {
+        if !match_kind(p, @tokens.TokenKind::RParen) {
           add_pp_error(p.pp, loc, "missing ')' after defined")
         }
         return pp_bool_value(has_macro(p.pp, macro_id_from_token(p.pp, tok)))
@@ -2659,9 +2655,9 @@ fn skip_paren_expr(p : IfParser, loc : @source.SrcLoc) -> Unit {
         return
       }
       Some(tok) =>
-        if tok.kind == LParen {
+        if tok.kind == @tokens.TokenKind::LParen {
           depth = depth + 1
-        } else if tok.kind == RParen {
+        } else if tok.kind == @tokens.TokenKind::RParen {
           depth = depth - 1
         }
     }
@@ -2670,17 +2666,17 @@ fn skip_paren_expr(p : IfParser, loc : @source.SrcLoc) -> Unit {
 
 ///|
 fn parse_unary(p : IfParser, loc : @source.SrcLoc) -> PpValue {
-  if match_kind(p, Bang) {
+  if match_kind(p, @tokens.TokenKind::Bang) {
     return pp_bool_value(pp_is_zero(parse_unary(p, loc)))
   }
-  if match_kind(p, Tilde) {
+  if match_kind(p, @tokens.TokenKind::Tilde) {
     let v = parse_unary(p, loc)
     return { value: v.value.lnot(), is_unsigned: v.is_unsigned }
   }
-  if match_kind(p, Plus) {
+  if match_kind(p, @tokens.TokenKind::Plus) {
     return parse_unary(p, loc)
   }
-  if match_kind(p, Minus) {
+  if match_kind(p, @tokens.TokenKind::Minus) {
     let v = parse_unary(p, loc)
     let value : UInt64 = 0 - v.value
     return { value, is_unsigned: v.is_unsigned }
@@ -2695,13 +2691,13 @@ fn parse_mul(p : IfParser, loc : @source.SrcLoc) -> PpValue {
     if peek_is_rparen(p) {
       break
     }
-    if match_kind(p, Star) {
+    if match_kind(p, @tokens.TokenKind::Star) {
       let rhs = parse_unary(p, loc)
       let unsigned = pp_unsigned_result(value, rhs)
       value = { value: value.value * rhs.value, is_unsigned: unsigned }
       continue
     }
-    if match_kind(p, Slash) {
+    if match_kind(p, @tokens.TokenKind::Slash) {
       let rhs = parse_unary(p, loc)
       if pp_is_zero(rhs) {
         add_pp_error(p.pp, loc, "division by zero in #if")
@@ -2719,7 +2715,7 @@ fn parse_mul(p : IfParser, loc : @source.SrcLoc) -> PpValue {
       }
       continue
     }
-    if match_kind(p, Percent) {
+    if match_kind(p, @tokens.TokenKind::Percent) {
       let rhs = parse_unary(p, loc)
       if pp_is_zero(rhs) {
         add_pp_error(p.pp, loc, "modulo by zero in #if")
@@ -2749,13 +2745,13 @@ fn parse_add(p : IfParser, loc : @source.SrcLoc) -> PpValue {
     if peek_is_rparen(p) {
       break
     }
-    if match_kind(p, Plus) {
+    if match_kind(p, @tokens.TokenKind::Plus) {
       let rhs = parse_mul(p, loc)
       let unsigned = pp_unsigned_result(value, rhs)
       value = { value: value.value + rhs.value, is_unsigned: unsigned }
       continue
     }
-    if match_kind(p, Minus) {
+    if match_kind(p, @tokens.TokenKind::Minus) {
       let rhs = parse_mul(p, loc)
       let unsigned = pp_unsigned_result(value, rhs)
       value = { value: value.value - rhs.value, is_unsigned: unsigned }
@@ -2773,13 +2769,13 @@ fn parse_shift(p : IfParser, loc : @source.SrcLoc) -> PpValue {
     if peek_is_rparen(p) {
       break
     }
-    if match_kind(p, ShiftLeft) {
+    if match_kind(p, @tokens.TokenKind::ShiftLeft) {
       let rhs = parse_add(p, loc)
       let shift = pp_shift_count(rhs)
       value = { value: value.value << shift, is_unsigned: value.is_unsigned }
       continue
     }
-    if match_kind(p, ShiftRight) {
+    if match_kind(p, @tokens.TokenKind::ShiftRight) {
       let rhs = parse_add(p, loc)
       let shift = pp_shift_count(rhs)
       let new_value = if value.is_unsigned {
@@ -2803,7 +2799,7 @@ fn parse_rel(p : IfParser, loc : @source.SrcLoc) -> PpValue {
     if peek_is_rparen(p) {
       break
     }
-    if match_kind(p, Lt) {
+    if match_kind(p, @tokens.TokenKind::Lt) {
       let rhs = parse_shift(p, loc)
       let cond = if pp_unsigned_result(value, rhs) {
         value.value < rhs.value
@@ -2813,7 +2809,7 @@ fn parse_rel(p : IfParser, loc : @source.SrcLoc) -> PpValue {
       value = pp_bool_value(cond)
       continue
     }
-    if match_kind(p, Le) {
+    if match_kind(p, @tokens.TokenKind::Le) {
       let rhs = parse_shift(p, loc)
       let cond = if pp_unsigned_result(value, rhs) {
         value.value <= rhs.value
@@ -2823,7 +2819,7 @@ fn parse_rel(p : IfParser, loc : @source.SrcLoc) -> PpValue {
       value = pp_bool_value(cond)
       continue
     }
-    if match_kind(p, Gt) {
+    if match_kind(p, @tokens.TokenKind::Gt) {
       let rhs = parse_shift(p, loc)
       let cond = if pp_unsigned_result(value, rhs) {
         value.value > rhs.value
@@ -2833,7 +2829,7 @@ fn parse_rel(p : IfParser, loc : @source.SrcLoc) -> PpValue {
       value = pp_bool_value(cond)
       continue
     }
-    if match_kind(p, Ge) {
+    if match_kind(p, @tokens.TokenKind::Ge) {
       let rhs = parse_shift(p, loc)
       let cond = if pp_unsigned_result(value, rhs) {
         value.value >= rhs.value
@@ -2855,12 +2851,12 @@ fn parse_eq(p : IfParser, loc : @source.SrcLoc) -> PpValue {
     if peek_is_rparen(p) {
       break
     }
-    if match_kind(p, Eq) {
+    if match_kind(p, @tokens.TokenKind::Eq) {
       let rhs = parse_rel(p, loc)
       value = pp_bool_value(value.value == rhs.value)
       continue
     }
-    if match_kind(p, Ne) {
+    if match_kind(p, @tokens.TokenKind::Ne) {
       let rhs = parse_rel(p, loc)
       value = pp_bool_value(value.value != rhs.value)
       continue
@@ -2873,7 +2869,7 @@ fn parse_eq(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 ///|
 fn parse_bit_and(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_eq(p, loc)
-  while match_kind(p, Amp) {
+  while match_kind(p, @tokens.TokenKind::Amp) {
     if peek_is_rparen(p) {
       break
     }
@@ -2887,7 +2883,7 @@ fn parse_bit_and(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 ///|
 fn parse_bit_xor(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_bit_and(p, loc)
-  while match_kind(p, Caret) {
+  while match_kind(p, @tokens.TokenKind::Caret) {
     if peek_is_rparen(p) {
       break
     }
@@ -2901,7 +2897,7 @@ fn parse_bit_xor(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 ///|
 fn parse_bit_or(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_bit_xor(p, loc)
-  while match_kind(p, Pipe) {
+  while match_kind(p, @tokens.TokenKind::Pipe) {
     if peek_is_rparen(p) {
       break
     }
@@ -2915,7 +2911,7 @@ fn parse_bit_or(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 ///|
 fn parse_logical_and(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_bit_or(p, loc)
-  while match_kind(p, AmpAmp) {
+  while match_kind(p, @tokens.TokenKind::AmpAmp) {
     let rhs = parse_bit_or(p, loc)
     value = pp_bool_value(!pp_is_zero(value) && !pp_is_zero(rhs))
   }
@@ -2925,7 +2921,7 @@ fn parse_logical_and(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 ///|
 fn parse_logical_or(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_logical_and(p, loc)
-  while match_kind(p, PipePipe) {
+  while match_kind(p, @tokens.TokenKind::PipePipe) {
     let rhs = parse_logical_and(p, loc)
     value = pp_bool_value(!pp_is_zero(value) || !pp_is_zero(rhs))
   }
@@ -2933,16 +2929,16 @@ fn parse_logical_or(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 }
 
 ///|
-fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
+fn handle_directive(pp : Preprocessor, _hash_tok : @tokens.Token) -> Unit {
   let name_tok = next_input_token(pp)
-  if name_tok.kind == Eof {
+  if name_tok.kind == @tokens.TokenKind::Eof {
     return
   }
   if name_tok.line_start {
     pp.held = Some(name_tok)
     return
   }
-  let name_id = token_id(name_tok)
+  let name_id = @tokens.token_id(name_tok)
   let ids = pp.builtin_ids
   let is_conditional = name_id == ids.dir_if ||
     name_id == ids.dir_ifdef ||
@@ -3124,7 +3120,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : Token) -> Unit {
 }
 
 ///|
-fn next_pp_token(pp : Preprocessor) -> Token {
+fn next_pp_token(pp : Preprocessor) -> @tokens.Token {
   while true {
     if !current_active(pp) && pp.held is None && pp.pending.length() == 0 {
       skip_inactive(pp)
@@ -3143,8 +3139,8 @@ fn next_pp_token(pp : Preprocessor) -> Token {
       next_input_token(pp)
     }
     match tok.kind {
-      Eof => return tok
-      Hash if tok.line_start && !from_pending => {
+      @tokens.TokenKind::Eof => return tok
+      @tokens.TokenKind::Hash if tok.line_start && !from_pending => {
         handle_directive(pp, tok)
         continue
       }
@@ -3153,10 +3149,10 @@ fn next_pp_token(pp : Preprocessor) -> Token {
     if !current_active(pp) {
       continue
     }
-    if token_id(tok) == 0 {
+    if @tokens.token_id(tok) == 0 {
       return tok
     }
-    let macro_id = token_id(tok)
+    let macro_id = @tokens.token_id(tok)
     let is_macro_name = macro_id > 0
     if is_macro_name {
       if builtin_macro_tokens(pp, tok) is Some(tokens) {
@@ -3175,7 +3171,7 @@ fn next_pp_token(pp : Preprocessor) -> Token {
           if macro_def.is_function {
             let next_tok = next_raw_token(pp)
             match next_tok.kind {
-              LParen => ()
+              @tokens.TokenKind::LParen => ()
               _ => {
                 push_back(pp, next_tok)
                 return tok
@@ -3255,23 +3251,23 @@ fn next_pp_token(pp : Preprocessor) -> Token {
     return tok
   } else {
     {
-      kind: Eof,
+      kind: @tokens.TokenKind::Eof,
       value: 0,
       loc: lexer_loc(pp.lexer),
       line_start: false,
-      hidden: empty_hidden,
+      hidden: @tokens.empty_hidden,
     }
   }
 }
 
 ///|
-fn dump_tokens(pp : Preprocessor, max_count : Int) -> Array[Token] {
-  let out : Array[Token] = []
+fn dump_tokens(pp : Preprocessor, max_count : Int) -> Array[@tokens.Token] {
+  let out : Array[@tokens.Token] = []
   while out.length() < max_count {
     let tok = next_pp_token(pp)
     out.push(tok)
     match tok.kind {
-      Eof => break
+      @tokens.TokenKind::Eof => break
       _ => ()
     }
   }

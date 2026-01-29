@@ -59,15 +59,9 @@ type IfParser
 
 type IncludeSpec
 
-type KeywordIds
-
 type LabelAddrContext
 
 type LabelCtx
-
-type LexemeEntry
-
-type LexemePool
 
 type Lexer
 
@@ -126,16 +120,6 @@ type SwitchInfo
 type Sym
 
 type SymTable
-
-type Token
-pub impl Eq for Token
-pub impl Show for Token
-pub impl ToJson for Token
-
-type TokenKind
-pub impl Eq for TokenKind
-pub impl Show for TokenKind
-pub impl ToJson for TokenKind
 
 type VlaScopeInfo
 

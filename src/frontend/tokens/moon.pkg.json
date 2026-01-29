@@ -1,0 +1,7 @@
+{
+  "import": [
+    "hackwaly/tinycc/support/intern",
+    "hackwaly/tinycc/support/source",
+    "hackwaly/tinycc/support/util"
+  ]
+}

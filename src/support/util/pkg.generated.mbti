@@ -4,6 +4,8 @@ package "hackwaly/tinycc/support/util"
 // Values
 pub let char_is_unsigned : Bool
 
+pub fn slice_string(String, Int, Int) -> String
+
 // Errors
 
 // Types and methods

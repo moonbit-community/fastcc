@@ -1,5 +1,5 @@
 ///|
-enum TokenKind {
+pub(all) enum TokenKind {
   Eof
   Invalid
   Ident
@@ -100,7 +100,7 @@ enum TokenKind {
 } derive(Show, Eq, ToJson)
 
 ///|
-struct Token {
+pub(all) struct Token {
   kind : TokenKind
   value : Int
   loc : @source.SrcLoc
@@ -109,10 +109,10 @@ struct Token {
 } derive(Show, Eq, ToJson)
 
 ///|
-let empty_hidden : Int = 0
+pub let empty_hidden : Int = 0
 
 ///|
-fn token_value_from_parts(id : Int, lexeme_id : Int) -> Int {
+pub fn token_value_from_parts(id : Int, lexeme_id : Int) -> Int {
   if lexeme_id != 0 {
     return -lexeme_id
   }
@@ -123,35 +123,35 @@ fn token_value_from_parts(id : Int, lexeme_id : Int) -> Int {
 }
 
 ///|
-fn token_id(tok : Token) -> Int {
+pub fn token_id(tok : Token) -> Int {
   let value = tok.value
   if value > 0 { value } else { 0 }
 }
 
 ///|
-fn token_lexeme_id(tok : Token) -> Int {
+pub fn token_lexeme_id(tok : Token) -> Int {
   let value = tok.value
   if value < 0 { -value } else { 0 }
 }
 
 ///|
-fn token_has_id(tok : Token) -> Bool {
+pub fn token_has_id(tok : Token) -> Bool {
   tok.value > 0
 }
 
 ///|
-enum LexemeEntry {
+pub(all) enum LexemeEntry {
   Owned(String)
   Slice(text~ : String, start~ : Int, len~ : Int)
 }
 
 ///|
-struct LexemePool {
+pub(all) struct LexemePool {
   entries : Array[LexemeEntry]
 }
 
 ///|
-fn new_lexeme_pool(capacity? : Int) -> LexemePool {
+pub fn new_lexeme_pool(capacity? : Int) -> LexemePool {
   match capacity {
     None => { entries: [] }
     Some(value) => {
@@ -162,7 +162,7 @@ fn new_lexeme_pool(capacity? : Int) -> LexemePool {
 }
 
 ///|
-fn lexeme_pool_intern(pool : LexemePool, text : String) -> Int {
+pub fn lexeme_pool_intern(pool : LexemePool, text : String) -> Int {
   if text.length() == 0 {
     return 0
   }
@@ -171,7 +171,7 @@ fn lexeme_pool_intern(pool : LexemePool, text : String) -> Int {
 }
 
 ///|
-fn lexeme_pool_get(pool : LexemePool, id : Int) -> String {
+pub fn lexeme_pool_get(pool : LexemePool, id : Int) -> String {
   if id <= 0 {
     return ""
   }
@@ -179,7 +179,7 @@ fn lexeme_pool_get(pool : LexemePool, id : Int) -> String {
   match pool.entries[idx] {
     LexemeEntry::Owned(value) => value
     LexemeEntry::Slice(text=text, start=start, len=len) => {
-      let value = slice_string(text, start, start + len)
+      let value = @util.slice_string(text, start, start + len)
       pool.entries[idx] = LexemeEntry::Owned(value)
       value
     }
@@ -187,7 +187,7 @@ fn lexeme_pool_get(pool : LexemePool, id : Int) -> String {
 }
 
 ///|
-fn lexeme_pool_intern_slice(
+pub fn lexeme_pool_intern_slice(
   pool : LexemePool,
   text : String,
   start : Int,
@@ -202,7 +202,7 @@ fn lexeme_pool_intern_slice(
 }
 
 ///|
-fn lexeme_pool_len(pool : LexemePool, id : Int) -> Int {
+pub fn lexeme_pool_len(pool : LexemePool, id : Int) -> Int {
   if id <= 0 {
     return 0
   }
@@ -213,12 +213,12 @@ fn lexeme_pool_len(pool : LexemePool, id : Int) -> Int {
 }
 
 ///|
-struct KeywordIds {
+pub(all) struct KeywordIds {
   kind_by_id : Array[TokenKind?]
 }
 
 ///|
-fn init_keyword_ids(interner : @intern.StringInterner) -> KeywordIds {
+pub fn init_keyword_ids(interner : @intern.StringInterner) -> KeywordIds {
   let (_, kw_if) = interner.intern_view_with_id("if"[:])
   let (_, kw_do) = interner.intern_view_with_id("do"[:])
   let (_, kw_for) = interner.intern_view_with_id("for"[:])
@@ -352,7 +352,7 @@ fn init_keyword_ids(interner : @intern.StringInterner) -> KeywordIds {
 }
 
 ///|
-fn keyword_kind_from_id(id : Int, ids : KeywordIds) -> TokenKind? {
+pub fn keyword_kind_from_id(id : Int, ids : KeywordIds) -> TokenKind? {
   if id <= 0 {
     return None
   }
@@ -364,7 +364,7 @@ fn keyword_kind_from_id(id : Int, ids : KeywordIds) -> TokenKind? {
 }
 
 ///|
-fn token_kind_text(kind : TokenKind) -> String {
+pub fn token_kind_text(kind : TokenKind) -> String {
   match kind {
     LParen => "("
     RParen => ")"
@@ -419,7 +419,7 @@ fn token_kind_text(kind : TokenKind) -> String {
 }
 
 ///|
-fn token_kind_text_len(kind : TokenKind) -> Int {
+pub fn token_kind_text_len(kind : TokenKind) -> Int {
   match kind {
     LParen |
     RParen |
@@ -474,7 +474,7 @@ fn token_kind_text_len(kind : TokenKind) -> Int {
 }
 
 ///|
-fn token_text_with(
+pub fn token_text_with(
   interner : @intern.StringInterner,
   pool : LexemePool,
   tok : Token,
@@ -491,7 +491,7 @@ fn token_text_with(
 }
 
 ///|
-fn token_text_len_with(
+pub fn token_text_len_with(
   interner : @intern.StringInterner,
   pool : LexemePool,
   tok : Token,

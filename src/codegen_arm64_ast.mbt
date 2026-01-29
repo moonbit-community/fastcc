@@ -303,7 +303,7 @@ fn strip_float_literal_suffix(text : String) -> String {
   }
   let last = text[len - 1]
   if last == 102 || last == 70 || last == 108 || last == 76 {
-    slice_string(text, 0, len - 1)
+    @util.slice_string(text, 0, len - 1)
   } else {
     text
   }
@@ -348,8 +348,8 @@ fn parse_hex_float_literal_value(text : String) -> Double? {
   if p_index < 0 {
     return None
   }
-  let mantissa = slice_string(text, idx, p_index)
-  let exp_str = slice_string(text, p_index + 1, len)
+  let mantissa = @util.slice_string(text, idx, p_index)
+  let exp_str = @util.slice_string(text, p_index + 1, len)
   if exp_str.length() == 0 {
     return None
   }

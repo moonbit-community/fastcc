@@ -42,8 +42,8 @@ fn split_define_spec(spec : String) -> (String, String?)? {
   let mut i = 0
   while i < len {
     if spec[i] == 61 {
-      let name = slice_string(spec, 0, i)
-      let value = slice_string(spec, i + 1, len)
+      let name = @util.slice_string(spec, 0, i)
+      let value = @util.slice_string(spec, i + 1, len)
       return Some((name, Some(value)))
     }
     i = i + 1
@@ -72,7 +72,7 @@ fn split_listfile_args(contents : String) -> Array[String] {
     while i < len && !is_cli_whitespace(contents.code_unit_at(i).to_int()) {
       i = i + 1
     }
-    args.push(slice_string(contents, start, i))
+    args.push(@util.slice_string(contents, start, i))
   }
   args
 }
@@ -84,7 +84,7 @@ fn expand_cli_args(args : Array[String]) -> Array[String]? {
   while i < args.length() {
     let arg = args[i]
     if arg.has_prefix("@") && arg.length() > 1 {
-      let path = slice_string(arg, 1, arg.length())
+      let path = @util.slice_string(arg, 1, arg.length())
       let contents = try @fs.read_file_to_string(path) catch {
         err => {
           println("error: failed to read argument file '\{path}': \{err.to_string()}")
@@ -184,7 +184,7 @@ fn parse_cli_args(
       continue
     }
     if arg.has_prefix("-o") && arg.length() > 2 {
-      output = Some(slice_string(arg, 2, arg.length()))
+      output = Some(@util.slice_string(arg, 2, arg.length()))
       i = i + 1
       continue
     }
@@ -199,7 +199,7 @@ fn parse_cli_args(
       continue
     }
     if arg.has_prefix("-I") && arg.length() > 2 {
-      include_paths.push(slice_string(arg, 2, arg.length()))
+      include_paths.push(@util.slice_string(arg, 2, arg.length()))
       i = i + 1
       continue
     }
@@ -228,7 +228,7 @@ fn parse_cli_args(
       continue
     }
     if arg.has_prefix("-D") && arg.length() > 2 {
-      match split_define_spec(slice_string(arg, 2, arg.length())) {
+      match split_define_spec(@util.slice_string(arg, 2, arg.length())) {
         None => {
           println("error: empty macro name in -D")
           print_usage()
@@ -263,7 +263,7 @@ fn parse_cli_args(
       continue
     }
     if arg.has_prefix("-U") && arg.length() > 2 {
-      let name = slice_string(arg, 2, arg.length())
+      let name = @util.slice_string(arg, 2, arg.length())
       if name == "" {
         println("error: empty macro name in -U")
         print_usage()
@@ -304,7 +304,7 @@ fn parse_cli_args(
       continue
     }
     if arg.has_prefix("-isystem") && arg.length() > 8 {
-      include_paths.push(slice_string(arg, 8, arg.length()))
+      include_paths.push(@util.slice_string(arg, 8, arg.length()))
       i = i + 1
       continue
     }
@@ -319,7 +319,7 @@ fn parse_cli_args(
       continue
     }
     if arg.has_prefix("-L") && arg.length() > 2 {
-      link_paths.push(slice_string(arg, 2, arg.length()))
+      link_paths.push(@util.slice_string(arg, 2, arg.length()))
       i = i + 1
       continue
     }
@@ -334,7 +334,7 @@ fn parse_cli_args(
       continue
     }
     if arg.has_prefix("-l") && arg.length() > 2 {
-      link_libs.push(slice_string(arg, 2, arg.length()))
+      link_libs.push(@util.slice_string(arg, 2, arg.length()))
       i = i + 1
       continue
     }
@@ -487,7 +487,7 @@ fn default_output_path(input_path : String) -> String {
     None => input_path + ".o"
     Some(dot) =>
       if dot > slash {
-        slice_string(input_path, 0, dot) + ".o"
+        @util.slice_string(input_path, 0, dot) + ".o"
       } else {
         input_path + ".o"
       }
@@ -504,7 +504,7 @@ fn format_diag_for_cli(map : @source.SourceMap, d : @diag.Diag) -> String {
 }
 
 ///|
-fn lex_cli_macro_tokens(pp : Preprocessor, value : String) -> Array[Token] {
+fn lex_cli_macro_tokens(pp : Preprocessor, value : String) -> Array[@tokens.Token] {
   if value == "" {
     return []
   }
@@ -516,7 +516,7 @@ fn lex_cli_macro_tokens(pp : Preprocessor, value : String) -> Array[Token] {
     pp.keyword_ids,
     pp.lexeme_pool,
   )
-  let tokens : Array[Token] = []
+  let tokens : Array[@tokens.Token] = []
   while true {
     let tok = next_token(lex)
     if tok.kind == Eof {
@@ -773,7 +773,7 @@ fn main {
                 apply_cli_macros(pp, cfg.macro_actions)
                 let toks = dump_tokens(pp, 32)
                 for t in toks {
-                  println(token_text_with(pp.interner, pp.lexeme_pool, t))
+                  println(@tokens.token_text_with(pp.interner, pp.lexeme_pool, t))
                 }
                 if @diag.has_errors(bag) {
                   any_errors = true
