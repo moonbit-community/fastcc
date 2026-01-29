@@ -14,11 +14,6 @@ type Arm64PcsLayout
 
 type BenchStats
 
-type BuiltinCallKind
-pub impl Eq for BuiltinCallKind
-pub impl Show for BuiltinCallKind
-pub impl ToJson for BuiltinCallKind
-
 type CliConfig
 
 type CliMacroAction
@@ -30,22 +25,13 @@ type CliParse
 
 type CstringPool
 
-type FieldAccessInfo
-
 type FramePlan
-
-type FuncSig
-pub impl Eq for FuncSig
-pub impl Show for FuncSig
-pub impl ToJson for FuncSig
 
 type LabelAddrContext
 
 type LabelCtx
 
 type LocalAlloc
-
-type LocalOverride
 
 type LocalSlot
 
@@ -59,8 +45,6 @@ type MachoSegmentLayout
 
 type ObjSymbol
 
-type RecordDef
-
 type RegPool
 
 type Reloc
@@ -71,8 +55,6 @@ type SValue
 
 type Section
 
-type SemContext
-
 type StaticLocalInfo
 
 type StringEntry
@@ -80,8 +62,6 @@ type StringEntry
 type SwitchCaseInfo
 
 type SwitchChains
-
-type SwitchInfo
 
 type Sym
 

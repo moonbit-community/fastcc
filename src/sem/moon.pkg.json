@@ -1,0 +1,12 @@
+{
+  "import": [
+    "hackwaly/tinycc/frontend/ast",
+    "hackwaly/tinycc/support/diag",
+    "hackwaly/tinycc/support/source",
+    "hackwaly/tinycc/support/util"
+  ],
+  "wbtest-import": [
+    "hackwaly/tinycc/frontend/parser",
+    "hackwaly/tinycc/frontend/preproc"
+  ]
+}

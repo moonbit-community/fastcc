@@ -6,6 +6,7 @@
     "hackwaly/tinycc/frontend/parser",
     "hackwaly/tinycc/frontend/preproc",
     "hackwaly/tinycc/frontend/tokens",
+    "hackwaly/tinycc/sem",
     "hackwaly/tinycc/support/diag",
     "hackwaly/tinycc/support/source",
     "hackwaly/tinycc/support/util",

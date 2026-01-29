@@ -46,16 +46,6 @@ struct StaticLocalInfo {
   ty : @ast.CType
 }
 
-///|
-struct FieldAccessInfo {
-  offset : Int
-  ty : @ast.CType
-  bit_offset : Int?
-  bit_width : Int?
-  bit_unit_size : Int?
-}
-
-///|
 struct LocalAlloc {
   sem : SemContext
   ret_ty : @ast.CType
@@ -2889,7 +2879,7 @@ fn resolve_init_designator_access_info(
         }
     }
   }
-  Some({
+  Some(@sem.FieldAccessInfo::{
     offset: off,
     ty: result_ty,
     bit_offset: bit_off,
@@ -3356,7 +3346,7 @@ fn gen_initializer_to_addr(
               ) is Some(info) {
                 match info.bit_width {
                   Some(_) => {
-                    let info_at = {
+                    let info_at = @sem.FieldAccessInfo::{
                       offset: base_off + info.offset,
                       ty: info.ty,
                       bit_offset: info.bit_offset,
@@ -3491,7 +3481,7 @@ fn gen_initializer_to_addr(
                       ) {
                         None => @diag.add_error(bag, item.loc, "codegen: missing bitfield info")
                         Some(info) => {
-                          let info_at = {
+                          let info_at = @sem.FieldAccessInfo::{
                             offset: base_off + info.offset,
                             ty: info.ty,
                             bit_offset: info.bit_offset,
@@ -3584,7 +3574,7 @@ fn gen_initializer_to_addr(
             ) is Some(info) {
               match info.bit_width {
                 Some(_) => {
-                  let info_at = {
+                  let info_at = @sem.FieldAccessInfo::{
                     offset: base_off + info.offset,
                     ty: info.ty,
                     bit_offset: info.bit_offset,
@@ -3652,7 +3642,7 @@ fn gen_initializer_to_addr(
               ) {
                 None => @diag.add_error(bag, first.loc, "codegen: missing bitfield info")
                 Some(info) => {
-                  let info_at = {
+                  let info_at = @sem.FieldAccessInfo::{
                     offset: base_off + info.offset,
                     ty: info.ty,
                     bit_offset: info.bit_offset,
@@ -6315,7 +6305,7 @@ fn struct_field_access_info(
           bit_pos = bit_pos - field_align * 8
         }
         if (id > 0 && field.id == id) || field.name == name {
-          let info = {
+          let info = @sem.FieldAccessInfo::{
             offset: size,
             ty: field.ty,
             bit_offset: Some(bit_pos),
@@ -6367,7 +6357,7 @@ fn struct_field_access_info(
         }
         size = align_to(size, adjusted_align)
         if (id > 0 && field.id == id) || field.name == name {
-          return Some({
+          return Some(@sem.FieldAccessInfo::{
             offset: size,
             ty: field.ty,
             bit_offset: None,
@@ -6379,7 +6369,7 @@ fn struct_field_access_info(
           match strip_top_qualifiers(field.ty) {
             @ast.CType::Struct(..) | @ast.CType::Union(..) =>
               if record_field_access_info(ctx, field.ty, name, id, loc) is Some(inner) {
-                return Some({
+                return Some(@sem.FieldAccessInfo::{
                   offset: size + inner.offset,
                   ty: inner.ty,
                   bit_offset: inner.bit_offset,
@@ -6417,7 +6407,7 @@ fn union_field_access_info(
           None => 0
         }
         if width > 0 {
-          let info = {
+          let info = @sem.FieldAccessInfo::{
             offset: 0,
             ty: field.ty,
             bit_offset: Some(0),
@@ -6429,7 +6419,7 @@ fn union_field_access_info(
       }
     }
     if (id > 0 && field.id == id) || field.name == name {
-      return Some({
+      return Some(@sem.FieldAccessInfo::{
         offset: 0,
         ty: field.ty,
         bit_offset: None,
@@ -6441,7 +6431,7 @@ fn union_field_access_info(
       match strip_top_qualifiers(field.ty) {
         @ast.CType::Struct(..) | @ast.CType::Union(..) =>
           if record_field_access_info(ctx, field.ty, name, id, loc) is Some(inner) {
-            return Some({
+            return Some(@sem.FieldAccessInfo::{
               offset: inner.offset,
               ty: inner.ty,
               bit_offset: inner.bit_offset,
@@ -6546,7 +6536,7 @@ fn collect_struct_field_access_cache(
           size = size + field_align
           bit_pos = bit_pos - field_align * 8
         }
-        let info = adjust_bitfield_access_info(ctx, struct_size, {
+        let info = adjust_bitfield_access_info(ctx, struct_size, @sem.FieldAccessInfo::{
           offset: size,
           ty: field.ty,
           bit_offset: Some(bit_pos),
@@ -6597,7 +6587,7 @@ fn collect_struct_field_access_cache(
           adjusted_align = value
         }
         size = align_to(size, adjusted_align)
-        let info = {
+        let info = @sem.FieldAccessInfo::{
           offset: size,
           ty: field.ty,
           bit_offset: None,
@@ -6615,7 +6605,7 @@ fn collect_struct_field_access_cache(
                 loc,
               )
               for nested_name, nested_info in nested_by_name {
-                add_field_access_entry(cache, nested_name, {
+                add_field_access_entry(cache, nested_name, @sem.FieldAccessInfo::{
                   offset: size + nested_info.offset,
                   ty: nested_info.ty,
                   bit_offset: nested_info.bit_offset,
@@ -6624,7 +6614,7 @@ fn collect_struct_field_access_cache(
                 })
               }
               for nested_id, nested_info in nested_by_id {
-                add_field_access_entry_by_id(cache_by_id, nested_id, {
+                add_field_access_entry_by_id(cache_by_id, nested_id, @sem.FieldAccessInfo::{
                   offset: size + nested_info.offset,
                   ty: nested_info.ty,
                   bit_offset: nested_info.bit_offset,
@@ -6659,7 +6649,7 @@ fn collect_union_field_access_cache(
         None => 0
       }
       if width > 0 {
-        let info = adjust_bitfield_access_info(ctx, union_size, {
+        let info = adjust_bitfield_access_info(ctx, union_size, @sem.FieldAccessInfo::{
           offset: 0,
           ty: field.ty,
           bit_offset: Some(0),
@@ -6671,7 +6661,7 @@ fn collect_union_field_access_cache(
       }
       continue
     }
-    let info = {
+    let info = @sem.FieldAccessInfo::{
       offset: 0,
       ty: field.ty,
       bit_offset: None,
@@ -6689,7 +6679,7 @@ fn collect_union_field_access_cache(
             loc,
           )
           for nested_name, nested_info in nested_by_name {
-            add_field_access_entry(cache, nested_name, {
+            add_field_access_entry(cache, nested_name, @sem.FieldAccessInfo::{
               offset: nested_info.offset,
               ty: nested_info.ty,
               bit_offset: nested_info.bit_offset,
@@ -6698,7 +6688,7 @@ fn collect_union_field_access_cache(
             })
           }
           for nested_id, nested_info in nested_by_id {
-            add_field_access_entry_by_id(cache_by_id, nested_id, {
+            add_field_access_entry_by_id(cache_by_id, nested_id, @sem.FieldAccessInfo::{
               offset: nested_info.offset,
               ty: nested_info.ty,
               bit_offset: nested_info.bit_offset,
