@@ -45,21 +45,8 @@ pub fn int_literal_base_from(text : String, end : Int) -> Int {
 pub fn parse_uint64_literal(text : String, base : Int) -> UInt64 {
   let mut value : UInt64 = 0
   let base_u64 = base.to_uint64()
-  let mut i = 0
   let len = text.length()
-  if base == 16 &&
-    len >= 2 &&
-    text[0] == 48 &&
-    (text[1] == 120 || text[1] == 88) {
-    i = 2
-  } else if base == 2 &&
-    len >= 2 &&
-    text[0] == 48 &&
-    (text[1] == 98 || text[1] == 66) {
-    i = 2
-  } else if base == 8 && len > 1 && text[0] == 48 {
-    i = 1
-  }
+  let mut i = literal_digit_start(text, base, len)
   while i < len {
     let code = text[i]
     let digit = match digit_value(code) {
@@ -79,16 +66,7 @@ pub fn parse_uint64_literal(text : String, base : Int) -> UInt64 {
 pub fn parse_uint64_literal_prefix(text : String, base : Int, end : Int) -> UInt64 {
   let mut value : UInt64 = 0
   let base_u64 = base.to_uint64()
-  let mut i = 0
-  if base == 16 && end >= 2 && text[0] == 48 &&
-    (text[1] == 120 || text[1] == 88) {
-    i = 2
-  } else if base == 2 && end >= 2 && text[0] == 48 &&
-    (text[1] == 98 || text[1] == 66) {
-    i = 2
-  } else if base == 8 && end > 1 && text[0] == 48 {
-    i = 1
-  }
+  let mut i = literal_digit_start(text, base, end)
   while i < end {
     let code = text[i]
     let digit = match digit_value(code) {
@@ -152,6 +130,22 @@ fn scan_digits(text : String, start : Int, accept : (UInt16) -> Bool) -> Int {
     i = i + 1
   }
   i
+}
+
+///|
+fn literal_digit_start(text : String, base : Int, end : Int) -> Int {
+  if base == 16 && end >= 2 && text[0] == 48 &&
+    (text[1] == 120 || text[1] == 88) {
+    return 2
+  }
+  if base == 2 && end >= 2 && text[0] == 48 &&
+    (text[1] == 98 || text[1] == 66) {
+    return 2
+  }
+  if base == 8 && end > 1 && text[0] == 48 {
+    return 1
+  }
+  0
 }
 
 ///|
