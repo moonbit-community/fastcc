@@ -3,7 +3,7 @@ fn parse_text(text : String) -> (@ast.TranslationUnit, @diag.DiagBag) {
   let bag = @diag.new_diag_bag()
   let map = @source.new_source_map()
   let file = @source.add_file(map, "<test>", text)
-  let pp = new_preprocessor(map, file, bag)
+  let pp = @preproc.new_preprocessor(map, file, bag)
   let unit = parse_translation_unit(pp)
   (unit, bag)
 }
@@ -23,9 +23,9 @@ fn check_text_with_paths(
   let bag = @diag.new_diag_bag()
   let map = @source.new_source_map()
   let file = @source.add_file(map, "<test>", text)
-  let pp = new_preprocessor(map, file, bag)
+  let pp = @preproc.new_preprocessor(map, file, bag)
   for path in paths {
-    add_include_path(pp, path)
+    @preproc.add_include_path(pp, path)
   }
   let unit = parse_translation_unit(pp)
   check_translation_unit(unit, bag) |> ignore
@@ -325,7 +325,7 @@ test "parser tracks typedef struct name" {
     "<test>",
     "typedef struct { int x; } T; int main(){ T r; return r.x; }",
   )
-  let pp = new_preprocessor(map, file, bag)
+  let pp = @preproc.new_preprocessor(map, file, bag)
   let parser = new_parser(pp)
   ignore(parse_translation_unit_with(parser))
   let (_, type_id) = parser.pp.interner.intern_view_with_id("T"[:])

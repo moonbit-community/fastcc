@@ -1,12 +1,12 @@
 ///|
-struct CondState {
+pub(all) struct CondState {
   parent_active : Bool
   mut taken : Bool
   mut active : Bool
 }
 
 ///|
-struct Macro {
+pub(all) struct Macro {
   params : Array[Int]
   is_variadic : Bool
   is_function : Bool
@@ -17,13 +17,13 @@ struct Macro {
 }
 
 ///|
-struct IncludeSpec {
+pub(all) struct IncludeSpec {
   path : String
   is_angle : Bool
 }
 
 ///|
-struct PreprocBuiltinIds {
+pub(all) struct PreprocBuiltinIds {
   line_macro : Int
   file_macro : Int
   date_macro : Int
@@ -48,19 +48,19 @@ struct PreprocBuiltinIds {
 }
 
 ///|
-struct HiddenNode {
+pub(all) struct HiddenNode {
   id : Int
   next : Int
 }
 
 ///|
-struct HiddenPool {
+pub(all) struct HiddenPool {
   nodes : Array[HiddenNode]
   singleton_by_id : Array[Int]
 }
 
 ///|
-struct Preprocessor {
+pub(all) struct Preprocessor {
   mut lexer : @lexer.Lexer
   lexer_stack : Array[@lexer.Lexer]
   held_stack : Array[@tokens.Token?]
@@ -93,21 +93,21 @@ struct Preprocessor {
 }
 
 ///|
-struct ExpandingGuard { restore_len : Int }
+pub(all) struct ExpandingGuard { restore_len : Int }
 
 ///|
-fn new_hidden_pool() -> HiddenPool {
+pub fn new_hidden_pool() -> HiddenPool {
   { nodes: [], singleton_by_id: [] }
 }
 
 ///|
-fn clear_hidden_pool(pool : HiddenPool) -> Unit {
+pub fn clear_hidden_pool(pool : HiddenPool) -> Unit {
   pool.nodes.clear()
   pool.singleton_by_id.clear()
 }
 
 ///|
-fn make_builtin_token(
+pub fn make_builtin_token(
   kind : @tokens.TokenKind,
   id? : Int = 0,
   lexeme_id? : Int = 0,
@@ -123,7 +123,7 @@ fn make_builtin_token(
 }
 
 ///|
-fn make_builtin_word_token(pp : Preprocessor, word : String) -> @tokens.Token {
+pub fn make_builtin_word_token(pp : Preprocessor, word : String) -> @tokens.Token {
   let (_, id) = pp.interner.intern_view_with_id(word[:])
   match @tokens.keyword_kind_from_id(id, pp.keyword_ids) {
     Some(kind) => make_builtin_token(kind, id=id)
@@ -132,17 +132,17 @@ fn make_builtin_word_token(pp : Preprocessor, word : String) -> @tokens.Token {
 }
 
 ///|
-fn pp_token_lexeme(pp : Preprocessor, tok : @tokens.Token) -> String {
+pub fn pp_token_lexeme(pp : Preprocessor, tok : @tokens.Token) -> String {
   @tokens.token_text_with(pp.interner, pp.lexeme_pool, tok)
 }
 
 ///|
-fn pp_token_lexeme_len(pp : Preprocessor, tok : @tokens.Token) -> Int {
+pub fn pp_token_lexeme_len(pp : Preprocessor, tok : @tokens.Token) -> Int {
   @tokens.token_text_len_with(pp.interner, pp.lexeme_pool, tok)
 }
 
 ///|
-fn define_macro(
+pub fn define_macro(
   pp : Preprocessor,
   name : String,
   replacement : Array[@tokens.Token],
@@ -164,20 +164,20 @@ fn define_macro(
 }
 
 ///|
-fn define_words_macro(pp : Preprocessor, name : String, words : Array[String]) ->
+pub fn define_words_macro(pp : Preprocessor, name : String, words : Array[String]) ->
   Unit {
   let tokens = words.map(w => make_builtin_word_token(pp, w))
   define_macro(pp, name, tokens)
 }
 
 ///|
-fn define_int_macro(pp : Preprocessor, name : String, value : Int) -> Unit {
+pub fn define_int_macro(pp : Preprocessor, name : String, value : Int) -> Unit {
   let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, value.to_string())
   define_macro(pp, name, [make_builtin_token(@tokens.TokenKind::IntLit, lexeme_id=lexeme_id)])
 }
 
 ///|
-fn define_func_macro_zero(pp : Preprocessor, name : String) -> Unit {
+pub fn define_func_macro_zero(pp : Preprocessor, name : String) -> Unit {
   let id = macro_id_from_name(pp, name)
   if id == 0 {
     return
@@ -197,7 +197,7 @@ fn define_func_macro_zero(pp : Preprocessor, name : String) -> Unit {
 }
 
 ///|
-fn define_func_macro_empty(pp : Preprocessor, name : String) -> Unit {
+pub fn define_func_macro_empty(pp : Preprocessor, name : String) -> Unit {
   let id = macro_id_from_name(pp, name)
   if id == 0 {
     return
@@ -216,7 +216,7 @@ fn define_func_macro_empty(pp : Preprocessor, name : String) -> Unit {
 }
 
 ///|
-fn init_builtin_macros(pp : Preprocessor) -> Unit {
+pub fn init_builtin_macros(pp : Preprocessor) -> Unit {
   define_int_macro(pp, "__APPLE__", 1)
   define_int_macro(pp, "__MACH__", 1)
   define_int_macro(pp, "__aarch64__", 1)
@@ -324,7 +324,7 @@ fn init_builtin_macros(pp : Preprocessor) -> Unit {
 }
 
 ///|
-fn new_preprocessor(map : @source.SourceMap, file : @source.SourceFile, diags : @diag.DiagBag) ->
+pub fn new_preprocessor(map : @source.SourceMap, file : @source.SourceFile, diags : @diag.DiagBag) ->
   Preprocessor {
   let (date_literal, time_literal) = init_datetime_literals()
   let text_len = file.text.length()
@@ -426,7 +426,7 @@ fn new_preprocessor(map : @source.SourceMap, file : @source.SourceFile, diags : 
 }
 
 ///|
-fn finalize_preprocessor(pp : Preprocessor) -> Unit {
+pub fn finalize_preprocessor(pp : Preprocessor) -> Unit {
   let dummy_file = @source.SourceFile::{
     id: pp.lexer.file_id,
     path: pp.current_path,
@@ -468,23 +468,23 @@ fn finalize_preprocessor(pp : Preprocessor) -> Unit {
 }
 
 ///|
-fn current_active(pp : Preprocessor) -> Bool {
+pub fn current_active(pp : Preprocessor) -> Bool {
   pp.active
 }
 
 ///|
-fn add_pp_error(pp : Preprocessor, loc : @source.SrcLoc, message : String) -> Unit {
+pub fn add_pp_error(pp : Preprocessor, loc : @source.SrcLoc, message : String) -> Unit {
   @diag.add_error(pp.diags, loc, message)
 }
 
 ///|
 ///|
-fn is_macro_name_token(tok : @tokens.Token) -> Bool {
+pub fn is_macro_name_token(tok : @tokens.Token) -> Bool {
   @tokens.token_id(tok) > 0
 }
 
 ///|
-fn macro_id_from_name(pp : Preprocessor, name : String) -> Int {
+pub fn macro_id_from_name(pp : Preprocessor, name : String) -> Int {
   if name == "" {
     return 0
   }
@@ -493,12 +493,12 @@ fn macro_id_from_name(pp : Preprocessor, name : String) -> Int {
 }
 
 ///|
-fn macro_id_from_token(_pp : Preprocessor, tok : @tokens.Token) -> Int {
+pub fn macro_id_from_token(_pp : Preprocessor, tok : @tokens.Token) -> Int {
   @tokens.token_id(tok)
 }
 
 ///|
-fn ensure_macro_capacity(pp : Preprocessor, id : Int) -> Unit {
+pub fn ensure_macro_capacity(pp : Preprocessor, id : Int) -> Unit {
   if id <= 0 {
     return
   }
@@ -514,7 +514,7 @@ fn ensure_macro_capacity(pp : Preprocessor, id : Int) -> Unit {
 }
 
 ///|
-fn get_macro(pp : Preprocessor, id : Int) -> Macro? {
+pub fn get_macro(pp : Preprocessor, id : Int) -> Macro? {
   if id <= 0 {
     return None
   }
@@ -527,12 +527,12 @@ fn get_macro(pp : Preprocessor, id : Int) -> Macro? {
 }
 
 ///|
-fn has_macro(pp : Preprocessor, id : Int) -> Bool {
+pub fn has_macro(pp : Preprocessor, id : Int) -> Bool {
   get_macro(pp, id) is Some(_)
 }
 
 ///|
-fn set_macro(pp : Preprocessor, id : Int, macro_def : Macro) -> Unit {
+pub fn set_macro(pp : Preprocessor, id : Int, macro_def : Macro) -> Unit {
   ensure_macro_capacity(pp, id)
   if id > 0 {
     pp.macros[id - 1] = Some(macro_def)
@@ -541,7 +541,7 @@ fn set_macro(pp : Preprocessor, id : Int, macro_def : Macro) -> Unit {
 }
 
 ///|
-fn remove_macro(pp : Preprocessor, id : Int) -> Unit {
+pub fn remove_macro(pp : Preprocessor, id : Int) -> Unit {
   if id <= 0 {
     return
   }
@@ -553,7 +553,7 @@ fn remove_macro(pp : Preprocessor, id : Int) -> Unit {
 }
 
 ///|
-fn next_input_token(pp : Preprocessor) -> @tokens.Token {
+pub fn next_input_token(pp : Preprocessor) -> @tokens.Token {
   while true {
     match pp.held {
       Some(tok) => {
@@ -600,7 +600,7 @@ fn next_input_token(pp : Preprocessor) -> @tokens.Token {
 }
 
 ///|
-fn read_directive_tokens(pp : Preprocessor) -> Array[@tokens.Token] {
+pub fn read_directive_tokens(pp : Preprocessor) -> Array[@tokens.Token] {
   let out : Array[@tokens.Token] = []
   while true {
     let tok = next_input_token(pp)
@@ -622,7 +622,7 @@ fn read_directive_tokens(pp : Preprocessor) -> Array[@tokens.Token] {
 }
 
 ///|
-fn read_directive_head_token(pp : Preprocessor) -> @tokens.Token? {
+pub fn read_directive_head_token(pp : Preprocessor) -> @tokens.Token? {
   let tok = next_input_token(pp)
   match tok.kind {
     @tokens.TokenKind::Eof => {
@@ -640,7 +640,7 @@ fn read_directive_head_token(pp : Preprocessor) -> @tokens.Token? {
 }
 
 ///|
-fn skip_directive_line(pp : Preprocessor) -> Unit {
+pub fn skip_directive_line(pp : Preprocessor) -> Unit {
   while true {
     match @lexer.peek_char(pp.lexer) {
       None => return
@@ -660,7 +660,7 @@ fn skip_directive_line(pp : Preprocessor) -> Unit {
 }
 
 ///|
-fn skip_inactive(pp : Preprocessor) -> Unit {
+pub fn skip_inactive(pp : Preprocessor) -> Unit {
   let lex = pp.lexer
   let text = lex.text
   let len = lex.text_len
@@ -749,7 +749,7 @@ fn skip_inactive(pp : Preprocessor) -> Unit {
 }
 
 ///|
-fn read_directive_text(pp : Preprocessor) -> String {
+pub fn read_directive_text(pp : Preprocessor) -> String {
   let sb = StringBuilder::new()
   let mut saw_non_ws = false
   while true {
@@ -779,7 +779,7 @@ fn read_directive_text(pp : Preprocessor) -> String {
 }
 
 ///|
-fn slice_tokens(tokens : Array[@tokens.Token], start : Int) -> Array[@tokens.Token] {
+pub fn slice_tokens(tokens : Array[@tokens.Token], start : Int) -> Array[@tokens.Token] {
   if start <= 0 {
     return tokens
   }
@@ -790,7 +790,7 @@ fn slice_tokens(tokens : Array[@tokens.Token], start : Int) -> Array[@tokens.Tok
 }
 
 ///|
-fn prefix_tokens(tokens : Array[@tokens.Token], end : Int) -> Array[@tokens.Token] {
+pub fn prefix_tokens(tokens : Array[@tokens.Token], end : Int) -> Array[@tokens.Token] {
   if end <= 0 {
     return []
   }
@@ -807,7 +807,7 @@ fn prefix_tokens(tokens : Array[@tokens.Token], end : Int) -> Array[@tokens.Toke
 
 ///|
 ///|
-fn dir_name(path : String) -> String {
+pub fn dir_name(path : String) -> String {
   match path.rev_find("/") {
     None => ""
     Some(idx) => @util.slice_string(path, 0, idx)
@@ -815,7 +815,7 @@ fn dir_name(path : String) -> String {
 }
 
 ///|
-fn join_path(base : String, name : String) -> String {
+pub fn join_path(base : String, name : String) -> String {
   if base == "" {
     return name
   }
@@ -827,12 +827,12 @@ fn join_path(base : String, name : String) -> String {
 }
 
 ///|
-fn add_include_path(pp : Preprocessor, path : String) -> Unit {
+pub fn add_include_path(pp : Preprocessor, path : String) -> Unit {
   pp.include_paths.push(path)
 }
 
 ///|
-fn strip_quotes(lexeme : String) -> String {
+pub fn strip_quotes(lexeme : String) -> String {
   let len = lexeme.length()
   if len >= 2 && lexeme[0] == 34 && lexeme[len - 1] == 34 {
     return @util.slice_string(lexeme, 1, len - 1)
@@ -841,7 +841,7 @@ fn strip_quotes(lexeme : String) -> String {
 }
 
 ///|
-fn parse_include_path(
+pub fn parse_include_path(
   pp : Preprocessor,
   args : Array[@tokens.Token],
   loc : @source.SrcLoc,
@@ -874,7 +874,7 @@ fn parse_include_path(
 }
 
 ///|
-fn parse_has_include_path(pp : Preprocessor, args : Array[@tokens.Token]) -> IncludeSpec? {
+pub fn parse_has_include_path(pp : Preprocessor, args : Array[@tokens.Token]) -> IncludeSpec? {
   if args.length() == 0 {
     return None
   }
@@ -899,7 +899,7 @@ fn parse_has_include_path(pp : Preprocessor, args : Array[@tokens.Token]) -> Inc
 }
 
 ///|
-fn eval_has_include(
+pub fn eval_has_include(
   pp : Preprocessor,
   args : Array[@tokens.Token],
   include_next~ : Bool,
@@ -915,7 +915,7 @@ fn eval_has_include(
 }
 
 ///|
-fn resolve_include_path(
+pub fn resolve_include_path(
   pp : Preprocessor,
   path : String,
   is_angle : Bool,
@@ -949,7 +949,7 @@ fn resolve_include_path(
 }
 
 ///|
-fn include_file(
+pub fn include_file(
   pp : Preprocessor,
   spec : IncludeSpec,
   loc : @source.SrcLoc,
@@ -988,7 +988,7 @@ fn include_file(
 }
 
 ///|
-fn parse_define_macro(
+pub fn parse_define_macro(
   pp : Preprocessor,
   name_tok : @tokens.Token,
   args : Array[@tokens.Token],
@@ -1028,7 +1028,7 @@ fn parse_define_macro(
 }
 
 ///|
-fn parse_macro_params(
+pub fn parse_macro_params(
   pp : Preprocessor,
   args : Array[@tokens.Token],
   loc : @source.SrcLoc,
@@ -1091,7 +1091,7 @@ fn parse_macro_params(
 }
 
 ///|
-fn next_raw_token(pp : Preprocessor) -> @tokens.Token {
+pub fn next_raw_token(pp : Preprocessor) -> @tokens.Token {
   if pp.pending.length() > 0 {
     if pp.pending.pop() is Some(tok) {
       release_expanding_guards(pp)
@@ -1102,12 +1102,12 @@ fn next_raw_token(pp : Preprocessor) -> @tokens.Token {
 }
 
 ///|
-fn push_back(pp : Preprocessor, tok : @tokens.Token) -> Unit {
+pub fn push_back(pp : Preprocessor, tok : @tokens.Token) -> Unit {
   pp.pending.push(tok)
 }
 
 ///|
-fn read_macro_args(pp : Preprocessor, loc : @source.SrcLoc) -> Array[Array[@tokens.Token]]? {
+pub fn read_macro_args(pp : Preprocessor, loc : @source.SrcLoc) -> Array[Array[@tokens.Token]]? {
   let args : Array[Array[@tokens.Token]] = []
   let mut current : Array[@tokens.Token] = []
   let mut depth_paren = 0
@@ -1175,7 +1175,7 @@ fn read_macro_args(pp : Preprocessor, loc : @source.SrcLoc) -> Array[Array[@toke
 }
 
 ///|
-fn normalize_macro_args(
+pub fn normalize_macro_args(
   macro_def : Macro,
   args : Array[Array[@tokens.Token]],
   loc : @source.SrcLoc,
@@ -1219,13 +1219,13 @@ fn normalize_macro_args(
 }
 
 ///|
-fn is_adjacent(pp : Preprocessor, left : @tokens.Token, right : @tokens.Token) -> Bool {
+pub fn is_adjacent(pp : Preprocessor, left : @tokens.Token, right : @tokens.Token) -> Bool {
   left.loc.file_id == right.loc.file_id &&
   right.loc.offset == left.loc.offset + pp_token_lexeme_len(pp, left)
 }
 
 ///|
-fn is_expanding(pp : Preprocessor, id : Int) -> Bool {
+pub fn is_expanding(pp : Preprocessor, id : Int) -> Bool {
   for n in pp.expanding {
     if n == id {
       return true
@@ -1235,17 +1235,17 @@ fn is_expanding(pp : Preprocessor, id : Int) -> Bool {
 }
 
 ///|
-fn push_expanding(pp : Preprocessor, id : Int) -> Unit {
+pub fn push_expanding(pp : Preprocessor, id : Int) -> Unit {
   pp.expanding.push(id)
 }
 
 ///|
-fn pop_expanding(pp : Preprocessor) -> Unit {
+pub fn pop_expanding(pp : Preprocessor) -> Unit {
   ignore(pp.expanding.pop())
 }
 
 ///|
-fn stringize_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> String {
+pub fn stringize_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> String {
   if tokens.length() == 0 {
     return ""
   }
@@ -1282,7 +1282,7 @@ fn stringize_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> String 
 }
 
 ///|
-fn make_string_literal(pp : Preprocessor, text : String, loc : @source.SrcLoc) -> @tokens.Token {
+pub fn make_string_literal(pp : Preprocessor, text : String, loc : @source.SrcLoc) -> @tokens.Token {
   let escaped = escape_string(text)
   let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, "\"" + escaped + "\"")
   let token_value = @tokens.token_value_from_parts(0, lexeme_id)
@@ -1296,7 +1296,7 @@ fn make_string_literal(pp : Preprocessor, text : String, loc : @source.SrcLoc) -
 }
 
 ///|
-fn escape_string(text : String) -> String {
+pub fn escape_string(text : String) -> String {
   let len = text.length()
   let mut i = 0
   while i < len {
@@ -1326,12 +1326,12 @@ fn escape_string(text : String) -> String {
 }
 
 ///|
-fn logical_line(pp : Preprocessor, loc : @source.SrcLoc) -> Int {
+pub fn logical_line(pp : Preprocessor, loc : @source.SrcLoc) -> Int {
   loc.line + pp.line_adjust
 }
 
 ///|
-fn make_int_literal_token(pp : Preprocessor, value : Int, loc : @source.SrcLoc) -> @tokens.Token {
+pub fn make_int_literal_token(pp : Preprocessor, value : Int, loc : @source.SrcLoc) -> @tokens.Token {
   let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, value.to_string())
   let token_value = @tokens.token_value_from_parts(0, lexeme_id)
   {
@@ -1344,7 +1344,7 @@ fn make_int_literal_token(pp : Preprocessor, value : Int, loc : @source.SrcLoc) 
 }
 
 ///|
-fn builtin_macro_tokens(pp : Preprocessor, tok : @tokens.Token) -> Array[@tokens.Token]? {
+pub fn builtin_macro_tokens(pp : Preprocessor, tok : @tokens.Token) -> Array[@tokens.Token]? {
   let id = @tokens.token_id(tok)
   if id == pp.builtin_ids.line_macro {
     return Some([
@@ -1369,7 +1369,7 @@ fn builtin_macro_tokens(pp : Preprocessor, tok : @tokens.Token) -> Array[@tokens
 }
 
 ///|
-fn is_builtin_macro_id(pp : Preprocessor, id : Int) -> Bool {
+pub fn is_builtin_macro_id(pp : Preprocessor, id : Int) -> Bool {
   id == pp.builtin_ids.line_macro ||
   id == pp.builtin_ids.file_macro ||
   id == pp.builtin_ids.date_macro ||
@@ -1377,7 +1377,7 @@ fn is_builtin_macro_id(pp : Preprocessor, id : Int) -> Bool {
 }
 
 ///|
-fn tokens_need_expansion(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Bool {
+pub fn tokens_need_expansion(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Bool {
   for tok in tokens {
     if token_needs_expansion(pp, tok) {
       return true
@@ -1387,13 +1387,13 @@ fn tokens_need_expansion(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Bo
 }
 
 ///|
-fn token_needs_expansion(pp : Preprocessor, tok : @tokens.Token) -> Bool {
+pub fn token_needs_expansion(pp : Preprocessor, tok : @tokens.Token) -> Bool {
   let id = @tokens.token_id(tok)
   id > 0 && (is_builtin_macro_id(pp, id) || get_macro(pp, id) is Some(_))
 }
 
 ///|
-fn macro_replacement_needs_expand(
+pub fn macro_replacement_needs_expand(
   pp : Preprocessor,
   macro_id : Int,
   macro_def : Macro,
@@ -1421,7 +1421,7 @@ fn macro_replacement_needs_expand(
 }
 
 ///|
-fn tokens_have_id(tokens : Array[@tokens.Token]) -> Bool {
+pub fn tokens_have_id(tokens : Array[@tokens.Token]) -> Bool {
   for tok in tokens {
     if @tokens.token_has_id(tok) {
       return true
@@ -1431,7 +1431,7 @@ fn tokens_have_id(tokens : Array[@tokens.Token]) -> Bool {
 }
 
 ///|
-fn init_datetime_literals() -> (String, String) {
+pub fn init_datetime_literals() -> (String, String) {
   let now_ms = @env.now()
   let now_sec = (now_ms / 1000UL).to_int().to_int64()
   try @time.unix(now_sec, zone=@time.utc_zone) catch {
@@ -1442,7 +1442,7 @@ fn init_datetime_literals() -> (String, String) {
 }
 
 ///|
-fn format_date(dt : @time.ZonedDateTime) -> String {
+pub fn format_date(dt : @time.ZonedDateTime) -> String {
   let month = month_name(dt.month())
   let day = pad2_space(dt.day())
   let year = dt.year().to_string()
@@ -1450,7 +1450,7 @@ fn format_date(dt : @time.ZonedDateTime) -> String {
 }
 
 ///|
-fn format_time(dt : @time.ZonedDateTime) -> String {
+pub fn format_time(dt : @time.ZonedDateTime) -> String {
   let hour = pad2(dt.hour())
   let minute = pad2(dt.minute())
   let second = pad2(dt.second())
@@ -1458,7 +1458,7 @@ fn format_time(dt : @time.ZonedDateTime) -> String {
 }
 
 ///|
-fn month_name(month : Int) -> String {
+pub fn month_name(month : Int) -> String {
   match month {
     1 => "Jan"
     2 => "Feb"
@@ -1477,7 +1477,7 @@ fn month_name(month : Int) -> String {
 }
 
 ///|
-fn pad2(value : Int) -> String {
+pub fn pad2(value : Int) -> String {
   if value < 10 {
     "0" + value.to_string()
   } else {
@@ -1486,7 +1486,7 @@ fn pad2(value : Int) -> String {
 }
 
 ///|
-fn pad2_space(value : Int) -> String {
+pub fn pad2_space(value : Int) -> String {
   if value < 10 {
     " " + value.to_string()
   } else {
@@ -1495,7 +1495,7 @@ fn pad2_space(value : Int) -> String {
 }
 
 ///|
-fn lookup_param_index(params : Array[Int], id : Int) -> Int? {
+pub fn lookup_param_index(params : Array[Int], id : Int) -> Int? {
   for i = 0; i < params.length(); i = i + 1 {
     if params[i] == id {
       return Some(i)
@@ -1505,7 +1505,7 @@ fn lookup_param_index(params : Array[Int], id : Int) -> Int? {
 }
 
 ///|
-fn lex_paste_tokens(
+pub fn lex_paste_tokens(
   pp : Preprocessor,
   text : String,
   left : String,
@@ -1548,7 +1548,7 @@ fn lex_paste_tokens(
   out
 }
 
-fn substitute_macro(
+pub fn substitute_macro(
   pp : Preprocessor,
   macro_def : Macro,
   raw_args : Array[Array[@tokens.Token]],
@@ -1706,7 +1706,7 @@ fn substitute_macro(
 }
 
 ///|
-fn read_macro_args_from_tokens(
+pub fn read_macro_args_from_tokens(
   pp : Preprocessor,
   tokens : Array[@tokens.Token],
   start : Int,
@@ -1784,7 +1784,7 @@ fn read_macro_args_from_tokens(
 }
 
 ///|
-fn ensure_expanded_arg(
+pub fn ensure_expanded_arg(
   pp : Preprocessor,
   raw_args : Array[Array[@tokens.Token]],
   expanded_cache : Array[Array[@tokens.Token]?],
@@ -1804,7 +1804,7 @@ fn ensure_expanded_arg(
 }
 
 ///|
-fn expand_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Array[@tokens.Token] {
+pub fn expand_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Array[@tokens.Token] {
   let mut out_opt : Array[@tokens.Token]? = None
   let mut changed = false
   let len = tokens.length()
@@ -1977,7 +1977,7 @@ fn expand_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Array[@tok
 }
 
 ///|
-fn push_cond(pp : Preprocessor, cond : Bool) -> Unit {
+pub fn push_cond(pp : Preprocessor, cond : Bool) -> Unit {
   let parent = current_active(pp)
   let active = parent && cond
   pp.cond_stack.push({ parent_active: parent, taken: active, active })
@@ -1985,7 +1985,7 @@ fn push_cond(pp : Preprocessor, cond : Bool) -> Unit {
 }
 
 ///|
-fn update_elif(pp : Preprocessor, cond : Bool, loc : @source.SrcLoc) -> Unit {
+pub fn update_elif(pp : Preprocessor, cond : Bool, loc : @source.SrcLoc) -> Unit {
   if pp.cond_stack.length() == 0 {
     add_pp_error(pp, loc, "unexpected #elif without #if")
     return
@@ -2007,7 +2007,7 @@ fn update_elif(pp : Preprocessor, cond : Bool, loc : @source.SrcLoc) -> Unit {
 }
 
 ///|
-fn update_else(pp : Preprocessor, loc : @source.SrcLoc) -> Unit {
+pub fn update_else(pp : Preprocessor, loc : @source.SrcLoc) -> Unit {
   if pp.cond_stack.length() == 0 {
     add_pp_error(pp, loc, "unexpected #else without #if")
     return
@@ -2027,7 +2027,7 @@ fn update_else(pp : Preprocessor, loc : @source.SrcLoc) -> Unit {
 }
 
 ///|
-fn pop_cond(pp : Preprocessor, loc : @source.SrcLoc) -> Unit {
+pub fn pop_cond(pp : Preprocessor, loc : @source.SrcLoc) -> Unit {
   if pp.cond_stack.length() == 0 {
     add_pp_error(pp, loc, "unexpected #endif without #if")
     return
@@ -2042,7 +2042,7 @@ fn pop_cond(pp : Preprocessor, loc : @source.SrcLoc) -> Unit {
 }
 
 ///|
-fn normalize_macro_tokens(tokens : Array[@tokens.Token]) -> Array[@tokens.Token] {
+pub fn normalize_macro_tokens(tokens : Array[@tokens.Token]) -> Array[@tokens.Token] {
   let mut needs_copy = false
   for tok in tokens {
     if tok.line_start {
@@ -2067,7 +2067,7 @@ fn normalize_macro_tokens(tokens : Array[@tokens.Token]) -> Array[@tokens.Token]
 }
 
 ///|
-fn expand_if_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Array[@tokens.Token] {
+pub fn expand_if_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Array[@tokens.Token] {
   let mut has_defined = false
   for tok in tokens {
     if tok.kind == @tokens.TokenKind::Ident && @tokens.token_id(tok) == pp.builtin_ids.defined {
@@ -2124,7 +2124,7 @@ fn expand_if_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Array[@
 }
 
 ///|
-fn push_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Unit {
+pub fn push_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Unit {
   let mut i = tokens.length()
   while i > 0 {
     i = i - 1
@@ -2133,7 +2133,7 @@ fn push_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Unit {
 }
 
 ///|
-fn release_expanding_guards(pp : Preprocessor) -> Unit {
+pub fn release_expanding_guards(pp : Preprocessor) -> Unit {
   while pp.expanding_guards.length() > 0 {
     let guard_restore = pp.expanding_guards[
       pp.expanding_guards.length() - 1
@@ -2148,12 +2148,12 @@ fn release_expanding_guards(pp : Preprocessor) -> Unit {
 }
 
 ///|
-fn hidden_is_empty(hidden : Int) -> Bool {
+pub fn hidden_is_empty(hidden : Int) -> Bool {
   hidden == 0
 }
 
 ///|
-fn hidden_contains(pool : HiddenPool, hidden : Int, id : Int) -> Bool {
+pub fn hidden_contains(pool : HiddenPool, hidden : Int, id : Int) -> Bool {
   let mut cur = hidden
   while cur != 0 {
     let node = pool.nodes[cur - 1]
@@ -2166,14 +2166,14 @@ fn hidden_contains(pool : HiddenPool, hidden : Int, id : Int) -> Bool {
 }
 
 ///|
-fn ensure_hidden_singleton_slot(pool : HiddenPool, id : Int) -> Unit {
+pub fn ensure_hidden_singleton_slot(pool : HiddenPool, id : Int) -> Unit {
   while pool.singleton_by_id.length() < id {
     pool.singleton_by_id.push(0)
   }
 }
 
 ///|
-fn hidden_add(pool : HiddenPool, hidden : Int, id : Int) -> Int {
+pub fn hidden_add(pool : HiddenPool, hidden : Int, id : Int) -> Int {
   if hidden_contains(pool, hidden, id) {
     return hidden
   }
@@ -2193,7 +2193,7 @@ fn hidden_add(pool : HiddenPool, hidden : Int, id : Int) -> Int {
 }
 
 ///|
-fn merge_hidden(pool : HiddenPool, a : Int, b : Int) -> Int {
+pub fn merge_hidden(pool : HiddenPool, a : Int, b : Int) -> Int {
   if hidden_is_empty(a) {
     return b
   }
@@ -2211,7 +2211,7 @@ fn merge_hidden(pool : HiddenPool, a : Int, b : Int) -> Int {
 }
 
 ///|
-fn add_hidden(pp : Preprocessor, tok : @tokens.Token, id : Int) -> @tokens.Token {
+pub fn add_hidden(pp : Preprocessor, tok : @tokens.Token, id : Int) -> @tokens.Token {
   let new_hidden = hidden_add(pp.hidden_pool, tok.hidden, id)
   if new_hidden == tok.hidden {
     tok
@@ -2227,7 +2227,7 @@ fn add_hidden(pp : Preprocessor, tok : @tokens.Token, id : Int) -> @tokens.Token
 }
 
 ///|
-fn add_hidden_tokens(
+pub fn add_hidden_tokens(
   pp : Preprocessor,
   tokens : Array[@tokens.Token],
   id : Int,
@@ -2240,7 +2240,7 @@ fn add_hidden_tokens(
 }
 
 ///|
-fn handle_line_directive(
+pub fn handle_line_directive(
   pp : Preprocessor,
   tokens : Array[@tokens.Token],
   loc : @source.SrcLoc,
@@ -2272,7 +2272,7 @@ fn handle_line_directive(
 ///|
 
 ///|
-fn eval_if_expr(pp : Preprocessor, tokens : Array[@tokens.Token], loc : @source.SrcLoc) -> Bool {
+pub fn eval_if_expr(pp : Preprocessor, tokens : Array[@tokens.Token], loc : @source.SrcLoc) -> Bool {
   if tokens.length() == 0 {
     add_pp_error(pp, loc, "empty #if expression")
     return false
@@ -2283,40 +2283,40 @@ fn eval_if_expr(pp : Preprocessor, tokens : Array[@tokens.Token], loc : @source.
 }
 
 ///|
-struct IfParser {
+pub(all) struct IfParser {
   tokens : Array[@tokens.Token]
   mut index : Int
   pp : Preprocessor
 }
 
 ///|
-struct PpValue {
+pub(all) struct PpValue {
   value : UInt64
   is_unsigned : Bool
 }
 
 ///|
-fn pp_bool_value(cond : Bool) -> PpValue {
+pub fn pp_bool_value(cond : Bool) -> PpValue {
   { value: if cond { 1 } else { 0 }, is_unsigned: false }
 }
 
 ///|
-fn pp_is_zero(v : PpValue) -> Bool {
+pub fn pp_is_zero(v : PpValue) -> Bool {
   v.value == 0
 }
 
 ///|
-fn pp_unsigned_result(a : PpValue, b : PpValue) -> Bool {
+pub fn pp_unsigned_result(a : PpValue, b : PpValue) -> Bool {
   a.is_unsigned || b.is_unsigned
 }
 
 ///|
-fn pp_shift_count(v : PpValue) -> Int {
+pub fn pp_shift_count(v : PpValue) -> Int {
   (v.value & (63 : UInt64)).to_int()
 }
 
 ///|
-fn peek_if(p : IfParser) -> @tokens.Token? {
+pub fn peek_if(p : IfParser) -> @tokens.Token? {
   if p.index >= p.tokens.length() {
     return None
   }
@@ -2324,7 +2324,7 @@ fn peek_if(p : IfParser) -> @tokens.Token? {
 }
 
 ///|
-fn advance_if(p : IfParser) -> @tokens.Token? {
+pub fn advance_if(p : IfParser) -> @tokens.Token? {
   match peek_if(p) {
     None => None
     Some(tok) => {
@@ -2335,7 +2335,7 @@ fn advance_if(p : IfParser) -> @tokens.Token? {
 }
 
 ///|
-fn match_kind(p : IfParser, kind : @tokens.TokenKind) -> Bool {
+pub fn match_kind(p : IfParser, kind : @tokens.TokenKind) -> Bool {
   match peek_if(p) {
     Some(tok) if tok.kind == kind => {
       p.index = p.index + 1
@@ -2346,8 +2346,8 @@ fn match_kind(p : IfParser, kind : @tokens.TokenKind) -> Bool {
 }
 
 ///|
-fn parse_line_int_literal(pp : Preprocessor, lexeme : String, loc : @source.SrcLoc) -> Int {
-  let end = int_literal_end(lexeme)
+pub fn parse_line_int_literal(pp : Preprocessor, lexeme : String, loc : @source.SrcLoc) -> Int {
+  let end = @util.int_literal_end(lexeme)
   if end <= 0 {
     add_pp_error(pp, loc, "invalid integer in #line")
     return 0
@@ -2362,18 +2362,18 @@ fn parse_line_int_literal(pp : Preprocessor, lexeme : String, loc : @source.SrcL
     }
   }
   let trimmed = @util.slice_string(lexeme, 0, end)
-  let base = int_literal_base(lexeme)
-  let value = parse_uint64_literal(trimmed, base)
+  let base = @util.int_literal_base(lexeme)
+  let value = @util.parse_uint64_literal(trimmed, base)
   value.reinterpret_as_int64().to_int()
 }
 
 ///|
-fn parse_pp_int_literal(
+pub fn parse_pp_int_literal(
   pp : Preprocessor,
   lexeme : String,
   loc : @source.SrcLoc,
 ) -> PpValue {
-  let end = int_literal_end(lexeme)
+  let end = @util.int_literal_end(lexeme)
   if end <= 0 {
     add_pp_error(pp, loc, "invalid integer in #if")
     return { value: 0, is_unsigned: false }
@@ -2390,16 +2390,16 @@ fn parse_pp_int_literal(
     }
   }
   let trimmed = @util.slice_string(lexeme, 0, end)
-  let base = int_literal_base(lexeme)
-  let value = parse_uint64_literal(trimmed, base)
-  let (_, unsigned_suffix) = parse_int_suffix(suffix)
+  let base = @util.int_literal_base(lexeme)
+  let value = @util.parse_uint64_literal(trimmed, base)
+  let (_, unsigned_suffix) = @util.parse_int_suffix(suffix)
   let max_signed : UInt64 = 0x7fffffffffffffff
   let is_unsigned = unsigned_suffix || value > max_signed
   { value, is_unsigned }
 }
 
 ///|
-fn parse_pp_char_literal(pp : Preprocessor, tok : @tokens.Token) -> PpValue {
+pub fn parse_pp_char_literal(pp : Preprocessor, tok : @tokens.Token) -> PpValue {
   let lexeme = pp_token_lexeme(pp, tok)
   if lexeme.length() < 3 {
     add_pp_error(pp, tok.loc, "invalid character literal in #if")
@@ -2428,7 +2428,7 @@ fn parse_pp_char_literal(pp : Preprocessor, tok : @tokens.Token) -> PpValue {
 }
 
 ///|
-fn decode_pp_escape_value(
+pub fn decode_pp_escape_value(
   pp : Preprocessor,
   text : String,
   start : Int,
@@ -2462,7 +2462,7 @@ fn decode_pp_escape_value(
 }
 
 ///|
-fn parse_pp_hex_escape(
+pub fn parse_pp_hex_escape(
   pp : Preprocessor,
   text : String,
   start : Int,
@@ -2490,7 +2490,7 @@ fn parse_pp_hex_escape(
 }
 
 ///|
-fn parse_pp_octal_escape(text : String, start : Int) -> (Int, Int) {
+pub fn parse_pp_octal_escape(text : String, start : Int) -> (Int, Int) {
   let mut i = start
   let mut value = 0
   let mut count = 0
@@ -2507,12 +2507,12 @@ fn parse_pp_octal_escape(text : String, start : Int) -> (Int, Int) {
 }
 
 ///|
-fn pp_is_oct_digit(code : UInt16) -> Bool {
+pub fn pp_is_oct_digit(code : UInt16) -> Bool {
   code >= 48 && code <= 55
 }
 
 ///|
-fn pp_hex_digit_value(code : UInt16) -> Int? {
+pub fn pp_hex_digit_value(code : UInt16) -> Int? {
   if code >= 48 && code <= 57 {
     return Some(code.to_int() - 48)
   }
@@ -2526,7 +2526,7 @@ fn pp_hex_digit_value(code : UInt16) -> Int? {
 }
 
 ///|
-fn macro_int_value(
+pub fn macro_int_value(
   pp : Preprocessor,
   tok : @tokens.Token,
   loc : @source.SrcLoc,
@@ -2555,7 +2555,7 @@ fn macro_int_value(
 }
 
 ///|
-fn parse_primary(p : IfParser, loc : @source.SrcLoc) -> PpValue {
+pub fn parse_primary(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   match advance_if(p) {
     None => {
       add_pp_error(p.pp, loc, "unexpected end of #if expression")
@@ -2612,7 +2612,7 @@ fn parse_primary(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 }
 
 ///|
-fn peek_is_rparen(p : IfParser) -> Bool {
+pub fn peek_is_rparen(p : IfParser) -> Bool {
   match peek_if(p) {
     Some(tok) if tok.kind == @tokens.TokenKind::RParen => true
     _ => false
@@ -2620,7 +2620,7 @@ fn peek_is_rparen(p : IfParser) -> Bool {
 }
 
 ///|
-fn parse_defined(p : IfParser, loc : @source.SrcLoc) -> PpValue {
+pub fn parse_defined(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   if match_kind(p, @tokens.TokenKind::LParen) {
     match advance_if(p) {
       Some(tok) if is_macro_name_token(tok) => {
@@ -2646,7 +2646,7 @@ fn parse_defined(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 }
 
 ///|
-fn skip_paren_expr(p : IfParser, loc : @source.SrcLoc) -> Unit {
+pub fn skip_paren_expr(p : IfParser, loc : @source.SrcLoc) -> Unit {
   let mut depth = 1
   while depth > 0 {
     match advance_if(p) {
@@ -2665,7 +2665,7 @@ fn skip_paren_expr(p : IfParser, loc : @source.SrcLoc) -> Unit {
 }
 
 ///|
-fn parse_unary(p : IfParser, loc : @source.SrcLoc) -> PpValue {
+pub fn parse_unary(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   if match_kind(p, @tokens.TokenKind::Bang) {
     return pp_bool_value(pp_is_zero(parse_unary(p, loc)))
   }
@@ -2685,7 +2685,7 @@ fn parse_unary(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_mul(p : IfParser, loc : @source.SrcLoc) -> PpValue {
+pub fn parse_mul(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_unary(p, loc)
   while true {
     if peek_is_rparen(p) {
@@ -2739,7 +2739,7 @@ fn parse_mul(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_add(p : IfParser, loc : @source.SrcLoc) -> PpValue {
+pub fn parse_add(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_mul(p, loc)
   while true {
     if peek_is_rparen(p) {
@@ -2763,7 +2763,7 @@ fn parse_add(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_shift(p : IfParser, loc : @source.SrcLoc) -> PpValue {
+pub fn parse_shift(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_add(p, loc)
   while true {
     if peek_is_rparen(p) {
@@ -2793,7 +2793,7 @@ fn parse_shift(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_rel(p : IfParser, loc : @source.SrcLoc) -> PpValue {
+pub fn parse_rel(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_shift(p, loc)
   while true {
     if peek_is_rparen(p) {
@@ -2845,7 +2845,7 @@ fn parse_rel(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_eq(p : IfParser, loc : @source.SrcLoc) -> PpValue {
+pub fn parse_eq(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_rel(p, loc)
   while true {
     if peek_is_rparen(p) {
@@ -2867,7 +2867,7 @@ fn parse_eq(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_bit_and(p : IfParser, loc : @source.SrcLoc) -> PpValue {
+pub fn parse_bit_and(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_eq(p, loc)
   while match_kind(p, @tokens.TokenKind::Amp) {
     if peek_is_rparen(p) {
@@ -2881,7 +2881,7 @@ fn parse_bit_and(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_bit_xor(p : IfParser, loc : @source.SrcLoc) -> PpValue {
+pub fn parse_bit_xor(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_bit_and(p, loc)
   while match_kind(p, @tokens.TokenKind::Caret) {
     if peek_is_rparen(p) {
@@ -2895,7 +2895,7 @@ fn parse_bit_xor(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_bit_or(p : IfParser, loc : @source.SrcLoc) -> PpValue {
+pub fn parse_bit_or(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_bit_xor(p, loc)
   while match_kind(p, @tokens.TokenKind::Pipe) {
     if peek_is_rparen(p) {
@@ -2909,7 +2909,7 @@ fn parse_bit_or(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_logical_and(p : IfParser, loc : @source.SrcLoc) -> PpValue {
+pub fn parse_logical_and(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_bit_or(p, loc)
   while match_kind(p, @tokens.TokenKind::AmpAmp) {
     let rhs = parse_bit_or(p, loc)
@@ -2919,7 +2919,7 @@ fn parse_logical_and(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_logical_or(p : IfParser, loc : @source.SrcLoc) -> PpValue {
+pub fn parse_logical_or(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_logical_and(p, loc)
   while match_kind(p, @tokens.TokenKind::PipePipe) {
     let rhs = parse_logical_and(p, loc)
@@ -2929,7 +2929,7 @@ fn parse_logical_or(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 }
 
 ///|
-fn handle_directive(pp : Preprocessor, _hash_tok : @tokens.Token) -> Unit {
+pub fn handle_directive(pp : Preprocessor, _hash_tok : @tokens.Token) -> Unit {
   let name_tok = next_input_token(pp)
   if name_tok.kind == @tokens.TokenKind::Eof {
     return
@@ -3120,7 +3120,7 @@ fn handle_directive(pp : Preprocessor, _hash_tok : @tokens.Token) -> Unit {
 }
 
 ///|
-fn next_pp_token(pp : Preprocessor) -> @tokens.Token {
+pub fn next_pp_token(pp : Preprocessor) -> @tokens.Token {
   while true {
     if !current_active(pp) && pp.held is None && pp.pending.length() == 0 {
       skip_inactive(pp)
@@ -3261,7 +3261,7 @@ fn next_pp_token(pp : Preprocessor) -> @tokens.Token {
 }
 
 ///|
-fn dump_tokens(pp : Preprocessor, max_count : Int) -> Array[@tokens.Token] {
+pub fn dump_tokens(pp : Preprocessor, max_count : Int) -> Array[@tokens.Token] {
   let out : Array[@tokens.Token] = []
   while out.length() < max_count {
     let tok = next_pp_token(pp)

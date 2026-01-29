@@ -30,8 +30,6 @@ pub impl ToJson for CliMacroAction
 
 type CliParse
 
-type CondState
-
 type CstringPool
 
 type DeclSpecs
@@ -39,8 +37,6 @@ type DeclSpecs
 type DeclWrapper
 
 type Declarator
-
-type ExpandingGuard
 
 type FieldAccessInfo
 
@@ -50,14 +46,6 @@ type FuncSig
 pub impl Eq for FuncSig
 pub impl Show for FuncSig
 pub impl ToJson for FuncSig
-
-type HiddenNode
-
-type HiddenPool
-
-type IfParser
-
-type IncludeSpec
 
 type LabelAddrContext
 
@@ -77,19 +65,11 @@ type MachoSectionLayout
 
 type MachoSegmentLayout
 
-type Macro
-
 type ObjSymbol
 
 type ParenDeclParts
 
 type Parser
-
-type PpValue
-
-type PreprocBuiltinIds
-
-type Preprocessor
 
 type RecordDef
 

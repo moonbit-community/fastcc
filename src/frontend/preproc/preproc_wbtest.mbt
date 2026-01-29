@@ -6,7 +6,7 @@ fn pp_tokens(text : String) ->
   let file = @source.add_file(map, "<test>", text)
   let pp = new_preprocessor(map, file, bag)
   let out = dump_tokens(pp, 512)
-  (out.filter(tok => tok.kind != @tokens.TokenKind::Eof), bag, pp.interner, pp.lexeme_pool)
+  (out.filter(tok => tok.kind != Eof), bag, pp.interner, pp.lexeme_pool)
 }
 
 ///|
@@ -22,7 +22,7 @@ fn pp_tokens_with_paths(
     add_include_path(pp, path)
   }
   let out = dump_tokens(pp, 512)
-  (out.filter(tok => tok.kind != @tokens.TokenKind::Eof), bag, pp.interner, pp.lexeme_pool)
+  (out.filter(tok => tok.kind != Eof), bag, pp.interner, pp.lexeme_pool)
 }
 
 ///|
@@ -43,7 +43,7 @@ test "preprocess define expansion" {
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
   @json.inspect(items, content=[
-    "@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:a", "@tokens.TokenKind::Assign:=", "@tokens.TokenKind::IntLit:1", "@tokens.TokenKind::Semicolon:;",
+    "KwInt:int", "Ident:a", "Assign:=", "IntLit:1", "Semicolon:;",
   ])
 }
 
@@ -54,7 +54,7 @@ test "preprocess ifdef and else" {
   )
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:x", "@tokens.TokenKind::Semicolon:;"])
+  @json.inspect(items, content=["KwInt:int", "Ident:x", "Semicolon:;"])
 }
 
 ///|
@@ -63,7 +63,7 @@ test "preprocess if 0 skip" {
     pp_tokens("#if 0\nint x;\n#endif\nint y;")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:y", "@tokens.TokenKind::Semicolon:;"])
+  @json.inspect(items, content=["KwInt:int", "Ident:y", "Semicolon:;"])
 }
 
 ///|
@@ -72,7 +72,7 @@ test "preprocess defined operator" {
     pp_tokens("#define A 1\n#if defined(A)\nint x;\n#endif")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:x", "@tokens.TokenKind::Semicolon:;"])
+  @json.inspect(items, content=["KwInt:int", "Ident:x", "Semicolon:;"])
 }
 
 ///|
@@ -85,7 +85,7 @@ test "preprocess include" {
     pp_tokens("#include \"\{path}\"")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:inc", "@tokens.TokenKind::Semicolon:;"])
+  @json.inspect(items, content=["KwInt:int", "Ident:inc", "Semicolon:;"])
 }
 
 ///|
@@ -98,7 +98,7 @@ test "preprocess include with macro" {
     pp_tokens("#define HDR \"\{path}\"\n#include HDR")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:inc2", "@tokens.TokenKind::Semicolon:;"])
+  @json.inspect(items, content=["KwInt:int", "Ident:inc2", "Semicolon:;"])
 }
 
 ///|
@@ -117,7 +117,7 @@ test "preprocess include search path" {
     pp_tokens_with_paths("#include <inc.h>", [dir])
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:inc3", "@tokens.TokenKind::Semicolon:;"])
+  @json.inspect(items, content=["KwInt:int", "Ident:inc3", "Semicolon:;"])
 }
 
 ///|
@@ -130,7 +130,7 @@ test "preprocess empty function-like macro expansion" {
   }
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:ok", "@tokens.TokenKind::Semicolon:;"])
+  @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
 }
 
 ///|
@@ -144,7 +144,7 @@ test "preprocess quickjs opcode header with empty DEF" {
   }
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:ok", "@tokens.TokenKind::Semicolon:;"])
+  @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
 }
 
 ///|
@@ -153,7 +153,7 @@ test "preprocess _Float16 builtin macro" {
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
   @json.inspect(items, content=[
-    "@tokens.TokenKind::KwShort:short", "@tokens.TokenKind::KwUnsigned:unsigned", "@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:x", "@tokens.TokenKind::Semicolon:;",
+    "KwShort:short", "KwUnsigned:unsigned", "KwInt:int", "Ident:x", "Semicolon:;",
   ])
 }
 
@@ -164,17 +164,17 @@ test "preprocess _Float16 prototype tokens" {
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
   @json.inspect(items, content=[
-    "@tokens.TokenKind::KwExtern:extern",
-    "@tokens.TokenKind::KwShort:short",
-    "@tokens.TokenKind::KwUnsigned:unsigned",
-    "@tokens.TokenKind::KwInt:int",
-    "@tokens.TokenKind::Ident:foo",
-    "@tokens.TokenKind::LParen:(",
-    "@tokens.TokenKind::KwShort:short",
-    "@tokens.TokenKind::KwUnsigned:unsigned",
-    "@tokens.TokenKind::KwInt:int",
-    "@tokens.TokenKind::RParen:)",
-    "@tokens.TokenKind::Semicolon:;",
+    "KwExtern:extern",
+    "KwShort:short",
+    "KwUnsigned:unsigned",
+    "KwInt:int",
+    "Ident:foo",
+    "LParen:(",
+    "KwShort:short",
+    "KwUnsigned:unsigned",
+    "KwInt:int",
+    "RParen:)",
+    "Semicolon:;",
   ])
 }
 
@@ -185,7 +185,7 @@ test "preprocess function-like macro" {
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
   @json.inspect(items, content=[
-    "@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:x", "@tokens.TokenKind::Assign:=", "@tokens.TokenKind::IntLit:1", "@tokens.TokenKind::Plus:+", "@tokens.TokenKind::IntLit:2", "@tokens.TokenKind::Semicolon:;",
+    "KwInt:int", "Ident:x", "Assign:=", "IntLit:1", "Plus:+", "IntLit:2", "Semicolon:;",
   ])
 }
 
@@ -197,8 +197,8 @@ test "preprocess stringize and paste" {
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
   @json.inspect(items, content=[
-    "@tokens.TokenKind::KwChar:char", "@tokens.TokenKind::Star:*", "@tokens.TokenKind::Ident:s", "@tokens.TokenKind::Assign:=", "@tokens.TokenKind::StrLit:\"hi\"", "@tokens.TokenKind::Semicolon:;",
-    "@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:xy", "@tokens.TokenKind::Assign:=", "@tokens.TokenKind::Ident:xy", "@tokens.TokenKind::Semicolon:;",
+    "KwChar:char", "Star:*", "Ident:s", "Assign:=", "StrLit:\"hi\"", "Semicolon:;",
+    "KwInt:int", "Ident:xy", "Assign:=", "Ident:xy", "Semicolon:;",
   ])
 }
 
@@ -209,7 +209,7 @@ test "preprocess stringize keeps adjacency" {
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
   @json.inspect(items, content=[
-    "@tokens.TokenKind::KwChar:char", "@tokens.TokenKind::Star:*", "@tokens.TokenKind::Ident:s", "@tokens.TokenKind::Assign:=", "@tokens.TokenKind::StrLit:\"->>\"", "@tokens.TokenKind::Semicolon:;",
+    "KwChar:char", "Star:*", "Ident:s", "Assign:=", "StrLit:\"->>\"", "Semicolon:;",
   ])
 }
 
@@ -220,7 +220,7 @@ test "preprocess if expression" {
   )
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:ok", "@tokens.TokenKind::Semicolon:;"])
+  @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
 }
 
 ///|
@@ -229,7 +229,7 @@ test "preprocess if char literal" {
     pp_tokens("#if 'A' == '\\101'\nint ok;\n#endif")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:ok", "@tokens.TokenKind::Semicolon:;"])
+  @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
 }
 
 ///|
@@ -238,7 +238,7 @@ test "preprocess if macro expression" {
     pp_tokens("#define A 1 + 2\n#if A == 3\nint ok;\n#endif")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:ok", "@tokens.TokenKind::Semicolon:;"])
+  @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
 }
 
 ///|
@@ -248,7 +248,7 @@ test "preprocess if defined and numeric macro" {
   let (toks, bag, interner, lexeme_pool) = pp_tokens(text)
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:ok", "@tokens.TokenKind::Semicolon:;"])
+  @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
 }
 
 ///|
@@ -294,7 +294,7 @@ test "preprocess whitespace before paren" {
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
   @json.inspect(items, content=[
-    "@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:y", "@tokens.TokenKind::Assign:=", "@tokens.TokenKind::IntLit:1", "@tokens.TokenKind::Semicolon:;",
+    "KwInt:int", "Ident:y", "Assign:=", "IntLit:1", "Semicolon:;",
   ])
 }
 
@@ -305,7 +305,7 @@ test "preprocess recursion guard" {
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
   @json.inspect(items, content=[
-    "@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:z", "@tokens.TokenKind::Assign:=", "@tokens.TokenKind::Ident:A", "@tokens.TokenKind::Semicolon:;",
+    "KwInt:int", "Ident:z", "Assign:=", "Ident:A", "Semicolon:;",
   ])
 }
 
@@ -316,8 +316,8 @@ test "preprocess builtin line and file" {
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
   @json.inspect(items, content=[
-    "@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:x", "@tokens.TokenKind::Assign:=", "@tokens.TokenKind::IntLit:1", "@tokens.TokenKind::Semicolon:;", "@tokens.TokenKind::KwConst:const",
-    "@tokens.TokenKind::KwChar:char", "@tokens.TokenKind::Star:*", "@tokens.TokenKind::Ident:f", "@tokens.TokenKind::Assign:=", "@tokens.TokenKind::StrLit:\"<test>\"", "@tokens.TokenKind::Semicolon:;",
+    "KwInt:int", "Ident:x", "Assign:=", "IntLit:1", "Semicolon:;", "KwConst:const",
+    "KwChar:char", "Star:*", "Ident:f", "Assign:=", "StrLit:\"<test>\"", "Semicolon:;",
   ])
 }
 
@@ -329,8 +329,8 @@ test "preprocess line directive" {
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
   @json.inspect(items, content=[
-    "@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:x", "@tokens.TokenKind::Assign:=", "@tokens.TokenKind::IntLit:200", "@tokens.TokenKind::Semicolon:;", "@tokens.TokenKind::KwConst:const",
-    "@tokens.TokenKind::KwChar:char", "@tokens.TokenKind::Star:*", "@tokens.TokenKind::Ident:f", "@tokens.TokenKind::Assign:=", "@tokens.TokenKind::StrLit:\"foo.c\"", "@tokens.TokenKind::Semicolon:;",
+    "KwInt:int", "Ident:x", "Assign:=", "IntLit:200", "Semicolon:;", "KwConst:const",
+    "KwChar:char", "Star:*", "Ident:f", "Assign:=", "StrLit:\"foo.c\"", "Semicolon:;",
   ])
 }
 
@@ -341,8 +341,8 @@ test "preprocess date and time" {
   )
   assert_true(!@diag.has_errors(bag))
   assert_true(toks.length() >= 13)
-  assert_true(toks[5].kind == @tokens.TokenKind::StrLit)
-  assert_true(toks[12].kind == @tokens.TokenKind::StrLit)
+  assert_true(toks[5].kind == StrLit)
+  assert_true(toks[12].kind == StrLit)
   assert_true(
     @tokens.token_text_with(interner, lexeme_pool, toks[12]).contains(":"),
   )

@@ -1,6 +1,6 @@
 ///|
 struct Parser {
-  pp : Preprocessor
+  pp : @preproc.Preprocessor
   mut current : @tokens.Token
   mut lookahead : @tokens.Token
   buffer : Array[@tokens.Token]
@@ -26,7 +26,7 @@ struct BuiltinIds {
 }
 
 ///|
-fn new_parser(pp : Preprocessor) -> Parser {
+fn new_parser(pp : @preproc.Preprocessor) -> Parser {
   let text_len = pp.lexer.text_len
   let mut id_capacity = text_len / 64
   if id_capacity < 512 {
@@ -65,8 +65,8 @@ fn new_parser(pp : Preprocessor) -> Parser {
     typedef_values[id - 1] = Some(ty)
     typedef_scope_levels[id - 1] = 1
   }
-  let current = next_pp_token(pp)
-  let lookahead = next_pp_token(pp)
+  let current = @preproc.next_pp_token(pp)
+  let lookahead = @preproc.next_pp_token(pp)
   let (_, builtin_types_compatible_p) =
     pp.interner.intern_view_with_id("__builtin_types_compatible_p"[:])
   let (_, builtin_offsetof) =
@@ -131,7 +131,7 @@ fn special_ident_kind(tok : @tokens.Token, ids : @tokens.KeywordIds) -> @tokens.
 }
 
 ///|
-fn parse_translation_unit(pp : Preprocessor) -> @ast.TranslationUnit {
+fn parse_translation_unit(pp : @preproc.Preprocessor) -> @ast.TranslationUnit {
   let parser = new_parser(pp)
   parse_translation_unit_with(parser)
 }
@@ -3947,7 +3947,7 @@ fn peek_token_at(p : Parser, offset : Int) -> @tokens.Token {
   }
   let target = p.buffer_pos + (offset - 2)
   while p.buffer.length() <= target {
-    p.buffer.push(next_pp_token(p.pp))
+    p.buffer.push(@preproc.next_pp_token(p.pp))
   }
   p.buffer[target]
 }
@@ -3969,7 +3969,7 @@ fn advance_token(p : Parser) -> @tokens.Token {
       p.buffer_pos = 0
     }
   } else {
-    p.lookahead = next_pp_token(p.pp)
+    p.lookahead = @preproc.next_pp_token(p.pp)
   }
   tok
 }

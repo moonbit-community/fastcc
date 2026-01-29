@@ -504,7 +504,7 @@ fn format_diag_for_cli(map : @source.SourceMap, d : @diag.Diag) -> String {
 }
 
 ///|
-fn lex_cli_macro_tokens(pp : Preprocessor, value : String) -> Array[@tokens.Token] {
+fn lex_cli_macro_tokens(pp : @preproc.Preprocessor, value : String) -> Array[@tokens.Token] {
   if value == "" {
     return []
   }
@@ -524,20 +524,20 @@ fn lex_cli_macro_tokens(pp : Preprocessor, value : String) -> Array[@tokens.Toke
     }
     tokens.push(tok)
   }
-  normalize_macro_tokens(tokens)
+  @preproc.normalize_macro_tokens(tokens)
 }
 
 ///|
-fn apply_cli_macros(pp : Preprocessor, actions : Array[CliMacroAction]) -> Unit {
+fn apply_cli_macros(pp : @preproc.Preprocessor, actions : Array[CliMacroAction]) -> Unit {
   for action in actions {
     match action {
       CliMacroAction::Define(name~, value~) =>
         match value {
-          None => define_int_macro(pp, name, 1)
-          Some(v) => define_macro(pp, name, lex_cli_macro_tokens(pp, v))
+          None => @preproc.define_int_macro(pp, name, 1)
+          Some(v) => @preproc.define_macro(pp, name, lex_cli_macro_tokens(pp, v))
         }
       CliMacroAction::Undef(name~) =>
-        remove_macro(pp, macro_id_from_name(pp, name))
+        @preproc.remove_macro(pp, @preproc.macro_id_from_name(pp, name))
     }
   }
 }
@@ -620,10 +620,10 @@ fn compile_to_object_path(
       let bag = @diag.new_diag_bag()
       let map = @source.new_source_map()
       let file = @source.add_file(map, path, text)
-      let pp = new_preprocessor(map, file, bag)
-      add_include_path(pp, "compat/include")
+      let pp = @preproc.new_preprocessor(map, file, bag)
+      @preproc.add_include_path(pp, "compat/include")
       for p in cfg.include_paths {
-        add_include_path(pp, p)
+        @preproc.add_include_path(pp, p)
       }
       apply_cli_macros(pp, cfg.macro_actions)
       let mut parse_ns = 0UL
@@ -635,7 +635,7 @@ fn compile_to_object_path(
       let total_start = if bench_enabled { bench_now_ns() } else { 0UL }
       let parse_start = total_start
       let unit = parse_translation_unit(pp)
-      finalize_preprocessor(pp)
+      @preproc.finalize_preprocessor(pp)
       if bench_enabled {
         let parse_end = bench_now_ns()
         parse_ns = bench_delta_ns(parse_start, parse_end)
@@ -765,13 +765,13 @@ fn main {
                 let bag = @diag.new_diag_bag()
                 let map = @source.new_source_map()
                 let file = @source.add_file(map, path, text)
-                let pp = new_preprocessor(map, file, bag)
-                add_include_path(pp, "compat/include")
+                let pp = @preproc.new_preprocessor(map, file, bag)
+                @preproc.add_include_path(pp, "compat/include")
                 for p in cfg.include_paths {
-                  add_include_path(pp, p)
+                  @preproc.add_include_path(pp, p)
                 }
                 apply_cli_macros(pp, cfg.macro_actions)
-                let toks = dump_tokens(pp, 32)
+                let toks = @preproc.dump_tokens(pp, 32)
                 for t in toks {
                   println(@tokens.token_text_with(pp.interner, pp.lexeme_pool, t))
                 }

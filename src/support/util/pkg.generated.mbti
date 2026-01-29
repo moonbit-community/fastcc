@@ -4,6 +4,20 @@ package "hackwaly/tinycc/support/util"
 // Values
 pub let char_is_unsigned : Bool
 
+pub fn int_literal_base(String) -> Int
+
+pub fn int_literal_base_from(String, Int) -> Int
+
+pub fn int_literal_end(String) -> Int
+
+pub fn parse_int_suffix(String) -> (Int, Bool)
+
+pub fn parse_int_suffix_range(String, Int) -> (Int, Bool)
+
+pub fn parse_uint64_literal(String, Int) -> UInt64
+
+pub fn parse_uint64_literal_prefix(String, Int, Int) -> UInt64
+
 pub fn slice_string(String, Int, Int) -> String
 
 // Errors
