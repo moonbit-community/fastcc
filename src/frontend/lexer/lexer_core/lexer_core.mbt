@@ -212,20 +212,18 @@ pub fn skip_line_comment(lex : Lexer) -> Unit {
   }
   let text = lex.text
   let mut i = idx
-  let mut col = lex.col
-  while i < len {
-    if text[i] == 10 {
-      lex.index = i + 1
-      lex.line = lex.line + 1
-      lex.col = 1
-      lex.line_start = true
-      return
-    }
+  while i < len && text[i] != 10 {
     i = i + 1
-    col = col + 1
   }
-  lex.index = len
-  lex.col = col
+  if i < len {
+    lex.index = i + 1
+    lex.line = lex.line + 1
+    lex.col = 1
+    lex.line_start = true
+  } else {
+    lex.index = len
+    lex.col = lex.col + (len - idx)
+  }
 }
 
 ///|
