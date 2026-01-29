@@ -1,6 +1,7 @@
 {
   "import": [
     "hackwaly/tinycc/backend/codegen",
+    "hackwaly/tinycc/driver/cli",
     "hackwaly/tinycc/ffi",
     "hackwaly/tinycc/frontend/lexer",
     "hackwaly/tinycc/frontend/parser",

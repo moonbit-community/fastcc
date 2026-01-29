@@ -110,7 +110,8 @@ Top-level:
 
 ## Driver and CLI
 
-- CLI parsing lives in `src/driver/driver.mbt` (`CliConfig`, `parse_cli_args`).
+- CLI parsing lives in `src/driver/cli/cli.mbt` and is re-exported by `driver`
+  (`CliConfig`, `parse_cli_args`).
 - `src/cmd/tinycc/main.mbt` is the primary entrypoint, and root `src/main.mbt`
   delegates to it for compatibility.
 - `compile_to_object_path` in `src/driver/driver.mbt` orchestrates
