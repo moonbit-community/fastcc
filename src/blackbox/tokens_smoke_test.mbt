@@ -24,6 +24,9 @@ test "tokens kind text and len" {
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::ShiftLeftAssign), "<<=")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::ShiftRightAssign), ">>=")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::Eq), "==")
+  assert_eq(@tokens.token_kind_text(@tokens.TokenKind::Ne), "!=")
+  assert_eq(@tokens.token_kind_text(@tokens.TokenKind::Lt), "<")
+  assert_eq(@tokens.token_kind_text(@tokens.TokenKind::Amp), "&")
   assert_eq(@tokens.token_kind_text(@tokens.TokenKind::HashHash), "##")
 
   let ellipsis = @tokens.TokenKind::Ellipsis

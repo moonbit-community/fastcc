@@ -69,6 +69,48 @@ test "ast attrs and call conv helpers" {
     @ast.CallConv::Default,
   )
   assert_eq(@ast.merge_call_conv(@ast.CallConv::Cdecl, @ast.CallConv::Stdcall), @ast.CallConv::Cdecl)
+
+  let base_attrs = @ast.attrs_with(
+    visibility=Some(@ast.Visibility::Hidden),
+    call_conv=Some(@ast.CallConv::Cdecl),
+  )
+  let incoming_attrs = @ast.attrs_with(
+    aligned=Some(@ast.AlignSpec::Default),
+    section=Some("sec"),
+    alias_name=Some("alias"),
+    asm_label=Some("asm"),
+    cleanup=Some("cleanup"),
+    call_conv=Some(@ast.CallConv::Stdcall),
+  )
+  let merged = @ast.merge_attrs(base_attrs, incoming_attrs)
+  assert_eq(merged.visibility, base_attrs.visibility)
+  assert_eq(merged.section, incoming_attrs.section)
+  assert_eq(merged.alias_name, incoming_attrs.alias_name)
+  assert_eq(merged.asm_label, incoming_attrs.asm_label)
+  assert_eq(merged.cleanup, incoming_attrs.cleanup)
+  assert_eq(merged.call_conv, base_attrs.call_conv)
+  assert_eq(merged.aligned, incoming_attrs.aligned)
+
+  let qual = @ast.with_const(@ast.empty_qual())
+  let qualified_ty : @ast.CType = @ast.CType::Qualified(qual=qual, base=base_int)
+  let updated_qual = @ast.apply_call_conv_to_type(qualified_ty, @ast.CallConv::Cdecl)
+  match updated_qual {
+    @ast.CType::Qualified(..) => ()
+    _ => fail("expected qualified call conv")
+  }
+  let attributed_ty : @ast.CType = @ast.CType::Attributed(attrs=@ast.empty_attrs(), base=base_int)
+  let updated_attr = @ast.apply_call_conv_to_type(attributed_ty, @ast.CallConv::Cdecl)
+  match updated_attr {
+    @ast.CType::Attributed(..) => ()
+    _ => fail("expected attributed call conv")
+  }
+  let array_ty : @ast.CType = @ast.CType::Array(elem=base_int, size=Some(2), size_expr=None)
+  let updated_array = @ast.apply_call_conv_to_type(array_ty, @ast.CallConv::Cdecl)
+  match updated_array {
+    @ast.CType::Array(..) => ()
+    _ => fail("expected array call conv")
+  }
+  assert_eq(@ast.apply_call_conv_to_type(base_int, @ast.CallConv::Default), base_int)
 }
 
 ///|
@@ -94,6 +136,7 @@ test "ast expr utils" {
     loc=loc,
   )
   assert_true(@ast.expr_is_lvalue_simple(stmt_expr))
+  assert_true(@ast.expr_may_call(stmt_expr))
 
   let call_expr = @ast.Expr::Call(callee=id_expr, args=[], node_id=14, loc=loc)
   assert_true(@ast.expr_may_call(call_expr))
@@ -152,8 +195,12 @@ test "ast expr utils" {
     loc=loc,
   )
   assert_eq(@ast.expr_node_id(types_compat), 24)
+  let offset_expr = @ast.Expr::BuiltinOffsetof(ty=base_int, path=[], node_id=25, loc=loc)
+  assert_eq(@ast.expr_node_id(offset_expr), 25)
   let align_expr = @ast.Expr::AlignofExpr(expr=id_expr, node_id=25, loc=loc)
   assert_eq(@ast.expr_node_id(align_expr), 25)
+  let align_type = @ast.Expr::AlignofType(ty=base_int, node_id=26, loc=loc)
+  assert_eq(@ast.expr_node_id(align_type), 26)
 }
 
 ///|
@@ -161,6 +208,7 @@ test "ast literal helpers and qualifiers" {
   assert_eq(@ast.parse_int64_literal(""), None)
   assert_eq(@ast.parse_int64_literal("0x10"), Some(16))
   assert_eq(@ast.parse_int64_literal("0x1a"), Some(26))
+  assert_eq(@ast.parse_int64_literal("0XAF"), Some(175))
   assert_eq(@ast.parse_int64_literal("0x"), Some(0))
   assert_eq(@ast.parse_int64_literal("0x1g"), Some(1))
   assert_eq(@ast.parse_int64_literal("0b101"), Some(5))
