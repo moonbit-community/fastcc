@@ -1,0 +1,190 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/backend/arm64"
+
+import {
+  "hackwaly/tinycc/backend/object",
+}
+
+// Values
+pub const NB_REGS : Int = 28
+
+pub const RC_FRET : Int = 4194304
+
+pub const RC_IRET : Int = 4
+
+pub const R_AARCH64_ADD_ABS_LO12_NC : Int = 277
+
+pub const R_AARCH64_ADR_GOT_PAGE : Int = 311
+
+pub const R_AARCH64_ADR_PREL_PG_HI21 : Int = 275
+
+pub const R_AARCH64_ADR_PREL_PG_HI21_NC : Int = 276
+
+pub const R_AARCH64_CALL26 : Int = 283
+
+pub const R_AARCH64_JUMP26 : Int = 282
+
+pub const R_AARCH64_LD64_GOT_LO12_NC : Int = 312
+
+pub const R_AARCH64_LDST8_ABS_LO12_NC : Int = 278
+
+pub const R_AARCH64_POINTER : Int = 257
+
+pub const TOK_ADD : Int = 0x2b
+
+pub const TOK_AND : Int = 0x26
+
+pub const TOK_DIV : Int = 0x2f
+
+pub const TOK_EQ : Int = 0x94
+
+pub const TOK_GE : Int = 0x9d
+
+pub const TOK_GT : Int = 0x9f
+
+pub const TOK_LAND : Int = 0x90
+
+pub const TOK_LE : Int = 0x9e
+
+pub const TOK_LOR : Int = 0x91
+
+pub const TOK_LT : Int = 0x9c
+
+pub const TOK_MOD : Int = 0x25
+
+pub const TOK_MUL : Int = 0x2a
+
+pub const TOK_NE : Int = 0x95
+
+pub const TOK_OR : Int = 0x7c
+
+pub const TOK_PDIV : Int = 0x85
+
+pub const TOK_SAR : Int = 0x3e
+
+pub const TOK_SHL : Int = 0x3c
+
+pub const TOK_SHR : Int = 0x8b
+
+pub const TOK_SUB : Int = 0x2d
+
+pub const TOK_UDIV : Int = 0x83
+
+pub const TOK_UGE : Int = 0x93
+
+pub const TOK_UGT : Int = 0x97
+
+pub const TOK_ULE : Int = 0x96
+
+pub const TOK_ULT : Int = 0x92
+
+pub const TOK_UMOD : Int = 0x84
+
+pub const TOK_XOR : Int = 0x5e
+
+pub const TREG_F0 : Int = 20
+
+pub const TREG_F7 : Int = 27
+
+pub const TREG_R30 : Int = 19
+
+pub fn arm64_check_offset(Bool, Int, UInt64) -> UInt64
+
+pub fn arm64_encode_bimm64(UInt64) -> Int
+
+pub fn arm64_gen_opic(Arm64Emitter, Int, Int, Bool, UInt64, Int, Int) -> Bool
+
+pub fn arm64_iconst(Int) -> UInt64?
+
+pub fn arm64_ldrs(Arm64Emitter, UInt, Int) -> Unit
+
+pub fn arm64_ldrv(Arm64Emitter, Int, UInt, UInt, UInt64) -> Unit
+
+pub fn arm64_ldrx(Arm64Emitter, Bool, Int, UInt, UInt, UInt64) -> Unit
+
+pub fn arm64_load_cmp(Arm64Emitter, Int, Int) -> Unit raise
+
+pub fn arm64_movi(UInt, UInt64) -> UInt
+
+pub fn arm64_movimm(Arm64Emitter, UInt, UInt64) -> Unit
+
+pub fn arm64_spoff(Arm64Emitter, UInt, UInt64) -> Unit
+
+pub fn arm64_strv(Arm64Emitter, Int, UInt, UInt, UInt64) -> Unit
+
+pub fn arm64_strx(Arm64Emitter, Int, UInt, UInt, UInt64) -> Unit
+
+pub fn arm64_sym(Arm64Emitter, UInt, @object.Sym, UInt64) -> Unit
+
+pub fn arm64_type_size(Int) -> Int
+
+pub fn arm64_vset_VT_CMP(Int) -> Unit
+
+pub fn emit32(Arm64Emitter, UInt) -> Unit
+
+pub fn emitter_pc(Arm64Emitter) -> Int
+
+pub fn fltr(Int) -> Int
+
+pub fn gen_fill_nops(Arm64Emitter, Int) -> Unit raise
+
+pub fn gind(Arm64Emitter) -> Int
+
+pub fn gjmp(Arm64Emitter, Int) -> Int
+
+pub fn gjmp_addr(Arm64Emitter, Int) -> Unit raise
+
+pub fn gjmp_append(Arm64Emitter, Int, Int) -> Int
+
+pub fn gjmp_cond(Arm64Emitter, Int, Int) -> Int raise
+
+pub fn greloc(Arm64Emitter, @object.Sym, Int, Int) -> Unit
+
+pub fn greloca(Arm64Emitter, @object.Sym, Int, Int, Int64) -> Unit
+
+pub fn gsym(Arm64Emitter, Int) -> Unit raise
+
+pub fn gsym_addr(Arm64Emitter, Int, Int) -> Unit raise
+
+pub fn intr(Int) -> Int
+
+pub fn is_freg(Int) -> Bool
+
+pub fn new_arm64_emitter() -> Arm64Emitter
+
+pub fn new_arm64_emitter_with_capacity(Int, Int) -> Arm64Emitter
+
+pub fn rc_f(Int) -> Int
+
+pub fn rc_r(Int) -> Int
+
+pub fn section_from_emitter(String, Arm64Emitter) -> @object.Section
+
+pub fn section_from_emitter_take(String, Arm64Emitter) -> @object.Section
+
+pub fn treg_f(Int) -> Int
+
+pub fn treg_r(Int) -> Int
+
+pub fn u64_mask(Int) -> UInt64
+
+pub fn vdup() -> Unit
+
+// Errors
+
+// Types and methods
+pub(all) struct Arm64Emitter {
+  mut code : Array[UInt]
+  mut code_len : Int
+  relocs : Array[@object.Reloc]
+}
+
+// Type aliases
+pub using @object {type Reloc}
+
+pub using @object {type Section}
+
+pub using @object {type Sym}
+
+// Traits
+

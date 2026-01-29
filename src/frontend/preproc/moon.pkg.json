@@ -1,0 +1,13 @@
+{
+  "import": [
+    "hackwaly/tinycc/frontend/preproc/preproc_core",
+    "hackwaly/tinycc/frontend/tokens",
+    "hackwaly/tinycc/support/diag",
+    "hackwaly/tinycc/support/source",
+    "moonbitlang/x/time"
+  ],
+  "test-import": [
+    "hackwaly/tinycc/support/diag",
+    "hackwaly/tinycc/support/source"
+  ]
+}

@@ -1,0 +1,120 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/frontend/ast"
+
+import {
+  "hackwaly/tinycc/frontend/ast/ast_core",
+  "hackwaly/tinycc/support/source",
+}
+
+// Values
+pub fn apply_call_conv_to_type(@ast_core.CType, @ast_core.CallConv) -> @ast_core.CType
+
+pub fn apply_qualifiers(@ast_core.CType, @ast_core.TypeQual) -> @ast_core.CType
+
+pub fn apply_type_attrs(@ast_core.CType, @ast_core.Attributes) -> @ast_core.CType
+
+pub fn attrs_is_empty(@ast_core.Attributes) -> Bool
+
+pub fn attrs_with(aligned? : @ast_core.AlignSpec?, packed? : Bool, weak? : Bool, visibility? : @ast_core.Visibility?, section? : String?, alias_name? : String?, asm_label? : String?, cleanup? : String?, noreturn? : Bool, constructor_attr? : Bool, destructor? : Bool, always_inline? : Bool, call_conv? : @ast_core.CallConv?, dll_import? : Bool, dll_export? : Bool, nodecorate? : Bool, nodebug? : Bool) -> @ast_core.Attributes
+
+pub fn const_i64_from_expr(@ast_core.Expr) -> Int64?
+
+pub fn default_int_type() -> @ast_core.CType
+
+pub fn empty_attrs() -> @ast_core.Attributes
+
+pub fn empty_qual() -> @ast_core.TypeQual
+
+pub fn expr_is_lvalue_simple(@ast_core.Expr) -> Bool
+
+pub fn expr_loc(@ast_core.Expr) -> @source.SrcLoc
+
+pub fn expr_may_call(@ast_core.Expr) -> Bool
+
+pub fn expr_node_id(@ast_core.Expr) -> Int
+
+pub fn has_type_attrs(@ast_core.Attributes) -> Bool
+
+pub fn merge_attrs(@ast_core.Attributes, @ast_core.Attributes) -> @ast_core.Attributes
+
+pub fn merge_call_conv(@ast_core.CallConv, @ast_core.CallConv) -> @ast_core.CallConv
+
+pub fn merge_qual(@ast_core.TypeQual, @ast_core.TypeQual) -> @ast_core.TypeQual
+
+pub fn normalize_call_conv(@ast_core.CallConv?) -> @ast_core.CallConv
+
+pub fn parse_int64_literal(String) -> Int64?
+
+pub fn type_attrs_from(@ast_core.Attributes) -> @ast_core.Attributes
+
+pub fn with_atomic(@ast_core.TypeQual) -> @ast_core.TypeQual
+
+pub fn with_const(@ast_core.TypeQual) -> @ast_core.TypeQual
+
+pub fn with_restrict(@ast_core.TypeQual) -> @ast_core.TypeQual
+
+pub fn with_volatile(@ast_core.TypeQual) -> @ast_core.TypeQual
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+pub using @ast_core {type AlignSpec}
+
+pub using @ast_core {type AsmOperand}
+
+pub using @ast_core {type AsmStmt}
+
+pub using @ast_core {type Attributes}
+
+pub using @ast_core {type BinaryOp}
+
+pub using @ast_core {type CFloatKind}
+
+pub using @ast_core {type CIntKind}
+
+pub using @ast_core {type CType}
+
+pub using @ast_core {type CallConv}
+
+pub using @ast_core {type Decl}
+
+pub using @ast_core {type EnumItem}
+
+pub using @ast_core {type Expr}
+
+pub using @ast_core {type Field}
+
+pub using @ast_core {type FuncDecl}
+
+pub using @ast_core {type FuncDef}
+
+pub using @ast_core {type InitDesignator}
+
+pub using @ast_core {type InitItem}
+
+pub using @ast_core {type Initializer}
+
+pub using @ast_core {type Param}
+
+pub using @ast_core {type RecordItem}
+
+pub using @ast_core {type StaticAssert}
+
+pub using @ast_core {type Stmt}
+
+pub using @ast_core {type StorageClass}
+
+pub using @ast_core {type TranslationUnit}
+
+pub using @ast_core {type TypeQual}
+
+pub using @ast_core {type UnaryOp}
+
+pub using @ast_core {type VarDecl}
+
+pub using @ast_core {type Visibility}
+
+// Traits
+

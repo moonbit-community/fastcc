@@ -1,0 +1,5 @@
+{
+  "import": [
+    "hackwaly/tinycc/support/intern/intern_core"
+  ]
+}

@@ -1,0 +1,39 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/backend/macho"
+
+import {
+  "hackwaly/tinycc/backend/object",
+  "moonbitlang/x/fs",
+}
+
+// Values
+pub const MH_MAGIC_64 : UInt = 0xfeedfacf
+
+pub fn encode_macho_object(Array[@object.Section], Array[ObjSymbol]) -> Bytes
+
+pub fn write_macho_object(String, Array[@object.Section], Array[ObjSymbol]) -> Unit raise @fs.IOError
+
+// Errors
+
+// Types and methods
+type MachoSectionInfo
+
+type MachoSectionLayout
+
+type MachoSegmentLayout
+
+pub(all) struct ObjSymbol {
+  id : Int
+  name : String
+  section : String?
+  value : Int
+  is_external : Bool
+}
+
+// Type aliases
+pub using @object {type Reloc}
+
+pub using @object {type Section}
+
+// Traits
+

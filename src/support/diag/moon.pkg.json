@@ -1,0 +1,6 @@
+{
+  "import": [
+    "hackwaly/tinycc/support/diag/diag_core",
+    "hackwaly/tinycc/support/source"
+  ]
+}

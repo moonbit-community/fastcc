@@ -1,0 +1,11 @@
+{
+  "import": [
+    "hackwaly/tinycc/frontend/parser/parser_core",
+    "hackwaly/tinycc/frontend/ast",
+    "hackwaly/tinycc/frontend/preproc"
+  ],
+  "test-import": [
+    "hackwaly/tinycc/support/diag",
+    "hackwaly/tinycc/support/source"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "import": [
+    "hackwaly/tinycc/backend/arm64",
+    "hackwaly/tinycc/backend/object",
+    "hackwaly/tinycc/support/util",
+    "moonbitlang/x/fs"
+  ],
+  "wbtest-import": [
+    "hackwaly/tinycc/backend/arm64"
+  ]
+}

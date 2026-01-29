@@ -1,0 +1,30 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/frontend/parser/parser_core"
+
+import {
+  "hackwaly/tinycc/frontend/ast",
+  "hackwaly/tinycc/frontend/preproc/preproc_core",
+}
+
+// Values
+pub fn parse_translation_unit(@preproc_core.Preprocessor) -> @ast.TranslationUnit
+
+// Errors
+
+// Types and methods
+type BuiltinIds
+
+type DeclSpecs
+
+type DeclWrapper
+
+type Declarator
+
+type ParenDeclParts
+
+type Parser
+
+// Type aliases
+
+// Traits
+

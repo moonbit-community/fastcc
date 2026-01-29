@@ -1,0 +1,6 @@
+{
+  "import": [
+    "hackwaly/tinycc/frontend/tokens/tokens_core",
+    "hackwaly/tinycc/support/intern"
+  ]
+}

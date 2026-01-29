@@ -1,0 +1,58 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/frontend/tokens"
+
+import {
+  "hackwaly/tinycc/frontend/tokens/tokens_core",
+  "hackwaly/tinycc/support/intern",
+}
+
+// Values
+pub let empty_hidden : Int
+
+pub fn init_keyword_ids(@intern.StringInterner) -> @tokens_core.KeywordIds
+
+pub fn keyword_kind_from_id(Int, @tokens_core.KeywordIds) -> @tokens_core.TokenKind?
+
+pub fn lexeme_pool_get(@tokens_core.LexemePool, Int) -> String
+
+pub fn lexeme_pool_intern(@tokens_core.LexemePool, String) -> Int
+
+pub fn lexeme_pool_intern_slice(@tokens_core.LexemePool, String, Int, Int) -> Int
+
+pub fn lexeme_pool_len(@tokens_core.LexemePool, Int) -> Int
+
+pub fn new_lexeme_pool(capacity? : Int) -> @tokens_core.LexemePool
+
+pub fn token_has_id(@tokens_core.Token) -> Bool
+
+pub fn token_id(@tokens_core.Token) -> Int
+
+pub fn token_kind_text(@tokens_core.TokenKind) -> String
+
+pub fn token_kind_text_len(@tokens_core.TokenKind) -> Int
+
+pub fn token_lexeme_id(@tokens_core.Token) -> Int
+
+pub fn token_text_len_with(@intern.StringInterner, @tokens_core.LexemePool, @tokens_core.Token) -> Int
+
+pub fn token_text_with(@intern.StringInterner, @tokens_core.LexemePool, @tokens_core.Token) -> String
+
+pub fn token_value_from_parts(Int, Int) -> Int
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+pub using @tokens_core {type KeywordIds}
+
+pub using @tokens_core {type LexemeEntry}
+
+pub using @tokens_core {type LexemePool}
+
+pub using @tokens_core {type Token}
+
+pub using @tokens_core {type TokenKind}
+
+// Traits
+

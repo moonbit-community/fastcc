@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/support/source"
+
+import {
+  "hackwaly/tinycc/support/source/source_core",
+}
+
+// Values
+pub fn add_file(@source_core.SourceMap, String, String) -> @source_core.SourceFile
+
+pub fn dummy_loc(Int) -> @source_core.SrcLoc
+
+pub fn new_source_map() -> @source_core.SourceMap
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+pub using @source_core {type SourceFile}
+
+pub using @source_core {type SourceMap}
+
+pub using @source_core {type SrcLoc}
+
+// Traits
+

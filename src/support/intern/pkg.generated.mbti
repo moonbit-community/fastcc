@@ -1,0 +1,23 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/support/intern"
+
+import {
+  "hackwaly/tinycc/support/intern/intern_core",
+}
+
+// Values
+pub fn new_string_interner_with_capacity(capacity? : Int) -> @intern_core.StringInterner
+
+pub let tok_hash_init : UInt
+
+pub fn tok_hash_step(UInt, UInt16) -> UInt
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+pub using @intern_core {type StringInterner}
+
+// Traits
+

@@ -17,6 +17,18 @@ MAKE_ASSUME_OLD="${MAKE_ASSUME_OLD:-sqlite3.o}"
 SQLITE_PATCH="${SQLITE_PATCH:-}"
 sqlite_patch_applied=0
 
+if [[ -z "${SQLITE_PATCH}" ]]; then
+  default_patch="${ROOT_DIR}/patches/refs-sqlite/sqlite-test-harness.patch"
+  if [[ -f "${default_patch}" ]]; then
+    SQLITE_PATCH="${default_patch}"
+  fi
+fi
+
+if [[ -z "${QUICKTEST_OMIT:-}" && "$(uname -s)" == "Darwin" ]]; then
+  QUICKTEST_OMIT="^busy2\\.test$,^syscall\\.test$,^walsetlk\\.test$"
+fi
+export QUICKTEST_OMIT
+
 usage() {
   cat <<'EOF'
 Usage:

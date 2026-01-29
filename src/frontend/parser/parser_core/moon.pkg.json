@@ -1,0 +1,10 @@
+{
+  "import": [
+    "hackwaly/tinycc/frontend/ast",
+    "hackwaly/tinycc/frontend/preproc",
+    "hackwaly/tinycc/frontend/tokens",
+    "hackwaly/tinycc/support/diag",
+    "hackwaly/tinycc/support/source",
+    "hackwaly/tinycc/support/util"
+  ]
+}

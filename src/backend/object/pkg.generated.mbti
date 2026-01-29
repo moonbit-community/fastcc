@@ -1,0 +1,38 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/backend/object"
+
+// Values
+pub fn new_section(String) -> Section
+
+pub fn reloc_addend(Reloc) -> Int64
+
+pub fn section_size_bytes(Section) -> Int
+
+pub fn section_word_len(Section) -> Int
+
+// Errors
+
+// Types and methods
+pub(all) struct Reloc {
+  offset : Int
+  kind : Int
+  sym : Sym
+  addend : Int64
+}
+
+pub(all) struct Section {
+  name : String
+  data : Array[UInt]
+  relocs : Array[Reloc]
+  align : Int
+  size_bytes : Int
+}
+
+pub(all) struct Sym {
+  id : Int
+}
+
+// Type aliases
+
+// Traits
+

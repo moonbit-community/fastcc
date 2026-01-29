@@ -1,0 +1,24 @@
+{
+  "import": [
+    "hackwaly/tinycc/backend/arm64",
+    "hackwaly/tinycc/backend/object",
+    "hackwaly/tinycc/backend/macho",
+    "hackwaly/tinycc/frontend/ast",
+    "hackwaly/tinycc/sem",
+    "hackwaly/tinycc/support/diag",
+    "hackwaly/tinycc/support/source",
+    "hackwaly/tinycc/support/util"
+  ],
+  "test-import": [
+    "hackwaly/tinycc/frontend/parser",
+    "hackwaly/tinycc/frontend/preproc",
+    "hackwaly/tinycc/support/source",
+    "hackwaly/tinycc/support/diag"
+  ],
+  "wbtest-import": [
+    "hackwaly/tinycc/frontend/parser",
+    "hackwaly/tinycc/frontend/preproc",
+    "hackwaly/tinycc/support/source",
+    "hackwaly/tinycc/support/diag"
+  ]
+}

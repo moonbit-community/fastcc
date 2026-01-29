@@ -1,0 +1,12 @@
+{
+  "import": [
+    "hackwaly/tinycc/sem/sem_core",
+    "hackwaly/tinycc/frontend/ast",
+    "hackwaly/tinycc/support/diag",
+    "hackwaly/tinycc/support/source"
+  ],
+  "test-import": [
+    "hackwaly/tinycc/frontend/ast",
+    "hackwaly/tinycc/support/diag"
+  ]
+}
