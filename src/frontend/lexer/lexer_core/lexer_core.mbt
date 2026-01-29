@@ -315,8 +315,9 @@ pub fn lex_ident(lex : Lexer, loc : @source.SrcLoc, line_start : Bool) -> @token
     hash = @intern.tok_hash_step(hash, text[idx])
     idx = idx + 1
   }
+  let delta = idx - start
   lex.index = idx
-  lex.col = lex.col + (idx - start)
+  lex.col = lex.col + delta
   lex.line_start = false
   let name_view = slice_to_view(text, start, idx)
   let (_, id) = lex.interner.intern_view_with_id_hash(name_view, hash)
@@ -409,8 +410,9 @@ pub fn lex_number(
   while idx < len && is_ident_continue(text[idx]) {
     idx = idx + 1
   }
+  let delta = idx - start
   lex.index = idx
-  lex.col = lex.col + (idx - start)
+  lex.col = lex.col + delta
   lex.line_start = false
   let kind = if is_float { @tokens.TokenKind::FloatLit } else { @tokens.TokenKind::IntLit }
   let lexeme_id = @tokens.lexeme_pool_intern_slice(lex.lexeme_pool, text, start, idx)
