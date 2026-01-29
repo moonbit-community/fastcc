@@ -6,38 +6,13 @@ package "hackwaly/tinycc"
 // Errors
 
 // Types and methods
-type AlignSpec
-pub impl Eq for AlignSpec
-pub impl Show for AlignSpec
-pub impl ToJson for AlignSpec
-
 type Arm64Emitter
 
 type Arm64PcsAuxInfo
 
 type Arm64PcsLayout
 
-type AsmOperand
-pub impl Eq for AsmOperand
-pub impl Show for AsmOperand
-pub impl ToJson for AsmOperand
-
-type AsmStmt
-pub impl Eq for AsmStmt
-pub impl Show for AsmStmt
-pub impl ToJson for AsmStmt
-
-type Attributes
-pub impl Eq for Attributes
-pub impl Show for Attributes
-pub impl ToJson for Attributes
-
 type BenchStats
-
-type BinaryOp
-pub impl Eq for BinaryOp
-pub impl Show for BinaryOp
-pub impl ToJson for BinaryOp
 
 type BuiltinCallKind
 pub impl Eq for BuiltinCallKind
@@ -45,26 +20,6 @@ pub impl Show for BuiltinCallKind
 pub impl ToJson for BuiltinCallKind
 
 type BuiltinIds
-
-type CFloatKind
-pub impl Eq for CFloatKind
-pub impl Show for CFloatKind
-pub impl ToJson for CFloatKind
-
-type CIntKind
-pub impl Eq for CIntKind
-pub impl Show for CIntKind
-pub impl ToJson for CIntKind
-
-type CType
-pub impl Eq for CType
-pub impl Show for CType
-pub impl ToJson for CType
-
-type CallConv
-pub impl Eq for CallConv
-pub impl Show for CallConv
-pub impl ToJson for CallConv
 
 type CliConfig
 
@@ -79,47 +34,17 @@ type CondState
 
 type CstringPool
 
-type Decl
-pub impl Eq for Decl
-pub impl Show for Decl
-pub impl ToJson for Decl
-
 type DeclSpecs
 
 type DeclWrapper
 
 type Declarator
 
-type EnumItem
-pub impl Eq for EnumItem
-pub impl Show for EnumItem
-pub impl ToJson for EnumItem
-
 type ExpandingGuard
-
-type Expr
-pub impl Eq for Expr
-pub impl Show for Expr
-pub impl ToJson for Expr
-
-type Field
-pub impl Eq for Field
-pub impl Show for Field
-pub impl ToJson for Field
 
 type FieldAccessInfo
 
 type FramePlan
-
-type FuncDecl
-pub impl Eq for FuncDecl
-pub impl Show for FuncDecl
-pub impl ToJson for FuncDecl
-
-type FuncDef
-pub impl Eq for FuncDef
-pub impl Show for FuncDef
-pub impl ToJson for FuncDef
 
 type FuncSig
 pub impl Eq for FuncSig
@@ -133,21 +58,6 @@ type HiddenPool
 type IfParser
 
 type IncludeSpec
-
-type InitDesignator
-pub impl Eq for InitDesignator
-pub impl Show for InitDesignator
-pub impl ToJson for InitDesignator
-
-type InitItem
-pub impl Eq for InitItem
-pub impl Show for InitItem
-pub impl ToJson for InitItem
-
-type Initializer
-pub impl Eq for Initializer
-pub impl Show for Initializer
-pub impl ToJson for Initializer
 
 type KeywordIds
 
@@ -179,11 +89,6 @@ type Macro
 
 type ObjSymbol
 
-type Param
-pub impl Eq for Param
-pub impl Show for Param
-pub impl ToJson for Param
-
 type ParenDeclParts
 
 type Parser
@@ -195,11 +100,6 @@ type PreprocBuiltinIds
 type Preprocessor
 
 type RecordDef
-
-type RecordItem
-pub impl Eq for RecordItem
-pub impl Show for RecordItem
-pub impl ToJson for RecordItem
 
 type RegPool
 
@@ -213,22 +113,7 @@ type Section
 
 type SemContext
 
-type StaticAssert
-pub impl Eq for StaticAssert
-pub impl Show for StaticAssert
-pub impl ToJson for StaticAssert
-
 type StaticLocalInfo
-
-type Stmt
-pub impl Eq for Stmt
-pub impl Show for Stmt
-pub impl ToJson for Stmt
-
-type StorageClass
-pub impl Eq for StorageClass
-pub impl Show for StorageClass
-pub impl ToJson for StorageClass
 
 type StringEntry
 
@@ -251,31 +136,6 @@ type TokenKind
 pub impl Eq for TokenKind
 pub impl Show for TokenKind
 pub impl ToJson for TokenKind
-
-type TranslationUnit
-pub impl Eq for TranslationUnit
-pub impl Show for TranslationUnit
-pub impl ToJson for TranslationUnit
-
-type TypeQual
-pub impl Eq for TypeQual
-pub impl Show for TypeQual
-pub impl ToJson for TypeQual
-
-type UnaryOp
-pub impl Eq for UnaryOp
-pub impl Show for UnaryOp
-pub impl ToJson for UnaryOp
-
-type VarDecl
-pub impl Eq for VarDecl
-pub impl Show for VarDecl
-pub impl ToJson for VarDecl
-
-type Visibility
-pub impl Eq for Visibility
-pub impl Show for Visibility
-pub impl ToJson for Visibility
 
 type VlaScopeInfo
 

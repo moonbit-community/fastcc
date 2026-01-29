@@ -1,5 +1,5 @@
 ///|
-struct TypeQual {
+pub(all) struct TypeQual {
   is_const : Bool
   is_volatile : Bool
   is_restrict : Bool
@@ -7,13 +7,13 @@ struct TypeQual {
 } derive(Show, Eq, ToJson)
 
 ///|
-enum AlignSpec {
+pub(all) enum AlignSpec {
   Default
   Expr(expr~ : Expr)
 } derive(Show, Eq, ToJson)
 
 ///|
-enum Visibility {
+pub(all) enum Visibility {
   Default
   Hidden
   Internal
@@ -21,7 +21,7 @@ enum Visibility {
 } derive(Show, Eq, ToJson)
 
 ///|
-enum CallConv {
+pub(all) enum CallConv {
   Default
   Cdecl
   Stdcall
@@ -31,7 +31,7 @@ enum CallConv {
 } derive(Show, Eq, ToJson)
 
 ///|
-fn normalize_call_conv(call_conv : CallConv?) -> CallConv {
+pub fn normalize_call_conv(call_conv : CallConv?) -> CallConv {
   match call_conv {
     None => CallConv::Default
     Some(CallConv::Default) => CallConv::Default
@@ -47,7 +47,7 @@ fn normalize_call_conv(call_conv : CallConv?) -> CallConv {
 }
 
 ///|
-fn merge_call_conv(existing : CallConv, incoming : CallConv) -> CallConv {
+pub fn merge_call_conv(existing : CallConv, incoming : CallConv) -> CallConv {
   if existing == CallConv::Default {
     incoming
   } else {
@@ -56,7 +56,7 @@ fn merge_call_conv(existing : CallConv, incoming : CallConv) -> CallConv {
 }
 
 ///|
-struct Attributes {
+pub(all) struct Attributes {
   aligned : AlignSpec?
   packed : Bool
   weak : Bool
@@ -77,7 +77,7 @@ struct Attributes {
 } derive(Show, Eq, ToJson)
 
 ///|
-fn empty_attrs() -> Attributes {
+pub fn empty_attrs() -> Attributes {
   {
     aligned: None,
     packed: false,
@@ -100,7 +100,7 @@ fn empty_attrs() -> Attributes {
 }
 
 ///|
-fn attrs_with(
+pub fn attrs_with(
   aligned? : AlignSpec? = None,
   packed? : Bool = false,
   weak? : Bool = false,
@@ -141,7 +141,7 @@ fn attrs_with(
 }
 
 ///|
-fn merge_attrs(base : Attributes, incoming : Attributes) -> Attributes {
+pub fn merge_attrs(base : Attributes, incoming : Attributes) -> Attributes {
   if attrs_is_empty(incoming) {
     return base
   }
@@ -198,7 +198,28 @@ fn merge_attrs(base : Attributes, incoming : Attributes) -> Attributes {
 }
 
 ///|
-fn type_attrs_from(attrs : Attributes) -> Attributes {
+pub fn attrs_is_empty(attrs : Attributes) -> Bool {
+  attrs.aligned is None &&
+  !attrs.packed &&
+  !attrs.weak &&
+  attrs.visibility is None &&
+  attrs.section is None &&
+  attrs.alias_name is None &&
+  attrs.asm_label is None &&
+  attrs.cleanup is None &&
+  !attrs.noreturn &&
+  !attrs.constructor_attr &&
+  !attrs.destructor &&
+  !attrs.always_inline &&
+  attrs.call_conv is None &&
+  !attrs.dll_import &&
+  !attrs.dll_export &&
+  !attrs.nodecorate &&
+  !attrs.nodebug
+}
+
+///|
+pub fn type_attrs_from(attrs : Attributes) -> Attributes {
   {
     aligned: attrs.aligned,
     packed: attrs.packed,
@@ -221,12 +242,12 @@ fn type_attrs_from(attrs : Attributes) -> Attributes {
 }
 
 ///|
-fn has_type_attrs(attrs : Attributes) -> Bool {
+pub fn has_type_attrs(attrs : Attributes) -> Bool {
   attrs.aligned is Some(_) || attrs.packed
 }
 
 ///|
-fn apply_type_attrs(ty : CType, attrs : Attributes) -> CType {
+pub fn apply_type_attrs(ty : CType, attrs : Attributes) -> CType {
   if !has_type_attrs(attrs) {
     return ty
   }
@@ -242,7 +263,7 @@ fn apply_type_attrs(ty : CType, attrs : Attributes) -> CType {
 }
 
 ///|
-fn apply_call_conv_to_type(ty : CType, call_conv : CallConv) -> CType {
+pub fn apply_call_conv_to_type(ty : CType, call_conv : CallConv) -> CType {
   if call_conv == CallConv::Default {
     return ty
   }
@@ -278,7 +299,7 @@ fn apply_call_conv_to_type(ty : CType, call_conv : CallConv) -> CType {
 }
 
 ///|
-enum CIntKind {
+pub(all) enum CIntKind {
   Char
   Short
   Int
@@ -287,14 +308,14 @@ enum CIntKind {
 } derive(Show, Eq, ToJson)
 
 ///|
-enum CFloatKind {
+pub(all) enum CFloatKind {
   Float
   Double
   LongDouble
 } derive(Show, Eq, ToJson)
 
 ///|
-enum StorageClass {
+pub(all) enum StorageClass {
   Default
   Extern
   Static
@@ -303,7 +324,7 @@ enum StorageClass {
 } derive(Show, Eq, ToJson)
 
 ///|
-enum CType {
+pub(all) enum CType {
   Void
   Bool
   Int(kind~ : CIntKind, unsigned~ : Bool)
@@ -336,7 +357,7 @@ enum CType {
 } derive(Show, Eq, ToJson)
 
 ///|
-struct Field {
+pub(all) struct Field {
   name : String
   id : Int
   ty : CType
@@ -346,20 +367,20 @@ struct Field {
 } derive(Show, Eq, ToJson)
 
 ///|
-struct StaticAssert {
+pub(all) struct StaticAssert {
   expr : Expr
   message : String?
   loc : @source.SrcLoc
 } derive(Show, Eq, ToJson)
 
 ///|
-enum RecordItem {
+pub(all) enum RecordItem {
   Field(Field)
   StaticAssert(StaticAssert)
 } derive(Show, Eq, ToJson)
 
 ///|
-struct EnumItem {
+pub(all) struct EnumItem {
   name : String
   id : Int
   value : Expr?
@@ -367,7 +388,7 @@ struct EnumItem {
 } derive(Show, Eq, ToJson)
 
 ///|
-struct Param {
+pub(all) struct Param {
   name : String
   id : Int
   ty : CType
@@ -375,7 +396,7 @@ struct Param {
 } derive(Show, Eq, ToJson)
 
 ///|
-struct FuncDef {
+pub(all) struct FuncDef {
   name : String
   id : Int
   return_type : CType
@@ -390,7 +411,7 @@ struct FuncDef {
 } derive(Show, Eq, ToJson)
 
 ///|
-struct FuncDecl {
+pub(all) struct FuncDecl {
   name : String
   id : Int
   return_type : CType
@@ -404,7 +425,7 @@ struct FuncDecl {
 } derive(Show, Eq, ToJson)
 
 ///|
-struct VarDecl {
+pub(all) struct VarDecl {
   name : String
   id : Int
   ty : CType
@@ -415,7 +436,7 @@ struct VarDecl {
 } derive(Show, Eq, ToJson)
 
 ///|
-enum Decl {
+pub(all) enum Decl {
   FuncDef(FuncDef)
   FuncDecl(FuncDecl)
   Var(VarDecl)
@@ -426,13 +447,13 @@ enum Decl {
 } derive(Show, Eq, ToJson)
 
 ///|
-struct TranslationUnit {
+pub(all) struct TranslationUnit {
   decls : Array[Decl]
   expr_id_max : Int
 } derive(Show, Eq, ToJson)
 
 ///|
-enum UnaryOp {
+pub(all) enum UnaryOp {
   Plus
   Minus
   Not
@@ -446,7 +467,7 @@ enum UnaryOp {
 } derive(Show, Eq, ToJson)
 
 ///|
-enum BinaryOp {
+pub(all) enum BinaryOp {
   Assign
   AddAssign
   SubAssign
@@ -480,7 +501,7 @@ enum BinaryOp {
 } derive(Show, Eq, ToJson)
 
 ///|
-enum Expr {
+pub(all) enum Expr {
   IntLit(value~ : String, node_id~ : Int, loc~ : @source.SrcLoc)
   FloatLit(value~ : String, node_id~ : Int, loc~ : @source.SrcLoc)
   CharLit(value~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
@@ -519,27 +540,27 @@ enum Expr {
 } derive(Show, Eq, ToJson)
 
 ///|
-enum InitDesignator {
+pub(all) enum InitDesignator {
   Index(expr~ : Expr, loc~ : @source.SrcLoc)
   IndexRange(start~ : Expr, end~ : Expr, loc~ : @source.SrcLoc)
   Field(name~ : String, id~ : Int, loc~ : @source.SrcLoc)
 } derive(Show, Eq, ToJson)
 
 ///|
-struct InitItem {
+pub(all) struct InitItem {
   designators : Array[InitDesignator]
   value : Initializer
   loc : @source.SrcLoc
 } derive(Show, Eq, ToJson)
 
 ///|
-enum Initializer {
+pub(all) enum Initializer {
   Expr(expr~ : Expr, loc~ : @source.SrcLoc)
   List(items~ : Array[InitItem], loc~ : @source.SrcLoc)
 } derive(Show, Eq, ToJson)
 
 ///|
-struct AsmOperand {
+pub(all) struct AsmOperand {
   name : String?
   constraint : String
   expr : Expr
@@ -547,7 +568,7 @@ struct AsmOperand {
 } derive(Show, Eq, ToJson)
 
 ///|
-struct AsmStmt {
+pub(all) struct AsmStmt {
   template : String
   outputs : Array[AsmOperand]
   inputs : Array[AsmOperand]
@@ -559,7 +580,7 @@ struct AsmStmt {
 } derive(Show, Eq, ToJson)
 
 ///|
-enum Stmt {
+pub(all) enum Stmt {
   Compound(stmts~ : Array[Stmt], loc~ : @source.SrcLoc)
   If(cond~ : Expr, then_branch~ : Stmt, else_branch~ : Stmt?, loc~ : @source.SrcLoc)
   While(cond~ : Expr, body~ : Stmt, loc~ : @source.SrcLoc)

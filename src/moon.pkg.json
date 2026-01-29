@@ -1,6 +1,7 @@
 {
   "is-main": true,
   "import": [
+    "hackwaly/tinycc/frontend/ast",
     "hackwaly/tinycc/support/diag",
     "hackwaly/tinycc/support/intern",
     "hackwaly/tinycc/support/source",

@@ -82,11 +82,11 @@ fn parse_int64_literal(text : String) -> Int64? {
 }
 
 ///|
-fn const_i64_from_expr(expr : Expr) -> Int64? {
+fn const_i64_from_expr(expr : @ast.Expr) -> Int64? {
   match expr {
-    Expr::IntLit(value~, ..) => parse_int64_literal(value)
-    Expr::Unary(op=UnaryOp::Plus, expr=inner, ..) => const_i64_from_expr(inner)
-    Expr::Unary(op=UnaryOp::Minus, expr=inner, ..) =>
+    @ast.Expr::IntLit(value~, ..) => parse_int64_literal(value)
+    @ast.Expr::Unary(op=@ast.UnaryOp::Plus, expr=inner, ..) => const_i64_from_expr(inner)
+    @ast.Expr::Unary(op=@ast.UnaryOp::Minus, expr=inner, ..) =>
       match const_i64_from_expr(inner) {
         None => None
         Some(v) => Some(-v)
@@ -96,6 +96,6 @@ fn const_i64_from_expr(expr : Expr) -> Int64? {
 }
 
 ///|
-fn codegen_arm64_object_bytes(unit : TranslationUnit, bag : @diag.DiagBag) -> Bytes? {
+fn codegen_arm64_object_bytes(unit : @ast.TranslationUnit, bag : @diag.DiagBag) -> Bytes? {
   codegen_arm64_object_bytes_from_ast(unit, bag)
 }

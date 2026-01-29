@@ -1,5 +1,5 @@
 ///|
-fn expr_is_lvalue_simple(expr : Expr) -> Bool {
+pub fn expr_is_lvalue_simple(expr : Expr) -> Bool {
   match expr {
     Expr::Ident(..) => true
     Expr::Index(..) => true
@@ -23,7 +23,7 @@ fn expr_is_lvalue_simple(expr : Expr) -> Bool {
 }
 
 ///|
-fn expr_may_call(expr : Expr) -> Bool {
+pub fn expr_may_call(expr : Expr) -> Bool {
   match expr {
     Expr::Call(..) => true
     Expr::Unary(expr=inner, ..) | Expr::Cast(expr=inner, ..) => expr_may_call(inner)
