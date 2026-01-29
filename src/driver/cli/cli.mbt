@@ -52,7 +52,7 @@ fn split_define_spec(spec : String) -> (String, String?)? {
 }
 
 ///|
-fn is_cli_whitespace(code : Int) -> Bool {
+fn is_cli_whitespace(code : UInt16) -> Bool {
   code == 32 || code == 9 || code == 10 || code == 13
 }
 
@@ -62,14 +62,14 @@ fn split_listfile_args(contents : String) -> Array[String] {
   let len = contents.length()
   let mut i = 0
   while i < len {
-    while i < len && is_cli_whitespace(contents.code_unit_at(i).to_int()) {
+    while i < len && is_cli_whitespace(contents.code_unit_at(i)) {
       i = i + 1
     }
     if i >= len {
       break
     }
     let start = i
-    while i < len && !is_cli_whitespace(contents.code_unit_at(i).to_int()) {
+    while i < len && !is_cli_whitespace(contents.code_unit_at(i)) {
       i = i + 1
     }
     args.push(@util.slice_string(contents, start, i))
