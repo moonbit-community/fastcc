@@ -20,6 +20,10 @@ test "tokens lexeme pool helpers" {
   assert_eq(@tokens.lexeme_pool_get(pool, id), "hello")
   assert_eq(@tokens.lexeme_pool_len(pool, id), 5)
 
+  let slice_id = @tokens.lexeme_pool_intern_slice(pool, "abcdef", 1, 4)
+  assert_eq(@tokens.lexeme_pool_get(pool, slice_id), "bcd")
+  assert_eq(@tokens.lexeme_pool_len(pool, slice_id), 3)
+
   let empty_id = @tokens.lexeme_pool_intern(pool, "")
   assert_eq(empty_id, 0)
 
@@ -30,4 +34,14 @@ test "tokens lexeme pool helpers" {
   let tok_id = @preproc.make_builtin_token(@tokens.TokenKind::Ident, id=7)
   assert_eq(@tokens.token_id(tok_id), 7)
   assert_eq(@tokens.token_lexeme_id(tok_id), 0)
+
+  let interner = @intern.new_string_interner_with_capacity()
+  let (_, intern_id) = interner.intern_view_with_id("world"[:])
+  let intern_tok = @preproc.make_builtin_token(@tokens.TokenKind::Ident, id=intern_id)
+  assert_eq(@tokens.token_text_with(interner, pool, intern_tok), "world")
+  assert_eq(@tokens.token_text_len_with(interner, pool, intern_tok), 5)
+
+  let lex_tok = @preproc.make_builtin_token(@tokens.TokenKind::StrLit, lexeme_id=slice_id)
+  assert_eq(@tokens.token_text_with(interner, pool, lex_tok), "bcd")
+  assert_eq(@tokens.token_text_len_with(interner, pool, lex_tok), 3)
 }

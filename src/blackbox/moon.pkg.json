@@ -9,6 +9,7 @@
     "hackwaly/tinycc/frontend/tokens",
     "hackwaly/tinycc/sem",
     "hackwaly/tinycc/support/diag",
+    "hackwaly/tinycc/support/intern",
     "hackwaly/tinycc/support/source",
     "moonbitlang/x/fs"
   ]

@@ -54,6 +54,7 @@ test "preproc directive hash newline" {
 test "preproc directive missing names" {
   let source = (
     #|#define
+    #|#define 1
     #|#undef
     #|#undef 1
   )
