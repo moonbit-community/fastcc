@@ -159,6 +159,67 @@ test "preproc if expr defined missing ident" {
 }
 
 ///|
+test "preproc if expr defined missing rparen" {
+  let (pp, bag) = new_pp()
+  let tokens : Array[@tokens.Token] = [
+    tok_ident(pp, "defined"),
+    tok_kind(@tokens.TokenKind::LParen),
+    tok_ident(pp, "FOO"),
+  ]
+  let _ = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
+  assert_true(@diag.has_errors(bag))
+}
+
+///|
+test "preproc if expr defined empty" {
+  let (pp, bag) = new_pp()
+  let tokens : Array[@tokens.Token] = [
+    tok_ident(pp, "defined"),
+    tok_kind(@tokens.TokenKind::LParen),
+    tok_kind(@tokens.TokenKind::RParen),
+  ]
+  let _ = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
+  assert_true(@diag.has_errors(bag))
+}
+
+///|
+test "preproc if expr rparen token" {
+  let (pp, bag) = new_pp()
+  let tokens : Array[@tokens.Token] = [tok_kind(@tokens.TokenKind::RParen)]
+  let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
+  assert_true(!ok)
+  assert_true(!@diag.has_errors(bag))
+}
+
+///|
+test "preproc if expr skip paren expr" {
+  let (pp, bag) = new_pp()
+  let tokens : Array[@tokens.Token] = [
+    tok_ident(pp, "FOO"),
+    tok_kind(@tokens.TokenKind::LParen),
+    tok_int(pp, "1"),
+  ]
+  let _ = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
+  assert_true(@diag.has_errors(bag))
+}
+
+///|
+test "preproc if expr unexpected token" {
+  let (pp, bag) = new_pp()
+  let tokens : Array[@tokens.Token] = [tok_kind(@tokens.TokenKind::Comma)]
+  let _ = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
+  assert_true(@diag.has_errors(bag))
+}
+
+///|
+test "preproc if expr missing operand" {
+  let (pp, bag) = new_pp()
+  let tokens : Array[@tokens.Token] = [tok_kind(@tokens.TokenKind::Plus)]
+  let _ = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
+  assert_true(@diag.has_errors(bag))
+}
+
+///|
 test "preproc char literal errors" {
   let (pp_short, bag_short) = new_pp()
   let short_tok = tok_char(pp_short, "''")
