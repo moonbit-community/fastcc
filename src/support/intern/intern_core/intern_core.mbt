@@ -73,13 +73,14 @@ pub fn StringInterner::intern_view_with_id_hash(
   let len = view.length()
   let mut id = self.buckets[bucket]
   while id != 0 {
-    if self.hashes[id - 1] == hash {
-      let stored = self.strings[id - 1]
-      if stored.length() == len && view == self.views[id - 1] {
+    let idx = id - 1
+    if self.hashes[idx] == hash {
+      let stored = self.strings[idx]
+      if stored.length() == len && view == self.views[idx] {
         return (stored, id)
       }
     }
-    id = self.next_by_id[id - 1]
+    id = self.next_by_id[idx]
   }
   let owned = view.to_string()
   let idx = self.strings.length()
