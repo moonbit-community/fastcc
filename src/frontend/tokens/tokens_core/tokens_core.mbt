@@ -188,9 +188,13 @@ pub fn lexeme_pool_intern_slice(
   start : Int,
   end : Int,
 ) -> Int {
+  let text_len = text.length()
   let len = end - start
   if len <= 0 {
     return 0
+  }
+  if start == 0 && end == text_len {
+    return lexeme_pool_intern(pool, text)
   }
   let id = pool.entries.length() + 1
   pool.entries.push(LexemeEntry::Slice(text=text, start=start, len=len))
