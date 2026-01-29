@@ -1,6 +1,5 @@
 {
   "import": [
-    "hackwaly/tinycc/frontend/ast/ast_core",
     "hackwaly/tinycc/support/source"
   ]
 }

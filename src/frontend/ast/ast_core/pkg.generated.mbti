@@ -1,0 +1,448 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/frontend/ast/ast_core"
+
+import {
+  "hackwaly/tinycc/support/source",
+}
+
+// Values
+pub fn apply_call_conv_to_type(CType, CallConv) -> CType
+
+pub fn apply_qualifiers(CType, TypeQual) -> CType
+
+pub fn apply_type_attrs(CType, Attributes) -> CType
+
+pub fn attrs_is_empty(Attributes) -> Bool
+
+pub fn attrs_with(aligned? : AlignSpec?, packed? : Bool, weak? : Bool, visibility? : Visibility?, section? : String?, alias_name? : String?, asm_label? : String?, cleanup? : String?, noreturn? : Bool, constructor_attr? : Bool, destructor? : Bool, always_inline? : Bool, call_conv? : CallConv?, dll_import? : Bool, dll_export? : Bool, nodecorate? : Bool, nodebug? : Bool) -> Attributes
+
+pub fn const_i64_from_expr(Expr) -> Int64?
+
+pub fn default_int_type() -> CType
+
+pub fn empty_attrs() -> Attributes
+
+pub fn empty_qual() -> TypeQual
+
+pub fn expr_is_lvalue_simple(Expr) -> Bool
+
+pub fn expr_loc(Expr) -> @source.SrcLoc
+
+pub fn expr_may_call(Expr) -> Bool
+
+pub fn expr_node_id(Expr) -> Int
+
+pub fn has_type_attrs(Attributes) -> Bool
+
+pub fn merge_attrs(Attributes, Attributes) -> Attributes
+
+pub fn merge_call_conv(CallConv, CallConv) -> CallConv
+
+pub fn merge_qual(TypeQual, TypeQual) -> TypeQual
+
+pub fn normalize_call_conv(CallConv?) -> CallConv
+
+pub fn parse_int64_literal(String) -> Int64?
+
+pub fn type_attrs_from(Attributes) -> Attributes
+
+pub fn with_atomic(TypeQual) -> TypeQual
+
+pub fn with_const(TypeQual) -> TypeQual
+
+pub fn with_restrict(TypeQual) -> TypeQual
+
+pub fn with_volatile(TypeQual) -> TypeQual
+
+// Errors
+
+// Types and methods
+pub(all) enum AlignSpec {
+  Default
+  Expr(expr~ : Expr)
+}
+pub impl Eq for AlignSpec
+pub impl Show for AlignSpec
+pub impl ToJson for AlignSpec
+
+pub(all) struct AsmOperand {
+  name : String?
+  constraint : String
+  expr : Expr
+  loc : @source.SrcLoc
+}
+pub impl Eq for AsmOperand
+pub impl Show for AsmOperand
+pub impl ToJson for AsmOperand
+
+pub(all) struct AsmStmt {
+  template : String
+  outputs : Array[AsmOperand]
+  inputs : Array[AsmOperand]
+  clobbers : Array[String]
+  labels : Array[String]
+  is_volatile : Bool
+  is_goto : Bool
+  loc : @source.SrcLoc
+}
+pub impl Eq for AsmStmt
+pub impl Show for AsmStmt
+pub impl ToJson for AsmStmt
+
+pub(all) struct Attributes {
+  aligned : AlignSpec?
+  packed : Bool
+  weak : Bool
+  visibility : Visibility?
+  section : String?
+  alias_name : String?
+  asm_label : String?
+  cleanup : String?
+  noreturn : Bool
+  constructor_attr : Bool
+  destructor : Bool
+  always_inline : Bool
+  call_conv : CallConv?
+  dll_import : Bool
+  dll_export : Bool
+  nodecorate : Bool
+  nodebug : Bool
+}
+pub impl Eq for Attributes
+pub impl Show for Attributes
+pub impl ToJson for Attributes
+
+pub(all) enum BinaryOp {
+  Assign
+  AddAssign
+  SubAssign
+  MulAssign
+  DivAssign
+  ModAssign
+  ShlAssign
+  ShrAssign
+  BitAndAssign
+  BitXorAssign
+  BitOrAssign
+  Comma
+  Add
+  Sub
+  Mul
+  Div
+  Mod
+  Shl
+  Shr
+  Eq
+  Ne
+  Lt
+  Le
+  Gt
+  Ge
+  BitAnd
+  BitXor
+  BitOr
+  LogAnd
+  LogOr
+}
+pub impl Eq for BinaryOp
+pub impl Show for BinaryOp
+pub impl ToJson for BinaryOp
+
+pub(all) enum CFloatKind {
+  Float
+  Double
+  LongDouble
+}
+pub impl Eq for CFloatKind
+pub impl Show for CFloatKind
+pub impl ToJson for CFloatKind
+
+pub(all) enum CIntKind {
+  Char
+  Short
+  Int
+  Long
+  LongLong
+}
+pub impl Eq for CIntKind
+pub impl Show for CIntKind
+pub impl ToJson for CIntKind
+
+pub(all) enum CType {
+  Void
+  Bool
+  Int(kind~ : CIntKind, unsigned~ : Bool)
+  Float(kind~ : CFloatKind)
+  Pointer(CType)
+  Array(elem~ : CType, size~ : Int?, size_expr~ : Expr?)
+  Struct(name~ : String, id~ : Int, fields~ : Array[RecordItem]?, attrs~ : Attributes)
+  Union(name~ : String, id~ : Int, fields~ : Array[RecordItem]?, attrs~ : Attributes)
+  Enum(name~ : String, id~ : Int, items~ : Array[EnumItem]?)
+  TypeofExpr(expr~ : Expr)
+  Function(return_type~ : CType, params~ : Array[CType], varargs~ : Bool, is_old_style~ : Bool, call_conv~ : CallConv)
+  Attributed(attrs~ : Attributes, base~ : CType)
+  Qualified(qual~ : TypeQual, base~ : CType)
+}
+pub impl Eq for CType
+pub impl Show for CType
+pub impl ToJson for CType
+
+pub(all) enum CallConv {
+  Default
+  Cdecl
+  Stdcall
+  Fastcall
+  Thiscall
+  Regparm(count~ : Int)
+}
+pub impl Eq for CallConv
+pub impl Show for CallConv
+pub impl ToJson for CallConv
+
+pub(all) enum Decl {
+  FuncDef(FuncDef)
+  FuncDecl(FuncDecl)
+  Var(VarDecl)
+  Typedef(name~ : String, ty~ : CType, attrs~ : Attributes, loc~ : @source.SrcLoc)
+  TagDef(ty~ : CType, loc~ : @source.SrcLoc)
+  StaticAssert(StaticAssert)
+  Asm(AsmStmt)
+}
+pub impl Eq for Decl
+pub impl Show for Decl
+pub impl ToJson for Decl
+
+pub(all) struct EnumItem {
+  name : String
+  id : Int
+  value : Expr?
+  loc : @source.SrcLoc
+}
+pub impl Eq for EnumItem
+pub impl Show for EnumItem
+pub impl ToJson for EnumItem
+
+pub(all) enum Expr {
+  IntLit(value~ : String, node_id~ : Int, loc~ : @source.SrcLoc)
+  FloatLit(value~ : String, node_id~ : Int, loc~ : @source.SrcLoc)
+  CharLit(value~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
+  StringLit(value~ : String, length~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
+  Ident(name~ : String, id~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
+  LabelAddr(name~ : String, id~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
+  BuiltinTypesCompatibleP(a~ : CType, b~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
+  BuiltinOffsetof(ty~ : CType, path~ : Array[String], node_id~ : Int, loc~ : @source.SrcLoc)
+  BuiltinVaArg(list~ : Expr, ty~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
+  Unary(op~ : UnaryOp, expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
+  Cast(ty~ : CType, expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
+  CompoundLiteral(ty~ : CType, init~ : Initializer, node_id~ : Int, loc~ : @source.SrcLoc)
+  StmtExpr(stmts~ : Array[Stmt], node_id~ : Int, loc~ : @source.SrcLoc)
+  SizeofExpr(expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
+  SizeofType(ty~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
+  AlignofExpr(expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
+  AlignofType(ty~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
+  Binary(op~ : BinaryOp, left~ : Expr, right~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
+  Conditional(cond~ : Expr, then_expr~ : Expr, else_expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
+  Call(callee~ : Expr, args~ : Array[Expr], node_id~ : Int, loc~ : @source.SrcLoc)
+  Index(base~ : Expr, index~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
+  Member(base~ : Expr, name~ : String, id~ : Int, is_arrow~ : Bool, node_id~ : Int, loc~ : @source.SrcLoc)
+}
+pub impl Eq for Expr
+pub impl Show for Expr
+pub impl ToJson for Expr
+
+pub(all) struct Field {
+  name : String
+  id : Int
+  ty : CType
+  bit_width : Expr?
+  attrs : Attributes
+  loc : @source.SrcLoc
+}
+pub impl Eq for Field
+pub impl Show for Field
+pub impl ToJson for Field
+
+pub(all) struct FuncDecl {
+  name : String
+  id : Int
+  return_type : CType
+  params : Array[Param]
+  varargs : Bool
+  is_old_style : Bool
+  storage : StorageClass
+  is_inline : Bool
+  attrs : Attributes
+  loc : @source.SrcLoc
+}
+pub impl Eq for FuncDecl
+pub impl Show for FuncDecl
+pub impl ToJson for FuncDecl
+
+pub(all) struct FuncDef {
+  name : String
+  id : Int
+  return_type : CType
+  params : Array[Param]
+  varargs : Bool
+  is_old_style : Bool
+  storage : StorageClass
+  is_inline : Bool
+  attrs : Attributes
+  body : Stmt
+  loc : @source.SrcLoc
+}
+pub impl Eq for FuncDef
+pub impl Show for FuncDef
+pub impl ToJson for FuncDef
+
+pub(all) enum InitDesignator {
+  Index(expr~ : Expr, loc~ : @source.SrcLoc)
+  IndexRange(start~ : Expr, end~ : Expr, loc~ : @source.SrcLoc)
+  Field(name~ : String, id~ : Int, loc~ : @source.SrcLoc)
+}
+pub impl Eq for InitDesignator
+pub impl Show for InitDesignator
+pub impl ToJson for InitDesignator
+
+pub(all) struct InitItem {
+  designators : Array[InitDesignator]
+  value : Initializer
+  loc : @source.SrcLoc
+}
+pub impl Eq for InitItem
+pub impl Show for InitItem
+pub impl ToJson for InitItem
+
+pub(all) enum Initializer {
+  Expr(expr~ : Expr, loc~ : @source.SrcLoc)
+  List(items~ : Array[InitItem], loc~ : @source.SrcLoc)
+}
+pub impl Eq for Initializer
+pub impl Show for Initializer
+pub impl ToJson for Initializer
+
+pub(all) struct Param {
+  name : String
+  id : Int
+  ty : CType
+  loc : @source.SrcLoc
+}
+pub impl Eq for Param
+pub impl Show for Param
+pub impl ToJson for Param
+
+pub(all) enum RecordItem {
+  Field(Field)
+  StaticAssert(StaticAssert)
+}
+pub impl Eq for RecordItem
+pub impl Show for RecordItem
+pub impl ToJson for RecordItem
+
+pub(all) struct StaticAssert {
+  expr : Expr
+  message : String?
+  loc : @source.SrcLoc
+}
+pub impl Eq for StaticAssert
+pub impl Show for StaticAssert
+pub impl ToJson for StaticAssert
+
+pub(all) enum Stmt {
+  Compound(stmts~ : Array[Stmt], loc~ : @source.SrcLoc)
+  If(cond~ : Expr, then_branch~ : Stmt, else_branch~ : Stmt?, loc~ : @source.SrcLoc)
+  While(cond~ : Expr, body~ : Stmt, loc~ : @source.SrcLoc)
+  DoWhile(cond~ : Expr, body~ : Stmt, loc~ : @source.SrcLoc)
+  For(init~ : Stmt?, cond~ : Expr?, step~ : Expr?, body~ : Stmt, loc~ : @source.SrcLoc)
+  Switch(cond~ : Expr, body~ : Stmt, loc~ : @source.SrcLoc)
+  Case(expr~ : Expr, end_expr~ : Expr?, body~ : Stmt, loc~ : @source.SrcLoc)
+  Default(body~ : Stmt, loc~ : @source.SrcLoc)
+  Label(name~ : String, body~ : Stmt, loc~ : @source.SrcLoc)
+  Goto(name~ : String, loc~ : @source.SrcLoc)
+  GotoExpr(expr~ : Expr, loc~ : @source.SrcLoc)
+  Break(loc~ : @source.SrcLoc)
+  Continue(loc~ : @source.SrcLoc)
+  Return(value~ : Expr?, loc~ : @source.SrcLoc)
+  Asm(AsmStmt)
+  ExprStmt(expr~ : Expr, loc~ : @source.SrcLoc)
+  DeclStmt(decls~ : Array[VarDecl], loc~ : @source.SrcLoc)
+  TagDef(ty~ : CType, loc~ : @source.SrcLoc)
+  StaticAssert(StaticAssert)
+  Empty(loc~ : @source.SrcLoc)
+}
+pub impl Eq for Stmt
+pub impl Show for Stmt
+pub impl ToJson for Stmt
+
+pub(all) enum StorageClass {
+  Default
+  Extern
+  Static
+  Auto
+  Register
+}
+pub impl Eq for StorageClass
+pub impl Show for StorageClass
+pub impl ToJson for StorageClass
+
+pub(all) struct TranslationUnit {
+  decls : Array[Decl]
+  expr_id_max : Int
+}
+pub impl Eq for TranslationUnit
+pub impl Show for TranslationUnit
+pub impl ToJson for TranslationUnit
+
+pub(all) struct TypeQual {
+  is_const : Bool
+  is_volatile : Bool
+  is_restrict : Bool
+  is_atomic : Bool
+}
+pub impl Eq for TypeQual
+pub impl Show for TypeQual
+pub impl ToJson for TypeQual
+
+pub(all) enum UnaryOp {
+  Plus
+  Minus
+  Not
+  BitNot
+  Addr
+  Deref
+  PreInc
+  PreDec
+  PostInc
+  PostDec
+}
+pub impl Eq for UnaryOp
+pub impl Show for UnaryOp
+pub impl ToJson for UnaryOp
+
+pub(all) struct VarDecl {
+  name : String
+  id : Int
+  ty : CType
+  init : Initializer?
+  storage : StorageClass
+  attrs : Attributes
+  loc : @source.SrcLoc
+}
+pub impl Eq for VarDecl
+pub impl Show for VarDecl
+pub impl ToJson for VarDecl
+
+pub(all) enum Visibility {
+  Default
+  Hidden
+  Internal
+  Protected
+}
+pub impl Eq for Visibility
+pub impl Show for Visibility
+pub impl ToJson for Visibility
+
+// Type aliases
+
+// Traits
+

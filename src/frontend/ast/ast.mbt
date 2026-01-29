@@ -1,102 +1,100 @@
 ///|
-pub(all) struct TypeQual {
-  is_const : Bool
-  is_volatile : Bool
-  is_restrict : Bool
-  is_atomic : Bool
-} derive(Show, Eq, ToJson)
+pub type AlignSpec = @ast_core.AlignSpec
 
 ///|
-pub(all) enum AlignSpec {
-  Default
-  Expr(expr~ : Expr)
-} derive(Show, Eq, ToJson)
+pub type AsmOperand = @ast_core.AsmOperand
 
 ///|
-pub(all) enum Visibility {
-  Default
-  Hidden
-  Internal
-  Protected
-} derive(Show, Eq, ToJson)
+pub type AsmStmt = @ast_core.AsmStmt
 
 ///|
-pub(all) enum CallConv {
-  Default
-  Cdecl
-  Stdcall
-  Fastcall
-  Thiscall
-  Regparm(count~ : Int)
-} derive(Show, Eq, ToJson)
+pub type Attributes = @ast_core.Attributes
+
+///|
+pub type BinaryOp = @ast_core.BinaryOp
+
+///|
+pub type CFloatKind = @ast_core.CFloatKind
+
+///|
+pub type CIntKind = @ast_core.CIntKind
+
+///|
+pub type CType = @ast_core.CType
+
+///|
+pub type CallConv = @ast_core.CallConv
+
+///|
+pub type Decl = @ast_core.Decl
+
+///|
+pub type EnumItem = @ast_core.EnumItem
+
+///|
+pub type Expr = @ast_core.Expr
+
+///|
+pub type Field = @ast_core.Field
+
+///|
+pub type FuncDecl = @ast_core.FuncDecl
+
+///|
+pub type FuncDef = @ast_core.FuncDef
+
+///|
+pub type InitDesignator = @ast_core.InitDesignator
+
+///|
+pub type InitItem = @ast_core.InitItem
+
+///|
+pub type Initializer = @ast_core.Initializer
+
+///|
+pub type Param = @ast_core.Param
+
+///|
+pub type RecordItem = @ast_core.RecordItem
+
+///|
+pub type StaticAssert = @ast_core.StaticAssert
+
+///|
+pub type Stmt = @ast_core.Stmt
+
+///|
+pub type StorageClass = @ast_core.StorageClass
+
+///|
+pub type TranslationUnit = @ast_core.TranslationUnit
+
+///|
+pub type TypeQual = @ast_core.TypeQual
+
+///|
+pub type UnaryOp = @ast_core.UnaryOp
+
+///|
+pub type VarDecl = @ast_core.VarDecl
+
+///|
+pub type Visibility = @ast_core.Visibility
 
 ///|
 pub fn normalize_call_conv(call_conv : CallConv?) -> CallConv {
-  match call_conv {
-    None => CallConv::Default
-    Some(CallConv::Default) => CallConv::Default
-    Some(CallConv::Cdecl) => CallConv::Default
-    Some(CallConv::Regparm(count~)) =>
-      if count <= 0 {
-        CallConv::Default
-      } else {
-        CallConv::Regparm(count~)
-      }
-    Some(conv) => conv
-  }
+  @ast_core.normalize_call_conv(call_conv)
 }
 
 ///|
 pub fn merge_call_conv(existing : CallConv, incoming : CallConv) -> CallConv {
-  if existing == CallConv::Default {
-    incoming
-  } else {
-    existing
-  }
+  @ast_core.merge_call_conv(existing, incoming)
 }
 
 ///|
-pub(all) struct Attributes {
-  aligned : AlignSpec?
-  packed : Bool
-  weak : Bool
-  visibility : Visibility?
-  section : String?
-  alias_name : String?
-  asm_label : String?
-  cleanup : String?
-  noreturn : Bool
-  constructor_attr : Bool
-  destructor : Bool
-  always_inline : Bool
-  call_conv : CallConv?
-  dll_import : Bool
-  dll_export : Bool
-  nodecorate : Bool
-  nodebug : Bool
-} derive(Show, Eq, ToJson)
-
-///|
 pub fn empty_attrs() -> Attributes {
-  {
-    aligned: None,
-    packed: false,
-    weak: false,
-    visibility: None,
-    section: None,
-    alias_name: None,
-    asm_label: None,
-    cleanup: None,
-    noreturn: false,
-    constructor_attr: false,
-    destructor: false,
-    always_inline: false,
-    call_conv: None,
-    dll_import: false,
-    dll_export: false,
-    nodecorate: false,
-    nodebug: false,
-  }
+  @ast_core.empty_attrs()
 }
 
 ///|
@@ -119,495 +117,95 @@ pub fn attrs_with(
   nodecorate? : Bool = false,
   nodebug? : Bool = false,
 ) -> Attributes {
-  {
-    aligned,
-    packed,
-    weak,
-    visibility,
-    section,
-    alias_name,
-    asm_label,
-    cleanup,
-    noreturn,
-    constructor_attr,
-    destructor,
-    always_inline,
-    call_conv,
-    dll_import,
-    dll_export,
-    nodecorate,
-    nodebug,
-  }
+  @ast_core.attrs_with(aligned=aligned, packed=packed, weak=weak, visibility=visibility, section=section, alias_name=alias_name, asm_label=asm_label, cleanup=cleanup, noreturn=noreturn, constructor_attr=constructor_attr, destructor=destructor, always_inline=always_inline, call_conv=call_conv, dll_import=dll_import, dll_export=dll_export, nodecorate=nodecorate, nodebug=nodebug)
 }
 
 ///|
 pub fn merge_attrs(base : Attributes, incoming : Attributes) -> Attributes {
-  if attrs_is_empty(incoming) {
-    return base
-  }
-  if attrs_is_empty(base) {
-    return incoming
-  }
-  let visibility = match base.visibility {
-    Some(val) => Some(val)
-    None => incoming.visibility
-  }
-  let section = match incoming.section {
-    Some(_) => incoming.section
-    None => base.section
-  }
-  let alias_name = match incoming.alias_name {
-    Some(_) => incoming.alias_name
-    None => base.alias_name
-  }
-  let asm_label = match incoming.asm_label {
-    Some(_) => incoming.asm_label
-    None => base.asm_label
-  }
-  let cleanup = match incoming.cleanup {
-    Some(_) => incoming.cleanup
-    None => base.cleanup
-  }
-  let call_conv = match base.call_conv {
-    Some(val) => Some(val)
-    None => incoming.call_conv
-  }
-  {
-    aligned: if base.aligned is Some(_) {
-      base.aligned
-    } else {
-      incoming.aligned
-    },
-    packed: base.packed || incoming.packed,
-    weak: base.weak || incoming.weak,
-    visibility,
-    section,
-    alias_name,
-    asm_label,
-    cleanup,
-    noreturn: base.noreturn || incoming.noreturn,
-    constructor_attr: base.constructor_attr || incoming.constructor_attr,
-    destructor: base.destructor || incoming.destructor,
-    always_inline: base.always_inline || incoming.always_inline,
-    call_conv,
-    dll_import: base.dll_import || incoming.dll_import,
-    dll_export: base.dll_export || incoming.dll_export,
-    nodecorate: base.nodecorate || incoming.nodecorate,
-    nodebug: base.nodebug || incoming.nodebug,
-  }
+  @ast_core.merge_attrs(base, incoming)
 }
 
 ///|
 pub fn attrs_is_empty(attrs : Attributes) -> Bool {
-  attrs.aligned is None &&
-  !attrs.packed &&
-  !attrs.weak &&
-  attrs.visibility is None &&
-  attrs.section is None &&
-  attrs.alias_name is None &&
-  attrs.asm_label is None &&
-  attrs.cleanup is None &&
-  !attrs.noreturn &&
-  !attrs.constructor_attr &&
-  !attrs.destructor &&
-  !attrs.always_inline &&
-  attrs.call_conv is None &&
-  !attrs.dll_import &&
-  !attrs.dll_export &&
-  !attrs.nodecorate &&
-  !attrs.nodebug
-}
-
-///|
-pub fn type_attrs_from(attrs : Attributes) -> Attributes {
-  {
-    aligned: attrs.aligned,
-    packed: attrs.packed,
-    weak: false,
-    visibility: None,
-    section: None,
-    alias_name: None,
-    asm_label: None,
-    cleanup: None,
-    noreturn: false,
-    constructor_attr: false,
-    destructor: false,
-    always_inline: false,
-    call_conv: None,
-    dll_import: false,
-    dll_export: false,
-    nodecorate: false,
-    nodebug: false,
-  }
+  @ast_core.attrs_is_empty(attrs)
 }
 
 ///|
 pub fn has_type_attrs(attrs : Attributes) -> Bool {
-  attrs.aligned is Some(_) || attrs.packed
-}
-
-///|
-pub fn apply_type_attrs(ty : CType, attrs : Attributes) -> CType {
-  if !has_type_attrs(attrs) {
-    return ty
-  }
-  match ty {
-    CType::Struct(name~, id~, fields~, attrs=existing) =>
-      CType::Struct(name~, id~, fields~, attrs=merge_attrs(existing, attrs))
-    CType::Union(name~, id~, fields~, attrs=existing) =>
-      CType::Union(name~, id~, fields~, attrs=merge_attrs(existing, attrs))
-    CType::Attributed(attrs=existing, base~) =>
-      CType::Attributed(attrs=merge_attrs(existing, attrs), base~)
-    _ => CType::Attributed(attrs~, base=ty)
-  }
+  @ast_core.has_type_attrs(attrs)
 }
 
 ///|
 pub fn apply_call_conv_to_type(ty : CType, call_conv : CallConv) -> CType {
-  if call_conv == CallConv::Default {
-    return ty
-  }
-  match ty {
-    CType::Qualified(qual~, base~) =>
-      CType::Qualified(qual~, base=apply_call_conv_to_type(base, call_conv))
-    CType::Attributed(attrs~, base~) =>
-      CType::Attributed(attrs~, base=apply_call_conv_to_type(base, call_conv))
-    CType::Pointer(inner) =>
-      CType::Pointer(apply_call_conv_to_type(inner, call_conv))
-    CType::Array(elem~, size~, size_expr~) =>
-      CType::Array(
-        elem=apply_call_conv_to_type(elem, call_conv),
-        size~,
-        size_expr~,
-      )
-    CType::Function(
-      return_type~,
-      params~,
-      varargs~,
-      is_old_style~,
-      call_conv=existing
-    ) =>
-      CType::Function(
-        return_type~,
-        params~,
-        varargs~,
-        is_old_style~,
-        call_conv=merge_call_conv(existing, call_conv),
-      )
-    _ => ty
-  }
+  @ast_core.apply_call_conv_to_type(ty, call_conv)
 }
 
 ///|
-pub(all) enum CIntKind {
-  Char
-  Short
-  Int
-  Long
-  LongLong
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) enum CFloatKind {
-  Float
-  Double
-  LongDouble
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) enum StorageClass {
-  Default
-  Extern
-  Static
-  Auto
-  Register
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) enum CType {
-  Void
-  Bool
-  Int(kind~ : CIntKind, unsigned~ : Bool)
-  Float(kind~ : CFloatKind)
-  Pointer(CType)
-  Array(elem~ : CType, size~ : Int?, size_expr~ : Expr?)
-  Struct(
-    name~ : String,
-    id~ : Int,
-    fields~ : Array[RecordItem]?,
-    attrs~ : Attributes,
-  )
-  Union(
-    name~ : String,
-    id~ : Int,
-    fields~ : Array[RecordItem]?,
-    attrs~ : Attributes,
-  )
-  Enum(name~ : String, id~ : Int, items~ : Array[EnumItem]?)
-  TypeofExpr(expr~ : Expr)
-  Function(
-    return_type~ : CType,
-    params~ : Array[CType],
-    varargs~ : Bool,
-    is_old_style~ : Bool,
-    call_conv~ : CallConv
-  )
-  Attributed(attrs~ : Attributes, base~ : CType)
-  Qualified(qual~ : TypeQual, base~ : CType)
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) struct Field {
-  name : String
-  id : Int
-  ty : CType
-  bit_width : Expr?
-  attrs : Attributes
-  loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) struct StaticAssert {
-  expr : Expr
-  message : String?
-  loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) enum RecordItem {
-  Field(Field)
-  StaticAssert(StaticAssert)
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) struct EnumItem {
-  name : String
-  id : Int
-  value : Expr?
-  loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) struct Param {
-  name : String
-  id : Int
-  ty : CType
-  loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) struct FuncDef {
-  name : String
-  id : Int
-  return_type : CType
-  params : Array[Param]
-  varargs : Bool
-  is_old_style : Bool
-  storage : StorageClass
-  is_inline : Bool
-  attrs : Attributes
-  body : Stmt
-  loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) struct FuncDecl {
-  name : String
-  id : Int
-  return_type : CType
-  params : Array[Param]
-  varargs : Bool
-  is_old_style : Bool
-  storage : StorageClass
-  is_inline : Bool
-  attrs : Attributes
-  loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) struct VarDecl {
-  name : String
-  id : Int
-  ty : CType
-  init : Initializer?
-  storage : StorageClass
-  attrs : Attributes
-  loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) enum Decl {
-  FuncDef(FuncDef)
-  FuncDecl(FuncDecl)
-  Var(VarDecl)
-  Typedef(name~ : String, ty~ : CType, attrs~ : Attributes, loc~ : @source.SrcLoc)
-  TagDef(ty~ : CType, loc~ : @source.SrcLoc)
-  StaticAssert(StaticAssert)
-  Asm(AsmStmt)
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) struct TranslationUnit {
-  decls : Array[Decl]
-  expr_id_max : Int
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) enum UnaryOp {
-  Plus
-  Minus
-  Not
-  BitNot
-  Addr
-  Deref
-  PreInc
-  PreDec
-  PostInc
-  PostDec
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) enum BinaryOp {
-  Assign
-  AddAssign
-  SubAssign
-  MulAssign
-  DivAssign
-  ModAssign
-  ShlAssign
-  ShrAssign
-  BitAndAssign
-  BitXorAssign
-  BitOrAssign
-  Comma
-  Add
-  Sub
-  Mul
-  Div
-  Mod
-  Shl
-  Shr
-  Eq
-  Ne
-  Lt
-  Le
-  Gt
-  Ge
-  BitAnd
-  BitXor
-  BitOr
-  LogAnd
-  LogOr
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) enum Expr {
-  IntLit(value~ : String, node_id~ : Int, loc~ : @source.SrcLoc)
-  FloatLit(value~ : String, node_id~ : Int, loc~ : @source.SrcLoc)
-  CharLit(value~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
-  StringLit(value~ : String, length~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
-  Ident(name~ : String, id~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
-  LabelAddr(name~ : String, id~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
-  BuiltinTypesCompatibleP(a~ : CType, b~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
-  BuiltinOffsetof(ty~ : CType, path~ : Array[String], node_id~ : Int, loc~ : @source.SrcLoc)
-  BuiltinVaArg(list~ : Expr, ty~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
-  Unary(op~ : UnaryOp, expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
-  Cast(ty~ : CType, expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
-  CompoundLiteral(ty~ : CType, init~ : Initializer, node_id~ : Int, loc~ : @source.SrcLoc)
-  StmtExpr(stmts~ : Array[Stmt], node_id~ : Int, loc~ : @source.SrcLoc)
-  SizeofExpr(expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
-  SizeofType(ty~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
-  AlignofExpr(expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
-  AlignofType(ty~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
-  Binary(op~ : BinaryOp, left~ : Expr, right~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
-  Conditional(
-    cond~ : Expr,
-    then_expr~ : Expr,
-    else_expr~ : Expr,
-    node_id~ : Int,
-    loc~ : @source.SrcLoc,
-  )
-  Call(callee~ : Expr, args~ : Array[Expr], node_id~ : Int, loc~ : @source.SrcLoc)
-  Index(base~ : Expr, index~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
-  Member(
-    base~ : Expr,
-    name~ : String,
-    id~ : Int,
-    is_arrow~ : Bool,
-    node_id~ : Int,
-    loc~ : @source.SrcLoc,
-  )
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) enum InitDesignator {
-  Index(expr~ : Expr, loc~ : @source.SrcLoc)
-  IndexRange(start~ : Expr, end~ : Expr, loc~ : @source.SrcLoc)
-  Field(name~ : String, id~ : Int, loc~ : @source.SrcLoc)
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) struct InitItem {
-  designators : Array[InitDesignator]
-  value : Initializer
-  loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) enum Initializer {
-  Expr(expr~ : Expr, loc~ : @source.SrcLoc)
-  List(items~ : Array[InitItem], loc~ : @source.SrcLoc)
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) struct AsmOperand {
-  name : String?
-  constraint : String
-  expr : Expr
-  loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) struct AsmStmt {
-  template : String
-  outputs : Array[AsmOperand]
-  inputs : Array[AsmOperand]
-  clobbers : Array[String]
-  labels : Array[String]
-  is_volatile : Bool
-  is_goto : Bool
-  loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
-
-///|
-pub(all) enum Stmt {
-  Compound(stmts~ : Array[Stmt], loc~ : @source.SrcLoc)
-  If(cond~ : Expr, then_branch~ : Stmt, else_branch~ : Stmt?, loc~ : @source.SrcLoc)
-  While(cond~ : Expr, body~ : Stmt, loc~ : @source.SrcLoc)
-  DoWhile(cond~ : Expr, body~ : Stmt, loc~ : @source.SrcLoc)
-  For(init~ : Stmt?, cond~ : Expr?, step~ : Expr?, body~ : Stmt, loc~ : @source.SrcLoc)
-  Switch(cond~ : Expr, body~ : Stmt, loc~ : @source.SrcLoc)
-  Case(expr~ : Expr, end_expr~ : Expr?, body~ : Stmt, loc~ : @source.SrcLoc)
-  Default(body~ : Stmt, loc~ : @source.SrcLoc)
-  Label(name~ : String, body~ : Stmt, loc~ : @source.SrcLoc)
-  Goto(name~ : String, loc~ : @source.SrcLoc)
-  GotoExpr(expr~ : Expr, loc~ : @source.SrcLoc)
-  Break(loc~ : @source.SrcLoc)
-  Continue(loc~ : @source.SrcLoc)
-  Return(value~ : Expr?, loc~ : @source.SrcLoc)
-  Asm(AsmStmt)
-  ExprStmt(expr~ : Expr, loc~ : @source.SrcLoc)
-  DeclStmt(decls~ : Array[VarDecl], loc~ : @source.SrcLoc)
-  TagDef(ty~ : CType, loc~ : @source.SrcLoc)
-  StaticAssert(StaticAssert)
-  Empty(loc~ : @source.SrcLoc)
-} derive(Show, Eq, ToJson)
-
-///|
-let default_int_type_value : CType =
-  CType::Int(kind=CIntKind::Int, unsigned=false)
-
-///|
 pub fn default_int_type() -> CType {
-  default_int_type_value
+  @ast_core.default_int_type()
+}
+
+///|
+pub fn expr_is_lvalue_simple(expr : Expr) -> Bool {
+  @ast_core.expr_is_lvalue_simple(expr)
+}
+
+///|
+pub fn expr_may_call(expr : Expr) -> Bool {
+  @ast_core.expr_may_call(expr)
+}
+
+///|
+pub fn parse_int64_literal(text : String) -> Int64? {
+  @ast_core.parse_int64_literal(text)
+}
+
+///|
+pub fn const_i64_from_expr(expr : Expr) -> Int64? {
+  @ast_core.const_i64_from_expr(expr)
+}
+
+///|
+pub fn expr_loc(expr : Expr) -> @source.SrcLoc {
+  @ast_core.expr_loc(expr)
+}
+
+///|
+pub fn expr_node_id(expr : Expr) -> Int {
+  @ast_core.expr_node_id(expr)
+}
+
+///|
+pub fn empty_qual() -> TypeQual {
+  @ast_core.empty_qual()
+}
+
+///|
+pub fn merge_qual(a : TypeQual, b : TypeQual) -> TypeQual {
+  @ast_core.merge_qual(a, b)
+}
+
+///|
+pub fn with_const(qual : TypeQual) -> TypeQual {
+  @ast_core.with_const(qual)
+}
+
+///|
+pub fn with_volatile(qual : TypeQual) -> TypeQual {
+  @ast_core.with_volatile(qual)
+}
+
+///|
+pub fn with_restrict(qual : TypeQual) -> TypeQual {
+  @ast_core.with_restrict(qual)
+}
+
+///|
+pub fn with_atomic(qual : TypeQual) -> TypeQual {
+  @ast_core.with_atomic(qual)
+}
+
+///|
+pub fn apply_qualifiers(ty : CType, qual : TypeQual) -> CType {
+  @ast_core.apply_qualifiers(ty, qual)
 }
