@@ -2,7 +2,7 @@
 package "hackwaly/tinycc/frontend/preproc/preproc_core"
 
 import {
-  "hackwaly/tinycc/frontend/lexer",
+  "hackwaly/tinycc/frontend/lexer/lexer_core",
   "hackwaly/tinycc/frontend/tokens",
   "hackwaly/tinycc/support/diag",
   "hackwaly/tinycc/support/intern",
@@ -335,8 +335,8 @@ pub(all) struct PreprocBuiltinIds {
 }
 
 pub(all) struct Preprocessor {
-  mut lexer : @lexer.Lexer
-  lexer_stack : Array[@lexer.Lexer]
+  mut lexer : @lexer_core.Lexer
+  lexer_stack : Array[@lexer_core.Lexer]
   held_stack : Array[@tokens.Token?]
   path_stack : Array[String]
   dir_stack : Array[String]

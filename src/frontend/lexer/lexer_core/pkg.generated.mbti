@@ -1,0 +1,80 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/frontend/lexer/lexer_core"
+
+import {
+  "hackwaly/tinycc/frontend/tokens",
+  "hackwaly/tinycc/support/diag",
+  "hackwaly/tinycc/support/intern",
+  "hackwaly/tinycc/support/source",
+}
+
+// Values
+pub fn add_lex_error(Lexer, @source.SrcLoc, String) -> Unit
+
+pub fn advance(Lexer) -> UInt16?
+
+pub fn advance_punct(Lexer) -> Unit
+
+pub fn is_bin_digit(UInt16) -> Bool
+
+pub fn is_digit(UInt16) -> Bool
+
+pub fn is_hex_digit(UInt16) -> Bool
+
+pub fn is_ident_continue(UInt16) -> Bool
+
+pub fn is_ident_start(UInt16) -> Bool
+
+pub fn is_ws_no_newline(UInt16) -> Bool
+
+pub fn lex_ident(Lexer, @source.SrcLoc, Bool) -> @tokens.Token
+
+pub fn lex_number(Lexer, @source.SrcLoc, Bool, Bool) -> @tokens.Token
+
+pub fn lex_punct(Lexer, @source.SrcLoc, Bool) -> @tokens.Token
+
+pub fn lex_string_literal(Lexer, @source.SrcLoc, Bool, UInt16) -> @tokens.Token
+
+pub fn lexer_loc(Lexer) -> @source.SrcLoc
+
+pub fn make_token(@tokens.TokenKind, @source.SrcLoc, Bool, id? : Int, lexeme_id? : Int) -> @tokens.Token
+
+pub fn new_lexer(@source.SourceFile, @diag.DiagBag, @intern.StringInterner, @tokens.KeywordIds, @tokens.LexemePool) -> Lexer
+
+pub fn next_token(Lexer) -> @tokens.Token
+
+pub fn peek_char(Lexer) -> UInt16?
+
+pub fn peek_char_offset(Lexer, Int) -> UInt16?
+
+pub fn skip_block_comment(Lexer, @source.SrcLoc) -> Unit
+
+pub fn skip_line_comment(Lexer) -> Unit
+
+pub fn skip_string_literal(Lexer, @source.SrcLoc, UInt16) -> Unit
+
+pub fn skip_ws(Lexer) -> Unit
+
+pub fn slice_to_view(String, Int, Int) -> StringView
+
+// Errors
+
+// Types and methods
+pub(all) struct Lexer {
+  file_id : Int
+  text : String
+  text_len : Int
+  mut index : Int
+  mut line : Int
+  mut col : Int
+  mut line_start : Bool
+  diags : @diag.DiagBag
+  interner : @intern.StringInterner
+  keyword_ids : @tokens.KeywordIds
+  lexeme_pool : @tokens.LexemePool
+}
+
+// Type aliases
+
+// Traits
+
