@@ -5,14 +5,15 @@ pub fn slice_string(text : String, start : Int, end : Int) -> String {
 
 ///|
 pub fn hex_digit_value(code : UInt16) -> Int? {
-  if code >= 48 && code <= 57 {
-    return Some(code.to_int() - 48)
+  let value = code.to_int()
+  if value >= 48 && value <= 57 {
+    return Some(value - 48)
   }
-  if code >= 65 && code <= 70 {
-    return Some(code.to_int() - 65 + 10)
+  if value >= 65 && value <= 70 {
+    return Some(value - 55)
   }
-  if code >= 97 && code <= 102 {
-    return Some(code.to_int() - 97 + 10)
+  if value >= 97 && value <= 102 {
+    return Some(value - 87)
   }
   None
 }
