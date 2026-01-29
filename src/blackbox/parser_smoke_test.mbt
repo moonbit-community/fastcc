@@ -319,3 +319,11 @@ test "parser paren pointer errors" {
   let (_unit, bag) = parse_unit(source)
   assert_true(@diag.has_errors(bag))
 }
+
+///|
+test "parser macro keyword mapping" {
+  let source =
+    "#define VOL __volatile__\n#define CONST const\n#define UNS unsigned\nasm VOL(\"nop\");\nCONST int x;\nUNS int y;\nint * VOL p;\n"
+  let (_unit, bag) = parse_unit(source)
+  assert_true(!@diag.has_errors(bag))
+}
