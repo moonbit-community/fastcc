@@ -20,8 +20,13 @@ pub fn add_error(bag : DiagBag, loc : @source.SrcLoc, message : String) -> Unit 
 }
 
 ///|
+pub fn error_count(bag : DiagBag) -> Int {
+  bag.diags.length()
+}
+
+///|
 pub fn has_errors(bag : DiagBag) -> Bool {
-  bag.diags.length() > 0
+  error_count(bag) > 0
 }
 
 ///|
