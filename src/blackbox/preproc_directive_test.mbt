@@ -96,6 +96,41 @@ test "preproc directive error warning inactive" {
 }
 
 ///|
+test "preproc directive inactive ifdef ifndef" {
+  let source = (
+    #|#if 0
+    #|#ifdef FOO
+    #|int a;
+    #|#endif
+    #|#ifndef BAR
+    #|int b;
+    #|#endif
+    #|#endif
+  )
+  let (bag, _kinds) = run_pp_collect(source, [])
+  assert_true(!@diag.has_errors(bag))
+}
+
+///|
+test "preproc directive elif branches" {
+  let source_taken = (
+    #|#if 1
+    #|#elif 1
+    #|#endif
+  )
+  let (bag_taken, _kinds) = run_pp_collect(source_taken, [])
+  assert_true(!@diag.has_errors(bag_taken))
+
+  let source_eval = (
+    #|#if 0
+    #|#elif 1
+    #|#endif
+  )
+  let (bag_eval, _kinds) = run_pp_collect(source_eval, [])
+  assert_true(!@diag.has_errors(bag_eval))
+}
+
+///|
 test "preproc directive line inactive" {
   let source = (
     #|#if 0

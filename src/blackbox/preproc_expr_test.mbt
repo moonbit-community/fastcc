@@ -220,6 +220,113 @@ test "preproc if expr missing operand" {
 }
 
 ///|
+test "preproc if expr paren resync" {
+  let (pp, bag) = new_pp()
+  let tokens : Array[@tokens.Token] = [
+    tok_kind(@tokens.TokenKind::LParen),
+    tok_int(pp, "1"),
+    tok_kind(@tokens.TokenKind::Plus),
+    tok_int(pp, "2"),
+  ]
+  let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
+  assert_true(ok)
+  assert_true(!@diag.has_errors(bag))
+}
+
+///|
+test "preproc if expr paren resync trailing rparen" {
+  let (pp, bag) = new_pp()
+  let tokens : Array[@tokens.Token] = [
+    tok_kind(@tokens.TokenKind::LParen),
+    tok_int(pp, "1"),
+    tok_kind(@tokens.TokenKind::Comma),
+    tok_kind(@tokens.TokenKind::RParen),
+  ]
+  let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
+  assert_true(ok)
+  assert_true(!@diag.has_errors(bag))
+}
+
+///|
+test "preproc if expr skip paren nesting" {
+  let (pp, bag) = new_pp()
+  let tokens : Array[@tokens.Token] = [
+    tok_ident(pp, "FOO"),
+    tok_kind(@tokens.TokenKind::LParen),
+    tok_kind(@tokens.TokenKind::LParen),
+    tok_int(pp, "1"),
+    tok_kind(@tokens.TokenKind::RParen),
+    tok_kind(@tokens.TokenKind::RParen),
+  ]
+  let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
+  assert_true(!ok)
+  assert_true(!@diag.has_errors(bag))
+}
+
+///|
+test "preproc if expr subtraction" {
+  let (pp, bag) = new_pp()
+  let tokens : Array[@tokens.Token] = [
+    tok_int(pp, "5"),
+    tok_kind(@tokens.TokenKind::Minus),
+    tok_int(pp, "3"),
+  ]
+  let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
+  assert_true(ok)
+  assert_true(!@diag.has_errors(bag))
+}
+
+///|
+test "preproc if expr division and modulo" {
+  let (pp, bag) = new_pp()
+  let tokens : Array[@tokens.Token] = [
+    tok_int(pp, "6U"),
+    tok_kind(@tokens.TokenKind::Slash),
+    tok_int(pp, "3U"),
+    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_int(pp, "7U"),
+    tok_kind(@tokens.TokenKind::Percent),
+    tok_int(pp, "3U"),
+  ]
+  let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
+  assert_true(ok)
+  assert_true(!@diag.has_errors(bag))
+}
+
+///|
+test "preproc if expr break on rparen" {
+  let (pp_and, bag_and) = new_pp()
+  let tokens_and : Array[@tokens.Token] = [
+    tok_int(pp_and, "1"),
+    tok_kind(@tokens.TokenKind::Amp),
+    tok_kind(@tokens.TokenKind::RParen),
+  ]
+  let ok_and = @preproc.eval_if_expr(pp_and, tokens_and, @source.dummy_loc(0))
+  assert_true(ok_and)
+  assert_true(!@diag.has_errors(bag_and))
+
+  let (pp_xor, bag_xor) = new_pp()
+  let tokens_xor : Array[@tokens.Token] = [
+    tok_int(pp_xor, "1"),
+    tok_kind(@tokens.TokenKind::Caret),
+    tok_kind(@tokens.TokenKind::RParen),
+  ]
+  let ok_xor = @preproc.eval_if_expr(pp_xor, tokens_xor, @source.dummy_loc(0))
+  assert_true(ok_xor)
+  assert_true(!@diag.has_errors(bag_xor))
+
+  let (pp_or, bag_or) = new_pp()
+  let tokens_or : Array[@tokens.Token] = [
+    tok_int(pp_or, "1"),
+    tok_kind(@tokens.TokenKind::Pipe),
+    tok_kind(@tokens.TokenKind::RParen),
+  ]
+  let ok_or = @preproc.eval_if_expr(pp_or, tokens_or, @source.dummy_loc(0))
+  assert_true(ok_or)
+  assert_true(!@diag.has_errors(bag_or))
+}
+
+///|
 test "preproc char literal errors" {
   let (pp_short, bag_short) = new_pp()
   let short_tok = tok_char(pp_short, "''")
