@@ -61,13 +61,42 @@ test "object section helpers" {
 
 ///|
 test "macho encode and write" {
-  let sec = @object.new_section(".text")
-  sec.data.push(0x1234)
-  let bytes = @macho.encode_macho_object([sec], [])
+  let sec_text : @object.Section = {
+    name: ".text",
+    data: [0x1234],
+    relocs: [
+      {
+        offset: 0,
+        kind: @arm64.R_AARCH64_POINTER,
+        sym: { id: 1 },
+        addend: 0,
+      },
+      {
+        offset: 0,
+        kind: @arm64.R_AARCH64_ADR_PREL_PG_HI21_NC,
+        sym: { id: 2 },
+        addend: 4,
+      },
+    ],
+    align: 4,
+    size_bytes: 0,
+  }
+  let sec_custom : @object.Section = {
+    name: ".custom",
+    data: [0x5678],
+    relocs: [],
+    align: 0,
+    size_bytes: 0,
+  }
+  let symbols : Array[@macho.ObjSymbol] = [
+    { id: 1, name: "sym_text", section: Some(".text"), value: 0, is_external: false },
+    { id: 2, name: "sym_missing", section: Some(".missing"), value: 0, is_external: false },
+  ]
+  let bytes = @macho.encode_macho_object([sec_text, sec_custom], symbols)
   assert_true(bytes.length() > 0)
 
   let case_dir = macho_make_case_dir("macho")
   let path = macho_join_path(case_dir, "tinycc.o")
-  @macho.write_macho_object(path, [sec], [])
+  @macho.write_macho_object(path, [sec_text, sec_custom], symbols)
   assert_true(@fs.path_exists(path))
 }
