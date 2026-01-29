@@ -80,8 +80,9 @@ fn split_listfile_args(contents : String) -> Array[String] {
 ///|
 fn expand_cli_args(args : Array[String]) -> Array[String]? {
   let expanded : Array[String] = []
+  let len = args.length()
   let mut i = 0
-  while i < args.length() {
+  while i < len {
     let arg = args[i]
     if arg.has_prefix("@") && arg.length() > 1 {
       let path = @util.slice_string(arg, 1, arg.length())
@@ -115,6 +116,7 @@ pub fn parse_cli_args(
     None => return CliParse::Error
     Some(v) => v
   }
+  let expanded_len = expanded.length()
   let include_paths : Array[String] = []
   let link_paths : Array[String] = []
   let link_libs : Array[String] = []
@@ -129,7 +131,7 @@ pub fn parse_cli_args(
 
   let mut i = 1
   let mut run_input = false
-  while i < expanded.length() {
+  while i < expanded_len {
     let arg = expanded[i]
     if run && run_input {
       run_args.push(arg)
@@ -139,7 +141,7 @@ pub fn parse_cli_args(
     if run && !run_input {
       if arg == "--" {
         i = i + 1
-        while i < expanded.length() {
+        while i < expanded_len {
           run_args.push(expanded[i])
           i = i + 1
         }
@@ -174,7 +176,7 @@ pub fn parse_cli_args(
       continue
     }
     if arg == "-o" {
-      if i + 1 >= expanded.length() {
+      if i + 1 >= expanded_len {
         println("error: missing argument for -o")
         print_usage()
         return CliParse::Error
@@ -189,7 +191,7 @@ pub fn parse_cli_args(
       continue
     }
     if arg == "-I" {
-      if i + 1 >= expanded.length() {
+      if i + 1 >= expanded_len {
         println("error: missing argument for -I")
         print_usage()
         return CliParse::Error
@@ -204,7 +206,7 @@ pub fn parse_cli_args(
       continue
     }
     if arg == "-D" {
-      if i + 1 >= expanded.length() {
+      if i + 1 >= expanded_len {
         println("error: missing argument for -D")
         print_usage()
         return CliParse::Error
@@ -247,7 +249,7 @@ pub fn parse_cli_args(
       continue
     }
     if arg == "-U" {
-      if i + 1 >= expanded.length() {
+      if i + 1 >= expanded_len {
         println("error: missing argument for -U")
         print_usage()
         return CliParse::Error
@@ -294,7 +296,7 @@ pub fn parse_cli_args(
       continue
     }
     if arg == "-isystem" {
-      if i + 1 >= expanded.length() {
+      if i + 1 >= expanded_len {
         println("error: missing argument for -isystem")
         print_usage()
         return CliParse::Error
@@ -309,7 +311,7 @@ pub fn parse_cli_args(
       continue
     }
     if arg == "-L" {
-      if i + 1 >= expanded.length() {
+      if i + 1 >= expanded_len {
         println("error: missing argument for -L")
         print_usage()
         return CliParse::Error
@@ -324,7 +326,7 @@ pub fn parse_cli_args(
       continue
     }
     if arg == "-l" {
-      if i + 1 >= expanded.length() {
+      if i + 1 >= expanded_len {
         println("error: missing argument for -l")
         print_usage()
         return CliParse::Error
