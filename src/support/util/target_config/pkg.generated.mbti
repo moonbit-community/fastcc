@@ -1,0 +1,14 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/support/util/target_config"
+
+// Values
+pub let char_is_unsigned : Bool
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

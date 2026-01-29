@@ -419,6 +419,11 @@ fn bench_us(delta_ns : UInt64) -> Int {
 }
 
 ///|
+pub fn bench_now_ns() -> UInt64 {
+  @ffi.bench_now_ns()
+}
+
+///|
 fn bench_stats_add(
   stats : BenchStats,
   parse_ns : UInt64,

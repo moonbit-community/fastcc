@@ -32,7 +32,8 @@ Key entrypoints:
 
 Top-level:
 - `src/`: compiler implementation split into packages (cmd/tinycc, driver,
-  frontend/*, sem, backend/*, support/*, ffi).
+  frontend/*, sem, backend/*, support/*, ffi). Utility helpers are split under
+  `support/util/*` and re-exported via `support/util`.
 - `compat/include/`: libc-style headers for compilation.
 - `refs/`: reference projects (tinycc, quickjs, sqlite, etc.).
 - `tests/`: C tests and support files.
@@ -104,7 +105,8 @@ Top-level:
   relocations) and writes the final object bytes.
 
 ### Target config
-- `src/support/util/util.mbt` houses target-specific flags (e.g. `char` signedness).
+- `src/support/util/target_config/target_config.mbt` houses target-specific flags
+  (re-exported via `src/support/util/util.mbt`).
 
 ## Driver and CLI
 
