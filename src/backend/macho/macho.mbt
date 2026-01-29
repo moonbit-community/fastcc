@@ -181,9 +181,10 @@ fn write_padded_name(buf : @buffer.Buffer, name : String, len : Int) -> Unit {
     }
   } else {
     let bytes = @encoding/utf8.encode(name)
+    let bytes_len = bytes.length()
     let mut i = 0
     while i < len {
-      if i < bytes.length() {
+      if i < bytes_len {
         buf.write_byte(bytes[i])
       } else {
         buf.write_byte(0)
