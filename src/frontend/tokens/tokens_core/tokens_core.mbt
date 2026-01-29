@@ -113,13 +113,7 @@ pub let empty_hidden : Int = 0
 
 ///|
 pub fn token_value_from_parts(id : Int, lexeme_id : Int) -> Int {
-  if lexeme_id != 0 {
-    return -lexeme_id
-  }
-  if id != 0 {
-    return id
-  }
-  0
+  if lexeme_id != 0 { -lexeme_id } else { id }
 }
 
 ///|
