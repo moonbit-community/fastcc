@@ -100,3 +100,12 @@ test "macho encode and write" {
   @macho.write_macho_object(path, [sec_text, sec_custom], symbols)
   assert_true(@fs.path_exists(path))
 }
+
+///|
+test "macho symtab missing section" {
+  let symbols : Array[@macho.ObjSymbol] = [
+    { id: 10, name: "sym_missing", section: Some(".nowhere"), value: 0, is_external: true },
+  ]
+  let bytes = @macho.encode_macho_object([], symbols)
+  assert_true(bytes.length() > 0)
+}
