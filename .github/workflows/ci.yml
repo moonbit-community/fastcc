@@ -23,6 +23,8 @@ jobs:
           if ! command -v tclsh >/dev/null 2>&1; then
             brew install tcl-tk
           fi
+      - name: Run moon test
+        run: moon test
       - name: Run mbtcc tests
         env:
           QUICKJS: "1"
