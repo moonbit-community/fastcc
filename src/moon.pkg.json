@@ -1,6 +1,9 @@
 {
   "is-main": true,
   "import": [
-    "hackwaly/tinycc/driver"
+    {
+      "path": "hackwaly/tinycc/cmd/tinycc",
+      "alias": "cmd_tinycc"
+    }
   ]
 }

@@ -2,15 +2,15 @@
 package "hackwaly/tinycc/backend/codegen"
 
 import {
-  "hackwaly/tinycc/frontend/ast",
+  "hackwaly/tinycc/frontend/ast/ast_core",
   "hackwaly/tinycc/sem/sem_core",
-  "hackwaly/tinycc/support/diag",
+  "hackwaly/tinycc/support/diag/diag_core",
 }
 
 // Values
-pub fn codegen_arm64_object_bytes(@ast.TranslationUnit, @diag.DiagBag) -> Bytes?
+pub fn codegen_arm64_object_bytes(@ast_core.TranslationUnit, @diag_core.DiagBag) -> Bytes?
 
-pub fn codegen_arm64_object_bytes_with_sem(@ast.TranslationUnit, @sem_core.SemContext, @diag.DiagBag) -> Bytes?
+pub fn codegen_arm64_object_bytes_with_sem(@ast_core.TranslationUnit, @sem_core.SemContext, @diag_core.DiagBag) -> Bytes?
 
 pub fn touch_unused_symbols() -> Unit
 

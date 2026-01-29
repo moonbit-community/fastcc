@@ -23,7 +23,7 @@ pub fn int_literal_end(text : String) -> Int {
 
 ///|
 pub fn int_literal_base(text : String) -> Int {
-  let trimmed = slice_string(text, 0, int_literal_end(text))
+  let trimmed = @string_utils.slice_string(text, 0, int_literal_end(text))
   if trimmed.length() >= 2 && trimmed[0] == 48 {
     let next = trimmed[1]
     if next == 120 || next == 88 {

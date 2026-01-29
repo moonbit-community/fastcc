@@ -2,62 +2,62 @@
 package "hackwaly/tinycc/sem"
 
 import {
-  "hackwaly/tinycc/frontend/ast",
+  "hackwaly/tinycc/frontend/ast/ast_core",
   "hackwaly/tinycc/sem/sem_core",
-  "hackwaly/tinycc/support/diag",
-  "hackwaly/tinycc/support/source",
+  "hackwaly/tinycc/support/diag/diag_core",
+  "hackwaly/tinycc/support/source/source_core",
 }
 
 // Values
-pub fn add_sem_error(@sem_core.SemContext, @source.SrcLoc, String) -> Unit
+pub fn add_sem_error(@sem_core.SemContext, @source_core.SrcLoc, String) -> Unit
 
-pub fn adjust_param_type_for_local(@ast.CType) -> @ast.CType
+pub fn adjust_param_type_for_local(@ast_core.CType) -> @ast_core.CType
 
 pub fn align_to(Int, Int) -> Int
 
-pub fn apply_inferred_array_size(@ast.CType, Int) -> @ast.CType
+pub fn apply_inferred_array_size(@ast_core.CType, Int) -> @ast_core.CType
 
-pub fn atomic_builtin_return_type(@sem_core.SemContext, String, Int, Array[@ast.Expr], @source.SrcLoc) -> @ast.CType?
+pub fn atomic_builtin_return_type(@sem_core.SemContext, String, Int, Array[@ast_core.Expr], @source_core.SrcLoc) -> @ast_core.CType?
 
 pub fn atomic_builtin_template_from_ident(@sem_core.SemContext, String, Int) -> String?
 
-pub fn attr_align_value(@sem_core.SemContext, @ast.Attributes, @source.SrcLoc) -> Int?
+pub fn attr_align_value(@sem_core.SemContext, @ast_core.Attributes, @source_core.SrcLoc) -> Int?
 
-pub fn attrs_layout_empty(@ast.Attributes) -> Bool
+pub fn attrs_layout_empty(@ast_core.Attributes) -> Bool
 
 pub fn builtin_call_kind(@sem_core.SemContext, String, Int) -> @sem_core.BuiltinCallKind?
 
-pub fn check_translation_unit(@ast.TranslationUnit, @diag.DiagBag) -> @sem_core.SemContext
+pub fn check_translation_unit(@ast_core.TranslationUnit, @diag_core.DiagBag) -> @sem_core.SemContext
 
-pub fn common_int_type(@sem_core.SemContext, @ast.CType, @ast.CType) -> @ast.CType
+pub fn common_int_type(@sem_core.SemContext, @ast_core.CType, @ast_core.CType) -> @ast_core.CType
 
 pub fn compound_literal_key(Int) -> Int
 
-pub fn compound_literal_type(@sem_core.SemContext, @ast.CType, @ast.Initializer, @source.SrcLoc, Int) -> @ast.CType
+pub fn compound_literal_type(@sem_core.SemContext, @ast_core.CType, @ast_core.Initializer, @source_core.SrcLoc, Int) -> @ast_core.CType
 
-pub fn const_int64_from_expr(@sem_core.SemContext, @ast.Expr, @source.SrcLoc) -> Int64?
+pub fn const_int64_from_expr(@sem_core.SemContext, @ast_core.Expr, @source_core.SrcLoc) -> Int64?
 
-pub fn const_int_from_expr(@sem_core.SemContext, @ast.Expr, @source.SrcLoc) -> Int?
+pub fn const_int_from_expr(@sem_core.SemContext, @ast_core.Expr, @source_core.SrcLoc) -> Int?
 
 pub fn current_local_scope_id(@sem_core.SemContext) -> Int
 
-pub fn decay_type(@ast.CType) -> @ast.CType
+pub fn decay_type(@ast_core.CType) -> @ast_core.CType
 
-pub fn default_int_type() -> @ast.CType
+pub fn default_int_type() -> @ast_core.CType
 
-pub fn ensure_struct_fields(@sem_core.SemContext, String, Int, Array[@ast.RecordItem]?, is_union~ : Bool, @source.SrcLoc) -> @sem_core.RecordDef?
+pub fn ensure_struct_fields(@sem_core.SemContext, String, Int, Array[@ast_core.RecordItem]?, is_union~ : Bool, @source_core.SrcLoc) -> @sem_core.RecordDef?
 
 pub fn enum_const_value(@sem_core.SemContext, String, Int) -> Int?
 
-pub fn eval_builtin_offsetof(@sem_core.SemContext, @ast.CType, Array[String], @source.SrcLoc) -> Int?
+pub fn eval_builtin_offsetof(@sem_core.SemContext, @ast_core.CType, Array[String], @source_core.SrcLoc) -> Int?
 
-pub fn find_field_index_cached(@sem_core.SemContext, @ast.CType, String, Int, @source.SrcLoc) -> Int?
+pub fn find_field_index_cached(@sem_core.SemContext, @ast_core.CType, String, Int, @source_core.SrcLoc) -> Int?
 
-pub fn float_size(@ast.CFloatKind) -> Int
+pub fn float_size(@ast_core.CFloatKind) -> Int
 
 pub fn get_function_by_id(@sem_core.SemContext, Int) -> @sem_core.FuncSig?
 
-pub fn get_global_by_id(@sem_core.SemContext, Int) -> @ast.CType?
+pub fn get_global_by_id(@sem_core.SemContext, Int) -> @ast_core.CType?
 
 pub fn[T] get_opt_by_id(Array[T?], Int) -> T?
 
@@ -65,49 +65,49 @@ pub fn has_function_by_id(@sem_core.SemContext, Int) -> Bool
 
 pub fn[T] has_opt_by_id(Array[T?], Int) -> Bool
 
-pub fn int_size(@ast.CIntKind) -> Int
+pub fn int_size(@ast_core.CIntKind) -> Int
 
-pub fn is_char_type(@ast.CType) -> Bool
+pub fn is_char_type(@ast_core.CType) -> Bool
 
-pub fn is_int_like(@ast.CType) -> Bool
+pub fn is_int_like(@ast_core.CType) -> Bool
 
-pub fn next_init_field(Array[@ast.Field], Int) -> (@ast.Field, Int)?
+pub fn next_init_field(Array[@ast_core.Field], Int) -> (@ast_core.Field, Int)?
 
 pub fn pop_scope(@sem_core.SemContext) -> Unit
 
 pub fn push_scope(@sem_core.SemContext) -> Unit
 
-pub fn record_local_binding(@sem_core.SemContext, Int, @ast.CType) -> Unit
+pub fn record_local_binding(@sem_core.SemContext, Int, @ast_core.CType) -> Unit
 
-pub fn resolve_struct_fields(@sem_core.SemContext, String, Int, Array[@ast.RecordItem]?, is_union~ : Bool) -> Array[@ast.Field]?
+pub fn resolve_struct_fields(@sem_core.SemContext, String, Int, Array[@ast_core.RecordItem]?, is_union~ : Bool) -> Array[@ast_core.Field]?
 
-pub fn resolve_type(@sem_core.SemContext, @ast.CType, @source.SrcLoc) -> @ast.CType
+pub fn resolve_type(@sem_core.SemContext, @ast_core.CType, @source_core.SrcLoc) -> @ast_core.CType
 
 pub fn[T] set_opt_by_id(Array[T?], Int, T) -> Unit
 
-pub fn strip_qual_attrs(@ast.CType) -> @ast.CType
+pub fn strip_qual_attrs(@ast_core.CType) -> @ast_core.CType
 
-pub fn strip_qualifiers(@ast.CType) -> @ast.CType
+pub fn strip_qualifiers(@ast_core.CType) -> @ast_core.CType
 
-pub fn strip_top_qualifiers(@ast.CType) -> @ast.CType
+pub fn strip_top_qualifiers(@ast_core.CType) -> @ast_core.CType
 
-pub fn strip_top_qualifiers_keep_attrs(@ast.CType) -> @ast.CType
+pub fn strip_top_qualifiers_keep_attrs(@ast_core.CType) -> @ast_core.CType
 
-pub fn struct_size_align(@sem_core.SemContext, Array[@ast.Field], @ast.Attributes, @source.SrcLoc) -> (Int, Int)
+pub fn struct_size_align(@sem_core.SemContext, Array[@ast_core.Field], @ast_core.Attributes, @source_core.SrcLoc) -> (Int, Int)
 
-pub fn try_eval_int_const(@sem_core.SemContext, @ast.Expr) -> Int?
+pub fn try_eval_int_const(@sem_core.SemContext, @ast_core.Expr) -> Int?
 
-pub fn type_contains_vla(@ast.CType) -> Bool
+pub fn type_contains_vla(@ast_core.CType) -> Bool
 
-pub fn type_for_sizeof(@sem_core.SemContext, @ast.Expr) -> @ast.CType
+pub fn type_for_sizeof(@sem_core.SemContext, @ast_core.Expr) -> @ast_core.CType
 
-pub fn type_of_expr(@sem_core.SemContext, @ast.Expr) -> @ast.CType
+pub fn type_of_expr(@sem_core.SemContext, @ast_core.Expr) -> @ast_core.CType
 
-pub fn type_of_lvalue(@sem_core.SemContext, @ast.Expr) -> @ast.CType?
+pub fn type_of_lvalue(@sem_core.SemContext, @ast_core.Expr) -> @ast_core.CType?
 
-pub fn type_size_align(@sem_core.SemContext, @ast.CType, @source.SrcLoc) -> (Int, Int)?
+pub fn type_size_align(@sem_core.SemContext, @ast_core.CType, @source_core.SrcLoc) -> (Int, Int)?
 
-pub fn union_size_align(@sem_core.SemContext, Array[@ast.Field], @ast.Attributes, @source.SrcLoc) -> (Int, Int)
+pub fn union_size_align(@sem_core.SemContext, Array[@ast_core.Field], @ast_core.Attributes, @source_core.SrcLoc) -> (Int, Int)
 
 // Errors
 

@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/support/util/fast_map"
+
+import {
+  "moonbitlang/core/hashmap",
+}
+
+// Values
+pub fn[K, V] fast_map_new(capacity? : Int) -> @hashmap.HashMap[K, V]
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+pub using @hashmap {type HashMap as FastMap}
+
+// Traits
+

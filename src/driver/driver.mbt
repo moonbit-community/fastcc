@@ -1,386 +1,15 @@
 ///|
-pub struct CliConfig {
-  include_paths : Array[String]
-  link_paths : Array[String]
-  link_libs : Array[String]
-  link_inputs : Array[String]
-  inputs : Array[String]
-  output : String?
-  compile_only : Bool
-  run : Bool
-  run_args : Array[String]
-  bench : Bool
-  macro_actions : Array[CliMacroAction]
-}
+pub type CliConfig = @cli.CliConfig
 
 ///|
-pub(all) enum CliMacroAction {
-  Define(name~ : String, value~ : String?)
-  Undef(name~ : String)
-} derive(Show, Eq, ToJson)
+pub type CliMacroAction = @cli.CliMacroAction
 
 ///|
-pub(all) enum CliParse {
-  Run(CliConfig)
-  Help
-  Error
-}
+pub type CliParse = @cli.CliParse
 
 ///|
-fn print_usage() -> Unit {
-  println(
-    "usage: tinycc.mbt [-c] [-run] [-bench] [-o OUT] [-I PATH]... [-isystem PATH]... [-L PATH]... [-l LIB]... [-D NAME[=VALUE]]... [-U NAME]... FILE...",
-  )
-}
-
-///|
-fn split_define_spec(spec : String) -> (String, String?)? {
-  if spec == "" {
-    return None
-  }
-  let len = spec.length()
-  let mut i = 0
-  while i < len {
-    if spec[i] == 61 {
-      let name = @util.slice_string(spec, 0, i)
-      let value = @util.slice_string(spec, i + 1, len)
-      return Some((name, Some(value)))
-    }
-    i = i + 1
-  }
-  Some((spec, None))
-}
-
-///|
-fn is_cli_whitespace(code : Int) -> Bool {
-  code == 32 || code == 9 || code == 10 || code == 13
-}
-
-///|
-fn split_listfile_args(contents : String) -> Array[String] {
-  let args : Array[String] = []
-  let len = contents.length()
-  let mut i = 0
-  while i < len {
-    while i < len && is_cli_whitespace(contents.code_unit_at(i).to_int()) {
-      i = i + 1
-    }
-    if i >= len {
-      break
-    }
-    let start = i
-    while i < len && !is_cli_whitespace(contents.code_unit_at(i).to_int()) {
-      i = i + 1
-    }
-    args.push(@util.slice_string(contents, start, i))
-  }
-  args
-}
-
-///|
-fn expand_cli_args(args : Array[String]) -> Array[String]? {
-  let expanded : Array[String] = []
-  let mut i = 0
-  while i < args.length() {
-    let arg = args[i]
-    if arg.has_prefix("@") && arg.length() > 1 {
-      let path = @util.slice_string(arg, 1, arg.length())
-      let contents = try @fs.read_file_to_string(path) catch {
-        err => {
-          println("error: failed to read argument file '\{path}': \{err.to_string()}")
-          return None
-        }
-      }
-      for item in split_listfile_args(contents) {
-        expanded.push(item)
-      }
-    } else {
-      expanded.push(arg)
-    }
-    i = i + 1
-  }
-  Some(expanded)
-}
-
-///|
-fn is_c_source_path(path : String) -> Bool {
-  path.has_suffix(".c") || path.has_suffix(".i")
-}
-
-///|
-pub fn parse_cli_args(
-  args : Array[String],
-) -> CliParse {
-  let expanded = match expand_cli_args(args) {
-    None => return CliParse::Error
-    Some(v) => v
-  }
-  let include_paths : Array[String] = []
-  let link_paths : Array[String] = []
-  let link_libs : Array[String] = []
-  let link_inputs : Array[String] = []
-  let inputs : Array[String] = []
-  let run_args : Array[String] = []
-  let macro_actions : Array[CliMacroAction] = []
-  let mut output : String? = None
-  let mut compile_only = false
-  let mut run = false
-  let mut bench = false
-
-  let mut i = 1
-  let mut run_input = false
-  while i < expanded.length() {
-    let arg = expanded[i]
-    if run && run_input {
-      run_args.push(arg)
-      i = i + 1
-      continue
-    }
-    if run && !run_input {
-      if arg == "--" {
-        i = i + 1
-        while i < expanded.length() {
-          run_args.push(expanded[i])
-          i = i + 1
-        }
-        break
-      }
-      if arg.has_prefix("-") && arg != "-" {
-        println("error: unsupported option after -run '\{arg}'")
-        return CliParse::Error
-      }
-      inputs.push(arg)
-      run_input = true
-      i = i + 1
-      continue
-    }
-    if arg == "-h" || arg == "--help" {
-      print_usage()
-      return CliParse::Help
-    }
-    if arg == "-c" {
-      compile_only = true
-      i = i + 1
-      continue
-    }
-    if arg == "-run" {
-      run = true
-      i = i + 1
-      continue
-    }
-    if arg == "-bench" {
-      bench = true
-      i = i + 1
-      continue
-    }
-    if arg == "-o" {
-      if i + 1 >= expanded.length() {
-        println("error: missing argument for -o")
-        print_usage()
-        return CliParse::Error
-      }
-      output = Some(expanded[i + 1])
-      i = i + 2
-      continue
-    }
-    if arg.has_prefix("-o") && arg.length() > 2 {
-      output = Some(@util.slice_string(arg, 2, arg.length()))
-      i = i + 1
-      continue
-    }
-    if arg == "-I" {
-      if i + 1 >= expanded.length() {
-        println("error: missing argument for -I")
-        print_usage()
-        return CliParse::Error
-      }
-      include_paths.push(expanded[i + 1])
-      i = i + 2
-      continue
-    }
-    if arg.has_prefix("-I") && arg.length() > 2 {
-      include_paths.push(@util.slice_string(arg, 2, arg.length()))
-      i = i + 1
-      continue
-    }
-    if arg == "-D" {
-      if i + 1 >= expanded.length() {
-        println("error: missing argument for -D")
-        print_usage()
-        return CliParse::Error
-      }
-      match split_define_spec(expanded[i + 1]) {
-        None => {
-          println("error: empty macro name in -D")
-          print_usage()
-          return CliParse::Error
-        }
-        Some((name, value)) =>
-          if name == "" {
-            println("error: empty macro name in -D")
-            print_usage()
-            return CliParse::Error
-          } else {
-            macro_actions.push(CliMacroAction::Define(name~, value~))
-          }
-      }
-      i = i + 2
-      continue
-    }
-    if arg.has_prefix("-D") && arg.length() > 2 {
-      match split_define_spec(@util.slice_string(arg, 2, arg.length())) {
-        None => {
-          println("error: empty macro name in -D")
-          print_usage()
-          return CliParse::Error
-        }
-        Some((name, value)) =>
-          if name == "" {
-            println("error: empty macro name in -D")
-            print_usage()
-            return CliParse::Error
-          } else {
-            macro_actions.push(CliMacroAction::Define(name~, value~))
-          }
-      }
-      i = i + 1
-      continue
-    }
-    if arg == "-U" {
-      if i + 1 >= expanded.length() {
-        println("error: missing argument for -U")
-        print_usage()
-        return CliParse::Error
-      }
-      let name = expanded[i + 1]
-      if name == "" {
-        println("error: empty macro name in -U")
-        print_usage()
-        return CliParse::Error
-      }
-      macro_actions.push(CliMacroAction::Undef(name=name))
-      i = i + 2
-      continue
-    }
-    if arg.has_prefix("-U") && arg.length() > 2 {
-      let name = @util.slice_string(arg, 2, arg.length())
-      if name == "" {
-        println("error: empty macro name in -U")
-        print_usage()
-        return CliParse::Error
-      }
-      macro_actions.push(CliMacroAction::Undef(name~))
-      i = i + 1
-      continue
-    }
-    if arg.has_prefix("-W") || arg.has_prefix("-w") {
-      i = i + 1
-      continue
-    }
-    if arg.has_prefix("-O") || arg.has_prefix("-g") {
-      i = i + 1
-      continue
-    }
-    if arg == "-fPIC" || arg == "-fpic" {
-      i = i + 1
-      continue
-    }
-    if arg.has_prefix("-Z") {
-      i = i + 1
-      continue
-    }
-    if arg.has_prefix("-Q") {
-      i = i + 1
-      continue
-    }
-    if arg == "-isystem" {
-      if i + 1 >= expanded.length() {
-        println("error: missing argument for -isystem")
-        print_usage()
-        return CliParse::Error
-      }
-      include_paths.push(expanded[i + 1])
-      i = i + 2
-      continue
-    }
-    if arg.has_prefix("-isystem") && arg.length() > 8 {
-      include_paths.push(@util.slice_string(arg, 8, arg.length()))
-      i = i + 1
-      continue
-    }
-    if arg == "-L" {
-      if i + 1 >= expanded.length() {
-        println("error: missing argument for -L")
-        print_usage()
-        return CliParse::Error
-      }
-      link_paths.push(expanded[i + 1])
-      i = i + 2
-      continue
-    }
-    if arg.has_prefix("-L") && arg.length() > 2 {
-      link_paths.push(@util.slice_string(arg, 2, arg.length()))
-      i = i + 1
-      continue
-    }
-    if arg == "-l" {
-      if i + 1 >= expanded.length() {
-        println("error: missing argument for -l")
-        print_usage()
-        return CliParse::Error
-      }
-      link_libs.push(expanded[i + 1])
-      i = i + 2
-      continue
-    }
-    if arg.has_prefix("-l") && arg.length() > 2 {
-      link_libs.push(@util.slice_string(arg, 2, arg.length()))
-      i = i + 1
-      continue
-    }
-    if arg.has_prefix("-") {
-      println("error: unsupported option '\{arg}'")
-      print_usage()
-      return CliParse::Error
-    }
-    if is_c_source_path(arg) {
-      inputs.push(arg)
-    } else {
-      link_inputs.push(arg)
-    }
-    i = i + 1
-  }
-
-  if run && compile_only {
-    println("error: -run cannot be combined with -c")
-    return CliParse::Error
-  }
-  if run && !run_input {
-    println("error: -run requires an input file")
-    return CliParse::Error
-  }
-  if inputs.length() == 0 {
-    println("error: no input files")
-    print_usage()
-    return CliParse::Error
-  }
-  if output is Some(_) && inputs.length() != 1 {
-    println("error: -o requires exactly one input file")
-    return CliParse::Error
-  }
-  CliParse::Run({
-    include_paths,
-    link_paths,
-    link_libs,
-    link_inputs,
-    inputs,
-    output,
-    compile_only,
-    run,
-    run_args,
-    bench,
-    macro_actions,
-  })
+pub fn parse_cli_args(args : Array[String]) -> CliParse {
+  @cli.parse_cli_args(args)
 }
 
 ///|
@@ -416,6 +45,11 @@ fn bench_ms(delta_ns : UInt64) -> Int {
 ///|
 fn bench_us(delta_ns : UInt64) -> Int {
   ((delta_ns + 999UL) / 1_000UL).to_int()
+}
+
+///|
+pub fn bench_now_ns() -> UInt64 {
+  @ffi.bench_now_ns()
 }
 
 ///|
@@ -543,10 +177,6 @@ fn apply_cli_macros(pp : @preproc.Preprocessor, actions : Array[CliMacroAction])
 }
 
 ///|
-#borrow(cmd)
-extern "C" fn run_command(cmd : Bytes) -> Int = "tinyccmbt_run_command"
-
-///|
 fn write_shell_quoted_arg(buf : @buffer.Buffer, arg : String) -> Unit {
   buf.write_byte((39 : Byte))
   for b in @encoding/utf8.encode(arg) {
@@ -579,7 +209,7 @@ fn build_shell_command_bytes(args : Array[String]) -> Bytes {
 
 ///|
 fn run_shell_command(args : Array[String]) -> Int {
-  run_command(build_shell_command_bytes(args))
+  @ffi.run_command(build_shell_command_bytes(args))
 }
 
 ///|
@@ -603,7 +233,7 @@ fn join_temp_path(dir : String, name : String) -> String {
 
 ///|
 fn run_temp_base() -> String {
-  let stamp = bench_now_ns()
+  let stamp = @ffi.bench_now_ns()
   join_temp_path(temp_dir(), "tinycc.mbt.run.\{stamp}")
 }
 
@@ -632,26 +262,26 @@ fn compile_to_object_path(
       let mut total_ns = 0UL
       let mut sem_ctx : @sem.SemContext? = None
       let bench_enabled = cfg.bench
-      let total_start = if bench_enabled { bench_now_ns() } else { 0UL }
+      let total_start = if bench_enabled { @ffi.bench_now_ns() } else { 0UL }
       let parse_start = total_start
       let unit = @parser.parse_translation_unit(pp)
       @preproc.finalize_preprocessor(pp)
       if bench_enabled {
-        let parse_end = bench_now_ns()
+        let parse_end = @ffi.bench_now_ns()
         parse_ns = bench_delta_ns(parse_start, parse_end)
       }
       if !@diag.has_errors(bag) {
         if bench_enabled {
-          let sem_start = bench_now_ns()
+          let sem_start = @ffi.bench_now_ns()
           sem_ctx = Some(@sem.check_translation_unit(unit, bag))
-          let sem_end = bench_now_ns()
+          let sem_end = @ffi.bench_now_ns()
           sem_ns = bench_delta_ns(sem_start, sem_end)
         } else {
           sem_ctx = Some(@sem.check_translation_unit(unit, bag))
         }
       }
       if !@diag.has_errors(bag) {
-        let codegen_start = if bench_enabled { bench_now_ns() } else { 0UL }
+        let codegen_start = if bench_enabled { @ffi.bench_now_ns() } else { 0UL }
         if sem_ctx is Some(ctx) {
           if @codegen.codegen_arm64_object_bytes_with_sem(unit, ctx, bag) is Some(bytes) {
             @fs.write_bytes_to_file(output_path, bytes) catch {
@@ -660,12 +290,12 @@ fn compile_to_object_path(
           }
         }
         if bench_enabled {
-          let codegen_end = bench_now_ns()
+          let codegen_end = @ffi.bench_now_ns()
           codegen_ns = bench_delta_ns(codegen_start, codegen_end)
         }
       }
       if bench_enabled {
-        let total_end = bench_now_ns()
+        let total_end = @ffi.bench_now_ns()
         total_ns = bench_delta_ns(total_start, total_end)
         if bench_stats is Some(stats) {
           bench_stats_add(stats, parse_ns, sem_ns, codegen_ns, total_ns)

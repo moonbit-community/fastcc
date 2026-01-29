@@ -3,14 +3,14 @@ package "hackwaly/tinycc/frontend/lexer"
 
 import {
   "hackwaly/tinycc/frontend/lexer/lexer_core",
-  "hackwaly/tinycc/frontend/tokens",
-  "hackwaly/tinycc/support/diag",
-  "hackwaly/tinycc/support/intern",
-  "hackwaly/tinycc/support/source",
+  "hackwaly/tinycc/frontend/tokens/tokens_core",
+  "hackwaly/tinycc/support/diag/diag_core",
+  "hackwaly/tinycc/support/intern/intern_core",
+  "hackwaly/tinycc/support/source/source_core",
 }
 
 // Values
-pub fn add_lex_error(@lexer_core.Lexer, @source.SrcLoc, String) -> Unit
+pub fn add_lex_error(@lexer_core.Lexer, @source_core.SrcLoc, String) -> Unit
 
 pub fn advance(@lexer_core.Lexer) -> UInt16?
 
@@ -28,31 +28,31 @@ pub fn is_ident_start(UInt16) -> Bool
 
 pub fn is_ws_no_newline(UInt16) -> Bool
 
-pub fn lex_ident(@lexer_core.Lexer, @source.SrcLoc, Bool) -> @tokens.Token
+pub fn lex_ident(@lexer_core.Lexer, @source_core.SrcLoc, Bool) -> @tokens_core.Token
 
-pub fn lex_number(@lexer_core.Lexer, @source.SrcLoc, Bool, Bool) -> @tokens.Token
+pub fn lex_number(@lexer_core.Lexer, @source_core.SrcLoc, Bool, Bool) -> @tokens_core.Token
 
-pub fn lex_punct(@lexer_core.Lexer, @source.SrcLoc, Bool) -> @tokens.Token
+pub fn lex_punct(@lexer_core.Lexer, @source_core.SrcLoc, Bool) -> @tokens_core.Token
 
-pub fn lex_string_literal(@lexer_core.Lexer, @source.SrcLoc, Bool, UInt16) -> @tokens.Token
+pub fn lex_string_literal(@lexer_core.Lexer, @source_core.SrcLoc, Bool, UInt16) -> @tokens_core.Token
 
-pub fn lexer_loc(@lexer_core.Lexer) -> @source.SrcLoc
+pub fn lexer_loc(@lexer_core.Lexer) -> @source_core.SrcLoc
 
-pub fn make_token(@tokens.TokenKind, @source.SrcLoc, Bool, id? : Int, lexeme_id? : Int) -> @tokens.Token
+pub fn make_token(@tokens_core.TokenKind, @source_core.SrcLoc, Bool, id? : Int, lexeme_id? : Int) -> @tokens_core.Token
 
-pub fn new_lexer(@source.SourceFile, @diag.DiagBag, @intern.StringInterner, @tokens.KeywordIds, @tokens.LexemePool) -> @lexer_core.Lexer
+pub fn new_lexer(@source_core.SourceFile, @diag_core.DiagBag, @intern_core.StringInterner, @tokens_core.KeywordIds, @tokens_core.LexemePool) -> @lexer_core.Lexer
 
-pub fn next_token(@lexer_core.Lexer) -> @tokens.Token
+pub fn next_token(@lexer_core.Lexer) -> @tokens_core.Token
 
 pub fn peek_char(@lexer_core.Lexer) -> UInt16?
 
 pub fn peek_char_offset(@lexer_core.Lexer, Int) -> UInt16?
 
-pub fn skip_block_comment(@lexer_core.Lexer, @source.SrcLoc) -> Unit
+pub fn skip_block_comment(@lexer_core.Lexer, @source_core.SrcLoc) -> Unit
 
 pub fn skip_line_comment(@lexer_core.Lexer) -> Unit
 
-pub fn skip_string_literal(@lexer_core.Lexer, @source.SrcLoc, UInt16) -> Unit
+pub fn skip_string_literal(@lexer_core.Lexer, @source_core.SrcLoc, UInt16) -> Unit
 
 pub fn skip_ws(@lexer_core.Lexer) -> Unit
 

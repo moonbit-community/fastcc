@@ -2,7 +2,7 @@
 package "hackwaly/tinycc/frontend/ast/ast_core"
 
 import {
-  "hackwaly/tinycc/support/source",
+  "hackwaly/tinycc/support/source/source_core",
 }
 
 // Values
@@ -26,7 +26,7 @@ pub fn empty_qual() -> TypeQual
 
 pub fn expr_is_lvalue_simple(Expr) -> Bool
 
-pub fn expr_loc(Expr) -> @source.SrcLoc
+pub fn expr_loc(Expr) -> @source_core.SrcLoc
 
 pub fn expr_may_call(Expr) -> Bool
 
@@ -69,7 +69,7 @@ pub(all) struct AsmOperand {
   name : String?
   constraint : String
   expr : Expr
-  loc : @source.SrcLoc
+  loc : @source_core.SrcLoc
 }
 pub impl Eq for AsmOperand
 pub impl Show for AsmOperand
@@ -83,7 +83,7 @@ pub(all) struct AsmStmt {
   labels : Array[String]
   is_volatile : Bool
   is_goto : Bool
-  loc : @source.SrcLoc
+  loc : @source_core.SrcLoc
 }
 pub impl Eq for AsmStmt
 pub impl Show for AsmStmt
@@ -203,8 +203,8 @@ pub(all) enum Decl {
   FuncDef(FuncDef)
   FuncDecl(FuncDecl)
   Var(VarDecl)
-  Typedef(name~ : String, ty~ : CType, attrs~ : Attributes, loc~ : @source.SrcLoc)
-  TagDef(ty~ : CType, loc~ : @source.SrcLoc)
+  Typedef(name~ : String, ty~ : CType, attrs~ : Attributes, loc~ : @source_core.SrcLoc)
+  TagDef(ty~ : CType, loc~ : @source_core.SrcLoc)
   StaticAssert(StaticAssert)
   Asm(AsmStmt)
 }
@@ -216,35 +216,35 @@ pub(all) struct EnumItem {
   name : String
   id : Int
   value : Expr?
-  loc : @source.SrcLoc
+  loc : @source_core.SrcLoc
 }
 pub impl Eq for EnumItem
 pub impl Show for EnumItem
 pub impl ToJson for EnumItem
 
 pub(all) enum Expr {
-  IntLit(value~ : String, node_id~ : Int, loc~ : @source.SrcLoc)
-  FloatLit(value~ : String, node_id~ : Int, loc~ : @source.SrcLoc)
-  CharLit(value~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
-  StringLit(value~ : String, length~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
-  Ident(name~ : String, id~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
-  LabelAddr(name~ : String, id~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
-  BuiltinTypesCompatibleP(a~ : CType, b~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
-  BuiltinOffsetof(ty~ : CType, path~ : Array[String], node_id~ : Int, loc~ : @source.SrcLoc)
-  BuiltinVaArg(list~ : Expr, ty~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
-  Unary(op~ : UnaryOp, expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
-  Cast(ty~ : CType, expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
-  CompoundLiteral(ty~ : CType, init~ : Initializer, node_id~ : Int, loc~ : @source.SrcLoc)
-  StmtExpr(stmts~ : Array[Stmt], node_id~ : Int, loc~ : @source.SrcLoc)
-  SizeofExpr(expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
-  SizeofType(ty~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
-  AlignofExpr(expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
-  AlignofType(ty~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
-  Binary(op~ : BinaryOp, left~ : Expr, right~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
-  Conditional(cond~ : Expr, then_expr~ : Expr, else_expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
-  Call(callee~ : Expr, args~ : Array[Expr], node_id~ : Int, loc~ : @source.SrcLoc)
-  Index(base~ : Expr, index~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
-  Member(base~ : Expr, name~ : String, id~ : Int, is_arrow~ : Bool, node_id~ : Int, loc~ : @source.SrcLoc)
+  IntLit(value~ : String, node_id~ : Int, loc~ : @source_core.SrcLoc)
+  FloatLit(value~ : String, node_id~ : Int, loc~ : @source_core.SrcLoc)
+  CharLit(value~ : Int, node_id~ : Int, loc~ : @source_core.SrcLoc)
+  StringLit(value~ : String, length~ : Int, node_id~ : Int, loc~ : @source_core.SrcLoc)
+  Ident(name~ : String, id~ : Int, node_id~ : Int, loc~ : @source_core.SrcLoc)
+  LabelAddr(name~ : String, id~ : Int, node_id~ : Int, loc~ : @source_core.SrcLoc)
+  BuiltinTypesCompatibleP(a~ : CType, b~ : CType, node_id~ : Int, loc~ : @source_core.SrcLoc)
+  BuiltinOffsetof(ty~ : CType, path~ : Array[String], node_id~ : Int, loc~ : @source_core.SrcLoc)
+  BuiltinVaArg(list~ : Expr, ty~ : CType, node_id~ : Int, loc~ : @source_core.SrcLoc)
+  Unary(op~ : UnaryOp, expr~ : Expr, node_id~ : Int, loc~ : @source_core.SrcLoc)
+  Cast(ty~ : CType, expr~ : Expr, node_id~ : Int, loc~ : @source_core.SrcLoc)
+  CompoundLiteral(ty~ : CType, init~ : Initializer, node_id~ : Int, loc~ : @source_core.SrcLoc)
+  StmtExpr(stmts~ : Array[Stmt], node_id~ : Int, loc~ : @source_core.SrcLoc)
+  SizeofExpr(expr~ : Expr, node_id~ : Int, loc~ : @source_core.SrcLoc)
+  SizeofType(ty~ : CType, node_id~ : Int, loc~ : @source_core.SrcLoc)
+  AlignofExpr(expr~ : Expr, node_id~ : Int, loc~ : @source_core.SrcLoc)
+  AlignofType(ty~ : CType, node_id~ : Int, loc~ : @source_core.SrcLoc)
+  Binary(op~ : BinaryOp, left~ : Expr, right~ : Expr, node_id~ : Int, loc~ : @source_core.SrcLoc)
+  Conditional(cond~ : Expr, then_expr~ : Expr, else_expr~ : Expr, node_id~ : Int, loc~ : @source_core.SrcLoc)
+  Call(callee~ : Expr, args~ : Array[Expr], node_id~ : Int, loc~ : @source_core.SrcLoc)
+  Index(base~ : Expr, index~ : Expr, node_id~ : Int, loc~ : @source_core.SrcLoc)
+  Member(base~ : Expr, name~ : String, id~ : Int, is_arrow~ : Bool, node_id~ : Int, loc~ : @source_core.SrcLoc)
 }
 pub impl Eq for Expr
 pub impl Show for Expr
@@ -256,7 +256,7 @@ pub(all) struct Field {
   ty : CType
   bit_width : Expr?
   attrs : Attributes
-  loc : @source.SrcLoc
+  loc : @source_core.SrcLoc
 }
 pub impl Eq for Field
 pub impl Show for Field
@@ -272,7 +272,7 @@ pub(all) struct FuncDecl {
   storage : StorageClass
   is_inline : Bool
   attrs : Attributes
-  loc : @source.SrcLoc
+  loc : @source_core.SrcLoc
 }
 pub impl Eq for FuncDecl
 pub impl Show for FuncDecl
@@ -289,16 +289,16 @@ pub(all) struct FuncDef {
   is_inline : Bool
   attrs : Attributes
   body : Stmt
-  loc : @source.SrcLoc
+  loc : @source_core.SrcLoc
 }
 pub impl Eq for FuncDef
 pub impl Show for FuncDef
 pub impl ToJson for FuncDef
 
 pub(all) enum InitDesignator {
-  Index(expr~ : Expr, loc~ : @source.SrcLoc)
-  IndexRange(start~ : Expr, end~ : Expr, loc~ : @source.SrcLoc)
-  Field(name~ : String, id~ : Int, loc~ : @source.SrcLoc)
+  Index(expr~ : Expr, loc~ : @source_core.SrcLoc)
+  IndexRange(start~ : Expr, end~ : Expr, loc~ : @source_core.SrcLoc)
+  Field(name~ : String, id~ : Int, loc~ : @source_core.SrcLoc)
 }
 pub impl Eq for InitDesignator
 pub impl Show for InitDesignator
@@ -307,15 +307,15 @@ pub impl ToJson for InitDesignator
 pub(all) struct InitItem {
   designators : Array[InitDesignator]
   value : Initializer
-  loc : @source.SrcLoc
+  loc : @source_core.SrcLoc
 }
 pub impl Eq for InitItem
 pub impl Show for InitItem
 pub impl ToJson for InitItem
 
 pub(all) enum Initializer {
-  Expr(expr~ : Expr, loc~ : @source.SrcLoc)
-  List(items~ : Array[InitItem], loc~ : @source.SrcLoc)
+  Expr(expr~ : Expr, loc~ : @source_core.SrcLoc)
+  List(items~ : Array[InitItem], loc~ : @source_core.SrcLoc)
 }
 pub impl Eq for Initializer
 pub impl Show for Initializer
@@ -325,7 +325,7 @@ pub(all) struct Param {
   name : String
   id : Int
   ty : CType
-  loc : @source.SrcLoc
+  loc : @source_core.SrcLoc
 }
 pub impl Eq for Param
 pub impl Show for Param
@@ -342,33 +342,33 @@ pub impl ToJson for RecordItem
 pub(all) struct StaticAssert {
   expr : Expr
   message : String?
-  loc : @source.SrcLoc
+  loc : @source_core.SrcLoc
 }
 pub impl Eq for StaticAssert
 pub impl Show for StaticAssert
 pub impl ToJson for StaticAssert
 
 pub(all) enum Stmt {
-  Compound(stmts~ : Array[Stmt], loc~ : @source.SrcLoc)
-  If(cond~ : Expr, then_branch~ : Stmt, else_branch~ : Stmt?, loc~ : @source.SrcLoc)
-  While(cond~ : Expr, body~ : Stmt, loc~ : @source.SrcLoc)
-  DoWhile(cond~ : Expr, body~ : Stmt, loc~ : @source.SrcLoc)
-  For(init~ : Stmt?, cond~ : Expr?, step~ : Expr?, body~ : Stmt, loc~ : @source.SrcLoc)
-  Switch(cond~ : Expr, body~ : Stmt, loc~ : @source.SrcLoc)
-  Case(expr~ : Expr, end_expr~ : Expr?, body~ : Stmt, loc~ : @source.SrcLoc)
-  Default(body~ : Stmt, loc~ : @source.SrcLoc)
-  Label(name~ : String, body~ : Stmt, loc~ : @source.SrcLoc)
-  Goto(name~ : String, loc~ : @source.SrcLoc)
-  GotoExpr(expr~ : Expr, loc~ : @source.SrcLoc)
-  Break(loc~ : @source.SrcLoc)
-  Continue(loc~ : @source.SrcLoc)
-  Return(value~ : Expr?, loc~ : @source.SrcLoc)
+  Compound(stmts~ : Array[Stmt], loc~ : @source_core.SrcLoc)
+  If(cond~ : Expr, then_branch~ : Stmt, else_branch~ : Stmt?, loc~ : @source_core.SrcLoc)
+  While(cond~ : Expr, body~ : Stmt, loc~ : @source_core.SrcLoc)
+  DoWhile(cond~ : Expr, body~ : Stmt, loc~ : @source_core.SrcLoc)
+  For(init~ : Stmt?, cond~ : Expr?, step~ : Expr?, body~ : Stmt, loc~ : @source_core.SrcLoc)
+  Switch(cond~ : Expr, body~ : Stmt, loc~ : @source_core.SrcLoc)
+  Case(expr~ : Expr, end_expr~ : Expr?, body~ : Stmt, loc~ : @source_core.SrcLoc)
+  Default(body~ : Stmt, loc~ : @source_core.SrcLoc)
+  Label(name~ : String, body~ : Stmt, loc~ : @source_core.SrcLoc)
+  Goto(name~ : String, loc~ : @source_core.SrcLoc)
+  GotoExpr(expr~ : Expr, loc~ : @source_core.SrcLoc)
+  Break(loc~ : @source_core.SrcLoc)
+  Continue(loc~ : @source_core.SrcLoc)
+  Return(value~ : Expr?, loc~ : @source_core.SrcLoc)
   Asm(AsmStmt)
-  ExprStmt(expr~ : Expr, loc~ : @source.SrcLoc)
-  DeclStmt(decls~ : Array[VarDecl], loc~ : @source.SrcLoc)
-  TagDef(ty~ : CType, loc~ : @source.SrcLoc)
+  ExprStmt(expr~ : Expr, loc~ : @source_core.SrcLoc)
+  DeclStmt(decls~ : Array[VarDecl], loc~ : @source_core.SrcLoc)
+  TagDef(ty~ : CType, loc~ : @source_core.SrcLoc)
   StaticAssert(StaticAssert)
-  Empty(loc~ : @source.SrcLoc)
+  Empty(loc~ : @source_core.SrcLoc)
 }
 pub impl Eq for Stmt
 pub impl Show for Stmt
@@ -426,7 +426,7 @@ pub(all) struct VarDecl {
   init : Initializer?
   storage : StorageClass
   attrs : Attributes
-  loc : @source.SrcLoc
+  loc : @source_core.SrcLoc
 }
 pub impl Eq for VarDecl
 pub impl Show for VarDecl

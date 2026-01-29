@@ -1,10 +1,14 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "hackwaly/tinycc/driver"
 
+import {
+  "hackwaly/tinycc/driver/cli",
+}
+
 // Values
 pub fn bench_now_ns() -> UInt64
 
-pub fn parse_cli_args(Array[String]) -> CliParse
+pub fn parse_cli_args(Array[String]) -> @cli.CliParse
 
 pub fn run_main() -> Unit
 
@@ -13,35 +17,12 @@ pub fn run_main() -> Unit
 // Types and methods
 type BenchStats
 
-pub struct CliConfig {
-  include_paths : Array[String]
-  link_paths : Array[String]
-  link_libs : Array[String]
-  link_inputs : Array[String]
-  inputs : Array[String]
-  output : String?
-  compile_only : Bool
-  run : Bool
-  run_args : Array[String]
-  bench : Bool
-  macro_actions : Array[CliMacroAction]
-}
-
-pub(all) enum CliMacroAction {
-  Define(name~ : String, value~ : String?)
-  Undef(name~ : String)
-}
-pub impl Eq for CliMacroAction
-pub impl Show for CliMacroAction
-pub impl ToJson for CliMacroAction
-
-pub(all) enum CliParse {
-  Run(CliConfig)
-  Help
-  Error
-}
-
 // Type aliases
+pub using @cli {type CliConfig}
+
+pub using @cli {type CliMacroAction}
+
+pub using @cli {type CliParse}
 
 // Traits
 
