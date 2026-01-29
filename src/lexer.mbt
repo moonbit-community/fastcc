@@ -7,7 +7,7 @@ struct Lexer {
   mut line : Int
   mut col : Int
   mut line_start : Bool
-  diags : DiagBag
+  diags : @diag.DiagBag
   interner : StringInterner
   keyword_ids : KeywordIds
   lexeme_pool : LexemePool
@@ -15,8 +15,8 @@ struct Lexer {
 
 ///|
 fn new_lexer(
-  file : SourceFile,
-  diags : DiagBag,
+  file : @source.SourceFile,
+  diags : @diag.DiagBag,
   interner : StringInterner,
   keyword_ids : KeywordIds,
   lexeme_pool : LexemePool,
@@ -37,8 +37,13 @@ fn new_lexer(
 }
 
 ///|
-fn lexer_loc(lex : Lexer) -> SrcLoc {
-  { file_id: lex.file_id, line: lex.line, col: lex.col, offset: lex.index }
+fn lexer_loc(lex : Lexer) -> @source.SrcLoc {
+  @source.SrcLoc::{
+    file_id: lex.file_id,
+    line: lex.line,
+    col: lex.col,
+    offset: lex.index,
+  }
 }
 
 ///|
@@ -71,7 +76,7 @@ fn next_token(lex : Lexer) -> Token {
 ///|
 fn make_token(
   kind : TokenKind,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
   line_start : Bool,
   id? : Int = 0,
   lexeme_id? : Int = 0,
@@ -125,8 +130,8 @@ fn advance_punct(lex : Lexer) -> Unit {
 }
 
 ///|
-fn add_lex_error(lex : Lexer, loc : SrcLoc, message : String) -> Unit {
-  add_error(lex.diags, loc, message)
+fn add_lex_error(lex : Lexer, loc : @source.SrcLoc, message : String) -> Unit {
+  @diag.add_error(lex.diags, loc, message)
 }
 
 ///|
@@ -224,7 +229,7 @@ fn skip_line_comment(lex : Lexer) -> Unit {
 }
 
 ///|
-fn skip_block_comment(lex : Lexer, start_loc : SrcLoc) -> Unit {
+fn skip_block_comment(lex : Lexer, start_loc : @source.SrcLoc) -> Unit {
   let idx = lex.index
   let len = lex.text_len
   if idx >= len {
@@ -299,7 +304,7 @@ fn slice_to_view(text : String, start : Int, end : Int) -> StringView {
 }
 
 ///|
-fn lex_ident(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
+fn lex_ident(lex : Lexer, loc : @source.SrcLoc, line_start : Bool) -> Token {
   let start = lex.index
   let text = lex.text
   let len = lex.text_len
@@ -324,7 +329,7 @@ fn lex_ident(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
 ///|
 fn lex_number(
   lex : Lexer,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
   line_start : Bool,
   started_with_dot : Bool,
 ) -> Token {
@@ -414,7 +419,7 @@ fn lex_number(
 
 ///|
 ///|
-fn skip_string_literal(lex : Lexer, loc : SrcLoc, quote : UInt16) -> Unit {
+fn skip_string_literal(lex : Lexer, loc : @source.SrcLoc, quote : UInt16) -> Unit {
   let text = lex.text
   let len = lex.text_len
   let _ = advance(lex)
@@ -467,7 +472,7 @@ fn skip_string_literal(lex : Lexer, loc : SrcLoc, quote : UInt16) -> Unit {
 ///|
 fn lex_string_literal(
   lex : Lexer,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
   line_start : Bool,
   quote : UInt16,
 ) -> Token {
@@ -479,7 +484,7 @@ fn lex_string_literal(
 }
 
 ///|
-fn lex_punct(lex : Lexer, loc : SrcLoc, line_start : Bool) -> Token {
+fn lex_punct(lex : Lexer, loc : @source.SrcLoc, line_start : Bool) -> Token {
   let idx = lex.index
   if idx >= lex.text_len {
     return make_token(Eof, loc, line_start)

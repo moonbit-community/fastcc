@@ -1,5 +1,5 @@
 ///|
-struct SrcLoc {
+pub(all) struct SrcLoc {
   file_id : Int
   line : Int
   col : Int
@@ -7,24 +7,24 @@ struct SrcLoc {
 } derive(Show, Eq, ToJson)
 
 ///|
-struct SourceFile {
+pub(all) struct SourceFile {
   id : Int
   path : String
   text : String
 }
 
 ///|
-struct SourceMap {
+pub(all) struct SourceMap {
   files : Array[SourceFile]
 }
 
 ///|
-fn new_source_map() -> SourceMap {
+pub fn new_source_map() -> SourceMap {
   { files: [] }
 }
 
 ///|
-fn add_file(map : SourceMap, path : String, text : String) -> SourceFile {
+pub fn add_file(map : SourceMap, path : String, text : String) -> SourceFile {
   let id = map.files.length()
   let file = { id, path, text }
   map.files.push(file)
@@ -32,6 +32,6 @@ fn add_file(map : SourceMap, path : String, text : String) -> SourceFile {
 }
 
 ///|
-fn dummy_loc(file_id : Int) -> SrcLoc {
+pub fn dummy_loc(file_id : Int) -> SrcLoc {
   { file_id, line: 1, col: 1, offset: 0 }
 }

@@ -96,6 +96,6 @@ fn const_i64_from_expr(expr : Expr) -> Int64? {
 }
 
 ///|
-fn codegen_arm64_object_bytes(unit : TranslationUnit, bag : DiagBag) -> Bytes? {
+fn codegen_arm64_object_bytes(unit : TranslationUnit, bag : @diag.DiagBag) -> Bytes? {
   codegen_arm64_object_bytes_from_ast(unit, bag)
 }

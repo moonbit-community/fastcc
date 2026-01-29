@@ -128,14 +128,14 @@ fn find_word_offset(
 ///|
 test "codegen emits arm64 main return 0 object" {
   let (unit, bag) = parse_text("int main(){return 0;}")
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
     Some(b) => b
   }
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let (text_offset, _, _) = macho_text_section_offsets(bytes)
   assert_eq(read_u32_le_at(bytes, text_offset), (0xa9bf7bfd : UInt))
   assert_eq(read_u32_le_at(bytes, text_offset + 4), (0x910003fd : UInt))
@@ -149,9 +149,9 @@ test "codegen handles __builtin_alloca" {
   let (unit, bag) = parse_text(
     "int f(int n){ void *p = __builtin_alloca(n); return p != 0; }",
   )
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
     Some(_bytes) => ()
@@ -166,14 +166,14 @@ test "codegen handles compound literal designators in function" {
     "#define MK(tag, val) (S){ (U){ .int32 = val }, tag }\n" +
     "S f(int x){ return MK(1, x); }",
   )
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
     Some(b) => b
   }
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   assert_true(bytes.length() > 0)
 }
 
@@ -182,28 +182,28 @@ test "codegen accepts enum range designator in array init" {
   let (unit, bag) = parse_text(
     "enum { OP_COUNT = 2 }; void f(){ int t[4] = { [OP_COUNT ... 3] = 1 }; }",
   )
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
     Some(b) => b
   }
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   assert_true(bytes.length() > 0)
 }
 
 ///|
 test "codegen emits call relocation for return f()" {
   let (unit, bag) = parse_text("int f(){return 0;} int main(){return f();}")
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
     Some(b) => b
   }
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let (text_offset, reloff, nreloc) = macho_text_section_offsets(bytes)
   assert_eq(nreloc, 1)
   let call_off = match find_word_offset(bytes, text_offset, 64, (0x94000000 : UInt)) {
@@ -222,14 +222,14 @@ test "codegen handles __builtin_frame_address and __builtin_return_address" {
   let (unit, bag) = parse_text(
     "int f(){ return __builtin_frame_address(0) != 0 && __builtin_return_address(0) != 0; }",
   )
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
     Some(b) => b
   }
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   assert_true(bytes.length() > 0)
 }
 
@@ -238,14 +238,14 @@ test "codegen handles __atomic_exchange builtin helper" {
   let (unit, bag) = parse_text(
     "int x; int out; void f(){ int v = 1; __atomic_exchange(&x, &v, &out, 0); }",
   )
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
     Some(b) => b
   }
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   assert_true(bytes.length() > 0)
 }
 
@@ -254,14 +254,14 @@ test "codegen accepts float constant initializers" {
   let (unit, bag) = parse_text(
     "double a = 0.0/0.0; double b = 1.0/0.0; float c = 0.0f/0.0f;",
   )
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
     Some(b) => b
   }
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   assert_true(bytes.length() > 0)
 }
 
@@ -270,14 +270,14 @@ test "codegen handles aggregate temp in switch default" {
   let (unit, bag) = parse_text(
     "struct S { int x; }; int f(int v){ switch(v){ default: return (struct S){1}.x; } }",
   )
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
     Some(b) => b
   }
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   assert_true(bytes.length() > 0)
 }
 
@@ -286,14 +286,14 @@ test "codegen emits conditional branch for if/else" {
   let (unit, bag) = parse_text(
     "int main(){int a=1; if(a) return 3; else return 4;}",
   )
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
     Some(b) => b
   }
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let (text_offset, _, _) = macho_text_section_offsets(bytes)
   assert_true(has_b_cond(bytes, text_offset, 64))
 }
@@ -303,14 +303,14 @@ test "codegen emits branches for while + break/continue" {
   let (unit, bag) = parse_text(
     "int main(){int i=0; while(i<3){i=i+1; if(i==2) continue; if(i==3) break;} return i;}",
   )
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
     Some(b) => b
   }
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let (text_offset, _, _) = macho_text_section_offsets(bytes)
   assert_true(has_b_cond(bytes, text_offset, 128))
   assert_true(has_b_uncond(bytes, text_offset, 128))
@@ -321,14 +321,14 @@ test "codegen emits .cstring and relocs for extern call with string literal" {
   let (unit, bag) = parse_text(
     "int puts(const char*); int main(){return puts(\"hi\");}",
   )
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
     Some(b) => b
   }
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let (_, _, nreloc) = macho_text_section_offsets(bytes)
   assert_eq(nreloc, 3)
   let cstring_off = match macho_section_file_offset(bytes, "__TEXT", "__cstring") {
@@ -343,14 +343,14 @@ test "codegen stores embedded-nul strings in .rodata" {
   let (unit, bag) = parse_text(
     "int main(){const char *s=\"a\\0b\"; return s[0];}",
   )
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
     Some(b) => b
   }
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let rodata_off = match macho_section_file_offset(bytes, "__TEXT", "__const") {
     None => fail("expected __TEXT,__const section")
     Some(v) => v
@@ -363,28 +363,28 @@ test "codegen supports local pointers: addr, deref, compare" {
   let (unit, bag) = parse_text(
     "int main(){int x=1; int *p=&x; if(p!=0){*p=3;} return x;}",
   )
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
     Some(b) => b
   }
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let (_, _, _) = macho_text_section_offsets(bytes)
 }
 
 ///|
 test "codegen emits global load relocs for return x" {
   let (unit, bag) = parse_text("int x; int main(){return x;}")
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
     Some(b) => b
   }
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let (text_offset, reloff, nreloc) = macho_text_section_offsets(bytes)
   let bytes_len = bytes.length()
   let max_words = (bytes_len - text_offset) / 4
@@ -414,9 +414,9 @@ test "codegen emits global load relocs for return x" {
 ///|
 test "codegen emits .data for initialized global int" {
   let (unit, bag) = parse_text("int x=3; int main(){return x;}")
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
     Some(b) => b
@@ -431,9 +431,9 @@ test "codegen emits .data for initialized global int" {
 ///|
 test "codegen emits .data for extern initialized global int" {
   let (unit, bag) = parse_text("extern int x=3; int main(){return x;}")
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
     Some(b) => b
@@ -450,9 +450,9 @@ test "codegen keeps definition after extern redeclare" {
   let (unit, bag) = parse_text(
     "extern int x; int x=3; extern int x; int main(){return x;}",
   )
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   check_translation_unit(unit, bag) |> ignore
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let bytes = match codegen_arm64_object_bytes(unit, bag) {
     None => fail("expected object bytes")
     Some(b) => b

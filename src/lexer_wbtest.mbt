@@ -1,8 +1,8 @@
 ///|
-fn lex_tokens(text : String) -> (Array[Token], DiagBag, StringInterner, LexemePool) {
-  let bag = new_diag_bag()
-  let map = new_source_map()
-  let file = add_file(map, "<test>", text)
+fn lex_tokens(text : String) -> (Array[Token], @diag.DiagBag, StringInterner, LexemePool) {
+  let bag = @diag.new_diag_bag()
+  let map = @source.new_source_map()
+  let file = @source.add_file(map, "<test>", text)
   let interner = new_string_interner_with_capacity()
   let keyword_ids = init_keyword_ids(interner)
   let lexeme_pool = new_lexeme_pool()
@@ -22,7 +22,7 @@ fn lex_tokens(text : String) -> (Array[Token], DiagBag, StringInterner, LexemePo
 test "lex keywords and operators" {
   let (toks, bag, interner, lexeme_pool) =
     lex_tokens("int x = 1 + 2; if (x >= 3) return x;")
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let items = toks.map(
     tok => "\{tok.kind}:\{token_text_with(interner, lexeme_pool, tok)}",
   )
@@ -37,7 +37,7 @@ test "lex keywords and operators" {
 test "lex comments and literals" {
   let (toks, bag, interner, lexeme_pool) =
     lex_tokens("char c='\\n';/*c*/char* s=\"hi\\n\";//x\nc=c+1")
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let items = toks.map(
     tok => "\{tok.kind}:\{token_text_with(interner, lexeme_pool, tok)}",
   )
@@ -52,7 +52,7 @@ test "lex comments and literals" {
 test "lex numbers and preprocessor hash" {
   let (toks, bag, interner, lexeme_pool) =
     lex_tokens("#define X 0x1f\nfloat y = .5 + 2e3;")
-  assert_true(!has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
   let items = toks.map(
     tok =>
       "\{tok.kind}:\{token_text_with(interner, lexeme_pool, tok)}:\{tok.line_start}",

@@ -29,7 +29,7 @@ enum BuiltinCallKind {
 
 ///|
 struct SemContext {
-  diags : DiagBag
+  diags : @diag.DiagBag
   globals : FastMap[String, CType]
   globals_by_id : Array[CType?]
   functions : FastMap[String, FuncSig]
@@ -86,7 +86,7 @@ struct SemContext {
   func_agg_temps_by_id : Array[(Int, Int)?]
   switch_stack : Array[SwitchInfo]
   mut labels_defined : FastMap[String, Bool]
-  mut labels_used : Array[(String, SrcLoc)]
+  mut labels_used : Array[(String, @source.SrcLoc)]
   mut loop_depth : Int
   mut switch_depth : Int
   mut current_func_name : String?
@@ -105,7 +105,7 @@ struct LocalOverride {
 
 ///|
 struct SwitchInfo {
-  cases : Array[(Int, Int, SrcLoc)]
+  cases : Array[(Int, Int, @source.SrcLoc)]
   mut has_default : Bool
 }
 
@@ -126,7 +126,7 @@ fn default_type_aliases() -> FastMap[String, CType] {
 }
 
 ///|
-fn new_sem_context(diags : DiagBag) -> SemContext {
+fn new_sem_context(diags : @diag.DiagBag) -> SemContext {
   let type_aliases = default_type_aliases()
   {
     diags,
@@ -665,7 +665,7 @@ fn is_power_of_two(value : Int) -> Bool {
 }
 
 ///|
-fn resolve_align_spec(ctx : SemContext, spec : AlignSpec, loc : SrcLoc) -> Int? {
+fn resolve_align_spec(ctx : SemContext, spec : AlignSpec, loc : @source.SrcLoc) -> Int? {
   match spec {
     AlignSpec::Default => Some(max_align)
     AlignSpec::Expr(expr~) =>
@@ -683,7 +683,7 @@ fn resolve_align_spec(ctx : SemContext, spec : AlignSpec, loc : SrcLoc) -> Int? 
 }
 
 ///|
-fn attr_align_value(ctx : SemContext, attrs : Attributes, loc : SrcLoc) -> Int? {
+fn attr_align_value(ctx : SemContext, attrs : Attributes, loc : @source.SrcLoc) -> Int? {
   match attrs.aligned {
     None => None
     Some(spec) => resolve_align_spec(ctx, spec, loc)
@@ -823,7 +823,7 @@ fn pointer_compatible(a : CType, b : CType) -> Bool {
 fn check_storage_class(
   ctx : SemContext,
   storage : StorageClass,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
   is_local~ : Bool,
   is_function~ : Bool,
 ) -> Unit {
@@ -849,7 +849,7 @@ fn check_storage_class(
 }
 
 ///|
-fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
+fn type_size_align(ctx : SemContext, ty : CType, loc : @source.SrcLoc) -> (Int, Int)? {
   match strip_top_qualifiers_keep_attrs(ty) {
     CType::TypeofExpr(expr~) =>
       type_size_align(ctx, type_for_typeof(ctx, expr), loc)
@@ -1041,7 +1041,7 @@ fn type_size_align(ctx : SemContext, ty : CType, loc : SrcLoc) -> (Int, Int)? {
 }
 
 ///|
-fn record_agg_temp_for_type(ctx : SemContext, ty : CType, loc : SrcLoc) -> Unit {
+fn record_agg_temp_for_type(ctx : SemContext, ty : CType, loc : @source.SrcLoc) -> Unit {
   if ctx.current_func_name is None {
     return
   }
@@ -1092,7 +1092,7 @@ fn ensure_struct_fields(
   tag_id : Int,
   fields : Array[RecordItem]?,
   is_union~ : Bool,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> RecordDef? {
   match fields {
     Some(list) =>
@@ -1194,7 +1194,7 @@ fn struct_size_align(
   ctx : SemContext,
   fields : Array[Field],
   attrs : Attributes,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (Int, Int) {
   let mut size = 0
   let mut align = 1
@@ -1321,7 +1321,7 @@ fn union_size_align(
   ctx : SemContext,
   fields : Array[Field],
   attrs : Attributes,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (Int, Int) {
   let mut size = 0
   let mut align = 1
@@ -1434,13 +1434,13 @@ fn type_for_typeof(ctx : SemContext, expr : Expr) -> CType {
 }
 
 ///|
-fn resolve_type(ctx : SemContext, ty : CType, loc : SrcLoc) -> CType {
+fn resolve_type(ctx : SemContext, ty : CType, loc : @source.SrcLoc) -> CType {
   let (resolved, _) = resolve_type_inner(ctx, ty, loc)
   resolved
 }
 
 ///|
-fn resolve_type_inner(ctx : SemContext, ty : CType, loc : SrcLoc) -> (CType, Bool) {
+fn resolve_type_inner(ctx : SemContext, ty : CType, loc : @source.SrcLoc) -> (CType, Bool) {
   match ty {
     CType::Qualified(qual~, base~) => {
       let (resolved_base, changed) = resolve_type_inner(ctx, base, loc)
@@ -1543,7 +1543,7 @@ fn resolve_array_sizes_for_decl(
   ty : CType,
   is_local : Bool,
   storage : StorageClass,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> CType {
   match ty {
     CType::Qualified(qual~, base~) =>
@@ -1653,7 +1653,7 @@ fn type_has_vla_object_size(ty : CType) -> Bool {
 }
 
 ///|
-fn check_translation_unit(unit : TranslationUnit, diags : DiagBag) -> SemContext {
+fn check_translation_unit(unit : TranslationUnit, diags : @diag.DiagBag) -> SemContext {
   let ctx = new_sem_context(diags)
   ensure_expr_type_cache(ctx, unit.expr_id_max)
   for decl in unit.decls {
@@ -1703,7 +1703,7 @@ fn check_decl(ctx : SemContext, decl : Decl) -> Unit {
 }
 
 ///|
-fn register_type_defs(ctx : SemContext, ty : CType, loc : SrcLoc) -> Unit {
+fn register_type_defs(ctx : SemContext, ty : CType, loc : @source.SrcLoc) -> Unit {
   match ty {
     CType::Qualified(base~, ..) => register_type_defs(ctx, base, loc)
     CType::Attributed(base~, ..) => register_type_defs(ctx, base, loc)
@@ -1732,7 +1732,7 @@ fn register_struct_def(
   fields : Array[RecordItem]?,
   attrs : Attributes,
   is_union~ : Bool,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> Unit {
   if name == "" {
     return
@@ -1907,7 +1907,7 @@ fn register_enum_def(
   name : String,
   id : Int,
   items : Array[EnumItem]?,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> Unit {
   if name == "" {
     return
@@ -1977,7 +1977,7 @@ fn define_enum_const(
   ctx : SemContext,
   name : String,
   id : Int,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
   value : Int,
 ) -> Unit {
   let mut conflict = enum_const_exists(ctx, name, id)
@@ -2302,7 +2302,7 @@ fn float_type_from_literal(lit : String) -> CType {
 fn eval_const_expr_value(
   ctx : SemContext,
   expr : Expr,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (Int, Bool) {
   match expr {
     Expr::IntLit(value~, ..) => (parse_int_value(value), true)
@@ -2490,7 +2490,7 @@ fn cast_const_int64_value(
   ctx : SemContext,
   value : Int64,
   ty : CType,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (Int64, Bool) {
   let resolved = resolve_type(ctx, ty, loc)
   let base = strip_top_qualifiers_keep_attrs(resolved)
@@ -2526,7 +2526,7 @@ fn cast_const_int64_value(
 fn eval_const_expr_value_i64(
   ctx : SemContext,
   expr : Expr,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (Int64, Bool) {
   match expr {
     Expr::IntLit(value~, ..) =>
@@ -2710,7 +2710,7 @@ fn eval_const_expr_value_i64(
 }
 
 ///|
-fn eval_const_expr(ctx : SemContext, expr : Expr, loc : SrcLoc) -> Int {
+fn eval_const_expr(ctx : SemContext, expr : Expr, loc : @source.SrcLoc) -> Int {
   let (value, _) = eval_const_expr_value(ctx, expr, loc)
   value
 }
@@ -2720,7 +2720,7 @@ fn eval_builtin_offsetof(
   ctx : SemContext,
   ty : CType,
   path : Array[String],
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> Int? {
   match eval_builtin_offsetof_and_type(ctx, ty, path, loc, false) {
     None => None
@@ -2733,7 +2733,7 @@ fn eval_builtin_offsetof_and_type(
   ctx : SemContext,
   ty : CType,
   path : Array[String],
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
   suppress_error : Bool,
 ) -> (Int, CType, Bool)? {
   if path.length() == 0 {
@@ -2823,7 +2823,7 @@ fn struct_field_offset_and_type(
   def : RecordDef,
   struct_attrs : Attributes,
   name : String,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (Int, CType, Bool)? {
   let fields = def.fields
   let attrs = merge_attrs(def.attrs, struct_attrs)
@@ -2953,7 +2953,7 @@ fn union_field_offset_and_type(
   def : RecordDef,
   union_attrs : Attributes,
   name : String,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (Int, CType, Bool)? {
   let fields = def.fields
   let _attrs = merge_attrs(def.attrs, union_attrs)
@@ -3220,7 +3220,7 @@ fn add_function_sig(
   name : String,
   id : Int,
   sig : FuncSig,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
   is_def~ : Bool,
 ) -> Unit {
   if enum_const_exists(ctx, name, id) {
@@ -3312,7 +3312,7 @@ fn compound_literal_type(
   ctx : SemContext,
   ty : CType,
   init : Initializer,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
   node_id : Int,
 ) -> CType {
   let key = compound_literal_key(node_id)
@@ -3421,7 +3421,7 @@ fn record_local_decl(ctx : SemContext) -> Unit {
 ///|
 fn record_compound_literal(
   ctx : SemContext,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
   node_id : Int,
   ty : CType,
 ) -> Unit {
@@ -3477,7 +3477,7 @@ fn record_compound_literal(
 fn require_complete_object_type(
   ctx : SemContext,
   ty : CType,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
   allow_incomplete_array? : Bool = false,
 ) -> Unit {
   match strip_top_qualifiers(ty) {
@@ -3598,7 +3598,7 @@ fn check_initializer(
   ctx : SemContext,
   ty : CType,
   init : Initializer,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> Int? {
   match init {
     Initializer::Expr(expr~, ..) =>
@@ -3684,7 +3684,7 @@ fn check_initializer_list(
   ctx : SemContext,
   ty : CType,
   items : Array[InitItem],
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> Int? {
   match strip_top_qualifiers(ty) {
     CType::Array(elem~, size~, ..) => {
@@ -3800,7 +3800,7 @@ fn check_struct_initializer(
   fields : Array[Field],
   items : Array[InitItem],
   is_union~ : Bool,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> Unit {
   let mut index = 0
   let mut saw = 0
@@ -3968,7 +3968,7 @@ fn next_init_field(fields : Array[Field], start : Int) -> (Field, Int)? {
 }
 
 ///|
-fn const_int_from_expr(ctx : SemContext, expr : Expr, loc : SrcLoc) -> Int? {
+fn const_int_from_expr(ctx : SemContext, expr : Expr, loc : @source.SrcLoc) -> Int? {
   let (value, ok) = eval_const_expr_value(ctx, expr, loc)
   if ok {
     Some(value)
@@ -3978,7 +3978,7 @@ fn const_int_from_expr(ctx : SemContext, expr : Expr, loc : SrcLoc) -> Int? {
 }
 
 ///|
-fn const_int64_from_expr(ctx : SemContext, expr : Expr, loc : SrcLoc) -> Int64? {
+fn const_int64_from_expr(ctx : SemContext, expr : Expr, loc : @source.SrcLoc) -> Int64? {
   let (value, ok) = eval_const_expr_value_i64(ctx, expr, loc)
   if ok {
     Some(value)
@@ -3992,7 +3992,7 @@ fn resolve_designator_type(
   ctx : SemContext,
   ty : CType,
   designators : Array[InitDesignator],
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> CType? {
   let mut current = strip_top_qualifiers(ty)
   for des in designators {
@@ -4274,7 +4274,7 @@ fn register_case_range(
   ctx : SemContext,
   start : Int,
   end : Int,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> Unit {
   if ctx.switch_stack.length() == 0 {
     return
@@ -4756,7 +4756,7 @@ fn collect_field_index_cache_from_field(
   ctx : SemContext,
   field : Field,
   top_index : Int,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
   cache_by_name : FastMap[String, Int],
   cache_by_id : FastMap[Int, Int],
 ) -> Unit {
@@ -4822,7 +4822,7 @@ fn collect_field_index_cache_from_field(
 fn build_field_index_caches(
   ctx : SemContext,
   fields : Array[Field],
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (FastMap[String, Int], FastMap[Int, Int]) {
   let cache_by_name : FastMap[String, Int] = fast_map_new()
   let cache_by_id : FastMap[Int, Int] = fast_map_new()
@@ -4845,7 +4845,7 @@ fn find_field_index_cached(
   record_ty : CType,
   name : String,
   id : Int,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> Int? {
   let resolved = resolve_type(ctx, record_ty, loc) |> strip_top_qualifiers
   match resolved {
@@ -4972,7 +4972,7 @@ fn collect_member_cache_from_fields(
   ctx : SemContext,
   fields : Array[Field],
   qual : TypeQual,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
   cache_by_name : FastMap[String, CType],
   cache_by_id : FastMap[Int, CType],
 ) -> Unit {
@@ -5038,7 +5038,7 @@ fn collect_member_cache_from_fields(
 fn build_member_caches(
   ctx : SemContext,
   fields : Array[Field],
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (FastMap[String, CType], FastMap[Int, CType]) {
   let cache_by_name : FastMap[String, CType] = fast_map_new()
   let cache_by_id : FastMap[Int, CType] = fast_map_new()
@@ -5060,7 +5060,7 @@ fn member_access_search(
   qual : TypeQual,
   name : String,
   id : Int,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> CType? {
   match strip_top_qualifiers(ty) {
     CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
@@ -5130,7 +5130,7 @@ fn member_access_type(
   name : String,
   id : Int,
   is_arrow~ : Bool,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> CType? {
   let obj_ty = if is_arrow {
     match strip_top_qualifiers(base_ty) {
@@ -5285,7 +5285,7 @@ fn index_access_type(
   ctx : SemContext,
   base_ty : CType,
   index_ty : CType,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> CType? {
   if is_int_like(index_ty) {
     match strip_top_qualifiers(base_ty) {
@@ -5423,7 +5423,7 @@ fn current_return_type(ctx : SemContext) -> CType {
 }
 
 ///|
-fn stmt_expr_result_type(ctx : SemContext, stmts : Array[Stmt], _loc : SrcLoc) ->
+fn stmt_expr_result_type(ctx : SemContext, stmts : Array[Stmt], _loc : @source.SrcLoc) ->
   CType {
   record_stmt_expr(ctx)
   let return_type = current_return_type(ctx)
@@ -5456,7 +5456,7 @@ fn stmt_expr_result_type(ctx : SemContext, stmts : Array[Stmt], _loc : SrcLoc) -
 fn stmt_expr_lvalue_type(
   ctx : SemContext,
   stmts : Array[Stmt],
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> CType? {
   record_stmt_expr(ctx)
   let return_type = current_return_type(ctx)
@@ -6394,7 +6394,7 @@ fn atomic_builtin_return_type(
   name : String,
   id : Int,
   args : Array[Expr],
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> CType? {
   let template = match atomic_builtin_template_from_ident(ctx, name, id) {
     None => return None
@@ -6537,7 +6537,7 @@ fn type_of_compound_assign(
   op : BinaryOp,
   left : Expr,
   right : Expr,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> CType {
   let lhs_ty = match type_of_lvalue(ctx, left) {
     None => return default_int_type()
@@ -6655,7 +6655,7 @@ fn declare_local(
   name : String,
   id : Int,
   ty : CType,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> Unit {
   let scope_id = current_local_scope_id(ctx)
   if scope_id == 0 || id <= 0 {
@@ -6680,7 +6680,7 @@ fn declare_global(
   name : String,
   id : Int,
   ty : CType,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> Unit {
   if enum_const_exists(ctx, name, id) {
     add_sem_error(ctx, loc, "redefinition of global '\{name}'")
@@ -6835,8 +6835,8 @@ fn pop_scope(ctx : SemContext) -> Unit {
 }
 
 ///|
-fn add_sem_error(ctx : SemContext, loc : SrcLoc, message : String) -> Unit {
-  add_error(ctx.diags, loc, message)
+fn add_sem_error(ctx : SemContext, loc : @source.SrcLoc, message : String) -> Unit {
+  @diag.add_error(ctx.diags, loc, message)
 }
 
 ///|

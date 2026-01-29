@@ -248,7 +248,7 @@ fn update_local_slot(
 fn type_size_align_or_error(
   sem : SemContext,
   ty : CType,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (Int, Int)? {
   match type_size_align(sem, ty, loc) {
     None => None
@@ -260,7 +260,7 @@ fn type_size_align_or_error(
 fn slot_type_size_align(
   alloc : LocalAlloc,
   slot : LocalSlot,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (Int, Int)? {
   match (slot.type_size, slot.type_align) {
     (Some(size), Some(align)) => Some((size, align))
@@ -452,7 +452,7 @@ fn cast_float_value(kind : CFloatKind, value : Double) -> Double {
 fn eval_float_const_value(
   sem : SemContext,
   expr : Expr,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> Double? {
   match expr {
     Expr::FloatLit(value~, ..) => parse_float_literal_value(value)
@@ -519,7 +519,7 @@ fn const_float_bits_from_expr(
   sem : SemContext,
   expr : Expr,
   kind : CFloatKind,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> UInt64? {
   match eval_float_const_value(sem, expr, loc) {
     None => None
@@ -533,7 +533,7 @@ fn alloc_local(
   name : String,
   id : Int,
   ty : CType,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> LocalSlot? {
   let (slot_size, slot_align, type_size, type_align) =
     match strip_top_qualifiers(ty) {
@@ -625,7 +625,7 @@ fn alloc_hidden_slot(alloc : LocalAlloc, size : Int, align : Int) -> Int {
 }
 
 ///|
-fn reserve_sret_slot(alloc : LocalAlloc, loc : SrcLoc, bag : DiagBag) -> Unit {
+fn reserve_sret_slot(alloc : LocalAlloc, loc : @source.SrcLoc, bag : @diag.DiagBag) -> Unit {
   if alloc.sret_offset is Some(_) {
     return
   }
@@ -637,7 +637,7 @@ fn reserve_sret_slot(alloc : LocalAlloc, loc : SrcLoc, bag : DiagBag) -> Unit {
 }
 
 ///|
-fn cached_ret_loc(alloc : LocalAlloc, loc : SrcLoc, bag : DiagBag) -> Int {
+fn cached_ret_loc(alloc : LocalAlloc, loc : @source.SrcLoc, bag : @diag.DiagBag) -> Int {
   match alloc.ret_loc {
     Some(v) => v
     None => {
@@ -741,8 +741,8 @@ fn gen_type_size_bytes_to_reg(
   cstrings : CstringPool,
   ty : CType,
   dst : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   match strip_top_qualifiers(ty) {
     CType::Array(elem=elem_ty, size=None, size_expr=Some(len_expr)) => {
@@ -750,7 +750,7 @@ fn gen_type_size_bytes_to_reg(
       emit_sxtw(emitter, dst, dst)
       let tmp = take_reg(pool) catch {
         err => {
-          add_error(bag, loc, err.to_string())
+          @diag.add_error(bag, loc, err.to_string())
           return
         }
       }
@@ -800,7 +800,7 @@ fn gen_type_size_bytes_to_reg(
       if n != 1 {
         let scale = take_reg(pool) catch {
           err => {
-            add_error(bag, loc, err.to_string())
+            @diag.add_error(bag, loc, err.to_string())
             return
           }
         }
@@ -817,7 +817,7 @@ fn gen_type_size_bytes_to_reg(
       }
     }
     _ =>
-      add_error(
+      @diag.add_error(
         bag,
         loc,
         "codegen: unsupported dynamic sizeof for type",
@@ -835,12 +835,12 @@ fn gen_vla_alloc_to_local_slot(
   slot_offset : Int,
   size_slot_offset : Int?,
   array_ty : CType,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let bytes_reg = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       return
     }
   }
@@ -909,8 +909,8 @@ fn gen_vla_size_bytes_to_reg(
   elem_ty : CType,
   size_expr : Expr,
   dst : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   gen_type_size_bytes_to_reg(
     emitter,
@@ -1347,7 +1347,7 @@ fn reserve_compound_literal_slot(
   alloc : LocalAlloc,
   ty : CType,
   init : Initializer,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
   node_id : Int,
 ) -> Unit {
   let key = compound_literal_key(node_id)
@@ -1674,8 +1674,8 @@ fn emit_int_extend_to_64(
   sem : SemContext,
   from_ty : CType,
   reg : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let (from_size, from_signed) = match scalar_size_signed_or_error(sem, from_ty, loc) {
     None => return
@@ -1697,7 +1697,7 @@ fn emit_int_extend_to_64(
     reg,
     reg,
   ) {
-    add_error(bag, loc, "codegen: unsupported integer extension")
+    @diag.add_error(bag, loc, "codegen: unsupported integer extension")
     return
   }
   let tok = if from_signed { TOK_SAR } else { TOK_SHR }
@@ -1710,7 +1710,7 @@ fn emit_int_extend_to_64(
     reg,
     reg,
   ) {
-    add_error(bag, loc, "codegen: unsupported integer extension")
+    @diag.add_error(bag, loc, "codegen: unsupported integer extension")
   }
 }
 
@@ -1721,8 +1721,8 @@ fn emit_int_cast(
   from_ty : CType,
   to_ty : CType,
   reg : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let (to_size, to_signed) = match scalar_size_signed_or_error(sem, to_ty, loc) {
     None => return
@@ -1745,7 +1745,7 @@ fn emit_int_cast(
     reg,
     reg,
   ) {
-    add_error(bag, loc, "codegen: unsupported integer cast")
+    @diag.add_error(bag, loc, "codegen: unsupported integer cast")
     return
   }
   let tok = if to_signed { TOK_SAR } else { TOK_SHR }
@@ -1758,7 +1758,7 @@ fn emit_int_cast(
     reg,
     reg,
   ) {
-    add_error(bag, loc, "codegen: unsupported integer cast")
+    @diag.add_error(bag, loc, "codegen: unsupported integer cast")
   }
 }
 
@@ -1769,8 +1769,8 @@ fn emit_cast_value(
   from_ty : CType,
   to_ty : CType,
   reg : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let from_float = float_kind_of_type(from_ty)
   let to_float = float_kind_of_type(to_ty)
@@ -1790,7 +1790,7 @@ fn emit_cast_value(
         emit32(emitter, (0x1e624000 : UInt))
         emit_fmov_s_to_w(emitter, reg, 0)
       } else {
-        add_error(bag, loc, "codegen: unsupported float conversion")
+        @diag.add_error(bag, loc, "codegen: unsupported float conversion")
       }
     }
     (Some(from_kind_raw), None) => {
@@ -1798,7 +1798,7 @@ fn emit_cast_value(
         return
       }
       if !float_kind_supported(from_kind_raw) {
-        add_error(bag, loc, "codegen: unsupported float type")
+        @diag.add_error(bag, loc, "codegen: unsupported float type")
         return
       }
       if from_kind_raw == CFloatKind::Double {
@@ -1835,7 +1835,7 @@ fn emit_cast_value(
     }
     (None, Some(to_kind_raw)) => {
       if !float_kind_supported(to_kind_raw) {
-        add_error(bag, loc, "codegen: unsupported float type")
+        @diag.add_error(bag, loc, "codegen: unsupported float type")
         return
       }
       let is_unsigned = match strip_top_qualifiers_keep_attrs(from_ty) {
@@ -2008,12 +2008,12 @@ fn gen_cond_expr_cmp_zero(
   pool : RegPool,
   cstrings : CstringPool,
   cond : Expr,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let cond_ty = type_of_expr(alloc.sem, cond)
   let tmp = take_reg(pool) catch {
     err => {
-      add_error(bag, expr_loc(cond), err.to_string())
+      @diag.add_error(bag, expr_loc(cond), err.to_string())
       return
     }
   }
@@ -2111,7 +2111,7 @@ fn type_is_aggregate(ty : CType) -> Bool {
 fn scalar_size_signed_or_error(
   sem : SemContext,
   ty : CType,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (Int, Bool)? {
   let mut base = strip_top_qualifiers_keep_attrs(ty)
   while true {
@@ -2197,12 +2197,12 @@ fn emit_copy_bytes(
   dst_reg : Int,
   dst_off : Int,
   size_bytes : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let tmp = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       return
     }
   }
@@ -2288,8 +2288,8 @@ fn emit_store_agg_return_gp_to_addr(
   size : Int,
   base_reg : Int,
   base_off : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   emit_store_gp_regs_to_addr(
     emitter,
@@ -2311,8 +2311,8 @@ fn emit_store_gp_regs_to_addr(
   size : Int,
   base_reg : Int,
   base_off : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let emit_store_reg_bytes = fn(
     reg : Int,
@@ -2378,7 +2378,7 @@ fn emit_store_gp_regs_to_addr(
     emit_store_reg_bytes(reg1, base_reg, base_off + 8, rest)
     return
   }
-  add_error(bag, loc, "codegen: aggregate return >16 bytes not supported yet")
+  @diag.add_error(bag, loc, "codegen: aggregate return >16 bytes not supported yet")
 }
 
 ///|
@@ -2392,8 +2392,8 @@ fn gen_agg_expr_to_addr(
   dst_reg : Int,
   dst_off : Int,
   ty : CType,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let (size, _) = match type_size_align_or_error(alloc.sem, ty, loc) {
     None => return
@@ -2433,7 +2433,7 @@ fn gen_agg_expr_to_addr(
             while i < count {
               let tmp = take_reg(pool) catch {
                 err => {
-                  add_error(bag, loc, err.to_string())
+                  @diag.add_error(bag, loc, err.to_string())
                   return
                 }
               }
@@ -2471,7 +2471,7 @@ fn gen_agg_expr_to_addr(
         CType::Struct(..) | CType::Union(..) => {
           let lhs_addr = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               return
             }
           }
@@ -2502,7 +2502,7 @@ fn gen_agg_expr_to_addr(
           )
           give_reg(pool, lhs_addr)
         }
-        _ => add_error(bag, loc, "codegen: aggregate assignment expects record lhs")
+        _ => @diag.add_error(bag, loc, "codegen: aggregate assignment expects record lhs")
       }
     }
     Expr::Cast(expr=inner, ..) =>
@@ -2525,9 +2525,9 @@ fn gen_agg_expr_to_addr(
           if v == 0 {
             emit_zero_bytes(emitter, dst_reg, dst_off, size)
           } else {
-            add_error(bag, loc, "codegen: non-zero scalar for aggregate")
+            @diag.add_error(bag, loc, "codegen: non-zero scalar for aggregate")
           }
-        None => add_error(bag, loc, "codegen: invalid integer literal")
+        None => @diag.add_error(bag, loc, "codegen: invalid integer literal")
       }
     Expr::Binary(op=BinaryOp::Comma, left~, right~, ..) => {
       gen_expr_discard(emitter, alloc, syms, pool, cstrings, left, bag)
@@ -2564,7 +2564,7 @@ fn gen_agg_expr_to_addr(
       let br_end = gjmp(emitter, 0)
       let else_pc = emitter_pc(emitter)
       patch_b_cond(emitter, br_else, else_pc, ARM64_COND_EQ) catch {
-        err => add_error(bag, loc, err.to_string())
+        err => @diag.add_error(bag, loc, err.to_string())
       }
       gen_agg_expr_to_addr(
         emitter,
@@ -2581,7 +2581,7 @@ fn gen_agg_expr_to_addr(
       )
       let end_pc = emitter_pc(emitter)
       gsym_addr(emitter, br_end, end_pc) catch {
-        err => add_error(bag, loc, err.to_string())
+        err => @diag.add_error(bag, loc, err.to_string())
       }
     }
     Expr::StmtExpr(stmts~, loc~, ..) =>
@@ -2614,7 +2614,7 @@ fn gen_agg_expr_to_addr(
     _ => {
       let src_addr = take_reg(pool) catch {
         err => {
-          add_error(bag, loc, err.to_string())
+          @diag.add_error(bag, loc, err.to_string())
           return
         }
       }
@@ -2643,8 +2643,8 @@ fn emit_store_scalar_at(
   value_reg : Int,
   base_reg : Int,
   off : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let (size, _) = match scalar_size_signed_or_error(sem, ty, loc) {
     None => return
@@ -2652,7 +2652,7 @@ fn emit_store_scalar_at(
   }
   let sz = match arm64_sz_from_size(size) {
     None => {
-      add_error(bag, loc, "codegen: unsupported scalar size")
+      @diag.add_error(bag, loc, "codegen: unsupported scalar size")
       return
     }
     Some(v) => v
@@ -2671,8 +2671,8 @@ fn resolve_init_designator_offset_type(
   sem : SemContext,
   ty : CType,
   designators : Array[InitDesignator],
-  _loc : SrcLoc,
-  bag : DiagBag,
+  _loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> (CType, Int)? {
   let mut current = strip_top_qualifiers(ty)
   let mut off = 0
@@ -2683,14 +2683,14 @@ fn resolve_init_designator_offset_type(
           CType::Array(elem~, size~, ..) => {
             let idx = match const_int_from_expr(sem, expr, des_loc) {
               None => {
-                add_error(bag, des_loc, "codegen: array designator must be constant")
+                @diag.add_error(bag, des_loc, "codegen: array designator must be constant")
                 0
               }
               Some(v) => v
             }
             if size is Some(n) {
               if idx < 0 || idx >= n {
-                add_error(bag, des_loc, "codegen: array designator out of bounds")
+                @diag.add_error(bag, des_loc, "codegen: array designator out of bounds")
               }
             }
             let (elem_size, _) = match type_size_align_or_error(sem, elem, des_loc) {
@@ -2701,12 +2701,12 @@ fn resolve_init_designator_offset_type(
             current = strip_top_qualifiers(elem)
           }
           _ => {
-            add_error(bag, des_loc, "codegen: array designator on non-array")
+            @diag.add_error(bag, des_loc, "codegen: array designator on non-array")
             return None
           }
         }
       InitDesignator::IndexRange(loc=des_loc, ..) => {
-        add_error(bag, des_loc, "codegen: array range designator must be expanded")
+        @diag.add_error(bag, des_loc, "codegen: array range designator must be expanded")
         return None
       }
       InitDesignator::Field(name~, id~, loc=des_loc) =>
@@ -2721,14 +2721,14 @@ fn resolve_init_designator_offset_type(
             )
             match fields {
               None => {
-                add_error(bag, des_loc, "codegen: incomplete struct '\{tag}'")
+                @diag.add_error(bag, des_loc, "codegen: incomplete struct '\{tag}'")
                 return None
               }
               Some(_) => ()
             }
             match record_field_access_info(sem, current, name, id, des_loc) {
               None => {
-                add_error(bag, des_loc, "codegen: unknown field '\{name}'")
+                @diag.add_error(bag, des_loc, "codegen: unknown field '\{name}'")
                 return None
               }
               Some(info) => {
@@ -2747,14 +2747,14 @@ fn resolve_init_designator_offset_type(
             )
             match fields {
               None => {
-                add_error(bag, des_loc, "codegen: incomplete union '\{tag}'")
+                @diag.add_error(bag, des_loc, "codegen: incomplete union '\{tag}'")
                 return None
               }
               Some(_) => ()
             }
             match record_field_access_info(sem, current, name, id, des_loc) {
               None => {
-                add_error(bag, des_loc, "codegen: unknown field '\{name}'")
+                @diag.add_error(bag, des_loc, "codegen: unknown field '\{name}'")
                 return None
               }
               Some(info) => {
@@ -2764,7 +2764,7 @@ fn resolve_init_designator_offset_type(
             }
           }
           _ => {
-            add_error(bag, des_loc, "codegen: field designator on non-record")
+            @diag.add_error(bag, des_loc, "codegen: field designator on non-record")
             return None
           }
         }
@@ -2802,11 +2802,11 @@ fn resolve_init_designator_access_info(
   sem : SemContext,
   ty : CType,
   designators : Array[InitDesignator],
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> FieldAccessInfo? {
   if designators.length() == 0 {
-    add_error(bag, loc, "codegen: missing designator")
+    @diag.add_error(bag, loc, "codegen: missing designator")
     return None
   }
   let mut current = strip_top_qualifiers(ty)
@@ -2824,14 +2824,14 @@ fn resolve_init_designator_access_info(
           CType::Array(elem~, size~, ..) => {
             let idx = match const_int_from_expr(sem, expr, des_loc) {
               None => {
-                add_error(bag, des_loc, "codegen: array designator must be constant")
+                @diag.add_error(bag, des_loc, "codegen: array designator must be constant")
                 0
               }
               Some(v) => v
             }
             if size is Some(n) {
               if idx < 0 || idx >= n {
-                add_error(bag, des_loc, "codegen: array designator out of bounds")
+                @diag.add_error(bag, des_loc, "codegen: array designator out of bounds")
               }
             }
             let (elem_size, _) = match type_size_align_or_error(sem, elem, des_loc) {
@@ -2846,12 +2846,12 @@ fn resolve_init_designator_access_info(
             bit_unit_size = None
           }
           _ => {
-            add_error(bag, des_loc, "codegen: array designator on non-array")
+            @diag.add_error(bag, des_loc, "codegen: array designator on non-array")
             return None
           }
         }
       InitDesignator::IndexRange(loc=des_loc, ..) => {
-        add_error(bag, des_loc, "codegen: array range designator must be expanded")
+        @diag.add_error(bag, des_loc, "codegen: array range designator must be expanded")
         return None
       }
       InitDesignator::Field(name~, id~, loc=des_loc) =>
@@ -2859,7 +2859,7 @@ fn resolve_init_designator_access_info(
           CType::Struct(..) | CType::Union(..) => {
             match record_field_access_info(sem, current, name, id, des_loc) {
               None => {
-                add_error(bag, des_loc, "codegen: unknown field '\{name}'")
+                @diag.add_error(bag, des_loc, "codegen: unknown field '\{name}'")
                 return None
               }
               Some(info) => {
@@ -2871,7 +2871,7 @@ fn resolve_init_designator_access_info(
                   bit_unit_size = info.bit_unit_size
                 } else {
                   if info.bit_width is Some(_) {
-                    add_error(bag, des_loc, "codegen: designator into bitfield")
+                    @diag.add_error(bag, des_loc, "codegen: designator into bitfield")
                     return None
                   }
                   bit_off = None
@@ -2883,7 +2883,7 @@ fn resolve_init_designator_access_info(
             }
           }
           _ => {
-            add_error(bag, des_loc, "codegen: field designator on non-record")
+            @diag.add_error(bag, des_loc, "codegen: field designator on non-record")
             return None
           }
         }
@@ -2908,13 +2908,13 @@ fn gen_string_init_to_addr(
   length : Int,
   dst_reg : Int,
   dst_off : Int,
-  bag : DiagBag,
-  loc : SrcLoc,
+  bag : @diag.DiagBag,
+  loc : @source.SrcLoc,
 ) -> Unit {
   let sym = cstring_sym_or_add(cstrings, syms, value)
   let src_reg = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       return
     }
   }
@@ -2945,7 +2945,7 @@ fn gen_string_init_to_addr(
 fn array_len_from_type_for_init(
   sem : SemContext,
   ty : CType,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> Int? {
   match strip_top_qualifiers(ty) {
     CType::Array(size=Some(n), ..) => Some(n)
@@ -3038,7 +3038,7 @@ fn gen_initializer_to_addr(
   base_off : Int,
   ty : CType,
   init : Initializer,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
 ) -> Unit {
   match init {
     Initializer::Expr(expr~, loc~) =>
@@ -3046,7 +3046,7 @@ fn gen_initializer_to_addr(
         CType::Array(elem~, ..) =>
           if try_eval_int_const(alloc.sem, expr) is Some(0) {
             match array_len_from_type_for_init(alloc.sem, ty, loc) {
-              None => add_error(bag, loc, "codegen: incomplete array type")
+              None => @diag.add_error(bag, loc, "codegen: incomplete array type")
               Some(n) => {
                 let (elem_size, _) = match type_size_align_or_error(alloc.sem, elem, loc) {
                   None => return
@@ -3062,7 +3062,7 @@ fn gen_initializer_to_addr(
               Expr::StringLit(value=value, length=length, ..) =>
                 if is_char_type(elem) {
                   match array_len_from_type_for_init(alloc.sem, ty, loc) {
-                    None => add_error(bag, loc, "codegen: incomplete array type")
+                    None => @diag.add_error(bag, loc, "codegen: incomplete array type")
                     Some(n) => {
                       let copy_len = if length > n { n } else { length }
                       gen_string_init_to_addr(
@@ -3080,10 +3080,10 @@ fn gen_initializer_to_addr(
                     }
                   }
                 } else {
-                  add_error(bag, loc, "codegen: string initializer for non-char array")
+                  @diag.add_error(bag, loc, "codegen: string initializer for non-char array")
                 }
               _ =>
-                add_error(bag, loc, "codegen: scalar initializer for array not supported")
+                @diag.add_error(bag, loc, "codegen: scalar initializer for array not supported")
             }
           }
         CType::Struct(..) | CType::Union(..) => {
@@ -3139,7 +3139,7 @@ fn gen_initializer_to_addr(
         CType::Array(elem=elem_ty, ..) => {
           let n = match array_len_from_type_for_init(alloc.sem, ty, loc) {
             None => {
-              add_error(bag, loc, "codegen: incomplete array type")
+              @diag.add_error(bag, loc, "codegen: incomplete array type")
               return
             }
             Some(v) => v
@@ -3163,7 +3163,7 @@ fn gen_initializer_to_addr(
                     idx = v
                     has_index = true
                     if idx < 0 || idx >= n {
-                      add_error(bag, des_loc, "codegen: array designator out of bounds")
+                      @diag.add_error(bag, des_loc, "codegen: array designator out of bounds")
                     }
                   }
                 InitDesignator::IndexRange(start~, end~, loc=des_loc) =>
@@ -3178,11 +3178,11 @@ fn gen_initializer_to_addr(
                       range_end = Some(end_val)
                       range_loc = des_loc
                       if idx < 0 || idx >= n {
-                        add_error(bag, des_loc, "codegen: array designator out of bounds")
+                        @diag.add_error(bag, des_loc, "codegen: array designator out of bounds")
                       }
                     }
                     _ => {
-                      add_error(
+                      @diag.add_error(
                         bag,
                         des_loc,
                         "codegen: array designator must be constant",
@@ -3210,16 +3210,16 @@ fn gen_initializer_to_addr(
             }
             if range_pos >= 0 {
               if range_pos != item.designators.length() - 1 {
-                add_error(bag, range_loc, "codegen: array range designator must be last")
+                @diag.add_error(bag, range_loc, "codegen: array range designator must be last")
               } else {
                 match (range_start, range_end) {
                   (Some(start_idx), Some(end_idx)) => {
                     if end_idx < start_idx {
-                      add_error(bag, range_loc, "codegen: array designator range is empty")
+                      @diag.add_error(bag, range_loc, "codegen: array designator range is empty")
                     } else {
                       if range_pos == 0 &&
                         (start_idx < 0 || end_idx < 0 || start_idx >= n || end_idx >= n) {
-                        add_error(bag, range_loc, "codegen: array designator out of bounds")
+                        @diag.add_error(bag, range_loc, "codegen: array designator out of bounds")
                       }
                       let mut cur = start_idx
                       while cur <= end_idx {
@@ -3258,7 +3258,7 @@ fn gen_initializer_to_addr(
                     }
                   }
                   _ =>
-                    add_error(
+                    @diag.add_error(
                       bag,
                       range_loc,
                       "codegen: array designator must be constant",
@@ -3330,7 +3330,7 @@ fn gen_initializer_to_addr(
           )
           let list = match fields {
             None => {
-              add_error(bag, loc, "codegen: incomplete struct '\{tag}'")
+              @diag.add_error(bag, loc, "codegen: incomplete struct '\{tag}'")
               return
             }
             Some(v) => v
@@ -3367,7 +3367,7 @@ fn gen_initializer_to_addr(
                       Initializer::Expr(expr~, ..) => {
                         let tmp = take_reg(pool) catch {
                           err => {
-                            add_error(bag, item.loc, err.to_string())
+                            @diag.add_error(bag, item.loc, err.to_string())
                             return
                           }
                         }
@@ -3393,7 +3393,7 @@ fn gen_initializer_to_addr(
                         )
                         give_reg(pool, tmp)
                       }
-                      _ => add_error(bag, item.loc, "codegen: bitfield initializer must be scalar")
+                      _ => @diag.add_error(bag, item.loc, "codegen: bitfield initializer must be scalar")
                     }
                   }
                   None =>
@@ -3415,7 +3415,7 @@ fn gen_initializer_to_addr(
             } else {
               match next_init_field(list, index) {
                 None => {
-                  add_error(bag, item.loc, "codegen: too many initializers for aggregate")
+                  @diag.add_error(bag, item.loc, "codegen: too many initializers for aggregate")
                   item_idx = item_idx + 1
                 }
                 Some((field, next_idx)) => {
@@ -3489,7 +3489,7 @@ fn gen_initializer_to_addr(
                         field.id,
                         item.loc,
                       ) {
-                        None => add_error(bag, item.loc, "codegen: missing bitfield info")
+                        None => @diag.add_error(bag, item.loc, "codegen: missing bitfield info")
                         Some(info) => {
                           let info_at = {
                             offset: base_off + info.offset,
@@ -3502,7 +3502,7 @@ fn gen_initializer_to_addr(
                             Initializer::Expr(expr~, ..) => {
                               let tmp = take_reg(pool) catch {
                                 err => {
-                                  add_error(bag, item.loc, err.to_string())
+                                  @diag.add_error(bag, item.loc, err.to_string())
                                   return
                                 }
                               }
@@ -3529,7 +3529,7 @@ fn gen_initializer_to_addr(
                               give_reg(pool, tmp)
                             }
                             _ =>
-                              add_error(bag, item.loc, "codegen: bitfield initializer must be scalar")
+                              @diag.add_error(bag, item.loc, "codegen: bitfield initializer must be scalar")
                           }
                         }
                       }
@@ -3565,7 +3565,7 @@ fn gen_initializer_to_addr(
           )
           let list = match fields {
             None => {
-              add_error(bag, loc, "codegen: incomplete union '\{tag}'")
+              @diag.add_error(bag, loc, "codegen: incomplete union '\{tag}'")
               return
             }
             Some(v) => v
@@ -3595,7 +3595,7 @@ fn gen_initializer_to_addr(
                     Initializer::Expr(expr~, ..) => {
                       let tmp = take_reg(pool) catch {
                         err => {
-                          add_error(bag, first.loc, err.to_string())
+                          @diag.add_error(bag, first.loc, err.to_string())
                           return
                         }
                       }
@@ -3622,7 +3622,7 @@ fn gen_initializer_to_addr(
                       give_reg(pool, tmp)
                     }
                     _ =>
-                      add_error(bag, first.loc, "codegen: bitfield initializer must be scalar")
+                      @diag.add_error(bag, first.loc, "codegen: bitfield initializer must be scalar")
                   }
                 }
                 None =>
@@ -3650,7 +3650,7 @@ fn gen_initializer_to_addr(
                 field.id,
                 first.loc,
               ) {
-                None => add_error(bag, first.loc, "codegen: missing bitfield info")
+                None => @diag.add_error(bag, first.loc, "codegen: missing bitfield info")
                 Some(info) => {
                   let info_at = {
                     offset: base_off + info.offset,
@@ -3663,7 +3663,7 @@ fn gen_initializer_to_addr(
                     Initializer::Expr(expr~, ..) => {
                       let tmp = take_reg(pool) catch {
                         err => {
-                          add_error(bag, first.loc, err.to_string())
+                          @diag.add_error(bag, first.loc, err.to_string())
                           return
                         }
                       }
@@ -3690,7 +3690,7 @@ fn gen_initializer_to_addr(
                       give_reg(pool, tmp)
                     }
                     _ =>
-                      add_error(bag, first.loc, "codegen: bitfield initializer must be scalar")
+                      @diag.add_error(bag, first.loc, "codegen: bitfield initializer must be scalar")
                   }
                 }
               }
@@ -3710,7 +3710,7 @@ fn gen_initializer_to_addr(
             }
           }
         }
-        _ => add_error(bag, loc, "codegen: initializer list for non-aggregate")
+        _ => @diag.add_error(bag, loc, "codegen: initializer list for non-aggregate")
       }
   }
 }
@@ -3857,8 +3857,8 @@ fn emit_load_local_scalar(
   ty : CType,
   dst : Int,
   off : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let (size, signed) = match scalar_size_signed_or_error(sem, ty, loc) {
     None => return
@@ -3866,7 +3866,7 @@ fn emit_load_local_scalar(
   }
   let sz = match arm64_sz_from_size(size) {
     None => {
-      add_error(bag, loc, "codegen: unsupported scalar size")
+      @diag.add_error(bag, loc, "codegen: unsupported scalar size")
       return
     }
     Some(v) => v
@@ -3882,8 +3882,8 @@ fn emit_store_local_scalar(
   ty : CType,
   src : Int,
   off : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let (size, _) = match scalar_size_signed_or_error(sem, ty, loc) {
     None => return
@@ -3891,7 +3891,7 @@ fn emit_store_local_scalar(
   }
   let sz = match arm64_sz_from_size(size) {
     None => {
-      add_error(bag, loc, "codegen: unsupported scalar size")
+      @diag.add_error(bag, loc, "codegen: unsupported scalar size")
       return
     }
     Some(v) => v
@@ -3905,8 +3905,8 @@ fn emit_addr_local(
   emitter : Arm64Emitter,
   dst : Int,
   off : Int,
-  _loc : SrcLoc,
-  _bag : DiagBag,
+  _loc : @source.SrcLoc,
+  _bag : @diag.DiagBag,
 ) -> Unit {
   let imm = if off < 0 { -off } else { off }
   if imm <= 0xfff {
@@ -3985,8 +3985,8 @@ fn emit_addr_sp(
   emitter : Arm64Emitter,
   dst : Int,
   off : Int,
-  _loc : SrcLoc,
-  _bag : DiagBag,
+  _loc : @source.SrcLoc,
+  _bag : @diag.DiagBag,
 ) -> Unit {
   let imm = if off < 0 { -off } else { off }
   if imm <= 0xfff {
@@ -4022,8 +4022,8 @@ fn emit_addr_reg(
   dst : Int,
   base_reg : Int,
   off : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   if base_reg == 29 {
     emit_addr_local(emitter, dst, off, loc, bag)
@@ -4074,23 +4074,23 @@ fn gen_builtin_va_start(
   pool : RegPool,
   cstrings : CstringPool,
   args : Array[Expr],
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   if args.length() < 1 {
-    add_error(bag, loc, "__builtin_va_start expects an ap argument")
+    @diag.add_error(bag, loc, "__builtin_va_start expects an ap argument")
     return
   }
   let ap_addr = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       return
     }
   }
   gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, args[0], ap_addr, bag)
   let base = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       give_reg(pool, ap_addr)
       return
     }
@@ -4116,23 +4116,23 @@ fn gen_builtin_va_copy(
   pool : RegPool,
   cstrings : CstringPool,
   args : Array[Expr],
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   if args.length() < 2 {
-    add_error(bag, loc, "__builtin_va_copy expects 2 arguments")
+    @diag.add_error(bag, loc, "__builtin_va_copy expects 2 arguments")
     return
   }
   let src_addr = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       return
     }
   }
   gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, args[1], src_addr, bag)
   let tmp = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       give_reg(pool, src_addr)
       return
     }
@@ -4147,7 +4147,7 @@ fn gen_builtin_va_copy(
   )
   let dst_addr = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       give_reg(pool, tmp)
       give_reg(pool, src_addr)
       return
@@ -4174,16 +4174,16 @@ fn gen_builtin_alloca(
   pool : RegPool,
   cstrings : CstringPool,
   args : Array[Expr],
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   if args.length() != 1 {
-    add_error(bag, loc, "__builtin_alloca expects 1 argument")
+    @diag.add_error(bag, loc, "__builtin_alloca expects 1 argument")
     return
   }
   let size_reg = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       return
     }
   }
@@ -4223,19 +4223,19 @@ fn gen_builtin_va_arg_load(
   list_expr : Expr,
   ty : CType,
   dst : Int,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
 ) -> Bool {
   let loc = expr_loc(list_expr)
   let ap_addr = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       return false
     }
   }
   gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, list_expr, ap_addr, bag)
   let cur = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       give_reg(pool, ap_addr)
       return false
     }
@@ -4271,7 +4271,7 @@ fn gen_builtin_va_arg_load(
   }
   let load_sz = match arm64_sz_from_size(size) {
     None => {
-      add_error(bag, loc, "codegen: unsupported va_arg size")
+      @diag.add_error(bag, loc, "codegen: unsupported va_arg size")
       give_reg(pool, cur)
       give_reg(pool, ap_addr)
       return false
@@ -4335,8 +4335,8 @@ fn arm64_hfa_aux(
   ty : CType,
   fsize : Int,
   num : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> (Int, Int)? {
   if float_kind_of_type(ty) is Some(_) {
     match type_size_align_or_error(sem, ty, loc) {
@@ -4469,8 +4469,8 @@ fn arm64_hfa_aux(
 fn arm64_hfa(
   sem : SemContext,
   ty : CType,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> (Int, Int)? {
   match arm64_hfa_aux(sem, ty, 0, 0, loc, bag) {
     None => None
@@ -4487,8 +4487,8 @@ fn arm64_hfa(
 fn arm64_pcs_size_align(
   sem : SemContext,
   ty : CType,
-  loc : SrcLoc,
-  _bag : DiagBag,
+  loc : @source.SrcLoc,
+  _bag : @diag.DiagBag,
 ) -> (Int, Int)? {
   match strip_top_qualifiers(ty) {
     CType::Array(..) | CType::Function(..) => Some((8, 8))
@@ -4501,8 +4501,8 @@ fn arm64_pcs_aux(
   sem : SemContext,
   variadic_index : Int,
   types : Array[CType],
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Arm64PcsAuxInfo {
   let mut nx = 0
   let mut nv = 0
@@ -4648,8 +4648,8 @@ fn arm64_pcs(
   variadic_index : Int,
   ret_ty : CType,
   arg_tys : Array[CType],
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Arm64PcsLayout {
   let ret_loc = match strip_top_qualifiers(ret_ty) {
     CType::Void => -1
@@ -4678,8 +4678,8 @@ fn arm64_pcs(
 fn call_arg_slot_count(
   alloc : LocalAlloc,
   ty : CType,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Int? {
   match strip_top_qualifiers(ty) {
     CType::Struct(..) | CType::Union(..) =>
@@ -4689,7 +4689,7 @@ fn call_arg_slot_count(
         } else if size <= 16 {
           Some(2)
         } else {
-          add_error(bag, loc, "codegen: struct args >16 bytes not supported yet")
+          @diag.add_error(bag, loc, "codegen: struct args >16 bytes not supported yet")
           None
         }
       } else {
@@ -4709,14 +4709,14 @@ fn store_call_arg_to_slot(
   arg : Expr,
   ty : CType,
   slot_off : UInt64,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   match float_kind_of_type(ty) {
     Some(k) => {
       let tmp = take_reg(pool) catch {
         err => {
-          add_error(bag, loc, err.to_string())
+          @diag.add_error(bag, loc, err.to_string())
           return
         }
       }
@@ -4757,13 +4757,13 @@ fn store_call_arg_to_slot(
                 bag,
               )
             } else {
-              add_error(bag, loc, "codegen: struct args >16 bytes not supported yet")
+              @diag.add_error(bag, loc, "codegen: struct args >16 bytes not supported yet")
             }
           }
         _ => {
           let tmp = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               return
             }
           }
@@ -4815,8 +4815,8 @@ fn gen_call_direct(
   id? : Int = 0,
   args : Array[Expr],
   sret : SRetAddr?,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> CType {
   let sig = if id > 0 {
     match get_function_by_id(alloc.sem, id) {
@@ -4982,12 +4982,12 @@ fn emit_adr(
   emitter : Arm64Emitter,
   rd : Int,
   diff : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   match encode_adr(rd, diff) {
     Some(insn) => emit32(emitter, insn)
-    None => add_error(bag, loc, "codegen: label address out of range")
+    None => @diag.add_error(bag, loc, "codegen: label address out of range")
   }
 }
 
@@ -4996,19 +4996,19 @@ fn patch_adr(
   emitter : Arm64Emitter,
   at : Int,
   target : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let idx = at >> 2
   if idx < 0 || idx >= emitter.code_len {
-    add_error(bag, loc, "codegen: invalid label address patch")
+    @diag.add_error(bag, loc, "codegen: invalid label address patch")
     return
   }
   let rd = emitter.code[idx].reinterpret_as_int() & 0x1f
   let diff = target - at
   match encode_adr(rd, diff) {
     Some(insn) => emitter.code[idx] = insn
-    None => add_error(bag, loc, "codegen: label address out of range")
+    None => @diag.add_error(bag, loc, "codegen: label address out of range")
   }
 }
 
@@ -5024,8 +5024,8 @@ fn gen_call_with_layout(
   ret_ty : CType,
   variadic_index : Int,
   sret : SRetAddr?,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
   emit_call : () -> Unit,
   layout~ : Arm64PcsLayout?,
 ) -> Unit {
@@ -5148,7 +5148,7 @@ fn gen_call_with_layout(
       )
       let tmp = take_reg(pool) catch {
         err => {
-          add_error(bag, loc, err.to_string())
+          @diag.add_error(bag, loc, err.to_string())
           return
         }
       }
@@ -5225,7 +5225,7 @@ fn gen_call_with_layout(
         while j < hfa_count {
           let tmp = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               return
             }
           }
@@ -5256,7 +5256,7 @@ fn gen_call_with_layout(
       } else {
         let tmp = take_reg(pool) catch {
           err => {
-            add_error(bag, loc, err.to_string())
+            @diag.add_error(bag, loc, err.to_string())
             return
           }
         }
@@ -5335,29 +5335,29 @@ fn gen_builtin_frame_address(
   pool : RegPool,
   args : Array[Expr],
   is_return : Bool,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   if args.length() != 1 {
     let name = if is_return { "__builtin_return_address" } else { "__builtin_frame_address" }
-    add_error(bag, loc, "\{name} expects 1 argument")
+    @diag.add_error(bag, loc, "\{name} expects 1 argument")
     return
   }
   let level = match const_int_from_expr(alloc.sem, args[0], loc) {
     None => {
-      add_error(bag, loc, "codegen: builtin expects constant integer level")
+      @diag.add_error(bag, loc, "codegen: builtin expects constant integer level")
       return
     }
     Some(v) => v
   }
   if level < 0 {
     let name = if is_return { "__builtin_return_address" } else { "__builtin_frame_address" }
-    add_error(bag, loc, "\{name} only takes non-negative integers")
+    @diag.add_error(bag, loc, "\{name} only takes non-negative integers")
     return
   }
   let tmp = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       return
     }
   }
@@ -5398,8 +5398,8 @@ fn gen_atomic_builtin_call(
   name : String,
   id : Int,
   args : Array[Expr],
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Bool {
   let template = match atomic_builtin_template_from_ident(alloc.sem, name, id) {
     None => return false
@@ -5414,7 +5414,7 @@ fn gen_atomic_builtin_call(
   }
   let arg_spec_len = dot_index
   if args.length() != arg_spec_len {
-    add_error(bag, loc, "\{name} expects \{arg_spec_len} arguments")
+    @diag.add_error(bag, loc, "\{name} expects \{arg_spec_len} arguments")
   }
   let mut atom_type : CType? = None
   let mut atom_size = 0
@@ -5437,7 +5437,7 @@ fn gen_atomic_builtin_call(
               }
             }
           }
-          _ => add_error(bag, loc, "\{name} expects pointer argument")
+          _ => @diag.add_error(bag, loc, "\{name} expects pointer argument")
         }
         call_args.push(arg)
         call_arg_tys.push(ptr_ty)
@@ -5482,7 +5482,7 @@ fn gen_atomic_builtin_call(
     i = i + 1
   }
   if atom_size <= 0 {
-    add_error(bag, loc, "codegen: atomic builtin requires 1/2/4/8-byte target type")
+    @diag.add_error(bag, loc, "codegen: atomic builtin requires 1/2/4/8-byte target type")
     return true
   }
   let helper_name = "\{name}_\{atom_size}"
@@ -5511,7 +5511,7 @@ fn gen_atomic_builtin_call(
   if save_arg is Some(dest) {
     let addr = take_reg(pool) catch {
       err => {
-        add_error(bag, loc, err.to_string())
+        @diag.add_error(bag, loc, err.to_string())
         return true
       }
     }
@@ -5536,8 +5536,8 @@ fn gen_call_expr_impl(
   callee : Expr,
   args : Array[Expr],
   sret : SRetAddr?,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   if callee is Expr::Ident(name~, id~, ..) {
     if name == "__builtin_alloca" || name == "alloca" {
@@ -5547,12 +5547,12 @@ fn gen_call_expr_impl(
     match builtin_call_kind(alloc.sem, name, id) {
       Some(BuiltinCallKind::Expect) => {
         if args.length() != 2 {
-          add_error(bag, loc, "__builtin_expect expects 2 arguments")
+          @diag.add_error(bag, loc, "__builtin_expect expects 2 arguments")
           return
         }
         let tmp = take_reg(pool) catch {
           err => {
-            add_error(bag, loc, err.to_string())
+            @diag.add_error(bag, loc, err.to_string())
             return
           }
         }
@@ -5604,7 +5604,7 @@ fn gen_call_expr_impl(
       Some(BuiltinCallKind::VaEnd) => return
       Some(BuiltinCallKind::SyncSynchronize) => {
         if args.length() != 0 {
-          add_error(bag, loc, "__sync_synchronize expects no args")
+          @diag.add_error(bag, loc, "__sync_synchronize expects no args")
         }
         emit32(emitter, (0xd5033bbf : UInt))
         return
@@ -5716,7 +5716,7 @@ fn gen_call_expr_impl(
 
   let fn_reg = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       return
     }
   }
@@ -5765,8 +5765,8 @@ fn gen_call_expr(
   cstrings : CstringPool,
   callee : Expr,
   args : Array[Expr],
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   gen_call_expr_impl(
     emitter,
@@ -5793,8 +5793,8 @@ fn gen_call_expr_with_sret(
   args : Array[Expr],
   sret_reg : Int,
   sret_off : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   gen_call_expr_impl(
     emitter,
@@ -5826,11 +5826,11 @@ fn gen_func_name_addr(
   cstrings : CstringPool,
   alloc : LocalAlloc,
   dst : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Bool {
   if alloc.func_name == "" {
-    add_error(bag, loc, "codegen: missing __func__ string literal")
+    @diag.add_error(bag, loc, "codegen: missing __func__ string literal")
     return false
   }
   let sym = cstring_sym_or_add(cstrings, syms, alloc.func_name)
@@ -5864,8 +5864,8 @@ fn gen_index_addr_with_elem_type(
   base : Expr,
   index : Expr,
   dst : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> CType? {
   gen_expr_ptr(emitter, alloc, syms, pool, cstrings, base, dst, bag)
   let mut base_reg = dst
@@ -5873,7 +5873,7 @@ fn gen_index_addr_with_elem_type(
   if expr_may_call(index) && dst < 19 {
     let tmp = take_reg(pool) catch {
       err => {
-        add_error(bag, loc, err.to_string())
+        @diag.add_error(bag, loc, err.to_string())
         return None
       }
     }
@@ -5883,7 +5883,7 @@ fn gen_index_addr_with_elem_type(
   }
   let idx = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       if saved_reg is Some(r) {
         give_reg(pool, r)
       }
@@ -5896,7 +5896,7 @@ fn gen_index_addr_with_elem_type(
   let base_ty = type_of_expr(alloc.sem, base)
   let elem_ty = match element_type_for_pointer_arith(base_ty) {
     None => {
-      add_error(bag, loc, "codegen: index base is not pointer/array")
+      @diag.add_error(bag, loc, "codegen: index base is not pointer/array")
       give_reg(pool, idx)
       if saved_reg is Some(r) {
         give_reg(pool, r)
@@ -5911,7 +5911,7 @@ fn gen_index_addr_with_elem_type(
     CType::Array(size=None, size_expr=Some(_), ..) => {
       let scale = take_reg(pool) catch {
         err => {
-          add_error(bag, loc, err.to_string())
+          @diag.add_error(bag, loc, err.to_string())
           give_reg(pool, idx)
           if saved_reg is Some(r) {
             give_reg(pool, r)
@@ -5961,7 +5961,7 @@ fn gen_index_addr_with_elem_type(
         if elem_size != 1 {
           let scale = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               give_reg(pool, idx)
               if saved_reg is Some(r) {
                 give_reg(pool, r)
@@ -6013,15 +6013,15 @@ fn gen_compound_literal_addr_with_type(
   cstrings : CstringPool,
   ty : CType,
   init : Initializer,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
   node_id : Int,
   dst : Int,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
 ) -> CType? {
   let key = compound_literal_key(node_id)
   match alloc.compound_literal_slots.get(key) {
     None => {
-      add_error(bag, loc, "codegen: missing compound literal slot")
+      @diag.add_error(bag, loc, "codegen: missing compound literal slot")
       None
     }
     Some(off) => {
@@ -6062,7 +6062,7 @@ fn gen_lvalue_addr(
   cstrings : CstringPool,
   expr : Expr,
   dst : Int,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
 ) -> Unit {
   match expr {
     Expr::Ident(name~, id~, loc~, ..) => {
@@ -6145,7 +6145,7 @@ fn gen_lvalue_addr(
           gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, expr, dst, bag),
       )
       if !last_is_expr {
-        add_error(bag, loc, "codegen: statement expression is not assignable")
+        @diag.add_error(bag, loc, "codegen: statement expression is not assignable")
       }
     }
     Expr::Unary(op=UnaryOp::Deref, expr=inner, ..) =>
@@ -6175,10 +6175,10 @@ fn gen_lvalue_addr(
           CType::Struct(..) | CType::Union(..) =>
             if type_size_align_or_error(alloc.sem, base_ty, loc) is Some((size, _)) {
               match alloc.agg_temp_offset {
-                None => add_error(bag, loc, "codegen: missing aggregate temp slot")
+                None => @diag.add_error(bag, loc, "codegen: missing aggregate temp slot")
                 Some(tmp_off) => {
                   if size > alloc.agg_temp_size {
-                    add_error(bag, loc, "codegen: aggregate temp too small")
+                    @diag.add_error(bag, loc, "codegen: aggregate temp too small")
                     return
                   }
                   gen_agg_expr_to_addr(
@@ -6229,7 +6229,7 @@ fn gen_lvalue_addr(
         } else {
           let tmp = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               return
             }
           }
@@ -6248,7 +6248,7 @@ fn gen_lvalue_addr(
         }
       }
     }
-    _ => add_error(bag, expr_loc(expr), "codegen: unsupported lvalue for now")
+    _ => @diag.add_error(bag, expr_loc(expr), "codegen: unsupported lvalue for now")
   }
 }
 
@@ -6259,7 +6259,7 @@ fn struct_field_access_info(
   struct_attrs : Attributes,
   name : String,
   id : Int,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> FieldAccessInfo? {
   let fields = def.fields
   let attrs = merge_attrs(def.attrs, struct_attrs)
@@ -6404,7 +6404,7 @@ fn union_field_access_info(
   union_attrs : Attributes,
   name : String,
   id : Int,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> FieldAccessInfo? {
   let fields = def.fields
   let attrs = merge_attrs(def.attrs, union_attrs)
@@ -6485,7 +6485,7 @@ fn collect_struct_field_access_cache(
   ctx : SemContext,
   fields : Array[Field],
   attrs : Attributes,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
   cache : FastMap[String, FieldAccessInfo],
   cache_by_id : FastMap[Int, FieldAccessInfo],
 ) -> Unit {
@@ -6647,7 +6647,7 @@ fn collect_union_field_access_cache(
   ctx : SemContext,
   fields : Array[Field],
   attrs : Attributes,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
   cache : FastMap[String, FieldAccessInfo],
   cache_by_id : FastMap[Int, FieldAccessInfo],
 ) -> Unit {
@@ -6718,7 +6718,7 @@ fn build_struct_field_access_caches(
   ctx : SemContext,
   def : RecordDef,
   struct_attrs : Attributes,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (FastMap[String, FieldAccessInfo], FastMap[Int, FieldAccessInfo]) {
   let cache_by_name : FastMap[String, FieldAccessInfo] = fast_map_new()
   let cache_by_id : FastMap[Int, FieldAccessInfo] = fast_map_new()
@@ -6732,7 +6732,7 @@ fn build_union_field_access_caches(
   ctx : SemContext,
   def : RecordDef,
   union_attrs : Attributes,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (FastMap[String, FieldAccessInfo], FastMap[Int, FieldAccessInfo]) {
   let cache_by_name : FastMap[String, FieldAccessInfo] = fast_map_new()
   let cache_by_id : FastMap[Int, FieldAccessInfo] = fast_map_new()
@@ -6747,7 +6747,7 @@ fn record_field_access_info(
   record_ty : CType,
   name : String,
   id : Int,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> FieldAccessInfo? {
   let resolved = resolve_type(ctx, record_ty, loc) |> strip_top_qualifiers
   match resolved {
@@ -6895,7 +6895,7 @@ fn record_field_access_info(
 fn build_record_field_access_caches(
   ctx : SemContext,
   record_ty : CType,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (FastMap[String, FieldAccessInfo], FastMap[Int, FieldAccessInfo]) {
   let resolved = resolve_type(ctx, record_ty, loc) |> strip_top_qualifiers
   match resolved {
@@ -6998,7 +6998,7 @@ fn member_access_info(
   name : String,
   id : Int,
   is_arrow : Bool,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> FieldAccessInfo? {
   let base_ty = type_of_expr(sem, base)
   let record_ty = if is_arrow {
@@ -7019,7 +7019,7 @@ fn member_access_info_from_base_type(
   name : String,
   id : Int,
   is_arrow : Bool,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> FieldAccessInfo? {
   let record_ty = if is_arrow {
     match strip_top_qualifiers(base_ty) {
@@ -7061,7 +7061,7 @@ fn gen_member_base_addr(
   base : Expr,
   is_arrow : Bool,
   dst : Int,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
 ) -> Unit {
   if is_arrow {
     gen_expr_ptr(emitter, alloc, syms, pool, cstrings, base, dst, bag)
@@ -7082,8 +7082,8 @@ fn gen_member_addr_with_info(
   is_arrow : Bool,
   info : FieldAccessInfo,
   dst : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   if is_arrow {
     gen_expr_ptr(emitter, alloc, syms, pool, cstrings, base, dst, bag)
@@ -7092,10 +7092,10 @@ fn gen_member_addr_with_info(
       CType::Struct(..) | CType::Union(..) =>
         if type_size_align_or_error(alloc.sem, base_ty, loc) is Some((size, _)) {
           match alloc.agg_temp_offset {
-            None => add_error(bag, loc, "codegen: missing aggregate temp slot")
+            None => @diag.add_error(bag, loc, "codegen: missing aggregate temp slot")
             Some(tmp_off) => {
               if size > alloc.agg_temp_size {
-                add_error(bag, loc, "codegen: aggregate temp too small")
+                @diag.add_error(bag, loc, "codegen: aggregate temp too small")
                 return
               }
               gen_agg_expr_to_addr(
@@ -7135,7 +7135,7 @@ fn gen_member_addr_with_info(
     } else {
       let tmp = take_reg(pool) catch {
         err => {
-          add_error(bag, loc, err.to_string())
+          @diag.add_error(bag, loc, err.to_string())
           return
         }
       }
@@ -7173,7 +7173,7 @@ fn adjust_bitfield_access_info(
   ctx : SemContext,
   struct_size : Int,
   info : FieldAccessInfo,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> FieldAccessInfo {
   match info.bit_width {
     None => info
@@ -7270,8 +7270,8 @@ fn emit_bitfield_load_packed(
   addr_reg : Int,
   info : FieldAccessInfo,
   dst : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let width = match info.bit_width {
     None => 0
@@ -7295,7 +7295,7 @@ fn emit_bitfield_load_packed(
   arm64_movimm(emitter, dst.reinterpret_as_uint(), 0)
   let tmp = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       return
     }
   }
@@ -7329,7 +7329,7 @@ fn emit_bitfield_load_packed(
       if !arm64_gen_opic(emitter, TOK_AND, l, false, mask, tmp, tmp) {
         let mask_reg = take_reg(pool) catch {
           err => {
-            add_error(bag, loc, err.to_string())
+            @diag.add_error(bag, loc, err.to_string())
             give_reg(pool, tmp)
             return
           }
@@ -7388,8 +7388,8 @@ fn emit_bitfield_store_packed(
   addr_reg : Int,
   info : FieldAccessInfo,
   value_reg : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let width = match info.bit_width {
     None => 0
@@ -7410,13 +7410,13 @@ fn emit_bitfield_store_packed(
   let l = if is64 { 1 } else { 0 }
   let tmp = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       return
     }
   }
   let chunk = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       give_reg(pool, tmp)
       return
     }
@@ -7455,7 +7455,7 @@ fn emit_bitfield_store_packed(
       if !arm64_gen_opic(emitter, TOK_AND, l, false, mask, chunk, chunk) {
         let mask_reg = take_reg(pool) catch {
           err => {
-            add_error(bag, loc, err.to_string())
+            @diag.add_error(bag, loc, err.to_string())
             give_reg(pool, chunk)
             give_reg(pool, tmp)
             return
@@ -7487,7 +7487,7 @@ fn emit_bitfield_store_packed(
       if !arm64_gen_opic(emitter, TOK_AND, l, false, inv_mask, tmp, tmp) {
         let mask_reg = take_reg(pool) catch {
           err => {
-            add_error(bag, loc, err.to_string())
+            @diag.add_error(bag, loc, err.to_string())
             give_reg(pool, chunk)
             give_reg(pool, tmp)
             return
@@ -7523,8 +7523,8 @@ fn emit_bitfield_load(
   addr_reg : Int,
   info : FieldAccessInfo,
   dst : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let width = match info.bit_width {
     None => 0
@@ -7552,7 +7552,7 @@ fn emit_bitfield_load(
   let unit_bits = unit_size * 8
   let sz = match arm64_sz_from_size(unit_size) {
     None => {
-      add_error(bag, loc, "codegen: unsupported bitfield size")
+      @diag.add_error(bag, loc, "codegen: unsupported bitfield size")
       return
     }
     Some(v) => v
@@ -7586,7 +7586,7 @@ fn emit_bitfield_load(
     if !arm64_gen_opic(emitter, TOK_AND, l, false, mask, dst, dst) {
       let tmp = take_reg(pool) catch {
         err => {
-          add_error(bag, loc, err.to_string())
+          @diag.add_error(bag, loc, err.to_string())
           return
         }
       }
@@ -7626,8 +7626,8 @@ fn emit_bitfield_store(
   addr_reg : Int,
   info : FieldAccessInfo,
   value_reg : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let width = match info.bit_width {
     None => 0
@@ -7654,7 +7654,7 @@ fn emit_bitfield_store(
   let unit_bits = unit_size * 8
   let sz = match arm64_sz_from_size(unit_size) {
     None => {
-      add_error(bag, loc, "codegen: unsupported bitfield size")
+      @diag.add_error(bag, loc, "codegen: unsupported bitfield size")
       return
     }
     Some(v) => v
@@ -7672,7 +7672,7 @@ fn emit_bitfield_store(
   }
   let unit_reg = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       return
     }
   }
@@ -7686,7 +7686,7 @@ fn emit_bitfield_store(
   )
   let val_reg = take_reg(pool) catch {
     err => {
-      add_error(bag, loc, err.to_string())
+      @diag.add_error(bag, loc, err.to_string())
       give_reg(pool, unit_reg)
       return
     }
@@ -7702,7 +7702,7 @@ fn emit_bitfield_store(
     if !arm64_gen_opic(emitter, TOK_AND, l, false, mask, val_reg, val_reg) {
       let tmp = take_reg(pool) catch {
         err => {
-          add_error(bag, loc, err.to_string())
+          @diag.add_error(bag, loc, err.to_string())
           give_reg(pool, val_reg)
           give_reg(pool, unit_reg)
           return
@@ -7740,7 +7740,7 @@ fn emit_bitfield_store(
     if !arm64_gen_opic(emitter, TOK_AND, l, false, inv_mask, unit_reg, unit_reg) {
       let tmp = take_reg(pool) catch {
         err => {
-          add_error(bag, loc, err.to_string())
+          @diag.add_error(bag, loc, err.to_string())
           give_reg(pool, val_reg)
           give_reg(pool, unit_reg)
           return
@@ -7773,7 +7773,7 @@ fn store_lvalue_scalar(
   lvalue : Expr,
   value_reg : Int,
   value_ty : CType,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let loc = expr_loc(lvalue)
   let (value_size, _) = match scalar_size_signed_or_error(alloc.sem, value_ty, loc) {
@@ -7785,7 +7785,7 @@ fn store_lvalue_scalar(
   if expr_may_call(lvalue) {
     let tmp = take_reg(pool) catch {
       err => {
-        add_error(bag, loc, err.to_string())
+        @diag.add_error(bag, loc, err.to_string())
         return
       }
     }
@@ -7796,7 +7796,7 @@ fn store_lvalue_scalar(
   if member_bitfield_info(alloc, lvalue) is Some((base, is_arrow, info)) {
     let addr = take_reg(pool) catch {
       err => {
-        add_error(bag, loc, err.to_string())
+        @diag.add_error(bag, loc, err.to_string())
         if saved_reg is Some(r) {
           give_reg(pool, r)
         }
@@ -7833,7 +7833,7 @@ fn store_lvalue_scalar(
           emit_addr_global(emitter, syms, sym, addr_reg)
           let sz = match arm64_sz_from_size(value_size) {
             None => {
-              add_error(bag, loc, "codegen: unsupported scalar size")
+              @diag.add_error(bag, loc, "codegen: unsupported scalar size")
               if saved_reg is Some(r) {
                 give_reg(pool, r)
               }
@@ -7853,7 +7853,7 @@ fn store_lvalue_scalar(
     _ => {
       let addr = take_reg(pool) catch {
         err => {
-          add_error(bag, loc, err.to_string())
+          @diag.add_error(bag, loc, err.to_string())
           if saved_reg is Some(r) {
             give_reg(pool, r)
           }
@@ -7863,7 +7863,7 @@ fn store_lvalue_scalar(
       gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, lvalue, addr, bag)
       let sz = match arm64_sz_from_size(value_size) {
         None => {
-          add_error(bag, loc, "codegen: unsupported scalar size")
+          @diag.add_error(bag, loc, "codegen: unsupported scalar size")
           give_reg(pool, addr)
           if saved_reg is Some(r) {
             give_reg(pool, r)
@@ -7898,11 +7898,11 @@ fn gen_expr_to_float_kind_bits_with_type(
   src_ty : CType,
   target_kind : CFloatKind,
   dst : Int,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let norm_target = normalize_float_kind(target_kind)
   if !float_kind_supported(norm_target) {
-    add_error(bag, expr_loc(expr), "codegen: unsupported float type")
+    @diag.add_error(bag, expr_loc(expr), "codegen: unsupported float type")
     return
   }
   match float_kind_of_type(src_ty) {
@@ -7923,7 +7923,7 @@ fn gen_expr_to_float_kind_bits_with_type(
         emit32(emitter, (0x1e624000 : UInt))
         emit_fmov_s_to_w(emitter, dst, 0)
       } else {
-        add_error(bag, expr_loc(expr), "codegen: unsupported float conversion")
+        @diag.add_error(bag, expr_loc(expr), "codegen: unsupported float conversion")
       }
     }
     None => {
@@ -7985,7 +7985,7 @@ fn gen_expr_to_float_kind_bits(
   expr : Expr,
   target_kind : CFloatKind,
   dst : Int,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let src_ty = type_of_expr(alloc.sem, expr)
   gen_expr_to_float_kind_bits_with_type(
@@ -8012,18 +8012,18 @@ fn gen_expr_floatbits(
   expr : Expr,
   kind_raw : CFloatKind,
   dst : Int,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let kind = normalize_float_kind(kind_raw)
   if !float_kind_supported(kind) {
-    add_error(bag, expr_loc(expr), "codegen: unsupported float type")
+    @diag.add_error(bag, expr_loc(expr), "codegen: unsupported float type")
     return
   }
   let is_double = float_is_double(kind)
   match expr {
     Expr::FloatLit(value~, loc~, ..) =>
       match parse_float_literal_bits(value, kind) {
-        None => add_error(bag, loc, "codegen: invalid float literal")
+        None => @diag.add_error(bag, loc, "codegen: invalid float literal")
         Some(bits) => arm64_movimm(emitter, dst.reinterpret_as_uint(), bits)
       }
     Expr::StmtExpr(stmts~, loc~, ..) =>
@@ -8065,7 +8065,7 @@ fn gen_expr_floatbits(
             dst,
             bag,
           ))
-        None => add_error(bag, loc, "codegen: expected float type for va_arg")
+        None => @diag.add_error(bag, loc, "codegen: expected float type for va_arg")
       }
     }
     Expr::Ident(name~, id~, loc~, ..) =>
@@ -8082,7 +8082,7 @@ fn gen_expr_floatbits(
           let size = if is_double { 8 } else { 4 }
           let sz = match arm64_sz_from_size(size) {
             None => {
-              add_error(bag, loc, "codegen: unsupported float size")
+              @diag.add_error(bag, loc, "codegen: unsupported float size")
               return
             }
             Some(v) => v
@@ -8101,7 +8101,7 @@ fn gen_expr_floatbits(
     Expr::Unary(op=UnaryOp::Deref, loc=loc, ..) | Expr::CompoundLiteral(loc=loc, ..) => {
       let addr = take_reg(pool) catch {
         err => {
-          add_error(bag, loc, err.to_string())
+          @diag.add_error(bag, loc, err.to_string())
           return
         }
       }
@@ -8109,7 +8109,7 @@ fn gen_expr_floatbits(
       let size = if is_double { 8 } else { 4 }
       let sz = match arm64_sz_from_size(size) {
         None => {
-          add_error(bag, loc, "codegen: unsupported float size")
+          @diag.add_error(bag, loc, "codegen: unsupported float size")
           give_reg(pool, addr)
           return
         }
@@ -8231,7 +8231,7 @@ fn gen_expr_floatbits(
         BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div => {
           let tmp = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               return
             }
           }
@@ -8281,14 +8281,14 @@ fn gen_expr_floatbits(
         BinaryOp::AddAssign | BinaryOp::SubAssign | BinaryOp::MulAssign | BinaryOp::DivAssign => {
           let addr = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               return
             }
           }
           gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, left, addr, bag)
           let old = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               give_reg(pool, addr)
               return
             }
@@ -8296,7 +8296,7 @@ fn gen_expr_floatbits(
           let size = if is_double { 8 } else { 4 }
           let sz = match arm64_sz_from_size(size) {
             None => {
-              add_error(bag, loc, "codegen: unsupported float size")
+              @diag.add_error(bag, loc, "codegen: unsupported float size")
               give_reg(pool, old)
               give_reg(pool, addr)
               return
@@ -8352,7 +8352,7 @@ fn gen_expr_floatbits(
           give_reg(pool, addr)
         }
         _ =>
-          add_error(
+          @diag.add_error(
             bag,
             loc,
             "codegen: unsupported float binary operator",
@@ -8398,7 +8398,7 @@ fn gen_expr_floatbits(
       let br_end = gjmp(emitter, 0)
       let else_pc = emitter_pc(emitter)
       patch_b_cond(emitter, br_else, else_pc, ARM64_COND_EQ) catch {
-        err => add_error(bag, loc, err.to_string())
+        err => @diag.add_error(bag, loc, err.to_string())
       }
       gen_expr_to_float_kind_bits(
         emitter,
@@ -8413,10 +8413,10 @@ fn gen_expr_floatbits(
       )
       let end_pc = emitter_pc(emitter)
       gsym_addr(emitter, br_end, end_pc) catch {
-        err => add_error(bag, loc, err.to_string())
+        err => @diag.add_error(bag, loc, err.to_string())
       }
     }
-    _ => add_error(bag, expr_loc(expr), "codegen: unsupported float expression")
+    _ => @diag.add_error(bag, expr_loc(expr), "codegen: unsupported float expression")
   }
 }
 
@@ -8429,13 +8429,13 @@ fn gen_expr_int32(
   cstrings : CstringPool,
   expr : Expr,
   dst : Int,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
   expr_ty? : CType,
 ) -> Unit {
   match expr {
     Expr::IntLit(value~, loc~, ..) =>
       match parse_int64_literal(value) {
-        None => add_error(bag, loc, "codegen: invalid integer literal")
+        None => @diag.add_error(bag, loc, "codegen: invalid integer literal")
         Some(v) => arm64_movimm(emitter, dst.reinterpret_as_uint(), v.reinterpret_as_uint64())
       }
     Expr::CharLit(value~, ..) =>
@@ -8480,7 +8480,7 @@ fn gen_expr_int32(
               }
               let sz = match arm64_sz_from_size(size) {
                 None => {
-                  add_error(bag, loc, "codegen: unsupported scalar size")
+                  @diag.add_error(bag, loc, "codegen: unsupported scalar size")
                   return
                 }
                 Some(v) => v
@@ -8516,7 +8516,7 @@ fn gen_expr_int32(
               }
               let sz = match arm64_sz_from_size(size) {
                 None => {
-                  add_error(bag, loc, "codegen: unsupported scalar size")
+                  @diag.add_error(bag, loc, "codegen: unsupported scalar size")
                   return
                 }
                 Some(v) => v
@@ -8536,7 +8536,7 @@ fn gen_expr_int32(
     Expr::Index(base~, index~, loc~, ..) => {
       let addr = take_reg(pool) catch {
         err => {
-          add_error(bag, loc, err.to_string())
+          @diag.add_error(bag, loc, err.to_string())
           return
         }
       }
@@ -8567,7 +8567,7 @@ fn gen_expr_int32(
       }
       let sz = match arm64_sz_from_size(size) {
         None => {
-          add_error(bag, loc, "codegen: unsupported scalar size")
+          @diag.add_error(bag, loc, "codegen: unsupported scalar size")
           give_reg(pool, addr)
           return
         }
@@ -8597,7 +8597,7 @@ fn gen_expr_int32(
         if access_info.bit_width is Some(_) {
           let addr = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               return
             }
           }
@@ -8619,7 +8619,7 @@ fn gen_expr_int32(
       }
       let addr = take_reg(pool) catch {
         err => {
-          add_error(bag, loc, err.to_string())
+          @diag.add_error(bag, loc, err.to_string())
           return
         }
       }
@@ -8652,7 +8652,7 @@ fn gen_expr_int32(
           }
           let sz = match arm64_sz_from_size(size) {
             None => {
-              add_error(bag, loc, "codegen: unsupported scalar size")
+              @diag.add_error(bag, loc, "codegen: unsupported scalar size")
               give_reg(pool, addr)
               return
             }
@@ -8682,7 +8682,7 @@ fn gen_expr_int32(
           }
           let sz = match arm64_sz_from_size(size) {
             None => {
-              add_error(bag, loc, "codegen: unsupported scalar size")
+              @diag.add_error(bag, loc, "codegen: unsupported scalar size")
               give_reg(pool, addr)
               return
             }
@@ -8703,7 +8703,7 @@ fn gen_expr_int32(
     Expr::CompoundLiteral(ty~, init~, node_id~, loc~, ..) => {
       let addr = take_reg(pool) catch {
         err => {
-          add_error(bag, loc, err.to_string())
+          @diag.add_error(bag, loc, err.to_string())
           return
         }
       }
@@ -8739,7 +8739,7 @@ fn gen_expr_int32(
       }
       let sz = match arm64_sz_from_size(size) {
         None => {
-          add_error(bag, loc, "codegen: unsupported scalar size")
+          @diag.add_error(bag, loc, "codegen: unsupported scalar size")
           give_reg(pool, addr)
           return
         }
@@ -8757,7 +8757,7 @@ fn gen_expr_int32(
     }
     Expr::BuiltinVaArg(list~, ty~, loc~, ..) => {
       match float_kind_of_type(strip_top_qualifiers(ty)) {
-        Some(_) => add_error(bag, loc, "codegen: va_arg for float handled elsewhere")
+        Some(_) => @diag.add_error(bag, loc, "codegen: va_arg for float handled elsewhere")
         None =>
           if !gen_builtin_va_arg_load(
             emitter,
@@ -8776,7 +8776,7 @@ fn gen_expr_int32(
     }
     Expr::BuiltinOffsetof(ty~, path~, loc~, ..) => {
       match eval_builtin_offsetof(alloc.sem, ty, path, loc) {
-        None => add_error(bag, loc, "codegen: unsupported expression")
+        None => @diag.add_error(bag, loc, "codegen: unsupported expression")
         Some(off) =>
           arm64_movimm(emitter, dst.reinterpret_as_uint(), off.to_uint64())
       }
@@ -8830,7 +8830,7 @@ fn gen_expr_int32(
         UnaryOp::Deref => {
           let addr = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               return
             }
           }
@@ -8851,7 +8851,7 @@ fn gen_expr_int32(
           }
           let sz = match arm64_sz_from_size(size) {
             None => {
-              add_error(bag, loc, "codegen: unsupported scalar size")
+              @diag.add_error(bag, loc, "codegen: unsupported scalar size")
               give_reg(pool, addr)
               return
             }
@@ -8871,7 +8871,7 @@ fn gen_expr_int32(
           if member_bitfield_info(alloc, inner) is Some((base, is_arrow, info)) {
               let addr = take_reg(pool) catch {
                 err => {
-                  add_error(bag, loc, err.to_string())
+                  @diag.add_error(bag, loc, err.to_string())
                   return
                 }
               }
@@ -8897,7 +8897,7 @@ fn gen_expr_int32(
               let is64 = size == 8
               let one = take_reg(pool) catch {
                 err => {
-                  add_error(bag, loc, err.to_string())
+                  @diag.add_error(bag, loc, err.to_string())
                   give_reg(pool, addr)
                   return
                 }
@@ -8906,7 +8906,7 @@ fn gen_expr_int32(
               if op == UnaryOp::PostInc || op == UnaryOp::PostDec {
                 let updated = take_reg(pool) catch {
                   err => {
-                    add_error(bag, loc, err.to_string())
+                    @diag.add_error(bag, loc, err.to_string())
                     give_reg(pool, one)
                     give_reg(pool, addr)
                     return
@@ -8957,7 +8957,7 @@ fn gen_expr_int32(
             }
             let elem_ty = match element_type_for_pointer_arith(ty) {
               None => {
-                add_error(bag, loc, "codegen: pointer inc/dec missing element type")
+                @diag.add_error(bag, loc, "codegen: pointer inc/dec missing element type")
                 return
               }
               Some(t) => t
@@ -8968,14 +8968,14 @@ fn gen_expr_int32(
             }
             let addr = take_reg(pool) catch {
               err => {
-                add_error(bag, loc, err.to_string())
+                @diag.add_error(bag, loc, err.to_string())
                 return
               }
             }
             gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, inner, addr, bag)
             let sz = match arm64_sz_from_size(ptr_size) {
               None => {
-                add_error(bag, loc, "codegen: unsupported pointer size")
+                @diag.add_error(bag, loc, "codegen: unsupported pointer size")
                 give_reg(pool, addr)
                 return
               }
@@ -8991,7 +8991,7 @@ fn gen_expr_int32(
             )
             let delta_reg = take_reg(pool) catch {
               err => {
-                add_error(bag, loc, err.to_string())
+                @diag.add_error(bag, loc, err.to_string())
                 give_reg(pool, addr)
                 return
               }
@@ -9001,7 +9001,7 @@ fn gen_expr_int32(
             if op == UnaryOp::PostInc || op == UnaryOp::PostDec {
               updated_reg = take_reg(pool) catch {
                 err => {
-                  add_error(bag, loc, err.to_string())
+                  @diag.add_error(bag, loc, err.to_string())
                   give_reg(pool, delta_reg)
                   give_reg(pool, addr)
                   return
@@ -9042,7 +9042,7 @@ fn gen_expr_int32(
           }
           let sz = match arm64_sz_from_size(size) {
             None => {
-              add_error(bag, loc, "codegen: unsupported scalar size")
+              @diag.add_error(bag, loc, "codegen: unsupported scalar size")
               return
             }
             Some(v) => v
@@ -9050,7 +9050,7 @@ fn gen_expr_int32(
           let is64 = size == 8
           let addr = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               return
             }
           }
@@ -9065,7 +9065,7 @@ fn gen_expr_int32(
           )
           let one = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               give_reg(pool, addr)
               return
             }
@@ -9074,7 +9074,7 @@ fn gen_expr_int32(
           if op == UnaryOp::PostInc || op == UnaryOp::PostDec {
             let updated = take_reg(pool) catch {
               err => {
-                add_error(bag, loc, err.to_string())
+                @diag.add_error(bag, loc, err.to_string())
                 give_reg(pool, one)
                 give_reg(pool, addr)
                 return
@@ -9162,7 +9162,7 @@ fn gen_expr_int32(
                 }
                 let dst_addr = take_reg(pool) catch {
                   err => {
-                    add_error(bag, loc, err.to_string())
+                    @diag.add_error(bag, loc, err.to_string())
                     return
                   }
                 }
@@ -9237,7 +9237,7 @@ fn gen_expr_int32(
                     bag,
                   )
                 }
-                _ => add_error(bag, loc, "codegen: unsupported assignment lhs for now")
+                _ => @diag.add_error(bag, loc, "codegen: unsupported assignment lhs for now")
               }
           }
         }
@@ -9251,14 +9251,14 @@ fn gen_expr_int32(
               BinaryOp::AddAssign | BinaryOp::SubAssign => {
                 let addr = take_reg(pool) catch {
                   err => {
-                    add_error(bag, loc, err.to_string())
+                    @diag.add_error(bag, loc, err.to_string())
                     return
                   }
                 }
                 gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, left, addr, bag)
                 let base_reg = take_reg(pool) catch {
                   err => {
-                    add_error(bag, loc, err.to_string())
+                    @diag.add_error(bag, loc, err.to_string())
                     give_reg(pool, addr)
                     return
                   }
@@ -9273,7 +9273,7 @@ fn gen_expr_int32(
                 )
                 let idx = take_reg(pool) catch {
                   err => {
-                    add_error(bag, loc, err.to_string())
+                    @diag.add_error(bag, loc, err.to_string())
                     give_reg(pool, base_reg)
                     give_reg(pool, addr)
                     return
@@ -9294,7 +9294,7 @@ fn gen_expr_int32(
                 emit_int_extend_to_64(emitter, alloc.sem, idx_ty, idx, loc, bag)
                 let elem_ty = match element_type_for_pointer_arith(left_ty) {
                   None => {
-                    add_error(bag, loc, "codegen: pointer arithmetic missing element type")
+                    @diag.add_error(bag, loc, "codegen: pointer arithmetic missing element type")
                     give_reg(pool, idx)
                     give_reg(pool, addr)
                     return
@@ -9312,7 +9312,7 @@ fn gen_expr_int32(
                 if elem_size != 1 {
                   let scale = take_reg(pool) catch {
                     err => {
-                      add_error(bag, loc, err.to_string())
+                      @diag.add_error(bag, loc, err.to_string())
                       give_reg(pool, idx)
                       give_reg(pool, addr)
                       return
@@ -9353,7 +9353,7 @@ fn gen_expr_int32(
                 give_reg(pool, base_reg)
                 give_reg(pool, addr)
               }
-              _ => add_error(bag, loc, "codegen: compound assign pointer lhs not supported yet")
+              _ => @diag.add_error(bag, loc, "codegen: compound assign pointer lhs not supported yet")
             }
             return
           }
@@ -9366,14 +9366,14 @@ fn gen_expr_int32(
               let is64 = lhs_size == 8
               let _ = match arm64_sz_from_size(lhs_size) {
                 None => {
-                  add_error(bag, loc, "codegen: unsupported scalar size")
+                  @diag.add_error(bag, loc, "codegen: unsupported scalar size")
                   return
                 }
                 Some(v) => v
               }
               let addr = take_reg(pool) catch {
                 err => {
-                  add_error(bag, loc, err.to_string())
+                  @diag.add_error(bag, loc, err.to_string())
                   return
                 }
               }
@@ -9391,7 +9391,7 @@ fn gen_expr_int32(
               emit_bitfield_load(emitter, alloc, pool, addr, info, dst, loc, bag)
               let tmp_old = take_reg(pool) catch {
                 err => {
-                  add_error(bag, loc, err.to_string())
+                  @diag.add_error(bag, loc, err.to_string())
                   give_reg(pool, addr)
                   return
                 }
@@ -9537,7 +9537,7 @@ fn gen_expr_int32(
           }
           let sz = match arm64_sz_from_size(lhs_size) {
             None => {
-              add_error(bag, loc, "codegen: unsupported scalar size")
+              @diag.add_error(bag, loc, "codegen: unsupported scalar size")
               return
             }
             Some(v) => v
@@ -9546,7 +9546,7 @@ fn gen_expr_int32(
           let is64 = lhs_size == 8
           let addr = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               return
             }
           }
@@ -9561,7 +9561,7 @@ fn gen_expr_int32(
           )
           let tmp_old = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               give_reg(pool, addr)
               return
             }
@@ -9824,11 +9824,11 @@ fn gen_expr_int32(
           }
           if right_fk is Some(_) {
             emit_cset_from_fp_tok(emitter, TOK_NE, dst) catch {
-              err => add_error(bag, loc, err.to_string())
+              err => @diag.add_error(bag, loc, err.to_string())
             }
           } else {
             emit_cset_from_tok(emitter, TOK_NE, dst, false) catch {
-              err => add_error(bag, loc, err.to_string())
+              err => @diag.add_error(bag, loc, err.to_string())
             }
           }
 
@@ -9840,7 +9840,7 @@ fn gen_expr_int32(
             short_pc,
             if op == BinaryOp::LogAnd { ARM64_COND_EQ } else { ARM64_COND_NE },
           )
-          catch { err => add_error(bag, loc, err.to_string()) }
+          catch { err => @diag.add_error(bag, loc, err.to_string()) }
 
           arm64_movimm(
             emitter,
@@ -9850,7 +9850,7 @@ fn gen_expr_int32(
 
           let end_pc = emitter_pc(emitter)
           gsym_addr(emitter, br_end, end_pc) catch {
-            err => add_error(bag, loc, err.to_string())
+            err => @diag.add_error(bag, loc, err.to_string())
           }
         }
         BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div |
@@ -9880,7 +9880,7 @@ fn gen_expr_int32(
           if float_kind is Some(k) {
             let rhs_reg = take_reg(pool) catch {
               err => {
-                add_error(bag, loc, err.to_string())
+                @diag.add_error(bag, loc, err.to_string())
                 return
               }
             }
@@ -9927,7 +9927,7 @@ fn gen_expr_int32(
               _ => TOK_EQ
             }
             emit_cset_from_fp_tok(emitter, tok, dst) catch {
-              err => add_error(bag, loc, err.to_string())
+              err => @diag.add_error(bag, loc, err.to_string())
             }
             give_reg(pool, rhs_reg)
             return
@@ -9939,7 +9939,7 @@ fn gen_expr_int32(
               BinaryOp::Gt | BinaryOp::Ge => {
                 let tmp = take_reg(pool) catch {
                   err => {
-                    add_error(bag, loc, err.to_string())
+                    @diag.add_error(bag, loc, err.to_string())
                     return
                   }
                 }
@@ -9986,7 +9986,7 @@ fn gen_expr_int32(
                   _ => TOK_EQ
                 }
                 emit_cset_from_tok(emitter, tok, dst, true) catch {
-                  err => add_error(bag, loc, err.to_string())
+                  err => @diag.add_error(bag, loc, err.to_string())
                 }
                 give_reg(pool, tmp)
                 return
@@ -9995,7 +9995,7 @@ fn gen_expr_int32(
                 if type_is_pointer_like(left_ty) && type_is_pointer_like(right_ty) {
                   let left_reg = take_reg(pool) catch {
                     err => {
-                      add_error(bag, loc, err.to_string())
+                      @diag.add_error(bag, loc, err.to_string())
                       return
                     }
                   }
@@ -10003,7 +10003,7 @@ fn gen_expr_int32(
                   gen_expr_ptr(emitter, alloc, syms, pool, cstrings, right, dst, bag)
                   let elem_ty = match element_type_for_pointer_arith(left_ty) {
                     None => {
-                      add_error(bag, loc, "codegen: pointer arithmetic missing element type")
+                      @diag.add_error(bag, loc, "codegen: pointer arithmetic missing element type")
                       give_reg(pool, left_reg)
                       return
                     }
@@ -10027,7 +10027,7 @@ fn gen_expr_int32(
                   if elem_size != 1 {
                     let scale = take_reg(pool) catch {
                       err => {
-                        add_error(bag, loc, err.to_string())
+                        @diag.add_error(bag, loc, err.to_string())
                         give_reg(pool, left_reg)
                         return
                       }
@@ -10051,11 +10051,11 @@ fn gen_expr_int32(
                   give_reg(pool, left_reg)
                   return
                 } else {
-                  add_error(bag, loc, "codegen: pointer +/- pointer not supported yet")
+                  @diag.add_error(bag, loc, "codegen: pointer +/- pointer not supported yet")
                   return
                 }
               _ => {
-                add_error(bag, loc, "codegen: unsupported pointer expression")
+                @diag.add_error(bag, loc, "codegen: unsupported pointer expression")
                 return
               }
             }
@@ -10074,7 +10074,7 @@ fn gen_expr_int32(
           )
           let tmp = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               return
             }
           }
@@ -10116,7 +10116,7 @@ fn gen_expr_int32(
                 _ => TOK_EQ
               }
               emit_cset_from_tok(emitter, tok, dst, cmp_unsigned) catch {
-                err => add_error(bag, loc, err.to_string())
+                err => @diag.add_error(bag, loc, err.to_string())
               }
             }
             BinaryOp::Shl | BinaryOp::Shr => {
@@ -10312,7 +10312,7 @@ fn gen_expr_int32(
 	                  )
 	                  return
 	                } else {
-	                  add_error(bag, loc, "codegen: missing VLA byte size slot")
+	                  @diag.add_error(bag, loc, "codegen: missing VLA byte size slot")
 	                }
 	              _ => ()
 	            }
@@ -10373,7 +10373,7 @@ fn gen_expr_int32(
       match (strip_top_qualifiers_keep_attrs(to_ty), strip_top_qualifiers_keep_attrs(from_ty)) {
         (CType::Int(kind=to_kind, unsigned=to_unsigned), CType::Float(kind=from_kind)) => {
           if !float_kind_supported(from_kind) {
-            add_error(bag, cast_loc, "codegen: unsupported float type")
+            @diag.add_error(bag, cast_loc, "codegen: unsupported float type")
             gen_expr_int32(
               emitter,
               alloc,
@@ -10479,7 +10479,7 @@ fn gen_expr_int32(
       let br_end = gjmp(emitter, 0)
       let else_pc = emitter_pc(emitter)
       patch_b_cond(emitter, br_else, else_pc, ARM64_COND_EQ) catch {
-        err => add_error(bag, loc, err.to_string())
+        err => @diag.add_error(bag, loc, err.to_string())
       }
       gen_expr_int32(
         emitter,
@@ -10495,7 +10495,7 @@ fn gen_expr_int32(
       emit_cast_value(emitter, alloc.sem, else_ty, result_ty, dst, loc, bag)
       let end_pc = emitter_pc(emitter)
       gsym_addr(emitter, br_end, end_pc) catch {
-        err => add_error(bag, loc, err.to_string())
+        err => @diag.add_error(bag, loc, err.to_string())
       }
     }
     Expr::StringLit(value=value, ..) => {
@@ -10517,7 +10517,7 @@ fn gen_expr_int32(
       )
     }
     _ =>
-      add_error(bag, expr_loc(expr), "codegen: unsupported expression")
+      @diag.add_error(bag, expr_loc(expr), "codegen: unsupported expression")
   }
 }
 
@@ -10525,14 +10525,14 @@ fn gen_expr_int32(
 fn deref_pointee_type(
   sem : SemContext,
   inner : Expr,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> CType? {
   let inner_ty = type_of_expr(sem, inner)
   match strip_top_qualifiers(inner_ty) {
     CType::Pointer(pointee) => Some(pointee)
     _ => {
-      add_error(bag, loc, "codegen: cannot dereference non-pointer")
+      @diag.add_error(bag, loc, "codegen: cannot dereference non-pointer")
       None
     }
   }
@@ -10547,12 +10547,12 @@ fn gen_expr_ptr(
   cstrings : CstringPool,
   expr : Expr,
   dst : Int,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
 ) -> Unit {
   match expr {
     Expr::IntLit(value~, loc~, ..) =>
       match parse_int64_literal(value) {
-        None => add_error(bag, loc, "codegen: invalid integer literal")
+        None => @diag.add_error(bag, loc, "codegen: invalid integer literal")
         Some(v) =>
           arm64_movimm(emitter, dst.reinterpret_as_uint(), v.reinterpret_as_uint64())
       }
@@ -10675,7 +10675,7 @@ fn gen_expr_ptr(
     Expr::Member(base~, name~, id~, is_arrow~, loc~, ..) => {
       let addr = take_reg(pool) catch {
         err => {
-          add_error(bag, loc, err.to_string())
+          @diag.add_error(bag, loc, err.to_string())
           return
         }
       }
@@ -10746,7 +10746,7 @@ fn gen_expr_ptr(
     Expr::Index(base~, index~, loc~, ..) => {
       let addr = take_reg(pool) catch {
         err => {
-          add_error(bag, loc, err.to_string())
+          @diag.add_error(bag, loc, err.to_string())
           return
         }
       }
@@ -10788,7 +10788,7 @@ fn gen_expr_ptr(
     Expr::CompoundLiteral(ty~, init~, node_id~, loc~, ..) => {
       let addr = take_reg(pool) catch {
         err => {
-          add_error(bag, loc, err.to_string())
+          @diag.add_error(bag, loc, err.to_string())
           return
         }
       }
@@ -10830,7 +10830,7 @@ fn gen_expr_ptr(
           }
           let sz = match arm64_sz_from_size(size) {
             None => {
-              add_error(bag, loc, "codegen: unsupported scalar size")
+              @diag.add_error(bag, loc, "codegen: unsupported scalar size")
               give_reg(pool, addr)
               return
             }
@@ -10866,7 +10866,7 @@ fn gen_expr_ptr(
       }
       let sz = match arm64_sz_from_size(size) {
         None => {
-          add_error(bag, loc, "codegen: unsupported scalar size")
+          @diag.add_error(bag, loc, "codegen: unsupported scalar size")
           return
         }
         Some(v) => v
@@ -10882,7 +10882,7 @@ fn gen_expr_ptr(
     }
     Expr::BuiltinVaArg(list~, ty~, loc~, ..) => {
       if !type_is_pointer_like(ty) {
-        add_error(bag, loc, "codegen: expected pointer type for va_arg")
+        @diag.add_error(bag, loc, "codegen: expected pointer type for va_arg")
         return
       }
       ignore(
@@ -10905,7 +10905,7 @@ fn gen_expr_ptr(
           let ty = type_of_expr(alloc.sem, inner)
           let elem_ty = match element_type_for_pointer_arith(ty) {
             None => {
-              add_error(bag, loc, "codegen: pointer inc/dec missing element type")
+              @diag.add_error(bag, loc, "codegen: pointer inc/dec missing element type")
               return
             }
             Some(t) => t
@@ -10921,7 +10921,7 @@ fn gen_expr_ptr(
 
           let addr = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               return
             }
           }
@@ -10930,7 +10930,7 @@ fn gen_expr_ptr(
           let value_reg = if dst == addr {
             let tmp = take_reg(pool) catch {
               err => {
-                add_error(bag, loc, err.to_string())
+                @diag.add_error(bag, loc, err.to_string())
                 give_reg(pool, addr)
                 return
               }
@@ -10955,7 +10955,7 @@ fn gen_expr_ptr(
           if is_post {
             let updated = take_reg(pool) catch {
               err => {
-                add_error(bag, loc, err.to_string())
+                @diag.add_error(bag, loc, err.to_string())
                 if value_reg != dst {
                   give_reg(pool, value_reg)
                 }
@@ -10978,7 +10978,7 @@ fn gen_expr_ptr(
               } else {
                 let scale = take_reg(pool) catch {
                   err => {
-                    add_error(bag, loc, err.to_string())
+                    @diag.add_error(bag, loc, err.to_string())
                     give_reg(pool, updated)
                     if value_reg != dst {
                       give_reg(pool, value_reg)
@@ -11031,7 +11031,7 @@ fn gen_expr_ptr(
               } else {
                 let scale = take_reg(pool) catch {
                   err => {
-                    add_error(bag, loc, err.to_string())
+                    @diag.add_error(bag, loc, err.to_string())
                     if value_reg != dst {
                       give_reg(pool, value_reg)
                     }
@@ -11070,7 +11070,7 @@ fn gen_expr_ptr(
           }
           give_reg(pool, addr)
         }
-        _ => add_error(bag, loc, "codegen: unsupported pointer unary operator")
+        _ => @diag.add_error(bag, loc, "codegen: unsupported pointer unary operator")
       }
     Expr::Binary(op=BinaryOp::Assign, left~, right~, ..) => {
       gen_expr_ptr(emitter, alloc, syms, pool, cstrings, right, dst, bag)
@@ -11095,13 +11095,13 @@ fn gen_expr_ptr(
         BinaryOp::AddAssign | BinaryOp::SubAssign => {
           let lhs_ty = type_of_expr(alloc.sem, left)
           if !type_is_pointer_like(lhs_ty) {
-            add_error(bag, loc, "codegen: compound assign pointer op needs pointer lhs")
+            @diag.add_error(bag, loc, "codegen: compound assign pointer op needs pointer lhs")
             return
           }
 
           let elem_ty = match element_type_for_pointer_arith(lhs_ty) {
             None => {
-              add_error(bag, loc, "codegen: pointer arithmetic missing element type")
+              @diag.add_error(bag, loc, "codegen: pointer arithmetic missing element type")
               return
             }
             Some(t) => t
@@ -11117,7 +11117,7 @@ fn gen_expr_ptr(
 
           let addr = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               return
             }
           }
@@ -11125,7 +11125,7 @@ fn gen_expr_ptr(
 
           let base_reg = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               give_reg(pool, addr)
               return
             }
@@ -11141,7 +11141,7 @@ fn gen_expr_ptr(
 
           let idx = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               give_reg(pool, base_reg)
               give_reg(pool, addr)
               return
@@ -11153,7 +11153,7 @@ fn gen_expr_ptr(
           if elem_size != 1 {
             let scale = take_reg(pool) catch {
               err => {
-                add_error(bag, loc, err.to_string())
+                @diag.add_error(bag, loc, err.to_string())
                 give_reg(pool, idx)
                 give_reg(pool, base_reg)
                 give_reg(pool, addr)
@@ -11204,18 +11204,18 @@ fn gen_expr_ptr(
           let left_ty = type_of_expr(alloc.sem, left)
           let right_ty = type_of_expr(alloc.sem, right)
           if type_is_pointer_like(left_ty) && type_is_pointer_like(right_ty) {
-            add_error(bag, loc, "codegen: pointer +/- pointer not supported yet")
+            @diag.add_error(bag, loc, "codegen: pointer +/- pointer not supported yet")
             return
           }
           if op == BinaryOp::Sub && type_is_pointer_like(right_ty) && !type_is_pointer_like(left_ty) {
-            add_error(bag, loc, "codegen: int - pointer not supported")
+            @diag.add_error(bag, loc, "codegen: int - pointer not supported")
             return
           }
           let (ptr_expr, int_expr, ptr_ty) =
             if type_is_pointer_like(left_ty) { (left, right, left_ty) }
             else if type_is_pointer_like(right_ty) { (right, left, right_ty) }
             else {
-              add_error(bag, loc, "codegen: pointer add/sub needs a pointer operand")
+              @diag.add_error(bag, loc, "codegen: pointer add/sub needs a pointer operand")
               return
             }
           gen_expr_ptr(emitter, alloc, syms, pool, cstrings, ptr_expr, dst, bag)
@@ -11224,7 +11224,7 @@ fn gen_expr_ptr(
           if expr_may_call(int_expr) && dst < 19 {
             let tmp = take_reg(pool) catch {
               err => {
-                add_error(bag, loc, err.to_string())
+                @diag.add_error(bag, loc, err.to_string())
                 return
               }
             }
@@ -11234,7 +11234,7 @@ fn gen_expr_ptr(
           }
           let idx = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               if saved_reg is Some(r) {
                 give_reg(pool, r)
               }
@@ -11246,7 +11246,7 @@ fn gen_expr_ptr(
           emit_int_extend_to_64(emitter, alloc.sem, idx_ty, idx, loc, bag)
           let elem_ty = match element_type_for_pointer_arith(ptr_ty) {
             None => {
-              add_error(bag, loc, "codegen: pointer arithmetic missing element type")
+              @diag.add_error(bag, loc, "codegen: pointer arithmetic missing element type")
               give_reg(pool, idx)
               return
             }
@@ -11262,7 +11262,7 @@ fn gen_expr_ptr(
           if elem_size != 1 {
             let scale = take_reg(pool) catch {
               err => {
-                add_error(bag, loc, err.to_string())
+                @diag.add_error(bag, loc, err.to_string())
                 give_reg(pool, idx)
                 return
               }
@@ -11296,7 +11296,7 @@ fn gen_expr_ptr(
             give_reg(pool, r)
           }
         }
-        _ => add_error(bag, loc, "codegen: unsupported pointer expression")
+        _ => @diag.add_error(bag, loc, "codegen: unsupported pointer expression")
       }
     Expr::Cast(ty=to_ty, expr=inner, loc=cast_loc, ..) => {
       let inner_ty = type_of_expr(alloc.sem, inner)
@@ -11320,15 +11320,15 @@ fn gen_expr_ptr(
       let br_end = gjmp(emitter, 0)
       let else_pc = emitter_pc(emitter)
       patch_b_cond(emitter, br_else, else_pc, ARM64_COND_EQ) catch {
-        err => add_error(bag, loc, err.to_string())
+        err => @diag.add_error(bag, loc, err.to_string())
       }
       gen_expr_ptr(emitter, alloc, syms, pool, cstrings, else_expr, dst, bag)
       let end_pc = emitter_pc(emitter)
       gsym_addr(emitter, br_end, end_pc) catch {
-        err => add_error(bag, loc, err.to_string())
+        err => @diag.add_error(bag, loc, err.to_string())
       }
     }
-    _ => add_error(bag, expr_loc(expr), "codegen: unsupported pointer expression")
+    _ => @diag.add_error(bag, expr_loc(expr), "codegen: unsupported pointer expression")
   }
 }
 
@@ -11341,7 +11341,7 @@ fn gen_expr_any(
   cstrings : CstringPool,
   expr : Expr,
   dst : Int,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let ty = type_of_expr(alloc.sem, expr)
   gen_expr_any_with_type(
@@ -11367,7 +11367,7 @@ fn gen_expr_any_with_type(
   expr : Expr,
   ty : CType,
   dst : Int,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
 ) -> Unit {
   match float_kind_of_type(ty) {
     Some(k) =>
@@ -11400,7 +11400,7 @@ fn gen_expr_discard(
   pool : RegPool,
   cstrings : CstringPool,
   expr : Expr,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
 ) -> Unit {
   match expr {
     Expr::Binary(op=BinaryOp::Assign, ..) => {
@@ -11428,12 +11428,12 @@ fn gen_expr_discard(
           let br_end = gjmp(emitter, 0)
           let else_pc = emitter_pc(emitter)
           patch_b_cond(emitter, br_else, else_pc, ARM64_COND_EQ) catch {
-            err => add_error(bag, loc, err.to_string())
+            err => @diag.add_error(bag, loc, err.to_string())
           }
           gen_expr_discard(emitter, alloc, syms, pool, cstrings, else_expr, bag)
           let end_pc = emitter_pc(emitter)
           gsym_addr(emitter, br_end, end_pc) catch {
-            err => add_error(bag, loc, err.to_string())
+            err => @diag.add_error(bag, loc, err.to_string())
           }
         }
         Expr::StmtExpr(stmts~, loc~, ..) =>
@@ -11471,10 +11471,10 @@ fn gen_expr_discard(
           return
         }
         match alloc.agg_temp_offset {
-          None => add_error(bag, loc, "codegen: missing aggregate temp slot")
+          None => @diag.add_error(bag, loc, "codegen: missing aggregate temp slot")
           Some(tmp_off) => {
             if size > alloc.agg_temp_size {
-              add_error(bag, loc, "codegen: aggregate temp too small")
+              @diag.add_error(bag, loc, "codegen: aggregate temp too small")
               return
             }
             gen_agg_expr_to_addr(
@@ -11499,7 +11499,7 @@ fn gen_expr_discard(
 }
 
 ///|
-fn stmt_loc(stmt : Stmt) -> SrcLoc {
+fn stmt_loc(stmt : Stmt) -> @source.SrcLoc {
   match stmt {
     Stmt::Compound(loc=loc, ..) => loc
     Stmt::If(loc=loc, ..) => loc
@@ -11568,8 +11568,8 @@ fn patch_label_addr_uses(
   labels : LabelCtx,
   name : String,
   addr : Int,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   if labels.addr_patches.get(name) is Some(entries) {
     for at in entries {
@@ -11589,8 +11589,8 @@ fn gen_stmt_expr_with(
   stmts : Array[Stmt],
   dst : Int,
   zero_is64 : Bool,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
   gen_last : (Expr, Int) -> Unit,
 ) -> Unit {
   let mut did_scope = false
@@ -11658,9 +11658,9 @@ fn gen_stmt_expr_with(
   }
   if chain != 0 {
     gsym(emitter, chain) catch {
-      err => add_error(bag, loc, err.to_string())
+      err => @diag.add_error(bag, loc, err.to_string())
     }
-    add_error(bag, loc, "codegen: return in statement expression not supported")
+    @diag.add_error(bag, loc, "codegen: return in statement expression not supported")
   }
   if did_scope {
     cg_pop_scope_codegen(emitter, alloc)
@@ -11677,12 +11677,12 @@ const BREAKABLE_SWITCH : Int = 1
 fn loop_append_break(
   loops : Array[LoopChains],
   emitter : Arm64Emitter,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let idx = loops.length() - 1
   match loops.get(idx) {
-    None => add_error(bag, loc, "codegen: break outside of loop")
+    None => @diag.add_error(bag, loc, "codegen: break outside of loop")
     Some(info) => {
       let chain = gjmp(emitter, info.break_chain)
       loops[idx] = {
@@ -11699,12 +11699,12 @@ fn loop_append_break(
 fn loop_append_continue(
   loops : Array[LoopChains],
   emitter : Arm64Emitter,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let idx = loops.length() - 1
   match loops.get(idx) {
-    None => add_error(bag, loc, "codegen: continue outside of loop")
+    None => @diag.add_error(bag, loc, "codegen: continue outside of loop")
     Some(info) => {
       let chain = gjmp(emitter, info.cont_chain)
       loops[idx] = {
@@ -11721,12 +11721,12 @@ fn loop_append_continue(
 fn switch_append_break(
   switches : Array[SwitchChains],
   emitter : Arm64Emitter,
-  loc : SrcLoc,
-  bag : DiagBag,
+  loc : @source.SrcLoc,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let idx = switches.length() - 1
   match switches.get(idx) {
-    None => add_error(bag, loc, "codegen: break outside of loop/switch")
+    None => @diag.add_error(bag, loc, "codegen: break outside of loop/switch")
     Some(info) => {
       let chain = gjmp(emitter, info.break_chain)
       switches[idx] = { break_chain: chain, break_depth: info.break_depth }
@@ -11810,7 +11810,7 @@ fn gen_switch_body(
   labels : LabelCtx,
   cstrings : CstringPool,
   stmt : Stmt,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
   return_chain : Int,
   case_addrs : Array[Int],
   default_addr : Int?,
@@ -11918,12 +11918,12 @@ fn gen_switch_body(
     Stmt::Label(name~, body~, loc~) => {
       let addr = emitter_pc(emitter)
       if labels.addrs.get(name) is Some(_) {
-        add_error(bag, loc, "codegen: duplicate label")
+        @diag.add_error(bag, loc, "codegen: duplicate label")
       }
       if labels.chains.get(name) is Some(chain) {
         if chain != 0 {
           gsym_addr(emitter, chain, addr) catch {
-            err => add_error(bag, loc, err.to_string())
+            err => @diag.add_error(bag, loc, err.to_string())
           }
         }
       }
@@ -11982,7 +11982,7 @@ fn gen_stmt(
   labels : LabelCtx,
   cstrings : CstringPool,
   stmt : Stmt,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
   return_chain : Int,
 ) -> Int {
   match stmt {
@@ -12135,7 +12135,7 @@ fn gen_stmt(
         None => {
           let end_pc = emitter_pc(emitter)
           patch_b_cond(emitter, br_false, end_pc, ARM64_COND_EQ) catch {
-            err => add_error(bag, loc, err.to_string())
+            err => @diag.add_error(bag, loc, err.to_string())
           }
           chain1
         }
@@ -12143,7 +12143,7 @@ fn gen_stmt(
           let after_then = gjmp(emitter, 0)
           let else_pc = emitter_pc(emitter)
           patch_b_cond(emitter, br_false, else_pc, ARM64_COND_EQ) catch {
-            err => add_error(bag, loc, err.to_string())
+            err => @diag.add_error(bag, loc, err.to_string())
           }
           let chain2 = gen_stmt(
             emitter,
@@ -12161,7 +12161,7 @@ fn gen_stmt(
           )
           let end_pc = emitter_pc(emitter)
           gsym_addr(emitter, after_then, end_pc) catch {
-            err => add_error(bag, loc, err.to_string())
+            err => @diag.add_error(bag, loc, err.to_string())
           }
           chain2
         }
@@ -12203,17 +12203,17 @@ fn gen_stmt(
 	      })
 	
 	      gsym_addr(emitter, loop_info.cont_chain, start_pc) catch {
-        err => add_error(bag, loc, err.to_string())
+        err => @diag.add_error(bag, loc, err.to_string())
       }
       gjmp_addr(emitter, start_pc) catch {
-        err => add_error(bag, loc, err.to_string())
+        err => @diag.add_error(bag, loc, err.to_string())
       }
       let end_pc = emitter_pc(emitter)
       patch_b_cond(emitter, br_end, end_pc, ARM64_COND_EQ) catch {
-        err => add_error(bag, loc, err.to_string())
+        err => @diag.add_error(bag, loc, err.to_string())
       }
       gsym_addr(emitter, loop_info.break_chain, end_pc) catch {
-        err => add_error(bag, loc, err.to_string())
+        err => @diag.add_error(bag, loc, err.to_string())
       }
       chain1
     }
@@ -12250,17 +12250,17 @@ fn gen_stmt(
 	        cont_depth: 0,
 	      })
 	      gsym_addr(emitter, loop_info.cont_chain, cond_pc) catch {
-	        err => add_error(bag, loc, err.to_string())
+	        err => @diag.add_error(bag, loc, err.to_string())
       }
 
       gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, cond, bag)
       let br_back = emit_b_cond_placeholder(emitter, ARM64_COND_NE)
       patch_b_cond(emitter, br_back, start_pc, ARM64_COND_NE) catch {
-        err => add_error(bag, loc, err.to_string())
+        err => @diag.add_error(bag, loc, err.to_string())
       }
       let end_pc = emitter_pc(emitter)
       gsym_addr(emitter, loop_info.break_chain, end_pc) catch {
-        err => add_error(bag, loc, err.to_string())
+        err => @diag.add_error(bag, loc, err.to_string())
       }
       chain1
     }
@@ -12325,22 +12325,22 @@ fn gen_stmt(
 	      })
 	      let continue_target = if step is Some(_) { step_pc } else { cond_pc }
 	      gsym_addr(emitter, loop_info.cont_chain, continue_target) catch {
-	        err => add_error(bag, loc, err.to_string())
+	        err => @diag.add_error(bag, loc, err.to_string())
       }
       if step is Some(e) {
         gen_expr_discard(emitter, alloc, syms, pool, cstrings, e, bag)
       }
       gjmp_addr(emitter, cond_pc) catch {
-        err => add_error(bag, loc, err.to_string())
+        err => @diag.add_error(bag, loc, err.to_string())
       }
       let end_pc = emitter_pc(emitter)
       if br_end is Some(at) {
         patch_b_cond(emitter, at, end_pc, ARM64_COND_EQ) catch {
-          err => add_error(bag, loc, err.to_string())
+          err => @diag.add_error(bag, loc, err.to_string())
         }
       }
       gsym_addr(emitter, loop_info.break_chain, end_pc) catch {
-        err => add_error(bag, loc, err.to_string())
+        err => @diag.add_error(bag, loc, err.to_string())
       }
 	      cg_pop_scope_codegen(emitter, alloc)
 	      chain1
@@ -12383,7 +12383,7 @@ fn gen_stmt(
         if info.start == info.end {
           let tmp = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               9
             }
           }
@@ -12399,7 +12399,7 @@ fn gen_stmt(
         } else {
           let tmp = take_reg(pool) catch {
             err => {
-              add_error(bag, loc, err.to_string())
+              @diag.add_error(bag, loc, err.to_string())
               9
             }
           }
@@ -12423,10 +12423,10 @@ fn gen_stmt(
           range_jmps.push((jmp, i))
           let next_pc = emitter_pc(emitter)
           patch_b_cond(emitter, skip1, next_pc, range_cond_lt) catch {
-            err => add_error(bag, loc, err.to_string())
+            err => @diag.add_error(bag, loc, err.to_string())
           }
           patch_b_cond(emitter, skip2, next_pc, range_cond_gt) catch {
-            err => add_error(bag, loc, err.to_string())
+            err => @diag.add_error(bag, loc, err.to_string())
           }
         }
       }
@@ -12459,19 +12459,19 @@ fn gen_stmt(
       breakables.pop() |> ignore
       let sw_info = switches.pop().unwrap_or({ break_chain: 0, break_depth: 0 })
       gsym_addr(emitter, sw_info.break_chain, end_pc) catch {
-        err => add_error(bag, loc, err.to_string())
+        err => @diag.add_error(bag, loc, err.to_string())
       }
 
       let default_target = default_addr.unwrap_or(end_pc)
       gsym_addr(emitter, default_jmp, default_target) catch {
-        err => add_error(bag, loc, err.to_string())
+        err => @diag.add_error(bag, loc, err.to_string())
       }
 
       for item in eq_branches {
         let (at, idx) = item
         if idx < case_addrs.length() {
           patch_b_cond(emitter, at, case_addrs[idx], ARM64_COND_EQ) catch {
-            err => add_error(bag, loc, err.to_string())
+            err => @diag.add_error(bag, loc, err.to_string())
           }
         }
       }
@@ -12479,7 +12479,7 @@ fn gen_stmt(
         let (jmp, idx) = item
         if idx < case_addrs.length() {
           gsym_addr(emitter, jmp, case_addrs[idx]) catch {
-            err => add_error(bag, loc, err.to_string())
+            err => @diag.add_error(bag, loc, err.to_string())
           }
         }
       }
@@ -12490,7 +12490,7 @@ fn gen_stmt(
       match labels.addrs.get(name) {
         Some(addr) =>
           gjmp_addr(emitter, addr) catch {
-            err => add_error(bag, loc, err.to_string())
+            err => @diag.add_error(bag, loc, err.to_string())
           }
         None => {
           let chain = labels.chains.get(name).unwrap_or(0)
@@ -12509,12 +12509,12 @@ fn gen_stmt(
     Stmt::Label(name~, body~, loc~) => {
       let addr = emitter_pc(emitter)
       if labels.addrs.get(name) is Some(_) {
-        add_error(bag, loc, "codegen: duplicate label")
+        @diag.add_error(bag, loc, "codegen: duplicate label")
       }
       if labels.chains.get(name) is Some(chain) {
         if chain != 0 {
           gsym_addr(emitter, chain, addr) catch {
-            err => add_error(bag, loc, err.to_string())
+            err => @diag.add_error(bag, loc, err.to_string())
           }
         }
       }
@@ -12542,17 +12542,17 @@ fn gen_stmt(
 	    Stmt::Break(loc~) => {
 	      let idx = breakables.length() - 1
 	      match breakables.get(idx) {
-	        None => add_error(bag, loc, "codegen: break outside of loop/switch")
+	        None => @diag.add_error(bag, loc, "codegen: break outside of loop/switch")
 	        Some(kind) =>
 	          if kind == BREAKABLE_LOOP {
 	            match loops.get(loops.length() - 1) {
-	              None => add_error(bag, loc, "codegen: break outside of loop")
+	              None => @diag.add_error(bag, loc, "codegen: break outside of loop")
 	              Some(info) => emit_vla_leave(emitter, alloc, info.break_depth)
 	            }
 	            loop_append_break(loops, emitter, loc, bag)
 	          } else {
 	            match switches.get(switches.length() - 1) {
-	              None => add_error(bag, loc, "codegen: break outside of switch")
+	              None => @diag.add_error(bag, loc, "codegen: break outside of switch")
 	              Some(info) => emit_vla_leave(emitter, alloc, info.break_depth)
 	            }
 	            switch_append_break(switches, emitter, loc, bag)
@@ -12562,7 +12562,7 @@ fn gen_stmt(
 	    }
 	    Stmt::Continue(loc~) => {
 	      match loops.get(loops.length() - 1) {
-	        None => add_error(bag, loc, "codegen: continue outside of loop")
+	        None => @diag.add_error(bag, loc, "codegen: continue outside of loop")
 	        Some(info) => emit_vla_leave(emitter, alloc, info.cont_depth)
 	      }
 	      loop_append_continue(loops, emitter, loc, bag)
@@ -12626,11 +12626,11 @@ fn gen_stmt(
                         let ret_loc = cached_ret_loc(alloc, loc, bag)
                         if ret_loc == 1 {
                           match alloc.sret_offset {
-                            None => add_error(bag, loc, "codegen: missing sret slot")
+                            None => @diag.add_error(bag, loc, "codegen: missing sret slot")
                             Some(off) => {
                               let tmp = take_reg(pool) catch {
                                 err => {
-                                  add_error(bag, loc, err.to_string())
+                                  @diag.add_error(bag, loc, err.to_string())
                                   return gjmp(emitter, return_chain)
                                 }
                               }
@@ -12668,7 +12668,7 @@ fn gen_stmt(
                             } else {
                               match alloc.agg_temp_offset {
                                 None => {
-                                  add_error(bag, loc, "codegen: missing aggregate temp for return")
+                                  @diag.add_error(bag, loc, "codegen: missing aggregate temp for return")
                                   return gjmp(emitter, return_chain)
                                 }
                                 Some(off) => {
@@ -12690,13 +12690,13 @@ fn gen_stmt(
                               }
                             }
                             match arm64_hfa(alloc.sem, rt, loc, bag) {
-                              None => add_error(bag, loc, "codegen: expected HFA return")
+                              None => @diag.add_error(bag, loc, "codegen: expected HFA return")
                               Some((count, fsize)) => {
                                 let mut j = 0
                                 while j < count {
                                   let tmp = take_reg(pool) catch {
                                     err => {
-                                      add_error(bag, loc, err.to_string())
+                                      @diag.add_error(bag, loc, err.to_string())
                                       return gjmp(emitter, return_chain)
                                     }
                                   }
@@ -12736,7 +12736,7 @@ fn gen_stmt(
                           } else {
                             match alloc.agg_temp_offset {
                               None => {
-                                add_error(bag, loc, "codegen: missing aggregate temp for return")
+                                @diag.add_error(bag, loc, "codegen: missing aggregate temp for return")
                                 return gjmp(emitter, return_chain)
                               }
                               Some(off) => {
@@ -12783,7 +12783,7 @@ fn gen_stmt(
     }
     Stmt::Empty(..) => return_chain
     _ => {
-      add_error(bag, stmt_loc(stmt), "codegen: unsupported statement")
+      @diag.add_error(bag, stmt_loc(stmt), "codegen: unsupported statement")
       return_chain
     }
   }
@@ -12808,7 +12808,7 @@ fn compute_frame_plan(
   sem : SemContext,
   func : FuncDef,
   static_locals : FastMap[Int, StaticLocalInfo],
-  bag : DiagBag,
+  bag : @diag.DiagBag,
 ) -> FramePlan {
   let alloc = new_local_alloc(sem, func.return_type, func.name, static_locals)
   cg_push_scope(alloc)
@@ -12987,7 +12987,7 @@ fn gen_func_def(
   cstrings : CstringPool,
   static_locals : FastMap[Int, StaticLocalInfo],
   func : FuncDef,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
 ) -> Unit {
   let link = link_name(func.name)
   sym_for_name(syms, link) |> ignore
@@ -13053,7 +13053,7 @@ fn gen_func_def(
           let stack_off = (loc_i & (0xfffffffe : Int)) - 32
           let tmp = take_reg(pool) catch {
             err => {
-              add_error(bag, p.loc, err.to_string())
+              @diag.add_error(bag, p.loc, err.to_string())
               i = i + 1
               continue
             }
@@ -13110,7 +13110,7 @@ fn gen_func_def(
             while j < count {
               let tmp = take_reg(pool) catch {
                 err => {
-                  add_error(bag, p.loc, err.to_string())
+                  @diag.add_error(bag, p.loc, err.to_string())
                   j = count
                   continue
                 }
@@ -13205,7 +13205,7 @@ fn gen_func_def(
   cg_pop_scope(alloc)
 
   gsym(emitter, return_chain) catch {
-    err => add_error(bag, func.loc, err.to_string())
+    err => @diag.add_error(bag, func.loc, err.to_string())
   }
   emit_restore_sp_to_frame_base(emitter, frame_size)
   emit_epilogue(emitter, frame_size)
@@ -13526,7 +13526,7 @@ fn fill_global_initializer_bytes(
   bytes : Array[Int],
   relocs : Array[Reloc],
   base_off : Int,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
   label_ctx? : LabelAddrContext? = None,
 ) -> Unit {
   match init {
@@ -13534,7 +13534,7 @@ fn fill_global_initializer_bytes(
       match strip_top_qualifiers(ty) {
         CType::Array(elem=elem_ty, ..) =>
           match array_len_from_type_for_init(sem, ty, loc) {
-            None => add_error(bag, loc, "codegen: incomplete array type")
+            None => @diag.add_error(bag, loc, "codegen: incomplete array type")
             Some(n) =>
               if try_eval_int_const(sem, expr) is Some(0) {
                 let (elem_sz, _) = match type_size_align_or_error(sem, elem_ty, loc) {
@@ -13553,7 +13553,7 @@ fn fill_global_initializer_bytes(
                         Some(v) => v
                       }
                       if elem_sz != 1 {
-                        add_error(bag, loc, "codegen: string initializer for non-byte array")
+                        @diag.add_error(bag, loc, "codegen: string initializer for non-byte array")
                         return
                       }
                       let mut idx = 0
@@ -13566,10 +13566,10 @@ fn fill_global_initializer_bytes(
                       }
                       store_int_le(bytes, base_off + idx, 1, 0)
                     } else {
-                      add_error(bag, loc, "codegen: string initializer for non-byte array")
+                      @diag.add_error(bag, loc, "codegen: string initializer for non-byte array")
                     }
                   _ =>
-                    add_error(bag, loc, "codegen: scalar initializer for array not supported")
+                    @diag.add_error(bag, loc, "codegen: scalar initializer for array not supported")
                 }
               }
           }
@@ -13589,7 +13589,7 @@ fn fill_global_initializer_bytes(
                 bag,
                 label_ctx=label_ctx,
               )
-            _ => add_error(bag, loc, "codegen: aggregate initializer must be a list")
+            _ => @diag.add_error(bag, loc, "codegen: aggregate initializer must be a list")
           }
         _ => {
           let (size, _) = match type_size_align_or_error(sem, ty, loc) {
@@ -13605,8 +13605,8 @@ fn fill_global_initializer_bytes(
                 None =>
                   match expr {
                     Expr::FloatLit(..) =>
-                      add_error(bag, loc, "codegen: invalid float initializer")
-                    _ => add_error(bag, loc, "codegen: non-constant float initializer")
+                      @diag.add_error(bag, loc, "codegen: invalid float initializer")
+                    _ => @diag.add_error(bag, loc, "codegen: non-constant float initializer")
                   }
               }
             }
@@ -13632,7 +13632,7 @@ fn fill_global_initializer_bytes(
                       match const_int64_from_expr(sem, expr, loc) {
                         Some(v) => store_int64_le(bytes, base_off, size, v)
                         None =>
-                          add_error(
+                          @diag.add_error(
                             bag,
                             loc,
                             "codegen: non-constant pointer initializer",
@@ -13642,7 +13642,7 @@ fn fill_global_initializer_bytes(
                       match const_int_from_expr(sem, expr, loc) {
                         Some(v) => store_int_le(bytes, base_off, size, v)
                         None =>
-                          add_error(
+                          @diag.add_error(
                             bag,
                             loc,
                             "codegen: non-constant pointer initializer",
@@ -13654,7 +13654,7 @@ fn fill_global_initializer_bytes(
                 if size > 4 {
                   match const_int64_from_expr(sem, expr, loc) {
                     None =>
-                      add_error(
+                      @diag.add_error(
                         bag,
                         loc,
                         "codegen: non-constant scalar initializer",
@@ -13664,7 +13664,7 @@ fn fill_global_initializer_bytes(
                 } else {
                   match const_int_from_expr(sem, expr, loc) {
                     None =>
-                      add_error(
+                      @diag.add_error(
                         bag,
                         loc,
                         "codegen: non-constant scalar initializer",
@@ -13682,7 +13682,7 @@ fn fill_global_initializer_bytes(
         CType::Array(elem=elem_ty, ..) => {
           let n = match array_len_from_type_for_init(sem, ty, loc) {
             None => {
-              add_error(bag, loc, "codegen: incomplete array type")
+              @diag.add_error(bag, loc, "codegen: incomplete array type")
               return
             }
             Some(v) => v
@@ -13708,7 +13708,7 @@ fn fill_global_initializer_bytes(
                     idx = v
                     has_index = true
                     if idx < 0 || idx >= n {
-                      add_error(bag, des_loc, "codegen: array designator out of bounds")
+                      @diag.add_error(bag, des_loc, "codegen: array designator out of bounds")
                     }
                   }
                 InitDesignator::IndexRange(start~, end~, loc=des_loc) =>
@@ -13720,11 +13720,11 @@ fn fill_global_initializer_bytes(
                       range_end = Some(end_val)
                       range_loc = des_loc
                       if idx < 0 || idx >= n {
-                        add_error(bag, des_loc, "codegen: array designator out of bounds")
+                        @diag.add_error(bag, des_loc, "codegen: array designator out of bounds")
                       }
                     }
                     _ =>
-                      add_error(
+                      @diag.add_error(
                         bag,
                         des_loc,
                         "codegen: array designator must be constant",
@@ -13759,16 +13759,16 @@ fn fill_global_initializer_bytes(
             }
             if range_pos >= 0 {
               if range_pos != item.designators.length() - 1 {
-                add_error(bag, range_loc, "codegen: array range designator must be last")
+                @diag.add_error(bag, range_loc, "codegen: array range designator must be last")
               } else {
                 match (range_start, range_end) {
                   (Some(start_idx), Some(end_idx)) => {
                     if end_idx < start_idx {
-                      add_error(bag, range_loc, "codegen: array designator range is empty")
+                      @diag.add_error(bag, range_loc, "codegen: array designator range is empty")
                     } else {
                       if range_pos == 0 &&
                         (start_idx < 0 || end_idx < 0 || start_idx >= n || end_idx >= n) {
-                        add_error(bag, range_loc, "codegen: array designator out of bounds")
+                        @diag.add_error(bag, range_loc, "codegen: array designator out of bounds")
                       }
                       let mut cur = start_idx
                       while cur <= end_idx {
@@ -13808,7 +13808,7 @@ fn fill_global_initializer_bytes(
                     }
                   }
                   _ =>
-                    add_error(
+                    @diag.add_error(
                       bag,
                       range_loc,
                       "codegen: array designator must be constant",
@@ -13879,7 +13879,7 @@ fn fill_global_initializer_bytes(
           )
           let list = match fields {
             None => {
-              add_error(bag, loc, "codegen: incomplete struct '\{tag}'")
+              @diag.add_error(bag, loc, "codegen: incomplete struct '\{tag}'")
               return
             }
             Some(v) => v
@@ -13907,7 +13907,7 @@ fn fill_global_initializer_bytes(
                       Initializer::Expr(expr~, ..) =>
                         match const_int_from_expr(sem, expr, item.loc) {
                           None =>
-                            add_error(
+                            @diag.add_error(
                               bag,
                               item.loc,
                               "codegen: non-constant bitfield initializer",
@@ -13921,7 +13921,7 @@ fn fill_global_initializer_bytes(
                               v,
                             )
                         }
-                      _ => add_error(bag, item.loc, "codegen: bitfield initializer must be scalar")
+                      _ => @diag.add_error(bag, item.loc, "codegen: bitfield initializer must be scalar")
                     }
                   }
                   None =>
@@ -13951,7 +13951,7 @@ fn fill_global_initializer_bytes(
             } else {
               match next_init_field(list, index) {
                 None => {
-                  add_error(bag, item.loc, "codegen: too many initializers for aggregate")
+                  @diag.add_error(bag, item.loc, "codegen: too many initializers for aggregate")
                   item_idx = item_idx + 1
                 }
                 Some((field, next_idx)) => {
@@ -14021,14 +14021,14 @@ fn fill_global_initializer_bytes(
                   if !used_elision {
                     if field.bit_width is Some(_) {
                       match record_field_access_info(sem, ty, field.name, field.id, item.loc) {
-                        None => add_error(bag, item.loc, "codegen: missing bitfield info")
+                        None => @diag.add_error(bag, item.loc, "codegen: missing bitfield info")
                         Some(info) =>
                           if info.bit_width is Some(width) {
                             match item.value {
                               Initializer::Expr(expr~, ..) =>
                                 match const_int_from_expr(sem, expr, item.loc) {
                                   None =>
-                                    add_error(
+                                    @diag.add_error(
                                       bag,
                                       item.loc,
                                       "codegen: non-constant bitfield initializer",
@@ -14043,7 +14043,7 @@ fn fill_global_initializer_bytes(
                                     )
                                 }
                               _ =>
-                                add_error(bag, item.loc, "codegen: bitfield initializer must be scalar")
+                                @diag.add_error(bag, item.loc, "codegen: bitfield initializer must be scalar")
                             }
                           }
                       }
@@ -14080,7 +14080,7 @@ fn fill_global_initializer_bytes(
           )
           let list = match fields {
             None => {
-              add_error(bag, loc, "codegen: incomplete union '\{tag}'")
+              @diag.add_error(bag, loc, "codegen: incomplete union '\{tag}'")
               return
             }
             Some(v) => v
@@ -14108,7 +14108,7 @@ fn fill_global_initializer_bytes(
                     Initializer::Expr(expr~, ..) =>
                       match const_int_from_expr(sem, expr, first.loc) {
                         None =>
-                          add_error(
+                          @diag.add_error(
                             bag,
                             first.loc,
                             "codegen: non-constant bitfield initializer",
@@ -14122,7 +14122,7 @@ fn fill_global_initializer_bytes(
                             v,
                           )
                       }
-                    _ => add_error(bag, first.loc, "codegen: bitfield initializer must be scalar")
+                    _ => @diag.add_error(bag, first.loc, "codegen: bitfield initializer must be scalar")
                   }
                 }
                 None =>
@@ -14145,14 +14145,14 @@ fn fill_global_initializer_bytes(
             let field = list[0]
             if field.bit_width is Some(_) {
               match record_field_access_info(sem, ty, field.name, field.id, first.loc) {
-                None => add_error(bag, first.loc, "codegen: missing bitfield info")
+                None => @diag.add_error(bag, first.loc, "codegen: missing bitfield info")
                 Some(info) =>
                   if info.bit_width is Some(width) {
                     match first.value {
                       Initializer::Expr(expr~, ..) =>
                         match const_int_from_expr(sem, expr, first.loc) {
                           None =>
-                            add_error(
+                            @diag.add_error(
                               bag,
                               first.loc,
                               "codegen: non-constant bitfield initializer",
@@ -14167,7 +14167,7 @@ fn fill_global_initializer_bytes(
                             )
                         }
                       _ =>
-                        add_error(bag, first.loc, "codegen: bitfield initializer must be scalar")
+                        @diag.add_error(bag, first.loc, "codegen: bitfield initializer must be scalar")
                     }
                   }
               }
@@ -14188,7 +14188,7 @@ fn fill_global_initializer_bytes(
             }
           }
         }
-        _ => add_error(bag, loc, "codegen: initializer list for non-aggregate")
+        _ => @diag.add_error(bag, loc, "codegen: initializer list for non-aggregate")
       }
     }
   }
@@ -14202,7 +14202,7 @@ fn build_global_initializer_bytes(
   static_locals : FastMap[Int, StaticLocalInfo],
   ty : CType,
   init : Initializer,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
   label_ctx? : LabelAddrContext? = None,
 ) -> (Array[Int], Array[Reloc])? {
   let init_loc = match init {
@@ -14276,10 +14276,10 @@ fn build_string_section(
 ///|
 fn codegen_arm64_object_bytes_from_ast(
   unit : TranslationUnit,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
 ) -> Bytes? {
   let sem = check_translation_unit(unit, bag)
-  if has_errors(bag) {
+  if @diag.has_errors(bag) {
     return None
   }
   codegen_arm64_object_bytes_with_sem(unit, sem, bag)
@@ -14289,9 +14289,9 @@ fn codegen_arm64_object_bytes_from_ast(
 fn codegen_arm64_object_bytes_with_sem(
   unit : TranslationUnit,
   sem : SemContext,
-  bag : DiagBag,
+  bag : @diag.DiagBag,
 ) -> Bytes? {
-  if has_errors(bag) {
+  if @diag.has_errors(bag) {
     return None
   }
   let decl_count = unit.decls.length()
@@ -14411,7 +14411,7 @@ fn codegen_arm64_object_bytes_with_sem(
       )
     }
   }
-  if has_errors(bag) {
+  if @diag.has_errors(bag) {
     return None
   }
 

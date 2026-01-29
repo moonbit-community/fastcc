@@ -73,8 +73,8 @@ struct Preprocessor {
   mut line_adjust : Int
   line_adjust_stack : Array[Int]
   include_paths : Array[String]
-  diags : DiagBag
-  map : SourceMap
+  diags : @diag.DiagBag
+  map : @source.SourceMap
   macros : Array[Macro?]
   mut macro_epoch : Int
   pending : Array[Token]
@@ -116,7 +116,7 @@ fn make_builtin_token(
   {
     kind,
     value,
-    loc: dummy_loc(0),
+    loc: @source.dummy_loc(0),
     line_start: false,
     hidden: empty_hidden,
   }
@@ -324,7 +324,7 @@ fn init_builtin_macros(pp : Preprocessor) -> Unit {
 }
 
 ///|
-fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
+fn new_preprocessor(map : @source.SourceMap, file : @source.SourceFile, diags : @diag.DiagBag) ->
   Preprocessor {
   let (date_literal, time_literal) = init_datetime_literals()
   let text_len = file.text.length()
@@ -427,7 +427,11 @@ fn new_preprocessor(map : SourceMap, file : SourceFile, diags : DiagBag) ->
 
 ///|
 fn finalize_preprocessor(pp : Preprocessor) -> Unit {
-  let dummy_file = { id: pp.lexer.file_id, path: pp.current_path, text: "" }
+  let dummy_file = @source.SourceFile::{
+    id: pp.lexer.file_id,
+    path: pp.current_path,
+    text: "",
+  }
   pp.lexer = new_lexer(dummy_file, pp.diags, pp.interner, pp.keyword_ids, pp.lexeme_pool)
   pp.lexer_stack.clear()
   pp.held_stack.clear()
@@ -447,7 +451,11 @@ fn finalize_preprocessor(pp : Preprocessor) -> Unit {
   while i < pp.map.files.length() {
     let file = pp.map.files[i]
     if file.text.length() > 0 {
-      pp.map.files[i] = { id: file.id, path: file.path, text: "" }
+      pp.map.files[i] = @source.SourceFile::{
+        id: file.id,
+        path: file.path,
+        text: "",
+      }
     }
     i = i + 1
   }
@@ -465,8 +473,8 @@ fn current_active(pp : Preprocessor) -> Bool {
 }
 
 ///|
-fn add_pp_error(pp : Preprocessor, loc : SrcLoc, message : String) -> Unit {
-  add_error(pp.diags, loc, message)
+fn add_pp_error(pp : Preprocessor, loc : @source.SrcLoc, message : String) -> Unit {
+  @diag.add_error(pp.diags, loc, message)
 }
 
 ///|
@@ -840,7 +848,7 @@ fn strip_quotes(lexeme : String) -> String {
 fn parse_include_path(
   pp : Preprocessor,
   args : Array[Token],
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> IncludeSpec? {
   if args.length() == 0 {
     add_pp_error(pp, loc, "missing include path")
@@ -948,7 +956,7 @@ fn resolve_include_path(
 fn include_file(
   pp : Preprocessor,
   spec : IncludeSpec,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
   include_next~ : Bool,
 ) -> Unit {
   match resolve_include_path(pp, spec.path, spec.is_angle, include_next~) {
@@ -959,7 +967,7 @@ fn include_file(
           add_pp_error(pp, loc, "failed to read include: \{err.to_string()}")
       } noraise {
         text => {
-          let file = add_file(pp.map, resolved, text)
+          let file = @source.add_file(pp.map, resolved, text)
           pp.lexer_stack.push(pp.lexer)
           pp.held_stack.push(pp.held)
           pp.held = None
@@ -988,7 +996,7 @@ fn parse_define_macro(
   pp : Preprocessor,
   name_tok : Token,
   args : Array[Token],
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> Macro? {
   let is_function_like = args.length() > 0 &&
     args[0].kind == LParen &&
@@ -1027,7 +1035,7 @@ fn parse_define_macro(
 fn parse_macro_params(
   pp : Preprocessor,
   args : Array[Token],
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (Array[Int], Bool, Array[Token])? {
   let params : Array[Int] = []
   let mut i = 1
@@ -1103,7 +1111,7 @@ fn push_back(pp : Preprocessor, tok : Token) -> Unit {
 }
 
 ///|
-fn read_macro_args(pp : Preprocessor, loc : SrcLoc) -> Array[Array[Token]]? {
+fn read_macro_args(pp : Preprocessor, loc : @source.SrcLoc) -> Array[Array[Token]]? {
   let args : Array[Array[Token]] = []
   let mut current : Array[Token] = []
   let mut depth_paren = 0
@@ -1174,7 +1182,7 @@ fn read_macro_args(pp : Preprocessor, loc : SrcLoc) -> Array[Array[Token]]? {
 fn normalize_macro_args(
   macro_def : Macro,
   args : Array[Array[Token]],
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> Array[Array[Token]]? {
   if !macro_def.is_function {
     return Some(args)
@@ -1278,7 +1286,7 @@ fn stringize_tokens(pp : Preprocessor, tokens : Array[Token]) -> String {
 }
 
 ///|
-fn make_string_literal(pp : Preprocessor, text : String, loc : SrcLoc) -> Token {
+fn make_string_literal(pp : Preprocessor, text : String, loc : @source.SrcLoc) -> Token {
   let escaped = escape_string(text)
   let lexeme_id = lexeme_pool_intern(pp.lexeme_pool, "\"" + escaped + "\"")
   let token_value = token_value_from_parts(0, lexeme_id)
@@ -1322,12 +1330,12 @@ fn escape_string(text : String) -> String {
 }
 
 ///|
-fn logical_line(pp : Preprocessor, loc : SrcLoc) -> Int {
+fn logical_line(pp : Preprocessor, loc : @source.SrcLoc) -> Int {
   loc.line + pp.line_adjust
 }
 
 ///|
-fn make_int_literal_token(pp : Preprocessor, value : Int, loc : SrcLoc) -> Token {
+fn make_int_literal_token(pp : Preprocessor, value : Int, loc : @source.SrcLoc) -> Token {
   let lexeme_id = lexeme_pool_intern(pp.lexeme_pool, value.to_string())
   let token_value = token_value_from_parts(0, lexeme_id)
   {
@@ -1506,10 +1514,10 @@ fn lex_paste_tokens(
   text : String,
   left : String,
   right : String,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
   hidden : Int,
 ) -> Array[Token] {
-  let file = { id: loc.file_id, path: ":paste:", text }
+  let file = @source.SourceFile::{ id: loc.file_id, path: ":paste:", text }
   let lex = new_lexer(
     file,
     pp.diags,
@@ -1548,7 +1556,7 @@ fn substitute_macro(
   pp : Preprocessor,
   macro_def : Macro,
   raw_args : Array[Array[Token]],
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (Array[Token], Bool) {
   if !macro_def.is_function {
     return (macro_def.replacement, tokens_need_expansion(pp, macro_def.replacement))
@@ -1706,7 +1714,7 @@ fn read_macro_args_from_tokens(
   pp : Preprocessor,
   tokens : Array[Token],
   start : Int,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (Array[Array[Token]], Int)? {
   let len = tokens.length()
   let args : Array[Array[Token]] = []
@@ -1981,7 +1989,7 @@ fn push_cond(pp : Preprocessor, cond : Bool) -> Unit {
 }
 
 ///|
-fn update_elif(pp : Preprocessor, cond : Bool, loc : SrcLoc) -> Unit {
+fn update_elif(pp : Preprocessor, cond : Bool, loc : @source.SrcLoc) -> Unit {
   if pp.cond_stack.length() == 0 {
     add_pp_error(pp, loc, "unexpected #elif without #if")
     return
@@ -2003,7 +2011,7 @@ fn update_elif(pp : Preprocessor, cond : Bool, loc : SrcLoc) -> Unit {
 }
 
 ///|
-fn update_else(pp : Preprocessor, loc : SrcLoc) -> Unit {
+fn update_else(pp : Preprocessor, loc : @source.SrcLoc) -> Unit {
   if pp.cond_stack.length() == 0 {
     add_pp_error(pp, loc, "unexpected #else without #if")
     return
@@ -2023,7 +2031,7 @@ fn update_else(pp : Preprocessor, loc : SrcLoc) -> Unit {
 }
 
 ///|
-fn pop_cond(pp : Preprocessor, loc : SrcLoc) -> Unit {
+fn pop_cond(pp : Preprocessor, loc : @source.SrcLoc) -> Unit {
   if pp.cond_stack.length() == 0 {
     add_pp_error(pp, loc, "unexpected #endif without #if")
     return
@@ -2239,7 +2247,7 @@ fn add_hidden_tokens(
 fn handle_line_directive(
   pp : Preprocessor,
   tokens : Array[Token],
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> Unit {
   if tokens.length() == 0 {
     add_pp_error(pp, loc, "missing line number in #line")
@@ -2268,7 +2276,7 @@ fn handle_line_directive(
 ///|
 
 ///|
-fn eval_if_expr(pp : Preprocessor, tokens : Array[Token], loc : SrcLoc) -> Bool {
+fn eval_if_expr(pp : Preprocessor, tokens : Array[Token], loc : @source.SrcLoc) -> Bool {
   if tokens.length() == 0 {
     add_pp_error(pp, loc, "empty #if expression")
     return false
@@ -2342,7 +2350,7 @@ fn match_kind(p : IfParser, kind : TokenKind) -> Bool {
 }
 
 ///|
-fn parse_line_int_literal(pp : Preprocessor, lexeme : String, loc : SrcLoc) -> Int {
+fn parse_line_int_literal(pp : Preprocessor, lexeme : String, loc : @source.SrcLoc) -> Int {
   let end = int_literal_end(lexeme)
   if end <= 0 {
     add_pp_error(pp, loc, "invalid integer in #line")
@@ -2367,7 +2375,7 @@ fn parse_line_int_literal(pp : Preprocessor, lexeme : String, loc : SrcLoc) -> I
 fn parse_pp_int_literal(
   pp : Preprocessor,
   lexeme : String,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> PpValue {
   let end = int_literal_end(lexeme)
   if end <= 0 {
@@ -2428,7 +2436,7 @@ fn decode_pp_escape_value(
   pp : Preprocessor,
   text : String,
   start : Int,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (Int, Int) {
   if start >= text.length() {
     add_pp_error(pp, loc, "unterminated escape sequence in #if")
@@ -2462,7 +2470,7 @@ fn parse_pp_hex_escape(
   pp : Preprocessor,
   text : String,
   start : Int,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (Int, Int) {
   let mut i = start
   let mut value = 0
@@ -2525,7 +2533,7 @@ fn pp_hex_digit_value(code : UInt16) -> Int? {
 fn macro_int_value(
   pp : Preprocessor,
   tok : Token,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> PpValue? {
   let id = macro_id_from_token(pp, tok)
   if id == 0 {
@@ -2551,7 +2559,7 @@ fn macro_int_value(
 }
 
 ///|
-fn parse_primary(p : IfParser, loc : SrcLoc) -> PpValue {
+fn parse_primary(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   match advance_if(p) {
     None => {
       add_pp_error(p.pp, loc, "unexpected end of #if expression")
@@ -2616,7 +2624,7 @@ fn peek_is_rparen(p : IfParser) -> Bool {
 }
 
 ///|
-fn parse_defined(p : IfParser, loc : SrcLoc) -> PpValue {
+fn parse_defined(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   if match_kind(p, LParen) {
     match advance_if(p) {
       Some(tok) if is_macro_name_token(tok) => {
@@ -2642,7 +2650,7 @@ fn parse_defined(p : IfParser, loc : SrcLoc) -> PpValue {
 }
 
 ///|
-fn skip_paren_expr(p : IfParser, loc : SrcLoc) -> Unit {
+fn skip_paren_expr(p : IfParser, loc : @source.SrcLoc) -> Unit {
   let mut depth = 1
   while depth > 0 {
     match advance_if(p) {
@@ -2661,7 +2669,7 @@ fn skip_paren_expr(p : IfParser, loc : SrcLoc) -> Unit {
 }
 
 ///|
-fn parse_unary(p : IfParser, loc : SrcLoc) -> PpValue {
+fn parse_unary(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   if match_kind(p, Bang) {
     return pp_bool_value(pp_is_zero(parse_unary(p, loc)))
   }
@@ -2681,7 +2689,7 @@ fn parse_unary(p : IfParser, loc : SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_mul(p : IfParser, loc : SrcLoc) -> PpValue {
+fn parse_mul(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_unary(p, loc)
   while true {
     if peek_is_rparen(p) {
@@ -2735,7 +2743,7 @@ fn parse_mul(p : IfParser, loc : SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_add(p : IfParser, loc : SrcLoc) -> PpValue {
+fn parse_add(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_mul(p, loc)
   while true {
     if peek_is_rparen(p) {
@@ -2759,7 +2767,7 @@ fn parse_add(p : IfParser, loc : SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_shift(p : IfParser, loc : SrcLoc) -> PpValue {
+fn parse_shift(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_add(p, loc)
   while true {
     if peek_is_rparen(p) {
@@ -2789,7 +2797,7 @@ fn parse_shift(p : IfParser, loc : SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_rel(p : IfParser, loc : SrcLoc) -> PpValue {
+fn parse_rel(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_shift(p, loc)
   while true {
     if peek_is_rparen(p) {
@@ -2841,7 +2849,7 @@ fn parse_rel(p : IfParser, loc : SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_eq(p : IfParser, loc : SrcLoc) -> PpValue {
+fn parse_eq(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_rel(p, loc)
   while true {
     if peek_is_rparen(p) {
@@ -2863,7 +2871,7 @@ fn parse_eq(p : IfParser, loc : SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_bit_and(p : IfParser, loc : SrcLoc) -> PpValue {
+fn parse_bit_and(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_eq(p, loc)
   while match_kind(p, Amp) {
     if peek_is_rparen(p) {
@@ -2877,7 +2885,7 @@ fn parse_bit_and(p : IfParser, loc : SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_bit_xor(p : IfParser, loc : SrcLoc) -> PpValue {
+fn parse_bit_xor(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_bit_and(p, loc)
   while match_kind(p, Caret) {
     if peek_is_rparen(p) {
@@ -2891,7 +2899,7 @@ fn parse_bit_xor(p : IfParser, loc : SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_bit_or(p : IfParser, loc : SrcLoc) -> PpValue {
+fn parse_bit_or(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_bit_xor(p, loc)
   while match_kind(p, Pipe) {
     if peek_is_rparen(p) {
@@ -2905,7 +2913,7 @@ fn parse_bit_or(p : IfParser, loc : SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_logical_and(p : IfParser, loc : SrcLoc) -> PpValue {
+fn parse_logical_and(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_bit_or(p, loc)
   while match_kind(p, AmpAmp) {
     let rhs = parse_bit_or(p, loc)
@@ -2915,7 +2923,7 @@ fn parse_logical_and(p : IfParser, loc : SrcLoc) -> PpValue {
 }
 
 ///|
-fn parse_logical_or(p : IfParser, loc : SrcLoc) -> PpValue {
+fn parse_logical_or(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_logical_and(p, loc)
   while match_kind(p, PipePipe) {
     let rhs = parse_logical_and(p, loc)

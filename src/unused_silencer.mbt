@@ -28,7 +28,7 @@ fn touch_unused_symbols() -> Unit {
   let vdup_ref = vdup
 
   // diag helper
-  let format_diag_ref = format_diag
+  let format_diag_ref = @diag.format_diag
 
   // Mach-O layout struct and helper
   let layout = {

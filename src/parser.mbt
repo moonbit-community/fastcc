@@ -5,7 +5,7 @@ struct Parser {
   mut lookahead : Token
   buffer : Array[Token]
   mut buffer_pos : Int
-  diags : DiagBag
+  diags : @diag.DiagBag
   typedef_counts : Array[Int]
   typedef_values : Array[CType?]
   typedef_scope_levels : Array[Int]
@@ -584,7 +584,7 @@ fn parse_type_qualifiers(p : Parser) -> TypeQual {
 ///|
 struct DeclSpecs {
   ty : CType
-  loc : SrcLoc
+  loc : @source.SrcLoc
   is_typedef : Bool
   storage : StorageClass
   is_inline : Bool
@@ -998,7 +998,7 @@ fn is_type_spec_start(p : Parser) -> Bool {
 }
 
 ///|
-fn parse_typeof_spec(p : Parser, loc : SrcLoc) -> CType? {
+fn parse_typeof_spec(p : Parser, loc : @source.SrcLoc) -> CType? {
   ignore(advance_token(p))
   if match_token(p, LParen) is None {
     add_parse_error(p, loc, "expected '(' after typeof")
@@ -1027,7 +1027,7 @@ fn normalize_attr_name(name : String) -> String {
 }
 
 ///|
-fn parse_attr_string(p : Parser, loc : SrcLoc) -> String? {
+fn parse_attr_string(p : Parser, loc : @source.SrcLoc) -> String? {
   if peek_token(p).kind != StrLit {
     add_parse_error(p, loc, "expected string literal in attribute")
     return None
@@ -1052,7 +1052,7 @@ fn parse_attr_string(p : Parser, loc : SrcLoc) -> String? {
 }
 
 ///|
-fn parse_static_assert(p : Parser, loc : SrcLoc) -> StaticAssert {
+fn parse_static_assert(p : Parser, loc : @source.SrcLoc) -> StaticAssert {
   expect(p, LParen, "expected '(' after _Static_assert") |> ignore
   let expr = parse_expr_cond(p)
   let mut message : String? = None
@@ -1064,7 +1064,7 @@ fn parse_static_assert(p : Parser, loc : SrcLoc) -> StaticAssert {
 }
 
 ///|
-fn parse_asm_label(p : Parser, loc : SrcLoc) -> String? {
+fn parse_asm_label(p : Parser, loc : @source.SrcLoc) -> String? {
   expect(p, LParen, "expected '(' after asm") |> ignore
   let label = parse_attr_string(p, loc)
   expect(p, RParen, "expected ')' after asm label") |> ignore
@@ -1151,7 +1151,7 @@ fn parse_asm_labels(p : Parser) -> Array[String] {
 }
 
 ///|
-fn parse_asm_stmt(p : Parser, loc : SrcLoc) -> AsmStmt {
+fn parse_asm_stmt(p : Parser, loc : @source.SrcLoc) -> AsmStmt {
   let mut is_volatile = false
   let mut is_goto = false
   while true {
@@ -1220,7 +1220,7 @@ fn skip_paren_group(p : Parser) -> Unit {
 }
 
 ///|
-fn parse_attribute_clause(p : Parser, loc : SrcLoc) -> Attributes {
+fn parse_attribute_clause(p : Parser, loc : @source.SrcLoc) -> Attributes {
   let mut attrs = empty_attrs()
   ignore(advance_token(p))
   if match_token(p, LParen) is None {
@@ -1510,7 +1510,7 @@ struct Declarator {
   varargs : Bool
   is_old_style : Bool
   attrs : Attributes
-  loc : SrcLoc
+  loc : @source.SrcLoc
 }
 
 ///|
@@ -1587,7 +1587,7 @@ fn parse_init_declarator(
 fn parse_field_declarator(
   p : Parser,
   base : CType,
-  fallback_loc : SrcLoc,
+  fallback_loc : @source.SrcLoc,
 ) -> Declarator? {
   // Like parse_declarator, but the name may be omitted (anonymous fields).
   let (ty0, pointer_attrs) = parse_pointer_chain(p, base)
@@ -1653,7 +1653,7 @@ fn parse_initializer(p : Parser) -> Initializer {
 }
 
 ///|
-fn parse_designator_list(p : Parser) -> (Array[InitDesignator], SrcLoc) {
+fn parse_designator_list(p : Parser) -> (Array[InitDesignator], @source.SrcLoc) {
   let designators : Array[InitDesignator] = Array::new(capacity=2)
   let mut start_loc = peek_token(p).loc
   while true {
@@ -1751,7 +1751,7 @@ enum DeclWrapper {
 struct ParenDeclParts {
   name : String
   id : Int
-  loc : SrcLoc
+  loc : @source.SrcLoc
   wrappers : Array[DeclWrapper]
   params : Array[Param]?
   varargs : Bool
@@ -1839,7 +1839,7 @@ fn parse_suffix_wrappers(
 fn parse_paren_pointer_parts(
   p : Parser,
   allow_missing_name : Bool,
-  fallback_loc : SrcLoc,
+  fallback_loc : @source.SrcLoc,
 ) -> ParenDeclParts? {
   expect(p, LParen, "expected '(' in declarator") |> ignore
   let quals : Array[TypeQual] = []
@@ -2069,7 +2069,7 @@ fn next_anon_tag(p : Parser) -> (String, Int) {
 }
 
 ///|
-fn parse_struct_type(p : Parser, is_union~ : Bool) -> (CType, SrcLoc)? {
+fn parse_struct_type(p : Parser, is_union~ : Bool) -> (CType, @source.SrcLoc)? {
   let kw = advance_token(p)
   let mut attrs = parse_attributes(p)
   let mut name = ""
@@ -2195,7 +2195,7 @@ fn parse_struct_fields(p : Parser) -> Array[RecordItem] {
 }
 
 ///|
-fn parse_enum_type(p : Parser) -> (CType, SrcLoc)? {
+fn parse_enum_type(p : Parser) -> (CType, @source.SrcLoc)? {
   let kw = advance_token(p)
   let mut name = ""
   let mut id = 0
@@ -2336,7 +2336,7 @@ fn parse_param_after_base(
   p : Parser,
   base : CType,
   attrs : Attributes,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> Param? {
   match parse_param_declarator(p, base, loc) {
     Some(param) => {
@@ -2360,7 +2360,7 @@ fn parse_param_after_base(
 fn parse_param_declarator(
   p : Parser,
   base : CType,
-  fallback_loc : SrcLoc,
+  fallback_loc : @source.SrcLoc,
 ) -> Param? {
   // Parse pointer chain first so we can handle return-type pointers on
   // function-pointer parameter declarators like:
@@ -2423,7 +2423,7 @@ fn parse_param_declarator(
 }
 
 ///|
-fn parse_compound_stmt(p : Parser, loc : SrcLoc) -> Stmt {
+fn parse_compound_stmt(p : Parser, loc : @source.SrcLoc) -> Stmt {
   p.pending_typedef_scopes.push(false)
   let stmts : Array[Stmt] = Array::new(capacity=8)
   while true {
@@ -2653,7 +2653,7 @@ fn parse_stmt(p : Parser) -> Stmt {
 }
 
 ///|
-fn parse_if_stmt(p : Parser, loc : SrcLoc) -> Stmt {
+fn parse_if_stmt(p : Parser, loc : @source.SrcLoc) -> Stmt {
   expect(p, LParen, "expected '(' after if") |> ignore
   let cond = parse_expr(p)
   expect(p, RParen, "expected ')' after if condition") |> ignore
@@ -2669,7 +2669,7 @@ fn parse_if_stmt(p : Parser, loc : SrcLoc) -> Stmt {
 }
 
 ///|
-fn parse_while_stmt(p : Parser, loc : SrcLoc) -> Stmt {
+fn parse_while_stmt(p : Parser, loc : @source.SrcLoc) -> Stmt {
   expect(p, LParen, "expected '(' after while") |> ignore
   let cond = parse_expr(p)
   expect(p, RParen, "expected ')' after while condition") |> ignore
@@ -2678,7 +2678,7 @@ fn parse_while_stmt(p : Parser, loc : SrcLoc) -> Stmt {
 }
 
 ///|
-fn parse_do_while_stmt(p : Parser, loc : SrcLoc) -> Stmt {
+fn parse_do_while_stmt(p : Parser, loc : @source.SrcLoc) -> Stmt {
   let body = parse_stmt(p)
   expect(p, KwWhile, "expected while after do") |> ignore
   expect(p, LParen, "expected '(' after while") |> ignore
@@ -2689,7 +2689,7 @@ fn parse_do_while_stmt(p : Parser, loc : SrcLoc) -> Stmt {
 }
 
 ///|
-fn parse_for_stmt(p : Parser, loc : SrcLoc) -> Stmt {
+fn parse_for_stmt(p : Parser, loc : @source.SrcLoc) -> Stmt {
   expect(p, LParen, "expected '(' after for") |> ignore
   p.pending_typedef_scopes.push(false)
   let init = parse_for_init(p)
@@ -2723,7 +2723,7 @@ fn parse_for_stmt(p : Parser, loc : SrcLoc) -> Stmt {
 }
 
 ///|
-fn parse_switch_stmt(p : Parser, loc : SrcLoc) -> Stmt {
+fn parse_switch_stmt(p : Parser, loc : @source.SrcLoc) -> Stmt {
   expect(p, LParen, "expected '(' after switch") |> ignore
   let cond = parse_expr(p)
   expect(p, RParen, "expected ')' after switch condition") |> ignore
@@ -3436,7 +3436,7 @@ fn parse_string_literal_expr(p : Parser, first : Token) -> Expr {
 fn decode_string_literal(
   p : Parser,
   lexeme : String,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (String, Int) {
   let len = lexeme.length()
   let size_hint = if len > 2 { len - 2 } else { 0 }
@@ -3504,7 +3504,7 @@ fn decode_escape_value(
   p : Parser,
   text : String,
   start : Int,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (Int, Int) {
   if start >= text.length() {
     add_parse_error(p, loc, "unterminated escape sequence")
@@ -3538,7 +3538,7 @@ fn parse_hex_escape(
   p : Parser,
   text : String,
   start : Int,
-  loc : SrcLoc,
+  loc : @source.SrcLoc,
 ) -> (Int, Int) {
   let mut i = start
   let mut value = 0
@@ -3630,7 +3630,7 @@ fn is_type_start(p : Parser, tok : Token) -> Bool {
 }
 
 ///|
-fn expr_loc(expr : Expr) -> SrcLoc {
+fn expr_loc(expr : Expr) -> @source.SrcLoc {
   match expr {
     Expr::IntLit(loc~, ..) => loc
     Expr::FloatLit(loc~, ..) => loc
@@ -3918,8 +3918,8 @@ fn has_typedef(p : Parser, tok : Token) -> Bool {
 }
 
 ///|
-fn add_parse_error(p : Parser, loc : SrcLoc, message : String) -> Unit {
-  add_error(p.diags, loc, message)
+fn add_parse_error(p : Parser, loc : @source.SrcLoc, message : String) -> Unit {
+  @diag.add_error(p.diags, loc, message)
 }
 
 ///|

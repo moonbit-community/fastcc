@@ -342,14 +342,14 @@ struct Field {
   ty : CType
   bit_width : Expr?
   attrs : Attributes
-  loc : SrcLoc
+  loc : @source.SrcLoc
 } derive(Show, Eq, ToJson)
 
 ///|
 struct StaticAssert {
   expr : Expr
   message : String?
-  loc : SrcLoc
+  loc : @source.SrcLoc
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -363,7 +363,7 @@ struct EnumItem {
   name : String
   id : Int
   value : Expr?
-  loc : SrcLoc
+  loc : @source.SrcLoc
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -371,7 +371,7 @@ struct Param {
   name : String
   id : Int
   ty : CType
-  loc : SrcLoc
+  loc : @source.SrcLoc
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -386,7 +386,7 @@ struct FuncDef {
   is_inline : Bool
   attrs : Attributes
   body : Stmt
-  loc : SrcLoc
+  loc : @source.SrcLoc
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -400,7 +400,7 @@ struct FuncDecl {
   storage : StorageClass
   is_inline : Bool
   attrs : Attributes
-  loc : SrcLoc
+  loc : @source.SrcLoc
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -411,7 +411,7 @@ struct VarDecl {
   init : Initializer?
   storage : StorageClass
   attrs : Attributes
-  loc : SrcLoc
+  loc : @source.SrcLoc
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -419,8 +419,8 @@ enum Decl {
   FuncDef(FuncDef)
   FuncDecl(FuncDecl)
   Var(VarDecl)
-  Typedef(name~ : String, ty~ : CType, attrs~ : Attributes, loc~ : SrcLoc)
-  TagDef(ty~ : CType, loc~ : SrcLoc)
+  Typedef(name~ : String, ty~ : CType, attrs~ : Attributes, loc~ : @source.SrcLoc)
+  TagDef(ty~ : CType, loc~ : @source.SrcLoc)
   StaticAssert(StaticAssert)
   Asm(AsmStmt)
 } derive(Show, Eq, ToJson)
@@ -481,61 +481,61 @@ enum BinaryOp {
 
 ///|
 enum Expr {
-  IntLit(value~ : String, node_id~ : Int, loc~ : SrcLoc)
-  FloatLit(value~ : String, node_id~ : Int, loc~ : SrcLoc)
-  CharLit(value~ : Int, node_id~ : Int, loc~ : SrcLoc)
-  StringLit(value~ : String, length~ : Int, node_id~ : Int, loc~ : SrcLoc)
-  Ident(name~ : String, id~ : Int, node_id~ : Int, loc~ : SrcLoc)
-  LabelAddr(name~ : String, id~ : Int, node_id~ : Int, loc~ : SrcLoc)
-  BuiltinTypesCompatibleP(a~ : CType, b~ : CType, node_id~ : Int, loc~ : SrcLoc)
-  BuiltinOffsetof(ty~ : CType, path~ : Array[String], node_id~ : Int, loc~ : SrcLoc)
-  BuiltinVaArg(list~ : Expr, ty~ : CType, node_id~ : Int, loc~ : SrcLoc)
-  Unary(op~ : UnaryOp, expr~ : Expr, node_id~ : Int, loc~ : SrcLoc)
-  Cast(ty~ : CType, expr~ : Expr, node_id~ : Int, loc~ : SrcLoc)
-  CompoundLiteral(ty~ : CType, init~ : Initializer, node_id~ : Int, loc~ : SrcLoc)
-  StmtExpr(stmts~ : Array[Stmt], node_id~ : Int, loc~ : SrcLoc)
-  SizeofExpr(expr~ : Expr, node_id~ : Int, loc~ : SrcLoc)
-  SizeofType(ty~ : CType, node_id~ : Int, loc~ : SrcLoc)
-  AlignofExpr(expr~ : Expr, node_id~ : Int, loc~ : SrcLoc)
-  AlignofType(ty~ : CType, node_id~ : Int, loc~ : SrcLoc)
-  Binary(op~ : BinaryOp, left~ : Expr, right~ : Expr, node_id~ : Int, loc~ : SrcLoc)
+  IntLit(value~ : String, node_id~ : Int, loc~ : @source.SrcLoc)
+  FloatLit(value~ : String, node_id~ : Int, loc~ : @source.SrcLoc)
+  CharLit(value~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
+  StringLit(value~ : String, length~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
+  Ident(name~ : String, id~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
+  LabelAddr(name~ : String, id~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
+  BuiltinTypesCompatibleP(a~ : CType, b~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
+  BuiltinOffsetof(ty~ : CType, path~ : Array[String], node_id~ : Int, loc~ : @source.SrcLoc)
+  BuiltinVaArg(list~ : Expr, ty~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
+  Unary(op~ : UnaryOp, expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
+  Cast(ty~ : CType, expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
+  CompoundLiteral(ty~ : CType, init~ : Initializer, node_id~ : Int, loc~ : @source.SrcLoc)
+  StmtExpr(stmts~ : Array[Stmt], node_id~ : Int, loc~ : @source.SrcLoc)
+  SizeofExpr(expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
+  SizeofType(ty~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
+  AlignofExpr(expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
+  AlignofType(ty~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
+  Binary(op~ : BinaryOp, left~ : Expr, right~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
   Conditional(
     cond~ : Expr,
     then_expr~ : Expr,
     else_expr~ : Expr,
     node_id~ : Int,
-    loc~ : SrcLoc,
+    loc~ : @source.SrcLoc,
   )
-  Call(callee~ : Expr, args~ : Array[Expr], node_id~ : Int, loc~ : SrcLoc)
-  Index(base~ : Expr, index~ : Expr, node_id~ : Int, loc~ : SrcLoc)
+  Call(callee~ : Expr, args~ : Array[Expr], node_id~ : Int, loc~ : @source.SrcLoc)
+  Index(base~ : Expr, index~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
   Member(
     base~ : Expr,
     name~ : String,
     id~ : Int,
     is_arrow~ : Bool,
     node_id~ : Int,
-    loc~ : SrcLoc,
+    loc~ : @source.SrcLoc,
   )
 } derive(Show, Eq, ToJson)
 
 ///|
 enum InitDesignator {
-  Index(expr~ : Expr, loc~ : SrcLoc)
-  IndexRange(start~ : Expr, end~ : Expr, loc~ : SrcLoc)
-  Field(name~ : String, id~ : Int, loc~ : SrcLoc)
+  Index(expr~ : Expr, loc~ : @source.SrcLoc)
+  IndexRange(start~ : Expr, end~ : Expr, loc~ : @source.SrcLoc)
+  Field(name~ : String, id~ : Int, loc~ : @source.SrcLoc)
 } derive(Show, Eq, ToJson)
 
 ///|
 struct InitItem {
   designators : Array[InitDesignator]
   value : Initializer
-  loc : SrcLoc
+  loc : @source.SrcLoc
 } derive(Show, Eq, ToJson)
 
 ///|
 enum Initializer {
-  Expr(expr~ : Expr, loc~ : SrcLoc)
-  List(items~ : Array[InitItem], loc~ : SrcLoc)
+  Expr(expr~ : Expr, loc~ : @source.SrcLoc)
+  List(items~ : Array[InitItem], loc~ : @source.SrcLoc)
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -543,7 +543,7 @@ struct AsmOperand {
   name : String?
   constraint : String
   expr : Expr
-  loc : SrcLoc
+  loc : @source.SrcLoc
 } derive(Show, Eq, ToJson)
 
 ///|
@@ -555,29 +555,29 @@ struct AsmStmt {
   labels : Array[String]
   is_volatile : Bool
   is_goto : Bool
-  loc : SrcLoc
+  loc : @source.SrcLoc
 } derive(Show, Eq, ToJson)
 
 ///|
 enum Stmt {
-  Compound(stmts~ : Array[Stmt], loc~ : SrcLoc)
-  If(cond~ : Expr, then_branch~ : Stmt, else_branch~ : Stmt?, loc~ : SrcLoc)
-  While(cond~ : Expr, body~ : Stmt, loc~ : SrcLoc)
-  DoWhile(cond~ : Expr, body~ : Stmt, loc~ : SrcLoc)
-  For(init~ : Stmt?, cond~ : Expr?, step~ : Expr?, body~ : Stmt, loc~ : SrcLoc)
-  Switch(cond~ : Expr, body~ : Stmt, loc~ : SrcLoc)
-  Case(expr~ : Expr, end_expr~ : Expr?, body~ : Stmt, loc~ : SrcLoc)
-  Default(body~ : Stmt, loc~ : SrcLoc)
-  Label(name~ : String, body~ : Stmt, loc~ : SrcLoc)
-  Goto(name~ : String, loc~ : SrcLoc)
-  GotoExpr(expr~ : Expr, loc~ : SrcLoc)
-  Break(loc~ : SrcLoc)
-  Continue(loc~ : SrcLoc)
-  Return(value~ : Expr?, loc~ : SrcLoc)
+  Compound(stmts~ : Array[Stmt], loc~ : @source.SrcLoc)
+  If(cond~ : Expr, then_branch~ : Stmt, else_branch~ : Stmt?, loc~ : @source.SrcLoc)
+  While(cond~ : Expr, body~ : Stmt, loc~ : @source.SrcLoc)
+  DoWhile(cond~ : Expr, body~ : Stmt, loc~ : @source.SrcLoc)
+  For(init~ : Stmt?, cond~ : Expr?, step~ : Expr?, body~ : Stmt, loc~ : @source.SrcLoc)
+  Switch(cond~ : Expr, body~ : Stmt, loc~ : @source.SrcLoc)
+  Case(expr~ : Expr, end_expr~ : Expr?, body~ : Stmt, loc~ : @source.SrcLoc)
+  Default(body~ : Stmt, loc~ : @source.SrcLoc)
+  Label(name~ : String, body~ : Stmt, loc~ : @source.SrcLoc)
+  Goto(name~ : String, loc~ : @source.SrcLoc)
+  GotoExpr(expr~ : Expr, loc~ : @source.SrcLoc)
+  Break(loc~ : @source.SrcLoc)
+  Continue(loc~ : @source.SrcLoc)
+  Return(value~ : Expr?, loc~ : @source.SrcLoc)
   Asm(AsmStmt)
-  ExprStmt(expr~ : Expr, loc~ : SrcLoc)
-  DeclStmt(decls~ : Array[VarDecl], loc~ : SrcLoc)
-  TagDef(ty~ : CType, loc~ : SrcLoc)
+  ExprStmt(expr~ : Expr, loc~ : @source.SrcLoc)
+  DeclStmt(decls~ : Array[VarDecl], loc~ : @source.SrcLoc)
+  TagDef(ty~ : CType, loc~ : @source.SrcLoc)
   StaticAssert(StaticAssert)
-  Empty(loc~ : SrcLoc)
+  Empty(loc~ : @source.SrcLoc)
 } derive(Show, Eq, ToJson)

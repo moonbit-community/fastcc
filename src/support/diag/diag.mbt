@@ -1,30 +1,30 @@
 ///|
-struct Diag {
-  loc : SrcLoc
+pub(all) struct Diag {
+  loc : @source.SrcLoc
   message : String
 }
 
 ///|
-struct DiagBag {
+pub(all) struct DiagBag {
   diags : Array[Diag]
 }
 
 ///|
-fn new_diag_bag() -> DiagBag {
+pub fn new_diag_bag() -> DiagBag {
   { diags: [] }
 }
 
 ///|
-fn add_error(bag : DiagBag, loc : SrcLoc, message : String) -> Unit {
+pub fn add_error(bag : DiagBag, loc : @source.SrcLoc, message : String) -> Unit {
   bag.diags.push({ loc, message })
 }
 
 ///|
-fn has_errors(bag : DiagBag) -> Bool {
+pub fn has_errors(bag : DiagBag) -> Bool {
   bag.diags.length() > 0
 }
 
 ///|
-fn format_diag(d : Diag) -> String {
+pub fn format_diag(d : Diag) -> String {
   d.message
 }

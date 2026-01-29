@@ -495,7 +495,7 @@ fn default_output_path(input_path : String) -> String {
 }
 
 ///|
-fn format_diag_for_cli(map : SourceMap, d : Diag) -> String {
+fn format_diag_for_cli(map : @source.SourceMap, d : @diag.Diag) -> String {
   let loc = d.loc
   match map.files.get(loc.file_id) {
     None => d.message
@@ -508,7 +508,7 @@ fn lex_cli_macro_tokens(pp : Preprocessor, value : String) -> Array[Token] {
   if value == "" {
     return []
   }
-  let file = add_file(pp.map, "<cmdline>", value)
+  let file = @source.add_file(pp.map, "<cmdline>", value)
   let lex = new_lexer(
     file,
     pp.diags,
@@ -617,9 +617,9 @@ fn compile_to_object_path(
   match load_input(input_path) {
     None => false
     Some((path, text)) => {
-      let bag = new_diag_bag()
-      let map = new_source_map()
-      let file = add_file(map, path, text)
+      let bag = @diag.new_diag_bag()
+      let map = @source.new_source_map()
+      let file = @source.add_file(map, path, text)
       let pp = new_preprocessor(map, file, bag)
       add_include_path(pp, "compat/include")
       for p in cfg.include_paths {
@@ -640,7 +640,7 @@ fn compile_to_object_path(
         let parse_end = bench_now_ns()
         parse_ns = bench_delta_ns(parse_start, parse_end)
       }
-      if !has_errors(bag) {
+      if !@diag.has_errors(bag) {
         if bench_enabled {
           let sem_start = bench_now_ns()
           sem_ctx = Some(check_translation_unit(unit, bag))
@@ -650,12 +650,12 @@ fn compile_to_object_path(
           sem_ctx = Some(check_translation_unit(unit, bag))
         }
       }
-      if !has_errors(bag) {
+      if !@diag.has_errors(bag) {
         let codegen_start = if bench_enabled { bench_now_ns() } else { 0UL }
         if sem_ctx is Some(ctx) {
           if codegen_arm64_object_bytes_with_sem(unit, ctx, bag) is Some(bytes) {
             @fs.write_bytes_to_file(output_path, bytes) catch {
-              err => add_error(bag, dummy_loc(0), err.to_string())
+              err => @diag.add_error(bag, @source.dummy_loc(0), err.to_string())
             }
           }
         }
@@ -672,7 +672,7 @@ fn compile_to_object_path(
         }
         println(bench_file_line(path, parse_ns, sem_ns, codegen_ns, total_ns))
       }
-      if has_errors(bag) {
+      if @diag.has_errors(bag) {
         for d in bag.diags {
           println(format_diag_for_cli(pp.map, d))
         }
@@ -762,9 +762,9 @@ fn main {
                 continue
               }
               Some((path, text)) => {
-                let bag = new_diag_bag()
-                let map = new_source_map()
-                let file = add_file(map, path, text)
+                let bag = @diag.new_diag_bag()
+                let map = @source.new_source_map()
+                let file = @source.add_file(map, path, text)
                 let pp = new_preprocessor(map, file, bag)
                 add_include_path(pp, "compat/include")
                 for p in cfg.include_paths {
@@ -775,7 +775,7 @@ fn main {
                 for t in toks {
                   println(token_text_with(pp.interner, pp.lexeme_pool, t))
                 }
-                if has_errors(bag) {
+                if @diag.has_errors(bag) {
                   any_errors = true
                   for d in bag.diags {
                     println(format_diag_for_cli(pp.map, d))

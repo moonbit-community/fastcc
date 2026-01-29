@@ -1,0 +1,37 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/support/source"
+
+// Values
+pub fn add_file(SourceMap, String, String) -> SourceFile
+
+pub fn dummy_loc(Int) -> SrcLoc
+
+pub fn new_source_map() -> SourceMap
+
+// Errors
+
+// Types and methods
+pub(all) struct SourceFile {
+  id : Int
+  path : String
+  text : String
+}
+
+pub(all) struct SourceMap {
+  files : Array[SourceFile]
+}
+
+pub(all) struct SrcLoc {
+  file_id : Int
+  line : Int
+  col : Int
+  offset : Int
+}
+pub impl Eq for SrcLoc
+pub impl Show for SrcLoc
+pub impl ToJson for SrcLoc
+
+// Type aliases
+
+// Traits
+

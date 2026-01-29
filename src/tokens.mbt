@@ -103,7 +103,7 @@ enum TokenKind {
 struct Token {
   kind : TokenKind
   value : Int
-  loc : SrcLoc
+  loc : @source.SrcLoc
   line_start : Bool
   hidden : Int
 } derive(Show, Eq, ToJson)

@@ -1,6 +1,8 @@
 {
   "is-main": true,
   "import": [
+    "hackwaly/tinycc/support/diag",
+    "hackwaly/tinycc/support/source",
     "moonbitlang/x/fs",
     "moonbitlang/x/sys",
     "moonbitlang/x/time"
