@@ -160,8 +160,9 @@ pub fn lexeme_pool_intern(pool : LexemePool, text : String) -> Int {
   if text.length() == 0 {
     return 0
   }
+  let id = pool.entries.length() + 1
   pool.entries.push(LexemeEntry::Owned(text))
-  pool.entries.length()
+  id
 }
 
 ///|
@@ -191,8 +192,9 @@ pub fn lexeme_pool_intern_slice(
   if len <= 0 {
     return 0
   }
+  let id = pool.entries.length() + 1
   pool.entries.push(LexemeEntry::Slice(text=text, start=start, len=len))
-  pool.entries.length()
+  id
 }
 
 ///|
