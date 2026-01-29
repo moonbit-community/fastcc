@@ -131,8 +131,18 @@ pub fn attrs_is_empty(attrs : Attributes) -> Bool {
 }
 
 ///|
+pub fn type_attrs_from(attrs : Attributes) -> Attributes {
+  @ast_core.type_attrs_from(attrs)
+}
+
+///|
 pub fn has_type_attrs(attrs : Attributes) -> Bool {
   @ast_core.has_type_attrs(attrs)
+}
+
+///|
+pub fn apply_type_attrs(ty : CType, attrs : Attributes) -> CType {
+  @ast_core.apply_type_attrs(ty, attrs)
 }
 
 ///|

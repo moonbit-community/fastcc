@@ -11,6 +11,8 @@ pub fn apply_call_conv_to_type(@ast_core.CType, @ast_core.CallConv) -> @ast_core
 
 pub fn apply_qualifiers(@ast_core.CType, @ast_core.TypeQual) -> @ast_core.CType
 
+pub fn apply_type_attrs(@ast_core.CType, @ast_core.Attributes) -> @ast_core.CType
+
 pub fn attrs_is_empty(@ast_core.Attributes) -> Bool
 
 pub fn attrs_with(aligned? : @ast_core.AlignSpec?, packed? : Bool, weak? : Bool, visibility? : @ast_core.Visibility?, section? : String?, alias_name? : String?, asm_label? : String?, cleanup? : String?, noreturn? : Bool, constructor_attr? : Bool, destructor? : Bool, always_inline? : Bool, call_conv? : @ast_core.CallConv?, dll_import? : Bool, dll_export? : Bool, nodecorate? : Bool, nodebug? : Bool) -> @ast_core.Attributes
@@ -42,6 +44,8 @@ pub fn merge_qual(@ast_core.TypeQual, @ast_core.TypeQual) -> @ast_core.TypeQual
 pub fn normalize_call_conv(@ast_core.CallConv?) -> @ast_core.CallConv
 
 pub fn parse_int64_literal(String) -> Int64?
+
+pub fn type_attrs_from(@ast_core.Attributes) -> @ast_core.Attributes
 
 pub fn with_atomic(@ast_core.TypeQual) -> @ast_core.TypeQual
 
