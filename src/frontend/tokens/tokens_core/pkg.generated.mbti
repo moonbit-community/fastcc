@@ -2,14 +2,14 @@
 package "hackwaly/tinycc/frontend/tokens/tokens_core"
 
 import {
-  "hackwaly/tinycc/support/intern",
-  "hackwaly/tinycc/support/source",
+  "hackwaly/tinycc/support/intern/intern_core",
+  "hackwaly/tinycc/support/source/source_core",
 }
 
 // Values
 pub let empty_hidden : Int
 
-pub fn init_keyword_ids(@intern.StringInterner) -> KeywordIds
+pub fn init_keyword_ids(@intern_core.StringInterner) -> KeywordIds
 
 pub fn keyword_kind_from_id(Int, KeywordIds) -> TokenKind?
 
@@ -33,9 +33,9 @@ pub fn token_kind_text_len(TokenKind) -> Int
 
 pub fn token_lexeme_id(Token) -> Int
 
-pub fn token_text_len_with(@intern.StringInterner, LexemePool, Token) -> Int
+pub fn token_text_len_with(@intern_core.StringInterner, LexemePool, Token) -> Int
 
-pub fn token_text_with(@intern.StringInterner, LexemePool, Token) -> String
+pub fn token_text_with(@intern_core.StringInterner, LexemePool, Token) -> String
 
 pub fn token_value_from_parts(Int, Int) -> Int
 
@@ -58,7 +58,7 @@ pub(all) struct LexemePool {
 pub(all) struct Token {
   kind : TokenKind
   value : Int
-  loc : @source.SrcLoc
+  loc : @source_core.SrcLoc
   line_start : Bool
   hidden : Int
 }
