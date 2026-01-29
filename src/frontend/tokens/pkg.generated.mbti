@@ -2,174 +2,57 @@
 package "hackwaly/tinycc/frontend/tokens"
 
 import {
+  "hackwaly/tinycc/frontend/tokens/tokens_core",
   "hackwaly/tinycc/support/intern",
-  "hackwaly/tinycc/support/source",
 }
 
 // Values
 pub let empty_hidden : Int
 
-pub fn init_keyword_ids(@intern.StringInterner) -> KeywordIds
+pub fn init_keyword_ids(@intern.StringInterner) -> @tokens_core.KeywordIds
 
-pub fn keyword_kind_from_id(Int, KeywordIds) -> TokenKind?
+pub fn keyword_kind_from_id(Int, @tokens_core.KeywordIds) -> @tokens_core.TokenKind?
 
-pub fn lexeme_pool_get(LexemePool, Int) -> String
+pub fn lexeme_pool_get(@tokens_core.LexemePool, Int) -> String
 
-pub fn lexeme_pool_intern(LexemePool, String) -> Int
+pub fn lexeme_pool_intern(@tokens_core.LexemePool, String) -> Int
 
-pub fn lexeme_pool_intern_slice(LexemePool, String, Int, Int) -> Int
+pub fn lexeme_pool_intern_slice(@tokens_core.LexemePool, String, Int, Int) -> Int
 
-pub fn lexeme_pool_len(LexemePool, Int) -> Int
+pub fn lexeme_pool_len(@tokens_core.LexemePool, Int) -> Int
 
-pub fn new_lexeme_pool(capacity? : Int) -> LexemePool
+pub fn new_lexeme_pool(capacity? : Int) -> @tokens_core.LexemePool
 
-pub fn token_has_id(Token) -> Bool
+pub fn token_has_id(@tokens_core.Token) -> Bool
 
-pub fn token_id(Token) -> Int
+pub fn token_id(@tokens_core.Token) -> Int
 
-pub fn token_kind_text(TokenKind) -> String
+pub fn token_kind_text(@tokens_core.TokenKind) -> String
 
-pub fn token_kind_text_len(TokenKind) -> Int
+pub fn token_kind_text_len(@tokens_core.TokenKind) -> Int
 
-pub fn token_lexeme_id(Token) -> Int
+pub fn token_lexeme_id(@tokens_core.Token) -> Int
 
-pub fn token_text_len_with(@intern.StringInterner, LexemePool, Token) -> Int
+pub fn token_text_len_with(@intern.StringInterner, @tokens_core.LexemePool, @tokens_core.Token) -> Int
 
-pub fn token_text_with(@intern.StringInterner, LexemePool, Token) -> String
+pub fn token_text_with(@intern.StringInterner, @tokens_core.LexemePool, @tokens_core.Token) -> String
 
 pub fn token_value_from_parts(Int, Int) -> Int
 
 // Errors
 
 // Types and methods
-pub(all) struct KeywordIds {
-  kind_by_id : Array[TokenKind?]
-}
-
-pub(all) enum LexemeEntry {
-  Owned(String)
-  Slice(text~ : String, start~ : Int, len~ : Int)
-}
-
-pub(all) struct LexemePool {
-  entries : Array[LexemeEntry]
-}
-
-pub(all) struct Token {
-  kind : TokenKind
-  value : Int
-  loc : @source.SrcLoc
-  line_start : Bool
-  hidden : Int
-}
-pub impl Eq for Token
-pub impl Show for Token
-pub impl ToJson for Token
-
-pub(all) enum TokenKind {
-  Eof
-  Invalid
-  Ident
-  IntLit
-  FloatLit
-  CharLit
-  StrLit
-  KwIf
-  KwElse
-  KwWhile
-  KwFor
-  KwDo
-  KwContinue
-  KwBreak
-  KwReturn
-  KwGoto
-  KwSwitch
-  KwCase
-  KwDefault
-  KwExtern
-  KwStatic
-  KwUnsigned
-  KwSigned
-  KwConst
-  KwVolatile
-  KwRegister
-  KwAuto
-  KwInline
-  KwNoreturn
-  KwRestrict
-  KwAtomic
-  KwVoid
-  KwChar
-  KwInt
-  KwFloat
-  KwDouble
-  KwBool
-  KwShort
-  KwLong
-  KwStruct
-  KwUnion
-  KwTypedef
-  KwEnum
-  KwSizeof
-  KwAlignof
-  KwTypeof
-  KwAttribute
-  KwStaticAssert
-  KwAsm
-  LParen
-  RParen
-  LBrace
-  RBrace
-  LBracket
-  RBracket
-  Comma
-  Semicolon
-  Colon
-  Question
-  Dot
-  Ellipsis
-  Arrow
-  Assign
-  Plus
-  Minus
-  Star
-  Slash
-  Percent
-  PlusPlus
-  MinusMinus
-  PlusAssign
-  MinusAssign
-  StarAssign
-  SlashAssign
-  PercentAssign
-  Eq
-  Ne
-  Lt
-  Le
-  Gt
-  Ge
-  ShiftLeft
-  ShiftRight
-  ShiftLeftAssign
-  ShiftRightAssign
-  Amp
-  Pipe
-  Caret
-  Tilde
-  Bang
-  AmpAmp
-  PipePipe
-  AmpAssign
-  PipeAssign
-  CaretAssign
-  Hash
-  HashHash
-}
-pub impl Eq for TokenKind
-pub impl Show for TokenKind
-pub impl ToJson for TokenKind
 
 // Type aliases
+pub using @tokens_core {type KeywordIds}
+
+pub using @tokens_core {type LexemeEntry}
+
+pub using @tokens_core {type LexemePool}
+
+pub using @tokens_core {type Token}
+
+pub using @tokens_core {type TokenKind}
 
 // Traits
 
