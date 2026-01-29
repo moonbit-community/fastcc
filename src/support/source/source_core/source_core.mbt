@@ -25,9 +25,10 @@ pub fn new_source_map() -> SourceMap {
 
 ///|
 pub fn add_file(map : SourceMap, path : String, text : String) -> SourceFile {
-  let id = map.files.length()
+  let files = map.files
+  let id = files.length()
   let file = { id, path, text }
-  map.files.push(file)
+  files.push(file)
   file
 }
 
