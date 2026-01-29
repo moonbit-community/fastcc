@@ -187,11 +187,47 @@ test "parser syncs after stray tokens" {
 
 ///|
 test "parser enum and struct errors" {
-  let source = "enum Empty {};\nstruct ;\nint ok;\n"
+  let source = "enum Empty {};\nstruct ;\nenum ;\nint ok;\n"
   let (unit, bag) = parse_unit(source)
   assert_true(@diag.has_errors(bag))
   match find_var_decl(unit, "ok") {
     Some(_) => ()
     None => fail("expected ok declaration")
   }
+}
+
+///|
+test "parser asm edge cases" {
+  let source =
+    "asm __volatile__(\"nop\" : [] \"=r\"(x), \"=r\"(y) : \"r\"(z), \"r\"(w) : \"memory\", \"cc\");\nasm goto(\"jmp\" : : : : );\nasm goto(\"jmp\" : : : : label1, label2);\n"
+  let (_unit, bag) = parse_unit(source)
+  assert_true(@diag.has_errors(bag))
+}
+
+///|
+test "parser declarator errors" {
+  let source =
+    "inline int x;\nint f() = 1;\nint g, h() { return 0; }\nint bad() = 1 { return 0; }\nint k(a)\nint a;\nint *;\nint (*)(void);\n"
+  let (_unit, bag) = parse_unit(source)
+  assert_true(@diag.has_errors(bag))
+}
+
+///|
+test "parser specifier and storage errors" {
+  let source =
+    "__const int c1;\n__volatile int c2;\n__signed int s1;\nunsigned signed int bad1;\nlong float lf;\nunsigned void v;\nunsigned _Bool b;\n_Noreturn int f();\nstatic extern int se;\nextern static int es;\nstatic auto int sa;\nstatic register int sr;\nstatic typedef int TS;\ntypedef int T;\nT typeof(1) bad2;\ntypeof(1) int bad3;\nint f2(typedef int x);\nint f3(static int y);\n_Atomic() a1;\nint _Atomic(int) a2;\nrestrict int r1;\n"
+  let (unit, bag) = parse_unit(source)
+  assert_true(@diag.has_errors(bag))
+  match find_var_decl(unit, "c1") {
+    Some(_) => ()
+    None => fail("expected c1 declaration")
+  }
+}
+
+///|
+test "parser array sizes and designators" {
+  let source =
+    "void f(int a[static 4], int b[1+2], int c[999999999999999999999999]);\nint d[-1];\nint arr2[2] = {1,};\nstruct S { int a; int b; };\nstruct S s1 = { .a = 1, b: 2 };\nstruct S s2 = { .a 1 };\nstruct S s3 = { . = 1 };\nstruct Bad { int ; };\nstruct Bad2 { ; };\nstruct Bad3 { typedef int t; };\nenum E { A, };\n"
+  let (_unit, bag) = parse_unit(source)
+  assert_true(@diag.has_errors(bag))
 }
