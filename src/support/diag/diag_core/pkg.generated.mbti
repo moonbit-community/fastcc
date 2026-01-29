@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/support/diag/diag_core"
+
+import {
+  "hackwaly/tinycc/support/source/source_core",
+}
+
+// Values
+pub fn add_error(DiagBag, @source_core.SrcLoc, String) -> Unit
+
+pub fn format_diag(Diag) -> String
+
+pub fn has_errors(DiagBag) -> Bool
+
+pub fn new_diag_bag() -> DiagBag
+
+// Errors
+
+// Types and methods
+pub(all) struct Diag {
+  loc : @source_core.SrcLoc
+  message : String
+}
+
+pub(all) struct DiagBag {
+  diags : Array[Diag]
+}
+
+// Type aliases
+
+// Traits
+

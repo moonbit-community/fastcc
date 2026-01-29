@@ -2,31 +2,27 @@
 package "hackwaly/tinycc/support/diag"
 
 import {
-  "hackwaly/tinycc/support/source",
+  "hackwaly/tinycc/support/diag/diag_core",
+  "hackwaly/tinycc/support/source/source_core",
 }
 
 // Values
-pub fn add_error(DiagBag, @source.SrcLoc, String) -> Unit
+pub fn add_error(@diag_core.DiagBag, @source_core.SrcLoc, String) -> Unit
 
-pub fn format_diag(Diag) -> String
+pub fn format_diag(@diag_core.Diag) -> String
 
-pub fn has_errors(DiagBag) -> Bool
+pub fn has_errors(@diag_core.DiagBag) -> Bool
 
-pub fn new_diag_bag() -> DiagBag
+pub fn new_diag_bag() -> @diag_core.DiagBag
 
 // Errors
 
 // Types and methods
-pub(all) struct Diag {
-  loc : @source.SrcLoc
-  message : String
-}
-
-pub(all) struct DiagBag {
-  diags : Array[Diag]
-}
 
 // Type aliases
+pub using @diag_core {type Diag}
+
+pub using @diag_core {type DiagBag}
 
 // Traits
 
