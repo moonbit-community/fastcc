@@ -1,5 +1,5 @@
 ///|
-struct Lexer {
+pub(all) struct Lexer {
   file_id : Int
   text : String
   text_len : Int
@@ -14,7 +14,7 @@ struct Lexer {
 }
 
 ///|
-fn new_lexer(
+pub fn new_lexer(
   file : @source.SourceFile,
   diags : @diag.DiagBag,
   interner : @intern.StringInterner,
@@ -37,7 +37,7 @@ fn new_lexer(
 }
 
 ///|
-fn lexer_loc(lex : Lexer) -> @source.SrcLoc {
+pub fn lexer_loc(lex : Lexer) -> @source.SrcLoc {
   @source.SrcLoc::{
     file_id: lex.file_id,
     line: lex.line,
@@ -47,7 +47,7 @@ fn lexer_loc(lex : Lexer) -> @source.SrcLoc {
 }
 
 ///|
-fn next_token(lex : Lexer) -> @tokens.Token {
+pub fn next_token(lex : Lexer) -> @tokens.Token {
   skip_ws(lex)
   let loc = lexer_loc(lex)
   let line_start = lex.line_start
@@ -74,7 +74,7 @@ fn next_token(lex : Lexer) -> @tokens.Token {
 }
 
 ///|
-fn make_token(
+pub fn make_token(
   kind : @tokens.TokenKind,
   loc : @source.SrcLoc,
   line_start : Bool,
@@ -86,7 +86,7 @@ fn make_token(
 }
 
 ///|
-fn peek_char(lex : Lexer) -> UInt16? {
+pub fn peek_char(lex : Lexer) -> UInt16? {
   if lex.index >= lex.text_len {
     return None
   }
@@ -94,7 +94,7 @@ fn peek_char(lex : Lexer) -> UInt16? {
 }
 
 ///|
-fn peek_char_offset(lex : Lexer, offset : Int) -> UInt16? {
+pub fn peek_char_offset(lex : Lexer, offset : Int) -> UInt16? {
   let idx = lex.index + offset
   if idx >= lex.text_len {
     return None
@@ -103,7 +103,7 @@ fn peek_char_offset(lex : Lexer, offset : Int) -> UInt16? {
 }
 
 ///|
-fn advance(lex : Lexer) -> UInt16? {
+pub fn advance(lex : Lexer) -> UInt16? {
   if lex.index >= lex.text_len {
     return None
   }
@@ -123,24 +123,24 @@ fn advance(lex : Lexer) -> UInt16? {
 }
 
 ///|
-fn advance_punct(lex : Lexer) -> Unit {
+pub fn advance_punct(lex : Lexer) -> Unit {
   lex.index = lex.index + 1
   lex.col = lex.col + 1
   lex.line_start = false
 }
 
 ///|
-fn add_lex_error(lex : Lexer, loc : @source.SrcLoc, message : String) -> Unit {
+pub fn add_lex_error(lex : Lexer, loc : @source.SrcLoc, message : String) -> Unit {
   @diag.add_error(lex.diags, loc, message)
 }
 
 ///|
-fn is_ws_no_newline(code : UInt16) -> Bool {
+pub fn is_ws_no_newline(code : UInt16) -> Bool {
   code == 32 || code == 9 || code == 13 || code == 12 || code == 11
 }
 
 ///|
-fn skip_ws(lex : Lexer) -> Unit {
+pub fn skip_ws(lex : Lexer) -> Unit {
   let text = lex.text
   let len = lex.text_len
   while true {
@@ -204,7 +204,7 @@ fn skip_ws(lex : Lexer) -> Unit {
 }
 
 ///|
-fn skip_line_comment(lex : Lexer) -> Unit {
+pub fn skip_line_comment(lex : Lexer) -> Unit {
   let idx = lex.index
   let len = lex.text_len
   if idx >= len {
@@ -229,7 +229,7 @@ fn skip_line_comment(lex : Lexer) -> Unit {
 }
 
 ///|
-fn skip_block_comment(lex : Lexer, start_loc : @source.SrcLoc) -> Unit {
+pub fn skip_block_comment(lex : Lexer, start_loc : @source.SrcLoc) -> Unit {
   let idx = lex.index
   let len = lex.text_len
   if idx >= len {
@@ -269,7 +269,7 @@ fn skip_block_comment(lex : Lexer, start_loc : @source.SrcLoc) -> Unit {
 }
 
 ///|
-fn is_ident_start(code : UInt16) -> Bool {
+pub fn is_ident_start(code : UInt16) -> Bool {
   (code >= 65 && code <= 90) ||
   (code >= 97 && code <= 122) ||
   code == 95 ||
@@ -278,33 +278,33 @@ fn is_ident_start(code : UInt16) -> Bool {
 }
 
 ///|
-fn is_ident_continue(code : UInt16) -> Bool {
+pub fn is_ident_continue(code : UInt16) -> Bool {
   is_ident_start(code) || is_digit(code)
 }
 
 ///|
-fn is_digit(code : UInt16) -> Bool {
+pub fn is_digit(code : UInt16) -> Bool {
   code >= 48 && code <= 57
 }
 
 ///|
-fn is_hex_digit(code : UInt16) -> Bool {
+pub fn is_hex_digit(code : UInt16) -> Bool {
   is_digit(code) || (code >= 65 && code <= 70) || (code >= 97 && code <= 102)
 }
 
 ///|
-fn is_bin_digit(code : UInt16) -> Bool {
+pub fn is_bin_digit(code : UInt16) -> Bool {
   code == 48 || code == 49
 }
 
 ///|
 ///|
-fn slice_to_view(text : String, start : Int, end : Int) -> StringView {
+pub fn slice_to_view(text : String, start : Int, end : Int) -> StringView {
   text.view(start_offset=start, end_offset=end)
 }
 
 ///|
-fn lex_ident(lex : Lexer, loc : @source.SrcLoc, line_start : Bool) -> @tokens.Token {
+pub fn lex_ident(lex : Lexer, loc : @source.SrcLoc, line_start : Bool) -> @tokens.Token {
   let start = lex.index
   let text = lex.text
   let len = lex.text_len
@@ -327,7 +327,7 @@ fn lex_ident(lex : Lexer, loc : @source.SrcLoc, line_start : Bool) -> @tokens.To
 }
 
 ///|
-fn lex_number(
+pub fn lex_number(
   lex : Lexer,
   loc : @source.SrcLoc,
   line_start : Bool,
@@ -419,7 +419,7 @@ fn lex_number(
 
 ///|
 ///|
-fn skip_string_literal(lex : Lexer, loc : @source.SrcLoc, quote : UInt16) -> Unit {
+pub fn skip_string_literal(lex : Lexer, loc : @source.SrcLoc, quote : UInt16) -> Unit {
   let text = lex.text
   let len = lex.text_len
   let _ = advance(lex)
@@ -470,7 +470,7 @@ fn skip_string_literal(lex : Lexer, loc : @source.SrcLoc, quote : UInt16) -> Uni
 }
 
 ///|
-fn lex_string_literal(
+pub fn lex_string_literal(
   lex : Lexer,
   loc : @source.SrcLoc,
   line_start : Bool,
@@ -484,7 +484,7 @@ fn lex_string_literal(
 }
 
 ///|
-fn lex_punct(lex : Lexer, loc : @source.SrcLoc, line_start : Bool) -> @tokens.Token {
+pub fn lex_punct(lex : Lexer, loc : @source.SrcLoc, line_start : Bool) -> @tokens.Token {
   let idx = lex.index
   if idx >= lex.text_len {
     return make_token(@tokens.TokenKind::Eof, loc, line_start)

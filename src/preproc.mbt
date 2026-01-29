@@ -61,8 +61,8 @@ struct HiddenPool {
 
 ///|
 struct Preprocessor {
-  mut lexer : Lexer
-  lexer_stack : Array[Lexer]
+  mut lexer : @lexer.Lexer
+  lexer_stack : Array[@lexer.Lexer]
   held_stack : Array[@tokens.Token?]
   path_stack : Array[String]
   dir_stack : Array[String]
@@ -369,7 +369,7 @@ fn new_preprocessor(map : @source.SourceMap, file : @source.SourceFile, diags : 
   let (_, dir_pragma_id) = interner.intern_view_with_id("pragma"[:])
   let lexeme_pool = @tokens.new_lexeme_pool(capacity=lexeme_capacity)
   let pp = {
-    lexer: new_lexer(file, diags, interner, keyword_ids, lexeme_pool),
+    lexer: @lexer.new_lexer(file, diags, interner, keyword_ids, lexeme_pool),
     lexer_stack: Array::new(capacity=include_stack_capacity),
     held_stack: Array::new(capacity=include_stack_capacity),
     path_stack: Array::new(capacity=include_stack_capacity),
@@ -432,7 +432,7 @@ fn finalize_preprocessor(pp : Preprocessor) -> Unit {
     path: pp.current_path,
     text: "",
   }
-  pp.lexer = new_lexer(dummy_file, pp.diags, pp.interner, pp.keyword_ids, pp.lexeme_pool)
+  pp.lexer = @lexer.new_lexer(dummy_file, pp.diags, pp.interner, pp.keyword_ids, pp.lexeme_pool)
   pp.lexer_stack.clear()
   pp.held_stack.clear()
   pp.path_stack.clear()
@@ -561,7 +561,7 @@ fn next_input_token(pp : Preprocessor) -> @tokens.Token {
         return tok
       }
       None => {
-        let tok = next_token(pp.lexer)
+        let tok = @lexer.next_token(pp.lexer)
         match tok.kind {
           @tokens.TokenKind::Eof if pp.lexer_stack.length() > 0 => {
             if pp.lexer_stack.pop() is Some(prev) {
@@ -592,7 +592,7 @@ fn next_input_token(pp : Preprocessor) -> @tokens.Token {
     {
       kind: @tokens.TokenKind::Eof,
       value: 0,
-      loc: lexer_loc(pp.lexer),
+      loc: @lexer.lexer_loc(pp.lexer),
       line_start: false,
       hidden: @tokens.empty_hidden,
     }
@@ -642,15 +642,15 @@ fn read_directive_head_token(pp : Preprocessor) -> @tokens.Token? {
 ///|
 fn skip_directive_line(pp : Preprocessor) -> Unit {
   while true {
-    match peek_char(pp.lexer) {
+    match @lexer.peek_char(pp.lexer) {
       None => return
       Some(code) => {
-        if code == 92 && peek_char_offset(pp.lexer, 1) is Some(10) {
-          let _ = advance(pp.lexer)
-          let _ = advance(pp.lexer)
+        if code == 92 && @lexer.peek_char_offset(pp.lexer, 1) is Some(10) {
+          let _ = @lexer.advance(pp.lexer)
+          let _ = @lexer.advance(pp.lexer)
           continue
         }
-        let _ = advance(pp.lexer)
+        let _ = @lexer.advance(pp.lexer)
         if code == 10 {
           return
         }
@@ -668,7 +668,7 @@ fn skip_inactive(pp : Preprocessor) -> Unit {
     let idx = lex.index
     let code = text[idx]
     if lex.line_start {
-      if is_ws_no_newline(code) {
+      if @lexer.is_ws_no_newline(code) {
         lex.index = idx + 1
         lex.col = lex.col + 1
         continue
@@ -692,14 +692,14 @@ fn skip_inactive(pp : Preprocessor) -> Unit {
         if next_code == 47 {
           lex.index = idx + 2
           lex.col = lex.col + 2
-          skip_line_comment(lex)
+          @lexer.skip_line_comment(lex)
           continue
         }
         if next_code == 42 {
-          let start_loc = lexer_loc(lex)
+          let start_loc = @lexer.lexer_loc(lex)
           lex.index = idx + 2
           lex.col = lex.col + 2
-          skip_block_comment(lex, start_loc)
+          @lexer.skip_block_comment(lex, start_loc)
           continue
         }
       }
@@ -726,20 +726,20 @@ fn skip_inactive(pp : Preprocessor) -> Unit {
       if next_code == 47 {
         lex.index = idx + 2
         lex.col = lex.col + 2
-        skip_line_comment(lex)
+        @lexer.skip_line_comment(lex)
         continue
       }
       if next_code == 42 {
-        let start_loc = lexer_loc(lex)
+        let start_loc = @lexer.lexer_loc(lex)
         lex.index = idx + 2
         lex.col = lex.col + 2
-        skip_block_comment(lex, start_loc)
+        @lexer.skip_block_comment(lex, start_loc)
         continue
       }
     }
     if code == 34 || code == 39 {
-      let start_loc = lexer_loc(lex)
-      skip_string_literal(lex, start_loc, code)
+      let start_loc = @lexer.lexer_loc(lex)
+      @lexer.skip_string_literal(lex, start_loc, code)
       continue
     }
     lex.index = idx + 1
@@ -753,25 +753,25 @@ fn read_directive_text(pp : Preprocessor) -> String {
   let sb = StringBuilder::new()
   let mut saw_non_ws = false
   while true {
-    match peek_char(pp.lexer) {
+    match @lexer.peek_char(pp.lexer) {
       None => return sb.to_string()
       Some(code) => {
-        if code == 92 && peek_char_offset(pp.lexer, 1) is Some(10) {
-          let _ = advance(pp.lexer)
-          let _ = advance(pp.lexer)
+        if code == 92 && @lexer.peek_char_offset(pp.lexer, 1) is Some(10) {
+          let _ = @lexer.advance(pp.lexer)
+          let _ = @lexer.advance(pp.lexer)
           continue
         }
         if code == 10 {
-          let _ = advance(pp.lexer)
+          let _ = @lexer.advance(pp.lexer)
           return sb.to_string()
         }
-        if !saw_non_ws && is_ws_no_newline(code) {
-          let _ = advance(pp.lexer)
+        if !saw_non_ws && @lexer.is_ws_no_newline(code) {
+          let _ = @lexer.advance(pp.lexer)
           continue
         }
         saw_non_ws = true
         sb.write_char(code.unsafe_to_char())
-        let _ = advance(pp.lexer)
+        let _ = @lexer.advance(pp.lexer)
       }
     }
   }
@@ -971,7 +971,7 @@ fn include_file(
           pp.dir_stack.push(pp.current_dir)
           pp.logical_path_stack.push(pp.logical_path)
           pp.line_adjust_stack.push(pp.line_adjust)
-          pp.lexer = new_lexer(
+          pp.lexer = @lexer.new_lexer(
             file,
             pp.diags,
             pp.interner,
@@ -1514,7 +1514,7 @@ fn lex_paste_tokens(
   hidden : Int,
 ) -> Array[@tokens.Token] {
   let file = @source.SourceFile::{ id: loc.file_id, path: ":paste:", text }
-  let lex = new_lexer(
+  let lex = @lexer.new_lexer(
     file,
     pp.diags,
     pp.interner,
@@ -1523,7 +1523,7 @@ fn lex_paste_tokens(
   )
   let out : Array[@tokens.Token] = []
   while true {
-    let tok = next_token(lex)
+    let tok = @lexer.next_token(lex)
     match tok.kind {
       @tokens.TokenKind::Eof => break
       _ =>
@@ -3253,7 +3253,7 @@ fn next_pp_token(pp : Preprocessor) -> @tokens.Token {
     {
       kind: @tokens.TokenKind::Eof,
       value: 0,
-      loc: lexer_loc(pp.lexer),
+      loc: @lexer.lexer_loc(pp.lexer),
       line_start: false,
       hidden: @tokens.empty_hidden,
     }

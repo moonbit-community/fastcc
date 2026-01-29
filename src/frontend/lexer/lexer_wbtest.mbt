@@ -27,9 +27,9 @@ test "lex keywords and operators" {
     tok => "\{tok.kind}:\{@tokens.token_text_with(interner, lexeme_pool, tok)}",
   )
   @json.inspect(items, content=[
-    "@tokens.TokenKind::KwInt:int", "@tokens.TokenKind::Ident:x", "@tokens.TokenKind::Assign:=", "@tokens.TokenKind::IntLit:1", "@tokens.TokenKind::Plus:+", "@tokens.TokenKind::IntLit:2", "@tokens.TokenKind::Semicolon:;",
-    "@tokens.TokenKind::KwIf:if", "@tokens.TokenKind::LParen:(", "@tokens.TokenKind::Ident:x", "@tokens.TokenKind::Ge:>=", "@tokens.TokenKind::IntLit:3", "@tokens.TokenKind::RParen:)", "@tokens.TokenKind::KwReturn:return",
-    "@tokens.TokenKind::Ident:x", "@tokens.TokenKind::Semicolon:;",
+    "KwInt:int", "Ident:x", "Assign:=", "IntLit:1", "Plus:+", "IntLit:2", "Semicolon:;",
+    "KwIf:if", "LParen:(", "Ident:x", "Ge:>=", "IntLit:3", "RParen:)", "KwReturn:return",
+    "Ident:x", "Semicolon:;",
   ])
 }
 
@@ -42,9 +42,9 @@ test "lex comments and literals" {
     tok => "\{tok.kind}:\{@tokens.token_text_with(interner, lexeme_pool, tok)}",
   )
   @json.inspect(items, content=[
-    "@tokens.TokenKind::KwChar:char", "@tokens.TokenKind::Ident:c", "@tokens.TokenKind::Assign:=", "@tokens.TokenKind::CharLit:'\\n'", "@tokens.TokenKind::Semicolon:;", "@tokens.TokenKind::KwChar:char",
-    "@tokens.TokenKind::Star:*", "@tokens.TokenKind::Ident:s", "@tokens.TokenKind::Assign:=", "@tokens.TokenKind::StrLit:\"hi\\n\"", "@tokens.TokenKind::Semicolon:;", "@tokens.TokenKind::Ident:c",
-    "@tokens.TokenKind::Assign:=", "@tokens.TokenKind::Ident:c", "@tokens.TokenKind::Plus:+", "@tokens.TokenKind::IntLit:1",
+    "KwChar:char", "Ident:c", "Assign:=", "CharLit:'\\n'", "Semicolon:;", "KwChar:char",
+    "Star:*", "Ident:s", "Assign:=", "StrLit:\"hi\\n\"", "Semicolon:;", "Ident:c",
+    "Assign:=", "Ident:c", "Plus:+", "IntLit:1",
   ])
 }
 
@@ -58,8 +58,8 @@ test "lex numbers and preprocessor hash" {
       "\{tok.kind}:\{@tokens.token_text_with(interner, lexeme_pool, tok)}:\{tok.line_start}",
   )
   @json.inspect(items, content=[
-    "@tokens.TokenKind::Hash:#:true", "@tokens.TokenKind::Ident:define:false", "@tokens.TokenKind::Ident:X:false", "@tokens.TokenKind::IntLit:0x1f:false", "@tokens.TokenKind::KwFloat:float:true",
-    "@tokens.TokenKind::Ident:y:false", "@tokens.TokenKind::Assign:=:false", "@tokens.TokenKind::FloatLit:.5:false", "@tokens.TokenKind::Plus:+:false", "@tokens.TokenKind::FloatLit:2e3:false",
-    "@tokens.TokenKind::Semicolon:;:false",
+    "Hash:#:true", "Ident:define:false", "Ident:X:false", "IntLit:0x1f:false", "KwFloat:float:true",
+    "Ident:y:false", "Assign:=:false", "FloatLit:.5:false", "Plus:+:false", "FloatLit:2e3:false",
+    "Semicolon:;:false",
   ])
 }

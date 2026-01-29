@@ -509,7 +509,7 @@ fn lex_cli_macro_tokens(pp : Preprocessor, value : String) -> Array[@tokens.Toke
     return []
   }
   let file = @source.add_file(pp.map, "<cmdline>", value)
-  let lex = new_lexer(
+  let lex = @lexer.new_lexer(
     file,
     pp.diags,
     pp.interner,
@@ -518,7 +518,7 @@ fn lex_cli_macro_tokens(pp : Preprocessor, value : String) -> Array[@tokens.Toke
   )
   let tokens : Array[@tokens.Token] = []
   while true {
-    let tok = next_token(lex)
+    let tok = @lexer.next_token(lex)
     if tok.kind == Eof {
       break
     }

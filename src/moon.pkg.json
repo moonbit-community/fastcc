@@ -2,6 +2,7 @@
   "is-main": true,
   "import": [
     "hackwaly/tinycc/frontend/ast",
+    "hackwaly/tinycc/frontend/lexer",
     "hackwaly/tinycc/frontend/tokens",
     "hackwaly/tinycc/support/diag",
     "hackwaly/tinycc/support/intern",
