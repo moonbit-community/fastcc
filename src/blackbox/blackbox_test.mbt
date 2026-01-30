@@ -595,6 +595,27 @@ test "blackbox compare outputs" {
       defines: [],
     },
     {
+      name: "redecl_bool_float",
+      source: (
+        #|#include <stdio.h>
+        #|extern _Bool b;
+        #|_Bool b = 1;
+        #|extern _Bool b;
+        #|extern float f;
+        #|float f = 1.5f;
+        #|extern float f;
+        #|extern double d;
+        #|double d = 2.5;
+        #|extern double d;
+        #|int main() {
+        #|  printf("%d %.1f %.1f\n", b ? 1 : 0, (double)f, d);
+        #|  return 0;
+        #|}
+      ),
+      headers: [],
+      defines: [],
+    },
+    {
       name: "designated_init",
       source: (
         #|#include <stdio.h>
@@ -790,6 +811,16 @@ test "blackbox compile failures" {
     #|  switch (1) {
     #|    default: break;
     #|    default: break;
+    #|  }
+    #|  return 0;
+    #|}
+  ))
+  compile_failure((
+    #|int main() {
+    #|  switch (1) {
+    #|    case 5 ... 6: break;
+    #|    case 1 ... 2: break;
+    #|    case 1 ... 3: break;
     #|  }
     #|  return 0;
     #|}
