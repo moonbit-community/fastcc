@@ -616,6 +616,21 @@ test "blackbox compare outputs" {
       defines: [],
     },
     {
+      name: "tagdef_stmt",
+      source: (
+        #|#include <stdio.h>
+        #|int main() {
+        #|  struct Local;
+        #|  struct Local { int x; };
+        #|  struct Local v = { 7 };
+        #|  printf("%d\n", v.x);
+        #|  return 0;
+        #|}
+      ),
+      headers: [],
+      defines: [],
+    },
+    {
       name: "designated_init",
       source: (
         #|#include <stdio.h>
@@ -823,6 +838,11 @@ test "blackbox compile failures" {
     #|    case 1 ... 3: break;
     #|  }
     #|  return 0;
+    #|}
+  ))
+  compile_failure((
+    #|int main() {
+    #|  goto *5;
     #|}
   ))
 }
