@@ -558,6 +558,25 @@ test "blackbox compare outputs" {
       defines: [],
     },
     {
+      name: "redecl_qual_attr",
+      source: (
+        #|#include <stdio.h>
+        #|const int g;
+        #|const int g;
+        #|__attribute__((aligned(16))) int h;
+        #|__attribute__((aligned(16))) int h;
+        #|int foo();
+        #|int foo(int x);
+        #|int foo(int x) { return x + 1; }
+        #|int main() {
+        #|  printf("%d\n", foo(1));
+        #|  return 0;
+        #|}
+      ),
+      headers: [],
+      defines: [],
+    },
+    {
       name: "designated_init",
       source: (
         #|#include <stdio.h>
@@ -723,6 +742,21 @@ test "blackbox compile failures" {
     #|  L: ;
     #|  return 0;
     #|}
+  ))
+  compile_failure((
+    #|int f(int);
+    #|int f(double);
+    #|int main() { return 0; }
+  ))
+  compile_failure((
+    #|int g(int, ...);
+    #|int g(int);
+    #|int main() { return 0; }
+  ))
+  compile_failure((
+    #|int arr[2];
+    #|int arr[3];
+    #|int main() { return 0; }
   ))
 }
 
