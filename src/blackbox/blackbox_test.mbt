@@ -663,6 +663,21 @@ test "blackbox compare outputs" {
       defines: [],
     },
     {
+      name: "array_unsized_compat",
+      source: (
+        #|#include <stdio.h>
+        #|extern int arr5[];
+        #|int arr5[2] = {3, 4};
+        #|extern int arr5[];
+        #|int main() {
+        #|  printf("%d\n", arr5[1]);
+        #|  return 0;
+        #|}
+      ),
+      headers: [],
+      defines: [],
+    },
+    {
       name: "designated_init",
       source: (
         #|#include <stdio.h>
@@ -886,6 +901,11 @@ test "blackbox compile failures" {
     #|int arr4c[2];
     #|int arr4c[2];
     #|int arr4c[3];
+    #|int main() { return 0; }
+  ))
+  compile_failure((
+    #|int fn2(int a, int b);
+    #|int fn2(int a);
     #|int main() { return 0; }
   ))
 }
