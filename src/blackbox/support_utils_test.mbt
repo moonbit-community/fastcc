@@ -5,15 +5,21 @@ test "support util literals" {
   assert_eq(@util.int_literal_end("0x1fU"), 4)
   assert_eq(@util.int_literal_end("0b1010"), 6)
   assert_eq(@util.int_literal_end("0777"), 4)
+  assert_eq(@util.int_literal_end("0x"), 2)
+  assert_eq(@util.int_literal_end("0b"), 2)
 
   assert_eq(@util.int_literal_base("123"), 10)
   assert_eq(@util.int_literal_base("0x10"), 16)
   assert_eq(@util.int_literal_base("0b10"), 2)
   assert_eq(@util.int_literal_base("077"), 8)
+  assert_eq(@util.int_literal_base("0"), 10)
   assert_eq(@util.int_literal_base_from("0x1f", 4), 16)
+  assert_eq(@util.int_literal_base_from("07", 2), 8)
 
   assert_eq(@util.parse_uint64_literal("0x10", 16), (16 : UInt64))
   assert_eq(@util.parse_uint64_literal("0xAF", 16), (175 : UInt64))
+  assert_eq(@util.parse_uint64_literal("0b101", 2), (5 : UInt64))
+  assert_eq(@util.parse_uint64_literal("0", 10), (0 : UInt64))
   assert_eq(@util.parse_uint64_literal("12g", 10), (12 : UInt64))
   assert_eq(@util.parse_uint64_literal("19", 8), (1 : UInt64))
   assert_eq(@util.parse_uint64_literal_prefix("0x10zz", 16, 4), (16 : UInt64))
@@ -42,6 +48,16 @@ test "support util strings and intern" {
   assert_eq(interner.get(id), "hello")
   assert_eq(interner.get(0), "")
   assert_eq(interner.get(id + 1), "")
+
+  let (value2, id2) = interner.intern_view_with_id("hello"[:])
+  assert_eq(value2, "hello")
+  assert_eq(id2, id)
+  assert_eq(interner.intern_view("hello"[:]), "hello")
+
+  let interner2 = @intern.new_string_interner_with_capacity(capacity=-1)
+  let (value3, id3) = interner2.intern_view_with_id("cap"[:])
+  assert_eq(value3, "cap")
+  assert_eq(interner2.get(id3), "cap")
 }
 
 ///|
