@@ -133,3 +133,52 @@ test "macho encode empty object" {
   let bytes = @macho.encode_macho_object([], [])
   assert_true(bytes.length() > 0)
 }
+
+///|
+test "macho reloc variants" {
+  let sec_text : @object.Section = {
+    name: ".text",
+    data: [0x90],
+    relocs: [
+      {
+        offset: 0,
+        kind: @arm64.R_AARCH64_POINTER,
+        sym: { id: 1 },
+        addend: 0,
+      },
+      {
+        offset: 0,
+        kind: @arm64.R_AARCH64_CALL26,
+        sym: { id: 2 },
+        addend: 0,
+      },
+      {
+        offset: 0,
+        kind: 999,
+        sym: { id: 99 },
+        addend: 0,
+      },
+    ],
+    align: 4,
+    size_bytes: 0,
+  }
+  let sec_data : @object.Section = {
+    name: ".data",
+    data: [0x01, 0x02],
+    relocs: [],
+    align: 4,
+    size_bytes: 0,
+  }
+  let symbols : Array[@macho.ObjSymbol] = [
+    { id: 1, name: "sym_text", section: Some(".text"), value: 0, is_external: false },
+    { id: 2, name: "sym_undef", section: None, value: 0, is_external: true },
+    { id: 3, name: "sym_data", section: Some(".data"), value: 4, is_external: false },
+  ]
+  let bytes = @macho.encode_macho_object([sec_text, sec_data], symbols)
+  assert_true(bytes.length() > 0)
+
+  let case_dir = macho_make_case_dir("macho-reloc")
+  let path = macho_join_path(case_dir, "reloc.o")
+  @macho.write_macho_object(path, [sec_text, sec_data], symbols)
+  assert_true(@fs.path_exists(path))
+}
