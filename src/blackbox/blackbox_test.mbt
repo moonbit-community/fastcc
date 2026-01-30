@@ -608,6 +608,80 @@ test "blackbox compile failures" {
     #|int main() { return 0; }
     #|#endif
   ))
+  compile_failure((
+    #|int main() {
+    #|  default: return 0;
+    #|}
+  ))
+  compile_failure((
+    #|int main() {
+    #|  case 1: return 0;
+    #|}
+  ))
+  compile_failure((
+    #|int main() {
+    #|  int x = 3;
+    #|  switch (x) {
+    #|    case x: return 0;
+    #|  }
+    #|  return 1;
+    #|}
+  ))
+  compile_failure((
+    #|int main() {
+    #|  switch (1) {
+    #|    case 0: break;
+    #|    case 0: break;
+    #|  }
+    #|  return 0;
+    #|}
+  ))
+  compile_failure((
+    #|int main() {
+    #|  break;
+    #|}
+  ))
+  compile_failure((
+    #|int main() {
+    #|  continue;
+    #|}
+  ))
+  compile_failure((
+    #|void f() {
+    #|  return 1;
+    #|}
+    #|int main() {
+    #|  f();
+    #|  return 0;
+    #|}
+  ))
+  compile_failure((
+    #|int main() {
+    #|  double x = 1.0;
+    #|  switch (x) {
+    #|    case 1: break;
+    #|  }
+    #|  return 0;
+    #|}
+  ))
+  compile_failure((
+    #|struct S { int a; };
+    #|int main() {
+    #|  struct S s = {1};
+    #|  if (s) {
+    #|    return 0;
+    #|  }
+    #|  return 1;
+    #|}
+  ))
+  compile_failure((
+    #|int main() {
+    #|  goto L;
+    #|  L: ;
+    #|  L: ;
+    #|  return 0;
+    #|}
+  ))
 }
 
 ///|
