@@ -387,6 +387,38 @@ test "blackbox compare outputs" {
       defines: [],
     },
     {
+      name: "long_long_ops",
+      source: (
+        #|#include <stdio.h>
+        #|int main() {
+        #|  long long a = 1LL << 33;
+        #|  unsigned long long b = (unsigned long long)a + 5ULL;
+        #|  long long c = -9;
+        #|  unsigned long long d = (unsigned long long)c;
+        #|  printf("%lld %llu\n", a, b);
+        #|  printf("%llu\n", d);
+        #|  return 0;
+        #|}
+      ),
+      headers: [],
+      defines: [],
+    },
+    {
+      name: "unsigned_ops",
+      source: (
+        #|#include <stdio.h>
+        #|int main() {
+        #|  unsigned int u = 0xffffffffu;
+        #|  unsigned int v = u >> 28;
+        #|  unsigned int w = (u ^ 0x0f0f0f0fU) & 0x00ff00ffU;
+        #|  printf("%u %u\n", v, w);
+        #|  return 0;
+        #|}
+      ),
+      headers: [],
+      defines: [],
+    },
+    {
       name: "builtin_file_line",
       source: (
         #|#include <stdio.h>
