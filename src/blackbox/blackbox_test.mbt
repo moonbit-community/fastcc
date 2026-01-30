@@ -631,6 +631,21 @@ test "blackbox compare outputs" {
       defines: [],
     },
     {
+      name: "typedefs_compat",
+      source: (
+        #|#include <stdio.h>
+        #|typedef int T;
+        #|typedef int T;
+        #|int main() {
+        #|  T x = 4;
+        #|  printf("%d\n", x);
+        #|  return 0;
+        #|}
+      ),
+      headers: [],
+      defines: [],
+    },
+    {
       name: "designated_init",
       source: (
         #|#include <stdio.h>
@@ -844,6 +859,11 @@ test "blackbox compile failures" {
     #|int main() {
     #|  goto *5;
     #|}
+  ))
+  compile_failure((
+    #|int v;
+    #|float v;
+    #|int main() { return 0; }
   ))
 }
 
