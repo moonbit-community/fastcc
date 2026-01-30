@@ -577,6 +577,24 @@ test "blackbox compare outputs" {
       defines: [],
     },
     {
+      name: "redecl_compat",
+      source: (
+        #|#include <stdio.h>
+        #|int arr2[2];
+        #|int arr2[2];
+        #|int f(int);
+        #|int f(int);
+        #|int f(int x) { return x + arr2[0]; }
+        #|int main() {
+        #|  arr2[0] = 2;
+        #|  printf("%d\n", f(3));
+        #|  return 0;
+        #|}
+      ),
+      headers: [],
+      defines: [],
+    },
+    {
       name: "designated_init",
       source: (
         #|#include <stdio.h>
@@ -757,6 +775,24 @@ test "blackbox compile failures" {
     #|int arr[2];
     #|int arr[3];
     #|int main() { return 0; }
+  ))
+  compile_failure((
+    #|int main() {
+    #|  int x = 3;
+    #|  switch (1) {
+    #|    case 1 ... x: return 0;
+    #|  }
+    #|  return 1;
+    #|}
+  ))
+  compile_failure((
+    #|int main() {
+    #|  switch (1) {
+    #|    default: break;
+    #|    default: break;
+    #|  }
+    #|  return 0;
+    #|}
   ))
 }
 
