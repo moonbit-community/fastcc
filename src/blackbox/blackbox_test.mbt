@@ -419,6 +419,48 @@ test "blackbox compare outputs" {
       defines: [],
     },
     {
+      name: "compare_ops",
+      source: (
+        #|#include <stdio.h>
+        #|int main() {
+        #|  long long a = -9;
+        #|  long long b = 12;
+        #|  unsigned long long ua = 0xffffffffULL;
+        #|  unsigned long long ub = ua + 2ULL;
+        #|  double d1 = 1.5;
+        #|  double d2 = 2.5;
+        #|  float f1 = 3.0f;
+        #|  float f2 = 2.0f;
+        #|  int cmp1 = a < b;
+        #|  int cmp2 = ua < ub;
+        #|  int cmp3 = d1 < d2;
+        #|  int cmp4 = f1 >= f2;
+        #|  printf("%d %d %d %d\n", cmp1, cmp2, cmp3, cmp4);
+        #|  return 0;
+        #|}
+      ),
+      headers: [],
+      defines: [],
+    },
+    {
+      name: "shift_immediates",
+      source: (
+        #|#include <stdio.h>
+        #|int main() {
+        #|  int x = 7;
+        #|  int y = x << 0;
+        #|  int z = x >> 0;
+        #|  int a = x + 4095;
+        #|  int b = x - 1;
+        #|  int c = x ^ 0xffffffff;
+        #|  printf("%d %d %d %d %d\n", y, z, a, b, c);
+        #|  return 0;
+        #|}
+      ),
+      headers: [],
+      defines: [],
+    },
+    {
       name: "builtin_file_line",
       source: (
         #|#include <stdio.h>
