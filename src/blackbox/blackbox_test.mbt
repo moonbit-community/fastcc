@@ -646,6 +646,23 @@ test "blackbox compare outputs" {
       defines: [],
     },
     {
+      name: "array_and_func_compat",
+      source: (
+        #|#include <stdio.h>
+        #|extern int arr4[2];
+        #|int arr4[2] = {1, 2};
+        #|extern int arr4[2];
+        #|int foo_bar(int a, float b);
+        #|int foo_bar(int a, float b) { return a + (int)b; }
+        #|int main() {
+        #|  printf("%d %d\n", arr4[1], foo_bar(3, 4.0f));
+        #|  return 0;
+        #|}
+      ),
+      headers: [],
+      defines: [],
+    },
+    {
       name: "designated_init",
       source: (
         #|#include <stdio.h>
@@ -863,6 +880,12 @@ test "blackbox compile failures" {
   compile_failure((
     #|int v;
     #|float v;
+    #|int main() { return 0; }
+  ))
+  compile_failure((
+    #|int arr4c[2];
+    #|int arr4c[2];
+    #|int arr4c[3];
     #|int main() { return 0; }
   ))
 }
