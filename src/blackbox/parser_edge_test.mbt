@@ -37,3 +37,17 @@ test "parser control flow constructs" {
   let (_unit, bag) = parse_unit(source)
   assert_true(!@diag.has_errors(bag))
 }
+
+///|
+test "parser inline function pointer error" {
+  let source = "inline int (*fp)(int);\n"
+  let (_unit, bag) = parse_unit(source)
+  assert_true(@diag.has_errors(bag))
+}
+
+///|
+test "parser old-style missing param name" {
+  let source = "int f(a)\nint *;\n{ return 0; }\n"
+  let (_unit, bag) = parse_unit(source)
+  assert_true(@diag.has_errors(bag))
+}
