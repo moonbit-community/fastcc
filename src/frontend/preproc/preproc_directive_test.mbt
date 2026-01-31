@@ -1,20 +1,9 @@
 ///|
-fn make_case_dir(prefix : String) -> String raise {
-  let root = @testutil.project_root()
-  let base = @testutil.join_path(root, "target/blackbox")
-  @testutil.ensure_dir(base)
-  let stamp = @ffi.bench_now_ns()
-  let case_dir = @testutil.join_path(base, prefix + "-" + stamp.to_string())
-  @testutil.ensure_dir(case_dir)
-  case_dir
-}
-
-///|
 fn run_pp_collect(
   source : String,
   include_dirs : Array[String],
 ) -> (@diag.DiagBag, Array[@tokens.TokenKind]) raise {
-  let case_dir = make_case_dir("pp-directive")
+  let case_dir = @testutil.make_case_dir("pp-directive")
   let path = @testutil.join_path(case_dir, "input.c")
   @testutil.write_string(path, source)
   let bag = @diag.new_diag_bag()
@@ -165,7 +154,7 @@ test "preproc directive unknown" {
 
 ///|
 test "preproc directive include_next" {
-  let case_dir = make_case_dir("pp-include-next")
+  let case_dir = @testutil.make_case_dir("pp-include-next")
   let inc1 = @testutil.join_path(case_dir, "inc1")
   let inc2 = @testutil.join_path(case_dir, "inc2")
   @testutil.ensure_dir(inc1)
