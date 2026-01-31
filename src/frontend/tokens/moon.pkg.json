@@ -2,5 +2,9 @@
   "import": [
     "hackwaly/tinycc/frontend/tokens/tokens_core",
     "hackwaly/tinycc/support/intern"
+  ],
+  "test-import": [
+    "hackwaly/tinycc/frontend/preproc",
+    "hackwaly/tinycc/support/source"
   ]
 }
