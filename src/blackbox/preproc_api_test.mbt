@@ -145,10 +145,10 @@ test "preproc api directive text" {
 ///|
 test "preproc api include helpers" {
   let case_dir = make_case_dir("pp-api-include")
-  let inc_dir = join_path(case_dir, "inc")
-  ensure_dir(inc_dir)
-  let header_path = join_path(inc_dir, "foo.h")
-  write_string(header_path, "int from_header;\n")
+  let inc_dir = @testutil.join_path(case_dir, "inc")
+  @testutil.ensure_dir(inc_dir)
+  let header_path = @testutil.join_path(inc_dir, "foo.h")
+  @testutil.write_string(header_path, "int from_header;\n")
 
   let (pp, bag) = new_pp_with_source("")
   @preproc.add_include_path(pp, inc_dir)
@@ -279,15 +279,15 @@ test "preproc api error helpers" {
   assert_eq(@preproc.eval_has_include(pp, [], include_next=false), 0)
 
   let case_dir = make_case_dir("pp-api-resolve")
-  let inc_dir = join_path(case_dir, "inc")
-  ensure_dir(inc_dir)
-  write_string(join_path(inc_dir, "skip.h"), "int ok;\n")
+  let inc_dir = @testutil.join_path(case_dir, "inc")
+  @testutil.ensure_dir(inc_dir)
+  @testutil.write_string(@testutil.join_path(inc_dir, "skip.h"), "int ok;\n")
   @preproc.add_include_path(pp, inc_dir)
   pp.current_dir = inc_dir
   assert_true(@preproc.resolve_include_path(pp, "skip.h", false, include_next=true) is Some(_))
 
-  let dir_path = join_path(case_dir, "dir")
-  ensure_dir(dir_path)
+  let dir_path = @testutil.join_path(case_dir, "dir")
+  @testutil.ensure_dir(dir_path)
   let spec = @preproc.IncludeSpec::{ path: "dir", is_angle: false }
   pp.current_dir = case_dir
   @preproc.include_file(pp, spec, loc, include_next=false)

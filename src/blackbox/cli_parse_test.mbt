@@ -32,7 +32,7 @@ test "cli parse help" {
 ///|
 test "cli parse listfile expansion" {
   let case_dir = make_case_dir("cli-args")
-  let args_path = join_path(case_dir, "args.txt")
+  let args_path = @testutil.join_path(case_dir, "args.txt")
   let contents = (
     #| -Iinc
     #| -DNAME=1
@@ -42,7 +42,7 @@ test "cli parse listfile expansion" {
     #| bar.o
     #|   
   )
-  write_string(args_path, contents)
+  @testutil.write_string(args_path, contents)
   let cfg = must_run(["tinycc.mbt", "@" + args_path])
   assert_eq(cfg.include_paths, ["inc"])
   assert_eq(cfg.inputs, ["foo.c"])

@@ -7,38 +7,6 @@ struct CCase {
 }
 
 ///|
-fn project_root() -> String {
-  match @env.current_dir() {
-    Some(path) => path
-    None => "."
-  }
-}
-
-///|
-fn join_path(dir : String, name : String) -> String {
-  if dir == "" {
-    name
-  } else if dir.has_suffix("/") {
-    dir + name
-  } else {
-    dir + "/" + name
-  }
-}
-
-///|
-fn ensure_dir(path : String) -> Unit raise {
-  if @fs.path_exists(path) {
-    return
-  }
-  @fs.create_dir(path)
-}
-
-///|
-fn write_string(path : String, contents : String) -> Unit raise {
-  @fs.write_string_to_file(path, contents)
-}
-
-///|
 fn read_string(path : String) -> String raise {
   @fs.read_file_to_string(path)
 }
@@ -105,8 +73,8 @@ fn compile_tinycc(
   let text = read_string(c_path)
   let file = @source.add_file(map, c_path, text)
   let pp = @preproc.new_preprocessor(map, file, bag)
-  let root = project_root()
-  @preproc.add_include_path(pp, join_path(root, "compat/include"))
+  let root = @testutil.project_root()
+  @preproc.add_include_path(pp, @testutil.join_path(root, "compat/include"))
   for dir in include_dirs {
     @preproc.add_include_path(pp, dir)
   }
@@ -176,12 +144,12 @@ fn link_exe(obj_path : String, exe_path : String, libs : Array[String]) -> Int {
 
 ///|
 fn run_case(case : CCase) -> Unit raise {
-  let root = project_root()
-  let base_dir = join_path(root, "target/blackbox")
-  ensure_dir(base_dir)
+  let root = @testutil.project_root()
+  let base_dir = @testutil.join_path(root, "target/blackbox")
+  @testutil.ensure_dir(base_dir)
   let stamp = @ffi.bench_now_ns()
-  let case_dir = join_path(base_dir, case.name + "-" + stamp.to_string())
-  ensure_dir(case_dir)
+  let case_dir = @testutil.join_path(base_dir, case.name + "-" + stamp.to_string())
+  @testutil.ensure_dir(case_dir)
 
   let include_dirs : Array[String] = []
   if case.headers.length() > 0 {
@@ -190,17 +158,17 @@ fn run_case(case : CCase) -> Unit raise {
 
   for item in case.headers {
     let (name, contents) = item
-    write_string(join_path(case_dir, name), contents)
+    @testutil.write_string(@testutil.join_path(case_dir, name), contents)
   }
 
-  let c_path = join_path(case_dir, case.name + ".c")
-  write_string(c_path, case.source)
+  let c_path = @testutil.join_path(case_dir, case.name + ".c")
+  @testutil.write_string(c_path, case.source)
 
-  let tiny_obj = join_path(case_dir, "tiny.o")
-  let tiny_exe = join_path(case_dir, "tiny.out")
-  let sys_exe = join_path(case_dir, "sys.out")
-  let tiny_out = join_path(case_dir, "tiny.txt")
-  let sys_out = join_path(case_dir, "sys.txt")
+  let tiny_obj = @testutil.join_path(case_dir, "tiny.o")
+  let tiny_exe = @testutil.join_path(case_dir, "tiny.out")
+  let sys_exe = @testutil.join_path(case_dir, "sys.out")
+  let tiny_out = @testutil.join_path(case_dir, "tiny.txt")
+  let sys_out = @testutil.join_path(case_dir, "sys.txt")
 
   assert_true(compile_tinycc(c_path, tiny_obj, include_dirs, case.defines))
   assert_eq(link_exe(tiny_obj, tiny_exe, []), 0)
@@ -216,18 +184,18 @@ fn run_case(case : CCase) -> Unit raise {
 
 ///|
 fn compile_failure(source : String) -> Unit raise {
-  let root = project_root()
-  let base_dir = join_path(root, "target/blackbox")
-  ensure_dir(base_dir)
+  let root = @testutil.project_root()
+  let base_dir = @testutil.join_path(root, "target/blackbox")
+  @testutil.ensure_dir(base_dir)
   let stamp = @ffi.bench_now_ns()
-  let case_dir = join_path(base_dir, "fail-" + stamp.to_string())
-  ensure_dir(case_dir)
+  let case_dir = @testutil.join_path(base_dir, "fail-" + stamp.to_string())
+  @testutil.ensure_dir(case_dir)
 
-  let c_path = join_path(case_dir, "fail.c")
-  write_string(c_path, source)
+  let c_path = @testutil.join_path(case_dir, "fail.c")
+  @testutil.write_string(c_path, source)
 
-  let obj_path = join_path(case_dir, "fail.o")
-  let sys_exe = join_path(case_dir, "fail.out")
+  let obj_path = @testutil.join_path(case_dir, "fail.o")
+  let sys_exe = @testutil.join_path(case_dir, "fail.out")
 
   assert_true(!compile_tinycc(c_path, obj_path, [], []))
   let sys_status = compile_system(c_path, sys_exe, [], [], [])
@@ -912,18 +880,18 @@ test "blackbox compile failures" {
 
 ///|
 test "driver run args" {
-  let root = project_root()
-  let base_dir = join_path(root, "target/blackbox")
-  ensure_dir(base_dir)
+  let root = @testutil.project_root()
+  let base_dir = @testutil.join_path(root, "target/blackbox")
+  @testutil.ensure_dir(base_dir)
   let stamp = @ffi.bench_now_ns()
-  let case_dir = join_path(base_dir, "driver-" + stamp.to_string())
-  ensure_dir(case_dir)
+  let case_dir = @testutil.join_path(base_dir, "driver-" + stamp.to_string())
+  @testutil.ensure_dir(case_dir)
 
-  let run_path = join_path(case_dir, "run.c")
-  write_string(run_path, "int main() { return 3; }\n")
+  let run_path = @testutil.join_path(case_dir, "run.c")
+  @testutil.write_string(run_path, "int main() { return 3; }\n")
   assert_eq(@driver.run_args(["tinycc", "-run", run_path]), 3)
 
-  let obj_path = join_path(case_dir, "run.o")
+  let obj_path = @testutil.join_path(case_dir, "run.o")
   let compile_status = @driver.run_args(["tinycc", "-c", run_path, "-o", obj_path])
   assert_eq(compile_status, 0)
   assert_true(try @fs.is_file(obj_path) catch { _ => false })
