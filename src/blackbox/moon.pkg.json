@@ -16,6 +16,7 @@
     "hackwaly/tinycc/support/intern",
     "hackwaly/tinycc/support/source",
     "hackwaly/tinycc/support/util",
+    "hackwaly/tinycc/testutil",
     "moonbitlang/x/fs",
     "moonbitlang/x/time"
   ]
