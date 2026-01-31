@@ -1,25 +1,25 @@
 ///|
 fn expect_cli_error(args : Array[String]) -> Unit raise {
-  match @driver.parse_cli_args(args) {
-    @driver.CliParse::Error => ()
+  match @cli.parse_cli_args(args) {
+    @cli.CliParse::Error => ()
     _ => fail("expected CliParse::Error")
   }
 }
 
 ///|
 fn expect_cli_help(args : Array[String]) -> Unit raise {
-  match @driver.parse_cli_args(args) {
-    @driver.CliParse::Help => ()
+  match @cli.parse_cli_args(args) {
+    @cli.CliParse::Help => ()
     _ => fail("expected CliParse::Help")
   }
 }
 
 ///|
-fn must_run(args : Array[String]) -> @driver.CliConfig raise {
-  match @driver.parse_cli_args(args) {
-    @driver.CliParse::Run(cfg) => cfg
-    @driver.CliParse::Help => fail("unexpected help")
-    @driver.CliParse::Error => fail("unexpected error")
+fn must_run(args : Array[String]) -> @cli.CliConfig raise {
+  match @cli.parse_cli_args(args) {
+    @cli.CliParse::Run(cfg) => cfg
+    @cli.CliParse::Help => fail("unexpected help")
+    @cli.CliParse::Error => fail("unexpected error")
   }
 }
 
@@ -52,21 +52,21 @@ test "cli parse listfile expansion" {
   assert_true(!cfg.bench)
   assert_eq(cfg.macro_actions.length(), 3)
   match cfg.macro_actions[0] {
-    @driver.CliMacroAction::Define(name~, value~) => {
+    @cli.CliMacroAction::Define(name~, value~) => {
       assert_eq(name, "NAME")
       assert_true(value is Some("1"))
     }
     _ => fail("expected define macro")
   }
   match cfg.macro_actions[1] {
-    @driver.CliMacroAction::Define(name~, value~) => {
+    @cli.CliMacroAction::Define(name~, value~) => {
       assert_eq(name, "NOVAL")
       assert_true(value is None)
     }
     _ => fail("expected define macro")
   }
   match cfg.macro_actions[2] {
-    @driver.CliMacroAction::Undef(name~) => assert_eq(name, "UNDEF")
+    @cli.CliMacroAction::Undef(name~) => assert_eq(name, "UNDEF")
     _ => fail("expected undef macro")
   }
 }
