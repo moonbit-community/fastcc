@@ -31,7 +31,7 @@ test "cli parse help" {
 
 ///|
 test "cli parse listfile expansion" {
-  let case_dir = make_case_dir("cli-args")
+  let case_dir = @testutil.make_case_dir("cli-args")
   let args_path = @testutil.join_path(case_dir, "args.txt")
   let contents = (
     #| -Iinc

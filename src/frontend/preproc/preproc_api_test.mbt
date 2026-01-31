@@ -144,7 +144,7 @@ test "preproc api directive text" {
 
 ///|
 test "preproc api include helpers" {
-  let case_dir = make_case_dir("pp-api-include")
+  let case_dir = @testutil.make_case_dir("pp-api-include")
   let inc_dir = @testutil.join_path(case_dir, "inc")
   @testutil.ensure_dir(inc_dir)
   let header_path = @testutil.join_path(inc_dir, "foo.h")
@@ -278,7 +278,7 @@ test "preproc api error helpers" {
   assert_true(@preproc.parse_has_include_path(pp, []) is None)
   assert_eq(@preproc.eval_has_include(pp, [], include_next=false), 0)
 
-  let case_dir = make_case_dir("pp-api-resolve")
+  let case_dir = @testutil.make_case_dir("pp-api-resolve")
   let inc_dir = @testutil.join_path(case_dir, "inc")
   @testutil.ensure_dir(inc_dir)
   @testutil.write_string(@testutil.join_path(inc_dir, "skip.h"), "int ok;\n")
