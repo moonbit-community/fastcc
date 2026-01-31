@@ -5,6 +5,9 @@
     "hackwaly/tinycc/support/util",
     "moonbitlang/x/fs"
   ],
+  "test-import": [
+    "hackwaly/tinycc/testutil"
+  ],
   "wbtest-import": [
     "hackwaly/tinycc/backend/arm64"
   ]
