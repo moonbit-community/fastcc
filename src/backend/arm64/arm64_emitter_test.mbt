@@ -1,5 +1,5 @@
 ///|
-test "arm64 register helpers" {
+test "arm64 register helpers (extra)" {
   assert_eq(@arm64.treg_r(3), 3)
   assert_eq(@arm64.treg_f(0), @arm64.TREG_F0)
   assert_eq(@arm64.treg_f(7), @arm64.TREG_F7)
