@@ -20,6 +20,11 @@ pub fn has_errors(bag : DiagBag) -> Bool {
 }
 
 ///|
+pub fn error_count(bag : DiagBag) -> Int {
+  @diag_core.error_count(bag)
+}
+
+///|
 pub fn format_diag(d : Diag) -> String {
   @diag_core.format_diag(d)
 }
