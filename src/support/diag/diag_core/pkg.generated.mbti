@@ -8,6 +8,8 @@ import {
 // Values
 pub fn add_error(DiagBag, @source_core.SrcLoc, String) -> Unit
 
+pub fn error_count(DiagBag) -> Int
+
 pub fn format_diag(Diag) -> String
 
 pub fn has_errors(DiagBag) -> Bool

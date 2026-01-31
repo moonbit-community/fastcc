@@ -10,6 +10,8 @@ pub fn bench_now_ns() -> UInt64
 
 pub fn parse_cli_args(Array[String]) -> @cli.CliParse
 
+pub fn run_args(Array[String]) -> Int
+
 pub fn run_main() -> Unit
 
 // Errors

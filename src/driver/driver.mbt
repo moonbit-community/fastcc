@@ -53,6 +53,11 @@ pub fn bench_now_ns() -> UInt64 {
 }
 
 ///|
+pub fn run_args(args : Array[String]) -> Int {
+  run_with_args(args)
+}
+
+///|
 fn bench_stats_add(
   stats : BenchStats,
   parse_ns : UInt64,
@@ -340,30 +345,35 @@ fn build_clang_link_args(
 
 ///|
 pub fn run_main() -> Unit {
+  @sys.exit(run_with_args(@env.args()))
+}
+
+///|
+fn run_with_args(args : Array[String]) -> Int {
   @codegen.touch_unused_symbols()
-  match parse_cli_args(@env.args()) {
-    CliParse::Help => ()
-    CliParse::Error => @sys.exit(1)
+  match parse_cli_args(args) {
+    CliParse::Help => 0
+    CliParse::Error => 1
     CliParse::Run(cfg) => {
       if cfg.run {
         if cfg.output is Some(_) {
           println("error: -o is not supported with -run")
-          @sys.exit(1)
+          return 1
         }
         if cfg.inputs.length() != 1 {
           println("error: -run requires exactly one input file")
-          @sys.exit(1)
+          return 1
         }
         let base = run_temp_base()
         let obj_path = base + ".o"
         let exe_path = base + ".out"
         if !compile_to_object_path(cfg, cfg.inputs[0], obj_path, None) {
-          @sys.exit(1)
+          return 1
         }
         let link_status = run_shell_command(build_clang_link_args(obj_path, exe_path, cfg))
         if link_status != 0 {
           println("error: clang link failed")
-          @sys.exit(1)
+          return 1
         }
         let run_args : Array[String] = []
         run_args.push(exe_path)
@@ -378,8 +388,9 @@ pub fn run_main() -> Unit {
           _ => ()
         }
         if run_status != 0 {
-          @sys.exit(run_status)
+          return run_status
         }
+        0
       } else {
         let mut any_errors = false
         let bench_enabled = cfg.bench
@@ -427,8 +438,9 @@ pub fn run_main() -> Unit {
           println(bench_summary_line(bench_stats))
         }
         if any_errors {
-          @sys.exit(1)
+          return 1
         }
+        0
       }
     }
   }
