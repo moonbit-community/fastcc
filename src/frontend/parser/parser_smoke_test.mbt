@@ -33,11 +33,9 @@ fn collect_asm_decls(unit : @ast.TranslationUnit) -> Array[@ast.AsmStmt] {
 
 ///|
 test "parser handles static assert and asm decls" {
-  let source =
-    "_Static_assert(1);\nasm volatile(\"a\" \"b\");\nasm goto(\"jmp %l0\" : : : : target);\nasm(\"add\" : [out] \"=r\"(x) : \"r\"(y) : \"memory\");\n"
+  let source = "_Static_assert(1);\nasm volatile(\"a\" \"b\");\nasm goto(\"jmp %l0\" : : : : target);\nasm(\"add\" : [out] \"=r\"(x) : \"r\"(y) : \"memory\");\n"
   let (unit, bag) = parse_unit(source)
   assert_true(!@diag.has_errors(bag))
-
   let mut static_asserts = 0
   for decl in unit.decls {
     match decl {
@@ -49,10 +47,8 @@ test "parser handles static assert and asm decls" {
     }
   }
   assert_eq(static_asserts, 1)
-
   let asm_decls = collect_asm_decls(unit)
   assert_eq(asm_decls.length(), 3)
-
   let mut saw_concat = false
   let mut saw_goto = false
   let mut saw_operands = false
@@ -84,7 +80,6 @@ test "parser typedef errors recover" {
   let source = "typedef int;\ntypedef int T = 1;\nint ok;\n"
   let (unit, bag) = parse_unit(source)
   assert_true(@diag.has_errors(bag))
-
   match find_var_decl(unit, "ok") {
     Some(_) => ()
     None => fail("expected ok declaration")
@@ -96,7 +91,6 @@ test "parser typeof and default int" {
   let source = "typeof(1) y;\nfoo;\n"
   let (unit, bag) = parse_unit(source)
   assert_true(!@diag.has_errors(bag))
-
   let y_decl = match find_var_decl(unit, "y") {
     Some(v) => v
     None => fail("expected y declaration")
@@ -105,7 +99,6 @@ test "parser typeof and default int" {
     @ast.CType::TypeofExpr(_) => ()
     _ => fail("expected typeof expr type")
   }
-
   let foo_decl = match find_var_decl(unit, "foo") {
     Some(v) => v
     None => fail("expected foo declaration")
@@ -118,11 +111,9 @@ test "parser typeof and default int" {
 
 ///|
 test "parser attributes and qualifiers" {
-  let source =
-    "__attribute__((aligned(16), packed, weak, noreturn, constructor, destructor, always_inline, section(\"sec\" \"2\"), alias(\"ali\"), visibility(\"hidden\"), cleanup(cleanup_fn), cdecl, stdcall, fastcall, thiscall, regparm(2), dllimport, dllexport, nodecorate, nodebug)) int * volatile restrict p;\n_Atomic int q;\n"
+  let source = "__attribute__((aligned(16), packed, weak, noreturn, constructor, destructor, always_inline, section(\"sec\" \"2\"), alias(\"ali\"), visibility(\"hidden\"), cleanup(cleanup_fn), cdecl, stdcall, fastcall, thiscall, regparm(2), dllimport, dllexport, nodecorate, nodebug)) int * volatile restrict p;\n_Atomic int q;\n"
   let (unit, bag) = parse_unit(source)
   assert_true(!@diag.has_errors(bag))
-
   match find_var_decl(unit, "p") {
     Some(_) => ()
     None => fail("expected p declaration")
@@ -135,11 +126,9 @@ test "parser attributes and qualifiers" {
 
 ///|
 test "parser attribute and typeof errors" {
-  let source =
-    "__attribute__ int a;\n__attribute__((123)) int b;\n__attribute__((section(1))) int c;\ntypeof int d;\ntypeof(struct) e;\nsigned unsigned int bad;\nint ok;\n"
+  let source = "__attribute__ int a;\n__attribute__((123)) int b;\n__attribute__((section(1))) int c;\ntypeof int d;\ntypeof(struct) e;\nsigned unsigned int bad;\nint ok;\n"
   let (unit, bag) = parse_unit(source)
   assert_true(@diag.has_errors(bag))
-
   match find_var_decl(unit, "ok") {
     Some(_) => ()
     None => fail("expected ok declaration")
@@ -148,8 +137,7 @@ test "parser attribute and typeof errors" {
 
 ///|
 test "parser old-style parameter diagnostics" {
-  let source =
-    "int f(a, a, b)\nint a;\nint a;\nint ;\nstatic int b;\ninline int a;\ntypedef int t;\nint c;\n{ return 0; }\n"
+  let source = "int f(a, a, b)\nint a;\nint a;\nint ;\nstatic int b;\ninline int a;\ntypedef int t;\nint c;\n{ return 0; }\n"
   let (_unit, bag) = parse_unit(source)
   assert_true(@diag.has_errors(bag))
 }
@@ -159,7 +147,6 @@ test "parser arrays and varargs" {
   let source = "int arr[3];\nint arr_empty[1] = {};\nint (*fp)[2];\nint v(...);\n"
   let (unit, bag) = parse_unit(source)
   assert_true(!@diag.has_errors(bag))
-
   match find_var_decl(unit, "arr") {
     Some(_) => ()
     None => fail("expected arr declaration")
@@ -198,24 +185,21 @@ test "parser enum and struct errors" {
 
 ///|
 test "parser asm edge cases" {
-  let source =
-    "asm __volatile__(\"nop\" : [] \"=r\"(x), \"=r\"(y) : \"r\"(z), \"r\"(w) : \"memory\", \"cc\");\nasm goto(\"jmp\" : : : : );\nasm goto(\"jmp\" : : : : , label1);\nasm goto(\"jmp\" : : : : label1, label2);\n"
+  let source = "asm __volatile__(\"nop\" : [] \"=r\"(x), \"=r\"(y) : \"r\"(z), \"r\"(w) : \"memory\", \"cc\");\nasm goto(\"jmp\" : : : : );\nasm goto(\"jmp\" : : : : , label1);\nasm goto(\"jmp\" : : : : label1, label2);\n"
   let (_unit, bag) = parse_unit(source)
   assert_true(@diag.has_errors(bag))
 }
 
 ///|
 test "parser declarator errors" {
-  let source =
-    "inline int x;\nint f() = 1;\nint g, h() { return 0; }\nint bad() = 1 { return 0; }\nint k(a)\nint a;\nint *;\nint (*)(void);\n"
+  let source = "inline int x;\nint f() = 1;\nint g, h() { return 0; }\nint bad() = 1 { return 0; }\nint k(a)\nint a;\nint *;\nint (*)(void);\n"
   let (_unit, bag) = parse_unit(source)
   assert_true(@diag.has_errors(bag))
 }
 
 ///|
 test "parser specifier and storage errors" {
-  let source =
-    "__const int c1;\n__volatile int c2;\n__signed int s1;\nunsigned signed int bad1;\nlong float lf;\nunsigned void v;\nunsigned _Bool b;\n_Noreturn int f();\nstatic extern int se;\nextern static int es;\nstatic auto int sa;\nstatic register int sr;\nstatic typedef int TS;\ntypedef int T;\nT typeof(1) bad2;\ntypeof(1) int bad3;\nint f2(typedef int x);\nint f3(static int y);\n_Atomic() a1;\nstruct S _Atomic(int) a2;\nstruct S struct T bad4;\nunion U union V bad5;\nenum E enum F bad6;\nunion ;\nrestrict int r1;\n"
+  let source = "__const int c1;\n__volatile int c2;\n__signed int s1;\nunsigned signed int bad1;\nlong float lf;\nunsigned void v;\nunsigned _Bool b;\n_Noreturn int f();\nstatic extern int se;\nextern static int es;\nstatic auto int sa;\nstatic register int sr;\nstatic typedef int TS;\ntypedef int T;\nT typeof(1) bad2;\ntypeof(1) int bad3;\nint f2(typedef int x);\nint f3(static int y);\n_Atomic() a1;\nstruct S _Atomic(int) a2;\nstruct S struct T bad4;\nunion U union V bad5;\nenum E enum F bad6;\nunion ;\nrestrict int r1;\n"
   let (unit, bag) = parse_unit(source)
   assert_true(@diag.has_errors(bag))
   match find_var_decl(unit, "c1") {
@@ -226,8 +210,7 @@ test "parser specifier and storage errors" {
 
 ///|
 test "parser array sizes and designators" {
-  let source =
-    "void f(int a[static 4], int b[1+2], int c[09]);\nint bad_big[9223372036854775808];\nint ok_plus[+3];\nint d[-1];\nint arr2[2] = {1,};\nstruct S { int a; int b; };\nstruct S s1 = { .a = 1, b: 2 };\nstruct S s2 = { .a 1 };\nstruct S s3 = { . = 1 };\nstruct Bad { int ; };\nstruct Bad2 { ; };\nstruct Bad3 { typedef int t; };\nstruct BadPtr { int (*); };\nenum E { A, };\n"
+  let source = "void f(int a[static 4], int b[1+2], int c[09]);\nint bad_big[9223372036854775808];\nint ok_plus[+3];\nint d[-1];\nint arr2[2] = {1,};\nstruct S { int a; int b; };\nstruct S s1 = { .a = 1, b: 2 };\nstruct S s2 = { .a 1 };\nstruct S s3 = { . = 1 };\nstruct Bad { int ; };\nstruct Bad2 { ; };\nstruct Bad3 { typedef int t; };\nstruct BadPtr { int (*); };\nenum E { A, };\n"
   let (_unit, bag) = parse_unit(source)
   assert_true(@diag.has_errors(bag))
 }
@@ -245,8 +228,7 @@ test "parser typedef initializer error" {
 
 ///|
 test "parser attribute variants" {
-  let source =
-    "__attribute__((aligned)) int a1;\n__attribute__((aligned())) int a2;\n__attribute__((packed((1)))) int a3;\n__attribute__((weak(1))) int a4;\n__attribute__((noreturn(1))) int f1(void);\n__attribute__((constructor(1))) int a5;\n__attribute__((destructor(1))) int a6;\n__attribute__((always_inline(1))) int f2(void);\n__attribute__((section)) int s1;\n__attribute__((alias)) int s2;\n__attribute__((visibility)) int s3;\n__attribute__((visibility(\"default\"))) int s4;\n__attribute__((visibility(\"internal\"))) int s5;\n__attribute__((visibility(\"protected\"))) int s6;\n__attribute__((visibility())) int s7;\n__attribute__((cleanup)) int s8;\n__attribute__((cdecl(1))) int f3(void);\n__attribute__((stdcall(1))) int f4(void);\n__attribute__((fastcall(1))) int f5(void);\n__attribute__((thiscall(1))) int f6(void);\n__attribute__((regparm)) int f7(void);\n__attribute__((regparm(5))) int f8(void);\n__attribute__((regparm(0xffffffffffffffff))) int f9(void);\n__attribute__((regparm(9999999999999999999999999))) int f10(void);\n__attribute__((dllimport(1))) int a7;\n__attribute__((dllexport(1))) int a8;\n__attribute__((nodecorate(1))) int a9;\n__attribute__((nodebug(1))) int a10;\n"
+  let source = "__attribute__((aligned)) int a1;\n__attribute__((aligned())) int a2;\n__attribute__((packed((1)))) int a3;\n__attribute__((weak(1))) int a4;\n__attribute__((noreturn(1))) int f1(void);\n__attribute__((constructor(1))) int a5;\n__attribute__((destructor(1))) int a6;\n__attribute__((always_inline(1))) int f2(void);\n__attribute__((section)) int s1;\n__attribute__((alias)) int s2;\n__attribute__((visibility)) int s3;\n__attribute__((visibility(\"default\"))) int s4;\n__attribute__((visibility(\"internal\"))) int s5;\n__attribute__((visibility(\"protected\"))) int s6;\n__attribute__((visibility())) int s7;\n__attribute__((cleanup)) int s8;\n__attribute__((cdecl(1))) int f3(void);\n__attribute__((stdcall(1))) int f4(void);\n__attribute__((fastcall(1))) int f5(void);\n__attribute__((thiscall(1))) int f6(void);\n__attribute__((regparm)) int f7(void);\n__attribute__((regparm(5))) int f8(void);\n__attribute__((regparm(0xffffffffffffffff))) int f9(void);\n__attribute__((regparm(9999999999999999999999999))) int f10(void);\n__attribute__((dllimport(1))) int a7;\n__attribute__((dllexport(1))) int a8;\n__attribute__((nodecorate(1))) int a9;\n__attribute__((nodebug(1))) int a10;\n"
   let (_unit, bag) = parse_unit(source)
   assert_true(@diag.has_errors(bag))
 }
@@ -264,8 +246,7 @@ test "parser attribute missing parens" {
 
 ///|
 test "parser paren pointer wrappers" {
-  let source =
-    "int (*fp2[2]);\nint (*fp3)(void) __asm(\"lbl\") __attribute__((cdecl));\nint f(int (x));\n"
+  let source = "int (*fp2[2]);\nint (*fp3)(void) __asm(\"lbl\") __attribute__((cdecl));\nint f(int (x));\n"
   let (unit, bag) = parse_unit(source)
   assert_true(!@diag.has_errors(bag))
   match find_var_decl(unit, "fp2") {
@@ -322,8 +303,7 @@ test "parser paren pointer errors" {
 
 ///|
 test "parser macro keyword mapping" {
-  let source =
-    "#define VOL __volatile__\n#define CONST const\n#define UNS unsigned\nasm VOL(\"nop\");\nCONST int x;\nUNS int y;\nint * VOL p;\n"
+  let source = "#define VOL __volatile__\n#define CONST const\n#define UNS unsigned\nasm VOL(\"nop\");\nCONST int x;\nUNS int y;\nint * VOL p;\n"
   let (_unit, bag) = parse_unit(source)
   assert_true(!@diag.has_errors(bag))
 }

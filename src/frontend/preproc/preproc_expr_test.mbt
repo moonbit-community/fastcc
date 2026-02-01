@@ -15,19 +15,19 @@ fn tok_kind(kind : @tokens.TokenKind) -> @tokens.Token {
 ///|
 fn tok_int(pp : @preproc.Preprocessor, text : String) -> @tokens.Token {
   let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, text)
-  @preproc.make_builtin_token(@tokens.TokenKind::IntLit, lexeme_id=lexeme_id)
+  @preproc.make_builtin_token(@tokens.TokenKind::IntLit, lexeme_id~)
 }
 
 ///|
 fn tok_char(pp : @preproc.Preprocessor, text : String) -> @tokens.Token {
   let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, text)
-  @preproc.make_builtin_token(@tokens.TokenKind::CharLit, lexeme_id=lexeme_id)
+  @preproc.make_builtin_token(@tokens.TokenKind::CharLit, lexeme_id~)
 }
 
 ///|
 fn tok_ident(pp : @preproc.Preprocessor, name : String) -> @tokens.Token {
   let (_, id) = pp.interner.intern_view_with_id(name[:])
-  @preproc.make_builtin_token(@tokens.TokenKind::Ident, id=id)
+  @preproc.make_builtin_token(@tokens.TokenKind::Ident, id~)
 }
 
 ///|
@@ -143,7 +143,9 @@ test "preproc if expr macro non-int" {
 ///|
 test "preproc if expr macro invalid id" {
   let (pp, bag) = new_pp()
-  let tokens : Array[@tokens.Token] = [@preproc.make_builtin_token(@tokens.TokenKind::Ident)]
+  let tokens : Array[@tokens.Token] = [
+    @preproc.make_builtin_token(@tokens.TokenKind::Ident),
+  ]
   let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
   assert_true(!ok)
   assert_true(!@diag.has_errors(bag))
@@ -304,7 +306,6 @@ test "preproc if expr break on rparen" {
   let ok_and = @preproc.eval_if_expr(pp_and, tokens_and, @source.dummy_loc(0))
   assert_true(ok_and)
   assert_true(!@diag.has_errors(bag_and))
-
   let (pp_xor, bag_xor) = new_pp()
   let tokens_xor : Array[@tokens.Token] = [
     tok_int(pp_xor, "1"),
@@ -314,7 +315,6 @@ test "preproc if expr break on rparen" {
   let ok_xor = @preproc.eval_if_expr(pp_xor, tokens_xor, @source.dummy_loc(0))
   assert_true(ok_xor)
   assert_true(!@diag.has_errors(bag_xor))
-
   let (pp_or, bag_or) = new_pp()
   let tokens_or : Array[@tokens.Token] = [
     tok_int(pp_or, "1"),
@@ -332,13 +332,16 @@ test "preproc char literal errors" {
   let short_tok = tok_char(pp_short, "''")
   let _ = @preproc.parse_pp_char_literal(pp_short, short_tok)
   assert_true(@diag.has_errors(bag_short))
-
   let (pp_multi, bag_multi) = new_pp()
   let multi_tok = tok_char(pp_multi, "'\\12x'")
   let _ = @preproc.parse_pp_char_literal(pp_multi, multi_tok)
   assert_true(@diag.has_errors(bag_multi))
-
   let (pp_escape, bag_escape) = new_pp()
-  let _ = @preproc.decode_pp_escape_value(pp_escape, "\\", 1, @source.dummy_loc(0))
+  let _ = @preproc.decode_pp_escape_value(
+    pp_escape,
+    "\\",
+    1,
+    @source.dummy_loc(0),
+  )
   assert_true(@diag.has_errors(bag_escape))
 }

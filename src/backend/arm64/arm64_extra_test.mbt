@@ -29,14 +29,12 @@ test "arm64 movi patterns" {
     .lor(value0 << 5)
     .to_uint()
   assert_eq(@arm64.arm64_movi(reg, value0), expected0)
-
   let value1 : UInt64 = 0x1234_0000
   let expected1 = (0x52a00000 : UInt64)
     .lor(reg.to_uint64())
     .lor(value1 >> 11)
     .to_uint()
   assert_eq(@arm64.arm64_movi(reg, value1), expected1)
-
   let value2 : UInt64 = 0x1234_0000_0000
   let expected2 = (0xd2c00000 : UInt64)
     .lor(reg.to_uint64())
@@ -54,35 +52,30 @@ test "arm64 movi complement patterns" {
     .lor((value3.lnot() << 5) & 0x1fffe0)
     .to_uint()
   assert_eq(@arm64.arm64_movi(reg, value3), expected3)
-
   let value4 : UInt64 = 0x00000000_1234ffff
   let expected4 = (0x12a00000 : UInt64)
     .lor(reg.to_uint64())
     .lor((value4.lnot() >> 11) & 0x1fffe0)
     .to_uint()
   assert_eq(@arm64.arm64_movi(reg, value4), expected4)
-
   let value5 : UInt64 = 0xffff_ffff_ffff0000
   let expected5 = (0x92800000 : UInt64)
     .lor(reg.to_uint64())
     .lor((value5.lnot() << 5) & 0x1fffe0)
     .to_uint()
   assert_eq(@arm64.arm64_movi(reg, value5), expected5)
-
   let value6 : UInt64 = 0xffff_ffff_0000ffff
   let expected6 = (0x92a00000 : UInt64)
     .lor(reg.to_uint64())
     .lor((value6.lnot() >> 11) & 0x1fffe0)
     .to_uint()
   assert_eq(@arm64.arm64_movi(reg, value6), expected6)
-
   let value7 : UInt64 = 0xffff_0000_ffff_ffff
   let expected7 = (0x92c00000 : UInt64)
     .lor(reg.to_uint64())
     .lor((value7.lnot() >> 27) & 0x1fffe0)
     .to_uint()
   assert_eq(@arm64.arm64_movi(reg, value7), expected7)
-
   let value8 : UInt64 = 0x0000_ffff_ffff_ffff
   let expected8 = (0x92e00000 : UInt64)
     .lor(reg.to_uint64())

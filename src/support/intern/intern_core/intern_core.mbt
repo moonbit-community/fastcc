@@ -32,15 +32,17 @@ fn tok_hash_view(view : StringView) -> UInt {
   h
 }
 
+///|
 pub fn new_string_interner_with_capacity(capacity? : Int) -> StringInterner {
   match capacity {
-    None => {
-      buckets: Array::make(tok_hash_size, 0),
-      next_by_id: [],
-      strings: [],
-      views: [],
-      hashes: [],
-    }
+    None =>
+      {
+        buckets: Array::make(tok_hash_size, 0),
+        next_by_id: [],
+        strings: [],
+        views: [],
+        hashes: [],
+      }
     Some(value) => {
       let cap = if value > 0 { value } else { 0 }
       {
@@ -93,7 +95,10 @@ pub fn StringInterner::intern_view_with_id_hash(
 }
 
 ///|
-pub fn StringInterner::intern_view(self : StringInterner, view : StringView) -> String {
+pub fn StringInterner::intern_view(
+  self : StringInterner,
+  view : StringView,
+) -> String {
   let (value, _) = self.intern_view_with_id(view)
   value
 }

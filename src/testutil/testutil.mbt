@@ -1,6 +1,7 @@
 ///|
 /// Small helpers for tests that need filesystem paths or temporary dirs.
 /// Keep this tiny and dependency-light so it can be reused across packages.
+
 ///|
 pub fn project_root() -> String {
   match @env.current_dir() {
@@ -40,15 +41,10 @@ pub fn make_case_dir(prefix : String) -> String raise {
   let root = project_root()
   let base = join_path(root, "target/blackbox")
   ensure_dir(base)
-
   let stamp = @env.now().to_string()
   let mut attempt = 0
   while true {
-    let suffix = if attempt == 0 {
-      ""
-    } else {
-      "-" + attempt.to_string()
-    }
+    let suffix = if attempt == 0 { "" } else { "-" + attempt.to_string() }
     let dir = join_path(base, prefix + "-" + stamp + suffix)
     if !@fs.path_exists(dir) {
       @fs.create_dir(dir)

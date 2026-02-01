@@ -117,7 +117,25 @@ pub fn attrs_with(
   nodecorate? : Bool = false,
   nodebug? : Bool = false,
 ) -> Attributes {
-  @ast_core.attrs_with(aligned=aligned, packed=packed, weak=weak, visibility=visibility, section=section, alias_name=alias_name, asm_label=asm_label, cleanup=cleanup, noreturn=noreturn, constructor_attr=constructor_attr, destructor=destructor, always_inline=always_inline, call_conv=call_conv, dll_import=dll_import, dll_export=dll_export, nodecorate=nodecorate, nodebug=nodebug)
+  @ast_core.attrs_with(
+    aligned~,
+    packed~,
+    weak~,
+    visibility~,
+    section~,
+    alias_name~,
+    asm_label~,
+    cleanup~,
+    noreturn~,
+    constructor_attr~,
+    destructor~,
+    always_inline~,
+    call_conv~,
+    dll_import~,
+    dll_export~,
+    nodecorate~,
+    nodebug~,
+  )
 }
 
 ///|

@@ -26,12 +26,15 @@ pub fn expr_is_lvalue_simple(expr : Expr) -> Bool {
 pub fn expr_may_call(expr : Expr) -> Bool {
   match expr {
     Expr::Call(..) => true
-    Expr::Unary(expr=inner, ..) | Expr::Cast(expr=inner, ..) => expr_may_call(inner)
+    Expr::Unary(expr=inner, ..) | Expr::Cast(expr=inner, ..) =>
+      expr_may_call(inner)
     Expr::SizeofExpr(..) | Expr::AlignofExpr(..) => false
     Expr::Binary(left~, right~, ..) =>
       expr_may_call(left) || expr_may_call(right)
     Expr::Conditional(cond~, then_expr~, else_expr~, ..) =>
-      expr_may_call(cond) || expr_may_call(then_expr) || expr_may_call(else_expr)
+      expr_may_call(cond) ||
+      expr_may_call(then_expr) ||
+      expr_may_call(else_expr)
     Expr::Index(base~, index~, ..) =>
       expr_may_call(base) || expr_may_call(index)
     Expr::Member(base~, ..) => expr_may_call(base)
@@ -46,16 +49,13 @@ pub fn parse_int64_literal(text : String) -> Int64? {
   if text == "" {
     return None
   }
-
   let len = text.length()
-
   let zero = 48
   let x_lower = 120
   let x_upper = 88
   let b_lower = 98
   let b_upper = 66
   let underscore = 95
-
   let mut base = 10
   let mut start = 0
   if len >= 2 && text.code_unit_at(0).to_int() == zero {
@@ -71,7 +71,6 @@ pub fn parse_int64_literal(text : String) -> Int64? {
       start = 1
     }
   }
-
   fn digit_value(base : Int, ch : Int) -> UInt64? {
     let zero = 48
     let nine = 57
@@ -93,12 +92,10 @@ pub fn parse_int64_literal(text : String) -> Int64? {
   if start >= len {
     return Some(0)
   }
-
   let mut acc : UInt64 = 0
   let base_u64 = base.to_uint64()
   // Leading zero already contributes a digit for octal/decimal zero forms like "0l".
   let mut any_digit = start == 1
-
   let mut i = start
   while i < len {
     let ch = text.code_unit_at(i).to_int()

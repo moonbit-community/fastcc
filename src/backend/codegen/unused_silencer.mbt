@@ -1,4 +1,5 @@
-///| Gather unused helpers to suppress warnings while keeping parity with refs/tinycc
+///|
+/// Gather unused helpers to suppress warnings while keeping parity with refs/tinycc
 pub fn touch_unused_symbols() -> Unit {
   // arm64 helpers/constants
   let _treg_f7 = @arm64.TREG_F7
@@ -43,34 +44,12 @@ pub fn touch_unused_symbols() -> Unit {
 
   // Touch refs to avoid unused warnings
   let _ = (
-    _treg_f7,
-    treg_r_ref,
-    treg_f_ref,
-    greloc_ref,
-    gind_ref,
-    gjmp_append_ref,
-    gen_fill_nops_ref,
-    arm64_vset_VT_CMP_ref,
-    gjmp_cond_ref,
-    arm64_ldrs_ref,
-    arm64_strv_ref,
-    emit_fcmp_ref,
-    emit_cset_from_fp_tok_ref,
-    emit_load_local_int32_ref,
-    emit_store_local_int32_ref,
-    codegen_arm64_object_bytes_ref,
-    tok_land_ref,
-    tok_lor_ref,
-    rc_iret_ref,
-    rc_fret_ref,
-    vdup_ref,
-    format_diag_ref,
-    write_macho_object_ref,
-    new_section_ref,
-    section_from_emitter_ref,
-    reloc_addend_ref,
-    type_contains_vla_ref,
-    strip_qualifiers_ref,
-    strip_qual_attrs_ref,
+    _treg_f7, treg_r_ref, treg_f_ref, greloc_ref, gind_ref, gjmp_append_ref, gen_fill_nops_ref,
+    arm64_vset_VT_CMP_ref, gjmp_cond_ref, arm64_ldrs_ref, arm64_strv_ref, emit_fcmp_ref,
+    emit_cset_from_fp_tok_ref, emit_load_local_int32_ref, emit_store_local_int32_ref,
+    codegen_arm64_object_bytes_ref, tok_land_ref, tok_lor_ref, rc_iret_ref, rc_fret_ref,
+    vdup_ref, format_diag_ref, write_macho_object_ref, new_section_ref, section_from_emitter_ref,
+    reloc_addend_ref, type_contains_vla_ref, strip_qualifiers_ref, strip_qual_attrs_ref,
   )
+
 }

@@ -627,4 +627,3 @@ pub fn write_macho_object(
   let bytes = encode_macho_object(sections, symbols)
   @fs.write_bytes_to_file(path, bytes)
 }
-

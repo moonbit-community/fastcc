@@ -15,12 +15,10 @@ test "string interner id stability and capacity edges" {
   assert_eq(interner.get(id), "hello")
   assert_eq(interner.get(0), "")
   assert_eq(interner.get(id + 1), "")
-
   let (value2, id2) = interner.intern_view_with_id("hello"[:])
   assert_eq(value2, "hello")
   assert_eq(id2, id)
   assert_eq(interner.intern_view("hello"[:]), "hello")
-
   let interner2 = @intern.new_string_interner_with_capacity(capacity=-1)
   let (value3, id3) = interner2.intern_view_with_id("cap"[:])
   assert_eq(value3, "cap")

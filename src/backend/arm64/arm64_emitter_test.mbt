@@ -27,7 +27,6 @@ test "arm64 emitter basics" {
   assert_eq(@arm64.emitter_pc(emitter), 8)
   assert_eq(emitter.code[0], 0x12345678)
   assert_eq(emitter.code[1], 0x9abcdef0)
-
   let sec = @arm64.section_from_emitter(".text", emitter)
   assert_eq(sec.name, ".text")
   assert_eq(sec.align, 4)

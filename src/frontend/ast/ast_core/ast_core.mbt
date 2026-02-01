@@ -335,13 +335,13 @@ pub(all) enum CType {
     name~ : String,
     id~ : Int,
     fields~ : Array[RecordItem]?,
-    attrs~ : Attributes,
+    attrs~ : Attributes
   )
   Union(
     name~ : String,
     id~ : Int,
     fields~ : Array[RecordItem]?,
-    attrs~ : Attributes,
+    attrs~ : Attributes
   )
   Enum(name~ : String, id~ : Int, items~ : Array[EnumItem]?)
   TypeofExpr(expr~ : Expr)
@@ -440,7 +440,12 @@ pub(all) enum Decl {
   FuncDef(FuncDef)
   FuncDecl(FuncDecl)
   Var(VarDecl)
-  Typedef(name~ : String, ty~ : CType, attrs~ : Attributes, loc~ : @source.SrcLoc)
+  Typedef(
+    name~ : String,
+    ty~ : CType,
+    attrs~ : Attributes,
+    loc~ : @source.SrcLoc
+  )
   TagDef(ty~ : CType, loc~ : @source.SrcLoc)
   StaticAssert(StaticAssert)
   Asm(AsmStmt)
@@ -505,29 +510,60 @@ pub(all) enum Expr {
   IntLit(value~ : String, node_id~ : Int, loc~ : @source.SrcLoc)
   FloatLit(value~ : String, node_id~ : Int, loc~ : @source.SrcLoc)
   CharLit(value~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
-  StringLit(value~ : String, length~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
+  StringLit(
+    value~ : String,
+    length~ : Int,
+    node_id~ : Int,
+    loc~ : @source.SrcLoc
+  )
   Ident(name~ : String, id~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
   LabelAddr(name~ : String, id~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
-  BuiltinTypesCompatibleP(a~ : CType, b~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
-  BuiltinOffsetof(ty~ : CType, path~ : Array[String], node_id~ : Int, loc~ : @source.SrcLoc)
+  BuiltinTypesCompatibleP(
+    a~ : CType,
+    b~ : CType,
+    node_id~ : Int,
+    loc~ : @source.SrcLoc
+  )
+  BuiltinOffsetof(
+    ty~ : CType,
+    path~ : Array[String],
+    node_id~ : Int,
+    loc~ : @source.SrcLoc
+  )
   BuiltinVaArg(list~ : Expr, ty~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
   Unary(op~ : UnaryOp, expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
   Cast(ty~ : CType, expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
-  CompoundLiteral(ty~ : CType, init~ : Initializer, node_id~ : Int, loc~ : @source.SrcLoc)
+  CompoundLiteral(
+    ty~ : CType,
+    init~ : Initializer,
+    node_id~ : Int,
+    loc~ : @source.SrcLoc
+  )
   StmtExpr(stmts~ : Array[Stmt], node_id~ : Int, loc~ : @source.SrcLoc)
   SizeofExpr(expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
   SizeofType(ty~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
   AlignofExpr(expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
   AlignofType(ty~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
-  Binary(op~ : BinaryOp, left~ : Expr, right~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
+  Binary(
+    op~ : BinaryOp,
+    left~ : Expr,
+    right~ : Expr,
+    node_id~ : Int,
+    loc~ : @source.SrcLoc
+  )
   Conditional(
     cond~ : Expr,
     then_expr~ : Expr,
     else_expr~ : Expr,
     node_id~ : Int,
-    loc~ : @source.SrcLoc,
+    loc~ : @source.SrcLoc
   )
-  Call(callee~ : Expr, args~ : Array[Expr], node_id~ : Int, loc~ : @source.SrcLoc)
+  Call(
+    callee~ : Expr,
+    args~ : Array[Expr],
+    node_id~ : Int,
+    loc~ : @source.SrcLoc
+  )
   Index(base~ : Expr, index~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
   Member(
     base~ : Expr,
@@ -535,7 +571,7 @@ pub(all) enum Expr {
     id~ : Int,
     is_arrow~ : Bool,
     node_id~ : Int,
-    loc~ : @source.SrcLoc,
+    loc~ : @source.SrcLoc
   )
 } derive(Show, Eq, ToJson)
 
@@ -582,10 +618,21 @@ pub(all) struct AsmStmt {
 ///|
 pub(all) enum Stmt {
   Compound(stmts~ : Array[Stmt], loc~ : @source.SrcLoc)
-  If(cond~ : Expr, then_branch~ : Stmt, else_branch~ : Stmt?, loc~ : @source.SrcLoc)
+  If(
+    cond~ : Expr,
+    then_branch~ : Stmt,
+    else_branch~ : Stmt?,
+    loc~ : @source.SrcLoc
+  )
   While(cond~ : Expr, body~ : Stmt, loc~ : @source.SrcLoc)
   DoWhile(cond~ : Expr, body~ : Stmt, loc~ : @source.SrcLoc)
-  For(init~ : Stmt?, cond~ : Expr?, step~ : Expr?, body~ : Stmt, loc~ : @source.SrcLoc)
+  For(
+    init~ : Stmt?,
+    cond~ : Expr?,
+    step~ : Expr?,
+    body~ : Stmt,
+    loc~ : @source.SrcLoc
+  )
   Switch(cond~ : Expr, body~ : Stmt, loc~ : @source.SrcLoc)
   Case(expr~ : Expr, end_expr~ : Expr?, body~ : Stmt, loc~ : @source.SrcLoc)
   Default(body~ : Stmt, loc~ : @source.SrcLoc)
@@ -604,8 +651,10 @@ pub(all) enum Stmt {
 } derive(Show, Eq, ToJson)
 
 ///|
-let default_int_type_value : CType =
-  CType::Int(kind=CIntKind::Int, unsigned=false)
+let default_int_type_value : CType = CType::Int(
+  kind=CIntKind::Int,
+  unsigned=false,
+)
 
 ///|
 pub fn default_int_type() -> CType {

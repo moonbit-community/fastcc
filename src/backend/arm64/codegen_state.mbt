@@ -1,3 +1,4 @@
+///|
 const VT_BTYPE : Int = 0x000f
 
 ///|

@@ -45,7 +45,12 @@ fn struct_size_align_from_text(
     check_decl(ctx, decl)
   }
   assert_true(!@diag.has_errors(sem_bag))
-  let ty = @ast.CType::Struct(name~, id=0, fields=None, attrs=@ast.empty_attrs())
+  let ty = @ast.CType::Struct(
+    name~,
+    id=0,
+    fields=None,
+    attrs=@ast.empty_attrs(),
+  )
   match type_size_align(ctx, ty, @source.dummy_loc(0)) {
     Some((size, align)) => (size, align)
     None => fail("expected struct size")
@@ -109,8 +114,7 @@ fn collect_ident_ids_expr(
       collect_ident_ids_expr(base, name, out)
       collect_ident_ids_expr(index, name, out)
     }
-    @ast.Expr::Member(base~, ..) =>
-      collect_ident_ids_expr(base, name, out)
+    @ast.Expr::Member(base~, ..) => collect_ident_ids_expr(base, name, out)
   }
 }
 
@@ -149,8 +153,7 @@ test "sem accepts local declarations" {
 
 ///|
 test "sem accepts static local arrays used in sizeof macro" {
-  let text =
-    "#define ArraySize(x) (sizeof(x)/sizeof((x)[0]))\n" +
+  let text = "#define ArraySize(x) (sizeof(x)/sizeof((x)[0]))\n" +
     "typedef struct { int x; } Foo;\n" +
     "int f(void){\n" +
     "  static Foo aTable[] = { {1}, {2} };\n" +
@@ -195,8 +198,7 @@ test "sem accepts static local arrays used in sizeof macro" {
 
 ///|
 test "sem accepts compat header macros and declarations" {
-  let text =
-    "#include <stdint.h>\n" +
+  let text = "#include <stdint.h>\n" +
     "#include <math.h>\n" +
     "#include <string.h>\n" +
     "#include <stdlib.h>\n" +
@@ -214,8 +216,7 @@ test "sem accepts compat header macros and declarations" {
 
 ///|
 test "sem accepts pthread compat declarations" {
-  let text =
-    "#include <pthread.h>\n" +
+  let text = "#include <pthread.h>\n" +
     "void f(void){\n" +
     "  volatile pthread_t owner = 0;\n" +
     "  pthread_mutex_t *m = 0;\n" +
@@ -289,8 +290,7 @@ test "parse __builtin_expect call" {
 
 ///|
 test "parse nested function pointer declarator" {
-  let text =
-    "void (*(*x)(void*, const char*))(void);\n" +
+  let text = "void (*(*x)(void*, const char*))(void);\n" +
     "void *dlsym();\n" +
     "void (*(*y)(void*, const char*))(void) = (void(*(*)(void*, const char*))(void))dlsym;"
   let (_, bag) = parse_text(text)
@@ -299,8 +299,7 @@ test "parse nested function pointer declarator" {
 
 ///|
 test "parse nested function pointer in struct field" {
-  let text =
-    "struct S {\n" +
+  let text = "struct S {\n" +
     "  void (*(*x)(void*, const char*))(void);\n" +
     "};"
   let (_, bag) = parse_text(text)
@@ -309,8 +308,7 @@ test "parse nested function pointer in struct field" {
 
 ///|
 test "sem accepts nested function pointer field call" {
-  let text =
-    "struct S { void (*(*x)(int))(void); };\n" +
+  let text = "struct S { void (*(*x)(int))(void); };\n" +
     "void g(struct S* s){ void (*fp)(void) = s->x(1); fp(); }\n"
   let (_, bag) = check_text(text)
   assert_true(!@diag.has_errors(bag))
@@ -337,7 +335,6 @@ test "sem accepts __builtin_expect call" {
   let (_, bag) = check_text("int main(){return __builtin_expect(1, 0);}")
   assert_true(!@diag.has_errors(bag))
 }
-
 
 ///|
 test "sem rejects missing return value" {
@@ -449,9 +446,7 @@ test "sem accepts builtin choose_expr without typechecking dead branch" {
 
 ///|
 test "parse paren pointer declarator with attribute" {
-  let (unit, bag) = parse_text(
-    "int (__attribute__((unused)) *fp)(void);",
-  )
+  let (unit, bag) = parse_text("int (__attribute__((unused)) *fp)(void);")
   assert_true(!@diag.has_errors(bag))
   guard unit.decls.length() == 1 else { fail("expected one declaration") }
   match unit.decls[0] {
@@ -462,9 +457,7 @@ test "parse paren pointer declarator with attribute" {
 
 ///|
 test "parse paren declarator without inner pointer" {
-  let (unit, bag) = parse_text(
-    "typedef int *(Func)(int);",
-  )
+  let (unit, bag) = parse_text("typedef int *(Func)(int);")
   assert_true(!@diag.has_errors(bag))
   guard unit.decls.length() == 1 else { fail("expected one declaration") }
   match unit.decls[0] {
@@ -491,7 +484,9 @@ test "sem treats plain char as unsigned" {
 
 ///|
 test "sem accepts builtin va_arg with type argument" {
-  let (_, bag) = check_text("int *p; int main(){return __builtin_va_arg(p, int);}")
+  let (_, bag) = check_text(
+    "int *p; int main(){return __builtin_va_arg(p, int);}",
+  )
   assert_true(!@diag.has_errors(bag))
 }
 
@@ -545,7 +540,9 @@ test "sem accepts __builtin_frame_address and __builtin_return_address" {
 
 ///|
 test "sem rejects negative frame address level" {
-  let (_, bag) = check_text("int main(){ return __builtin_frame_address(-1) != 0; }")
+  let (_, bag) = check_text(
+    "int main(){ return __builtin_frame_address(-1) != 0; }",
+  )
   assert_true(@diag.has_errors(bag))
 }
 
@@ -567,7 +564,9 @@ test "sem accepts _Atomic type qualifiers" {
 
 ///|
 test "sem rejects __atomic_fetch_add on pointer target" {
-  let (_, bag) = check_text("int *p; int main(){ return __atomic_fetch_add(&p, p, 0); }")
+  let (_, bag) = check_text(
+    "int *p; int main(){ return __atomic_fetch_add(&p, p, 0); }",
+  )
   assert_true(@diag.has_errors(bag))
 }
 

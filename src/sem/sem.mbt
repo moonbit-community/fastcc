@@ -14,7 +14,11 @@ pub type BuiltinCallKind = @sem_core.BuiltinCallKind
 pub type SemContext = @sem_core.SemContext
 
 ///|
-pub fn add_sem_error(ctx : SemContext, loc : @source.SrcLoc, msg : String) -> Unit {
+pub fn add_sem_error(
+  ctx : SemContext,
+  loc : @source.SrcLoc,
+  msg : String,
+) -> Unit {
   @sem_core.add_sem_error(ctx, loc, msg)
 }
 
@@ -68,7 +72,11 @@ pub fn attrs_layout_empty(attrs : @ast.Attributes) -> Bool {
 }
 
 ///|
-pub fn builtin_call_kind(ctx : SemContext, name : String, id : Int) -> BuiltinCallKind? {
+pub fn builtin_call_kind(
+  ctx : SemContext,
+  name : String,
+  id : Int,
+) -> BuiltinCallKind? {
   @sem_core.builtin_call_kind(ctx, name, id)
 }
 
@@ -147,7 +155,7 @@ pub fn ensure_struct_fields(
   is_union~ : Bool,
   loc : @source.SrcLoc,
 ) -> RecordDef? {
-  @sem_core.ensure_struct_fields(ctx, name, id, items, is_union=is_union, loc)
+  @sem_core.ensure_struct_fields(ctx, name, id, items, is_union~, loc)
 }
 
 ///|
@@ -222,7 +230,10 @@ pub fn is_int_like(ty : @ast.CType) -> Bool {
 }
 
 ///|
-pub fn next_init_field(fields : Array[@ast.Field], index : Int) -> (@ast.Field, Int)? {
+pub fn next_init_field(
+  fields : Array[@ast.Field],
+  index : Int,
+) -> (@ast.Field, Int)? {
   @sem_core.next_init_field(fields, index)
 }
 
@@ -237,7 +248,11 @@ pub fn push_scope(ctx : SemContext) -> Unit {
 }
 
 ///|
-pub fn record_local_binding(ctx : SemContext, id : Int, ty : @ast.CType) -> Unit {
+pub fn record_local_binding(
+  ctx : SemContext,
+  id : Int,
+  ty : @ast.CType,
+) -> Unit {
   @sem_core.record_local_binding(ctx, id, ty)
 }
 
@@ -249,11 +264,15 @@ pub fn resolve_struct_fields(
   items : Array[@ast.RecordItem]?,
   is_union~ : Bool,
 ) -> Array[@ast.Field]? {
-  @sem_core.resolve_struct_fields(ctx, name, id, items, is_union=is_union)
+  @sem_core.resolve_struct_fields(ctx, name, id, items, is_union~)
 }
 
 ///|
-pub fn resolve_type(ctx : SemContext, ty : @ast.CType, loc : @source.SrcLoc) -> @ast.CType {
+pub fn resolve_type(
+  ctx : SemContext,
+  ty : @ast.CType,
+  loc : @source.SrcLoc,
+) -> @ast.CType {
   @sem_core.resolve_type(ctx, ty, loc)
 }
 

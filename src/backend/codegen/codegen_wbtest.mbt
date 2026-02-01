@@ -152,9 +152,15 @@ test "codegen emits arm64 main return 0 object" {
   let (text_offset, _, _) = macho_text_section_offsets(bytes)
   assert_eq(read_u32_le_at(bytes, text_offset), (0xa9bf7bfd : UInt))
   assert_eq(read_u32_le_at(bytes, text_offset + 4), (0x910003fd : UInt))
-  assert_true(find_word_offset(bytes, text_offset, 64, (0x52800000 : UInt)) is Some(_))
-  assert_true(find_word_offset(bytes, text_offset, 64, (0xa8c17bfd : UInt)) is Some(_))
-  assert_true(find_word_offset(bytes, text_offset, 64, (0xd65f03c0 : UInt)) is Some(_))
+  assert_true(
+    find_word_offset(bytes, text_offset, 64, (0x52800000 : UInt)) is Some(_),
+  )
+  assert_true(
+    find_word_offset(bytes, text_offset, 64, (0xa8c17bfd : UInt)) is Some(_),
+  )
+  assert_true(
+    find_word_offset(bytes, text_offset, 64, (0xd65f03c0 : UInt)) is Some(_),
+  )
 }
 
 ///|
@@ -219,7 +225,8 @@ test "codegen emits call relocation for return f()" {
   assert_true(!@diag.has_errors(bag))
   let (text_offset, reloff, nreloc) = macho_text_section_offsets(bytes)
   assert_eq(nreloc, 1)
-  let call_off = match find_word_offset(bytes, text_offset, 64, (0x94000000 : UInt)) {
+  let call_off = match
+    find_word_offset(bytes, text_offset, 64, (0x94000000 : UInt)) {
     None => fail("expected BL instruction")
     Some(v) => v
   }
@@ -344,7 +351,8 @@ test "codegen emits .cstring and relocs for extern call with string literal" {
   assert_true(!@diag.has_errors(bag))
   let (_, _, nreloc) = macho_text_section_offsets(bytes)
   assert_eq(nreloc, 3)
-  let cstring_off = match macho_section_file_offset(bytes, "__TEXT", "__cstring") {
+  let cstring_off = match
+    macho_section_file_offset(bytes, "__TEXT", "__cstring") {
     None => fail("expected __TEXT,__cstring section")
     Some(v) => v
   }
@@ -385,6 +393,7 @@ test "codegen supports local pointers: addr, deref, compare" {
   }
   assert_true(!@diag.has_errors(bag))
   let (_, _, _) = macho_text_section_offsets(bytes)
+
 }
 
 ///|
@@ -403,11 +412,13 @@ test "codegen emits global load relocs for return x" {
   let max_words = (bytes_len - text_offset) / 4
   let scan_words = if max_words < 64 { max_words } else { 64 }
   assert_eq(nreloc, 2)
-  let adrp_off = match find_word_offset(bytes, text_offset, scan_words, (0x90000000 : UInt)) {
+  let adrp_off = match
+    find_word_offset(bytes, text_offset, scan_words, (0x90000000 : UInt)) {
     None => fail("expected ADRP instruction")
     Some(v) => v
   }
-  let add_off = match find_word_offset(bytes, text_offset, scan_words, (0x91000000 : UInt)) {
+  let add_off = match
+    find_word_offset(bytes, text_offset, scan_words, (0x91000000 : UInt)) {
     None => fail("expected ADD instruction")
     Some(v) => v
   }

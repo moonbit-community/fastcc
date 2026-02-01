@@ -95,7 +95,8 @@ pub const R_AARCH64_LDST8_ABS_LO12_NC : Int = 278
 ///|
 pub const R_AARCH64_JUMP26 : Int = 282
 
-///| Absolute 64-bit relocation used for data/pointer references.
+///|
+/// Absolute 64-bit relocation used for data/pointer references.
 pub const R_AARCH64_POINTER : Int = 257
 
 ///|
@@ -152,7 +153,10 @@ pub fn section_from_emitter(name : String, emitter : Arm64Emitter) -> Section {
 }
 
 ///|
-pub fn section_from_emitter_take(name : String, emitter : Arm64Emitter) -> Section {
+pub fn section_from_emitter_take(
+  name : String,
+  emitter : Arm64Emitter,
+) -> Section {
   let code_len = emitter.code_len
   {
     name,
@@ -202,7 +206,12 @@ pub fn greloca(
 }
 
 ///|
-pub fn greloc(emitter : Arm64Emitter, sym : Sym, offset : Int, kind : Int) -> Unit {
+pub fn greloc(
+  emitter : Arm64Emitter,
+  sym : Sym,
+  offset : Int,
+  kind : Int,
+) -> Unit {
   greloca(emitter, sym, offset, kind, 0)
 }
 
@@ -845,10 +854,7 @@ pub fn arm64_gen_opic(
       if val2 == 0 {
         // Shift-by-zero is a no-op; preserve the destination register.
         let base : Int = if l != 0 { 0xaa0003e0 } else { 0x2a0003e0 }
-        emit32(
-          emitter,
-          base.lor(x).lor(a << 16).reinterpret_as_uint(),
-        )
+        emit32(emitter, base.lor(x).lor(a << 16).reinterpret_as_uint())
         return true
       }
       if op1 == TOK_SHL {

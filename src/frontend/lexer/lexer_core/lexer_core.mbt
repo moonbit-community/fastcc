@@ -130,7 +130,11 @@ pub fn advance_punct(lex : Lexer) -> Unit {
 }
 
 ///|
-pub fn add_lex_error(lex : Lexer, loc : @source.SrcLoc, message : String) -> Unit {
+pub fn add_lex_error(
+  lex : Lexer,
+  loc : @source.SrcLoc,
+  message : String,
+) -> Unit {
   @diag.add_error(lex.diags, loc, message)
 }
 
@@ -298,13 +302,18 @@ pub fn is_bin_digit(code : UInt16) -> Bool {
 }
 
 ///|
+
 ///|
 pub fn slice_to_view(text : String, start : Int, end : Int) -> StringView {
   text.view(start_offset=start, end_offset=end)
 }
 
 ///|
-pub fn lex_ident(lex : Lexer, loc : @source.SrcLoc, line_start : Bool) -> @tokens.Token {
+pub fn lex_ident(
+  lex : Lexer,
+  loc : @source.SrcLoc,
+  line_start : Bool,
+) -> @tokens.Token {
   let start = lex.index
   let text = lex.text
   let len = lex.text_len
@@ -321,8 +330,8 @@ pub fn lex_ident(lex : Lexer, loc : @source.SrcLoc, line_start : Bool) -> @token
   let name_view = slice_to_view(text, start, idx)
   let (_, id) = lex.interner.intern_view_with_id_hash(name_view, hash)
   match @tokens.keyword_kind_from_id(id, lex.keyword_ids) {
-    Some(kind) => make_token(kind, loc, line_start, id=id)
-    None => make_token(@tokens.TokenKind::Ident, loc, line_start, id=id)
+    Some(kind) => make_token(kind, loc, line_start, id~)
+    None => make_token(@tokens.TokenKind::Ident, loc, line_start, id~)
   }
 }
 
@@ -412,14 +421,28 @@ pub fn lex_number(
   lex.index = idx
   lex.col = lex.col + (idx - start)
   lex.line_start = false
-  let kind = if is_float { @tokens.TokenKind::FloatLit } else { @tokens.TokenKind::IntLit }
-  let lexeme_id = @tokens.lexeme_pool_intern_slice(lex.lexeme_pool, text, start, idx)
-  make_token(kind, loc, line_start, lexeme_id=lexeme_id)
+  let kind = if is_float {
+    @tokens.TokenKind::FloatLit
+  } else {
+    @tokens.TokenKind::IntLit
+  }
+  let lexeme_id = @tokens.lexeme_pool_intern_slice(
+    lex.lexeme_pool,
+    text,
+    start,
+    idx,
+  )
+  make_token(kind, loc, line_start, lexeme_id~)
 }
 
 ///|
+
 ///|
-pub fn skip_string_literal(lex : Lexer, loc : @source.SrcLoc, quote : UInt16) -> Unit {
+pub fn skip_string_literal(
+  lex : Lexer,
+  loc : @source.SrcLoc,
+  quote : UInt16,
+) -> Unit {
   let text = lex.text
   let len = lex.text_len
   let _ = advance(lex)
@@ -478,13 +501,26 @@ pub fn lex_string_literal(
 ) -> @tokens.Token {
   let start = lex.index
   skip_string_literal(lex, loc, quote)
-  let kind = if quote == 34 { @tokens.TokenKind::StrLit } else { @tokens.TokenKind::CharLit }
-  let lexeme_id = @tokens.lexeme_pool_intern_slice(lex.lexeme_pool, lex.text, start, lex.index)
-  make_token(kind, loc, line_start, lexeme_id=lexeme_id)
+  let kind = if quote == 34 {
+    @tokens.TokenKind::StrLit
+  } else {
+    @tokens.TokenKind::CharLit
+  }
+  let lexeme_id = @tokens.lexeme_pool_intern_slice(
+    lex.lexeme_pool,
+    lex.text,
+    start,
+    lex.index,
+  )
+  make_token(kind, loc, line_start, lexeme_id~)
 }
 
 ///|
-pub fn lex_punct(lex : Lexer, loc : @source.SrcLoc, line_start : Bool) -> @tokens.Token {
+pub fn lex_punct(
+  lex : Lexer,
+  loc : @source.SrcLoc,
+  line_start : Bool,
+) -> @tokens.Token {
   let idx = lex.index
   if idx >= lex.text_len {
     return make_token(@tokens.TokenKind::Eof, loc, line_start)
@@ -616,7 +652,11 @@ pub fn lex_punct(lex : Lexer, loc : @source.SrcLoc, line_start : Bool) -> @token
         advance_punct(lex)
         if lex.index < len && text[lex.index] == 61 {
           advance_punct(lex)
-          return make_token(@tokens.TokenKind::ShiftRightAssign, loc, line_start)
+          return make_token(
+            @tokens.TokenKind::ShiftRightAssign,
+            loc,
+            line_start,
+          )
         }
         return make_token(@tokens.TokenKind::ShiftRight, loc, line_start)
       }
@@ -664,9 +704,13 @@ pub fn lex_punct(lex : Lexer, loc : @source.SrcLoc, line_start : Bool) -> @token
     126 => make_token(@tokens.TokenKind::Tilde, loc, line_start)
     _ => {
       add_lex_error(lex, loc, "unexpected character")
-      let lexeme_id =
-        @tokens.lexeme_pool_intern_slice(lex.lexeme_pool, lex.text, loc.offset, lex.index)
-      make_token(@tokens.TokenKind::Invalid, loc, line_start, lexeme_id=lexeme_id)
+      let lexeme_id = @tokens.lexeme_pool_intern_slice(
+        lex.lexeme_pool,
+        lex.text,
+        loc.offset,
+        lex.index,
+      )
+      make_token(@tokens.TokenKind::Invalid, loc, line_start, lexeme_id~)
     }
   }
 }

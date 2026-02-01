@@ -61,9 +61,15 @@ pub struct SemContext {
   struct_member_cache_by_id : Array[@util.FastMap[Int, @ast.CType]?]
   union_member_cache : @util.FastMap[String, @util.FastMap[String, @ast.CType]]
   union_member_cache_by_id : Array[@util.FastMap[Int, @ast.CType]?]
-  struct_field_access_cache : @util.FastMap[String, @util.FastMap[String, FieldAccessInfo]]
+  struct_field_access_cache : @util.FastMap[
+    String,
+    @util.FastMap[String, FieldAccessInfo],
+  ]
   struct_field_access_cache_by_id : Array[@util.FastMap[Int, FieldAccessInfo]?]
-  union_field_access_cache : @util.FastMap[String, @util.FastMap[String, FieldAccessInfo]]
+  union_field_access_cache : @util.FastMap[
+    String,
+    @util.FastMap[String, FieldAccessInfo],
+  ]
   union_field_access_cache_by_id : Array[@util.FastMap[Int, FieldAccessInfo]?]
   struct_field_index_cache : @util.FastMap[String, @util.FastMap[String, Int]]
   struct_field_index_cache_by_id : Array[@util.FastMap[Int, Int]?]
@@ -124,11 +130,7 @@ fn default_type_aliases() -> @util.FastMap[String, @ast.CType] {
   aliases.set("__builtin_va_list", @ast.CType::Pointer(@ast.CType::Void))
   aliases.set(
     "jmp_buf",
-    @ast.CType::Array(
-      elem=default_int_type(),
-      size=Some(1),
-      size_expr=None,
-    ),
+    Array(elem=default_int_type(), size=Some(1), size_expr=None),
   )
   aliases.set("FILE", @ast.CType::Pointer(@ast.CType::Void))
   aliases
@@ -377,28 +379,31 @@ fn has_enum_const_by_id(ctx : SemContext, id : Int) -> Bool {
 }
 
 ///|
+
 ///|
 pub fn attrs_layout_empty(attrs : @ast.Attributes) -> Bool {
   attrs.aligned is None && !attrs.packed
 }
 
 ///|
-///|
-let size_t_type_value : @ast.CType =
-  @ast.CType::Int(kind=@ast.CIntKind::Long, unsigned=true)
 
 ///|
-let char_type_value : @ast.CType =
-  @ast.CType::Int(kind=@ast.CIntKind::Char, unsigned=@util.char_is_unsigned)
+let size_t_type_value : @ast.CType = @ast.CType::Int(
+  kind=@ast.CIntKind::Long,
+  unsigned=true,
+)
 
 ///|
-let void_pointer_type_value : @ast.CType =
-  @ast.CType::Pointer(@ast.CType::Void)
+let char_type_value : @ast.CType = @ast.CType::Int(
+  kind=@ast.CIntKind::Char,
+  unsigned=@util.char_is_unsigned,
+)
 
 ///|
-let char_pointer_type_value : @ast.CType =
-  @ast.CType::Pointer(char_type_value)
+let void_pointer_type_value : @ast.CType = @ast.CType::Pointer(@ast.CType::Void)
 
+///|
+let char_pointer_type_value : @ast.CType = @ast.CType::Pointer(char_type_value)
 
 ///|
 pub fn default_int_type() -> @ast.CType {
@@ -462,7 +467,10 @@ fn enum_int_type_from_range(min_value : Int, max_value : Int) -> @ast.CType {
 }
 
 ///|
-fn enum_type_from_items(ctx : SemContext, items : Array[@ast.EnumItem]) -> @ast.CType {
+fn enum_type_from_items(
+  ctx : SemContext,
+  items : Array[@ast.EnumItem],
+) -> @ast.CType {
   let mut value = 0
   let mut min_value = 0
   let mut max_value = 0
@@ -502,7 +510,13 @@ pub fn strip_qualifiers(ty : @ast.CType) -> @ast.CType {
     @ast.CType::Pointer(inner) => @ast.CType::Pointer(strip_qualifiers(inner))
     @ast.CType::Array(elem~, size~, size_expr~) =>
       @ast.CType::Array(elem=strip_qualifiers(elem), size~, size_expr~)
-    @ast.CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) =>
+    @ast.CType::Function(
+      return_type~,
+      params~,
+      varargs~,
+      is_old_style~,
+      call_conv~
+    ) =>
       @ast.CType::Function(
         return_type=strip_qualifiers(return_type),
         params=params.map(strip_qualifiers),
@@ -522,7 +536,13 @@ pub fn strip_qual_attrs(ty : @ast.CType) -> @ast.CType {
     @ast.CType::Pointer(inner) => @ast.CType::Pointer(strip_qual_attrs(inner))
     @ast.CType::Array(elem~, size~, size_expr~) =>
       @ast.CType::Array(elem=strip_qual_attrs(elem), size~, size_expr~)
-    @ast.CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) =>
+    @ast.CType::Function(
+      return_type~,
+      params~,
+      varargs~,
+      is_old_style~,
+      call_conv~
+    ) =>
       @ast.CType::Function(
         return_type=strip_qual_attrs(return_type),
         params=params.map(strip_qual_attrs),
@@ -651,7 +671,11 @@ fn is_power_of_two(value : Int) -> Bool {
 }
 
 ///|
-fn resolve_align_spec(ctx : SemContext, spec : @ast.AlignSpec, loc : @source.SrcLoc) -> Int? {
+fn resolve_align_spec(
+  ctx : SemContext,
+  spec : @ast.AlignSpec,
+  loc : @source.SrcLoc,
+) -> Int? {
   match spec {
     @ast.AlignSpec::Default => Some(max_align)
     @ast.AlignSpec::Expr(expr~) =>
@@ -669,7 +693,11 @@ fn resolve_align_spec(ctx : SemContext, spec : @ast.AlignSpec, loc : @source.Src
 }
 
 ///|
-pub fn attr_align_value(ctx : SemContext, attrs : @ast.Attributes, loc : @source.SrcLoc) -> Int? {
+pub fn attr_align_value(
+  ctx : SemContext,
+  attrs : @ast.Attributes,
+  loc : @source.SrcLoc,
+) -> Int? {
   match attrs.aligned {
     None => None
     Some(spec) => resolve_align_spec(ctx, spec, loc)
@@ -719,7 +747,11 @@ fn promote_int_type(ctx : SemContext, ty : @ast.CType) -> @ast.CType {
 }
 
 ///|
-pub fn common_int_type(ctx : SemContext, lhs : @ast.CType, rhs : @ast.CType) -> @ast.CType {
+pub fn common_int_type(
+  ctx : SemContext,
+  lhs : @ast.CType,
+  rhs : @ast.CType,
+) -> @ast.CType {
   let left = promote_int_type(ctx, lhs)
   let right = promote_int_type(ctx, rhs)
   match (left, right) {
@@ -756,7 +788,11 @@ pub fn common_int_type(ctx : SemContext, lhs : @ast.CType, rhs : @ast.CType) -> 
 }
 
 ///|
-fn arithmetic_result_type(ctx : SemContext, lhs : @ast.CType, rhs : @ast.CType) -> @ast.CType {
+fn arithmetic_result_type(
+  ctx : SemContext,
+  lhs : @ast.CType,
+  rhs : @ast.CType,
+) -> @ast.CType {
   let left = strip_top_qualifiers(lhs)
   let right = strip_top_qualifiers(rhs)
   match (left, right) {
@@ -798,9 +834,10 @@ fn pointer_compatible(a : @ast.CType, b : @ast.CType) -> Bool {
   }
   // Match tcc leniency: same-size integer pointer types are compatible.
   match (strip_top_qualifiers(a), strip_top_qualifiers(b)) {
-    (@ast.CType::Int(kind=a_kind, unsigned=a_unsigned),
-     @ast.CType::Int(kind=b_kind, unsigned=b_unsigned)) =>
-      a_unsigned == b_unsigned && int_size(a_kind) == int_size(b_kind)
+    (
+      @ast.CType::Int(kind=a_kind, unsigned=a_unsigned),
+      @ast.CType::Int(kind=b_kind, unsigned=b_unsigned),
+    ) => a_unsigned == b_unsigned && int_size(a_kind) == int_size(b_kind)
     _ => false
   }
 }
@@ -835,7 +872,11 @@ fn check_storage_class(
 }
 
 ///|
-pub fn type_size_align(ctx : SemContext, ty : @ast.CType, loc : @source.SrcLoc) -> (Int, Int)? {
+pub fn type_size_align(
+  ctx : SemContext,
+  ty : @ast.CType,
+  loc : @source.SrcLoc,
+) -> (Int, Int)? {
   match strip_top_qualifiers_keep_attrs(ty) {
     @ast.CType::TypeofExpr(expr~) =>
       type_size_align(ctx, type_for_typeof(ctx, expr), loc)
@@ -918,9 +959,7 @@ pub fn type_size_align(ctx : SemContext, ty : @ast.CType, loc : @source.SrcLoc) 
         Some(base) => type_size_align(ctx, base, loc)
       }
     }
-    @ast.CType::Function(..) => {
-      Some((8, 8))
-    }
+    @ast.CType::Function(..) => Some((8, 8))
     @ast.CType::Array(elem~, size~, size_expr~) => {
       let (elem_size, elem_align) = match type_size_align(ctx, elem, loc) {
         None => return None
@@ -939,7 +978,11 @@ pub fn type_size_align(ctx : SemContext, ty : @ast.CType, loc : @source.SrcLoc) 
                 None => None
                 Some(n) =>
                   if n < 0 {
-                    add_sem_error(ctx, @ast.expr_loc(expr), "invalid array size")
+                    add_sem_error(
+                      ctx,
+                      @ast.expr_loc(expr),
+                      "invalid array size",
+                    )
                     None
                   } else {
                     Some((elem_size * n, elem_align))
@@ -948,15 +991,14 @@ pub fn type_size_align(ctx : SemContext, ty : @ast.CType, loc : @source.SrcLoc) 
           }
       }
     }
-    @ast.CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=struct_attrs) =>
-      match ensure_struct_fields(
-        ctx,
-        tag,
-        tag_id,
-        field_list,
-        is_union=false,
-        loc,
-      ) {
+    @ast.CType::Struct(
+      name=tag,
+      id=tag_id,
+      fields=field_list,
+      attrs=struct_attrs
+    ) =>
+      match
+        ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=false, loc) {
         None => None
         Some(def) => {
           let merged = @ast.merge_attrs(def.attrs, struct_attrs)
@@ -985,15 +1027,14 @@ pub fn type_size_align(ctx : SemContext, ty : @ast.CType, loc : @source.SrcLoc) 
           }
         }
       }
-    @ast.CType::Union(name=tag, id=tag_id, fields=field_list, attrs=struct_attrs) =>
-      match ensure_struct_fields(
-        ctx,
-        tag,
-        tag_id,
-        field_list,
-        is_union=true,
-        loc,
-      ) {
+    @ast.CType::Union(
+      name=tag,
+      id=tag_id,
+      fields=field_list,
+      attrs=struct_attrs
+    ) =>
+      match
+        ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=true, loc) {
         None => None
         Some(def) => {
           let merged = @ast.merge_attrs(def.attrs, struct_attrs)
@@ -1027,7 +1068,11 @@ pub fn type_size_align(ctx : SemContext, ty : @ast.CType, loc : @source.SrcLoc) 
 }
 
 ///|
-fn record_agg_temp_for_type(ctx : SemContext, ty : @ast.CType, loc : @source.SrcLoc) -> Unit {
+fn record_agg_temp_for_type(
+  ctx : SemContext,
+  ty : @ast.CType,
+  loc : @source.SrcLoc,
+) -> Unit {
   if ctx.current_func_name is None {
     return
   }
@@ -1083,9 +1128,13 @@ pub fn ensure_struct_fields(
   match fields {
     Some(list) =>
       if tag != "" {
-        match lookup_struct_def(ctx, tag, tag_id, is_union=is_union) {
+        match lookup_struct_def(ctx, tag, tag_id, is_union~) {
           Some(def) => Some(def)
-          None => Some({ fields: record_items_to_fields(list), attrs: @ast.empty_attrs() })
+          None =>
+            Some({
+              fields: record_items_to_fields(list),
+              attrs: @ast.empty_attrs(),
+            })
         }
       } else {
         Some({ fields: record_items_to_fields(list), attrs: @ast.empty_attrs() })
@@ -1109,22 +1158,20 @@ pub fn ensure_struct_fields(
             }
           }
         }
-      } else {
-        if tag_id != 0 {
-          match get_opt_by_id(ctx.struct_defs_by_id, tag_id) {
-            Some(def) if def.fields.length() > 0 => Some(def)
-            _ => {
-              add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
-              None
-            }
+      } else if tag_id != 0 {
+        match get_opt_by_id(ctx.struct_defs_by_id, tag_id) {
+          Some(def) if def.fields.length() > 0 => Some(def)
+          _ => {
+            add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
+            None
           }
-        } else {
-          match ctx.struct_defs.get(tag) {
-            Some(def) if def.fields.length() > 0 => Some(def)
-            _ => {
-              add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
-              None
-            }
+        }
+      } else {
+        match ctx.struct_defs.get(tag) {
+          Some(def) if def.fields.length() > 0 => Some(def)
+          _ => {
+            add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
+            None
           }
         }
       }
@@ -1193,7 +1240,9 @@ pub fn struct_size_align(
       Some(expr) => {
         let width = const_int_from_expr(ctx, expr, field.loc).unwrap_or(0)
         let base = strip_top_qualifiers_keep_attrs(field.ty)
-        let (base_size, base_align) = type_size_align(ctx, base, loc).unwrap_or((0, 1))
+        let (base_size, base_align) = type_size_align(ctx, base, loc).unwrap_or(
+          (0, 1),
+        )
         let mut field_align = base_align
         if field_align_override is Some(value) {
           field_align = value
@@ -1242,8 +1291,9 @@ pub fn struct_size_align(
           size = size + (bit_pos + 7) / 8
           bit_pos = 0
         }
-        let (field_size, field_align) = match strip_top_qualifiers_keep_attrs(field.ty) {
-          @ast.CType::Array(elem~, size=None, size_expr=size_expr) =>
+        let (field_size, field_align) = match
+          strip_top_qualifiers_keep_attrs(field.ty) {
+          @ast.CType::Array(elem~, size=None, size_expr~) =>
             match size_expr {
               None => {
                 if i != fields.length() - 1 {
@@ -1325,7 +1375,7 @@ pub fn union_size_align(
       }
       None =>
         match strip_top_qualifiers_keep_attrs(field.ty) {
-          @ast.CType::Array(elem=_, size=None, size_expr=size_expr) =>
+          @ast.CType::Array(elem=_, size=None, size_expr~) =>
             match size_expr {
               None =>
                 match type_size_align(ctx, field.ty, loc) {
@@ -1420,13 +1470,21 @@ fn type_for_typeof(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
 }
 
 ///|
-pub fn resolve_type(ctx : SemContext, ty : @ast.CType, loc : @source.SrcLoc) -> @ast.CType {
+pub fn resolve_type(
+  ctx : SemContext,
+  ty : @ast.CType,
+  loc : @source.SrcLoc,
+) -> @ast.CType {
   let (resolved, _) = resolve_type_inner(ctx, ty, loc)
   resolved
 }
 
 ///|
-fn resolve_type_inner(ctx : SemContext, ty : @ast.CType, loc : @source.SrcLoc) -> (@ast.CType, Bool) {
+fn resolve_type_inner(
+  ctx : SemContext,
+  ty : @ast.CType,
+  loc : @source.SrcLoc,
+) -> (@ast.CType, Bool) {
   match ty {
     @ast.CType::Qualified(qual~, base~) => {
       let (resolved_base, changed) = resolve_type_inner(ctx, base, loc)
@@ -1460,14 +1518,24 @@ fn resolve_type_inner(ctx : SemContext, ty : @ast.CType, loc : @source.SrcLoc) -
         (ty, false)
       }
     }
-    @ast.CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) => {
-      let (resolved_ret, ret_changed) = resolve_type_inner(ctx, return_type, loc)
+    @ast.CType::Function(
+      return_type~,
+      params~,
+      varargs~,
+      is_old_style~,
+      call_conv~
+    ) => {
+      let (resolved_ret, ret_changed) = resolve_type_inner(
+        ctx, return_type, loc,
+      )
       let mut any_changed = ret_changed
       let mut out_params : Array[@ast.CType]? = None
       let len = params.length()
       for i = 0; i < len; i = i + 1 {
         let param = params[i]
-        let (resolved_param, param_changed) = resolve_type_inner(ctx, param, loc)
+        let (resolved_param, param_changed) = resolve_type_inner(
+          ctx, param, loc,
+        )
         if param_changed {
           any_changed = true
           if out_params is None {
@@ -1479,7 +1547,11 @@ fn resolve_type_inner(ctx : SemContext, ty : @ast.CType, loc : @source.SrcLoc) -
           }
         }
         if out_params is Some(arr) {
-          if param_changed { arr.push(resolved_param) } else { arr.push(param) }
+          if param_changed {
+            arr.push(resolved_param)
+          } else {
+            arr.push(param)
+          }
         }
       }
       if !any_changed {
@@ -1516,9 +1588,9 @@ fn decl_allows_vla(is_local : Bool, storage : @ast.StorageClass) -> Bool {
     return false
   }
   match storage {
-    @ast.StorageClass::Default |
-    @ast.StorageClass::Auto |
-    @ast.StorageClass::Register => true
+    @ast.StorageClass::Default
+    | @ast.StorageClass::Auto
+    | @ast.StorageClass::Register => true
     _ => false
   }
 }
@@ -1543,23 +1615,31 @@ fn resolve_array_sizes_for_decl(
         base=resolve_array_sizes_for_decl(ctx, base, is_local, storage, loc),
       )
     @ast.CType::Pointer(inner) =>
-      @ast.CType::Pointer(resolve_array_sizes_for_decl(ctx, inner, is_local, storage, loc))
-    @ast.CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) =>
+      @ast.CType::Pointer(
+        resolve_array_sizes_for_decl(ctx, inner, is_local, storage, loc),
+      )
+    @ast.CType::Function(
+      return_type~,
+      params~,
+      varargs~,
+      is_old_style~,
+      call_conv~
+    ) =>
       @ast.CType::Function(
         return_type=resolve_array_sizes_for_decl(
-          ctx,
-          return_type,
-          is_local,
-          storage,
-          loc,
+          ctx, return_type, is_local, storage, loc,
         ),
-        params=params.map(p => resolve_array_sizes_for_decl(ctx, p, is_local, storage, loc)),
+        params=params.map(p => resolve_array_sizes_for_decl(
+          ctx, p, is_local, storage, loc,
+        )),
         varargs~,
         is_old_style~,
         call_conv~,
       )
     @ast.CType::Array(elem~, size~, size_expr~) => {
-      let resolved_elem = resolve_array_sizes_for_decl(ctx, elem, is_local, storage, loc)
+      let resolved_elem = resolve_array_sizes_for_decl(
+        ctx, elem, is_local, storage, loc,
+      )
       match size {
         Some(n) =>
           if n < 0 {
@@ -1570,18 +1650,31 @@ fn resolve_array_sizes_for_decl(
           }
         None =>
           match size_expr {
-            None => @ast.CType::Array(elem=resolved_elem, size=None, size_expr=None)
+            None =>
+              @ast.CType::Array(elem=resolved_elem, size=None, size_expr=None)
             Some(expr) =>
               if decl_allows_vla(is_local, storage) {
                 if is_constant_expr_for_builtin(ctx, expr) {
-                  let (value, ok) = eval_const_expr_value(ctx, expr, @ast.expr_loc(expr))
+                  let (value, ok) = eval_const_expr_value(
+                    ctx,
+                    expr,
+                    @ast.expr_loc(expr),
+                  )
                   if !ok {
                     @ast.CType::Array(elem=resolved_elem, size=None, size_expr~)
                   } else if value < 0 {
-                    add_sem_error(ctx, @ast.expr_loc(expr), "invalid array size")
+                    add_sem_error(
+                      ctx,
+                      @ast.expr_loc(expr),
+                      "invalid array size",
+                    )
                     @ast.CType::Array(elem=resolved_elem, size=None, size_expr~)
                   } else {
-                    @ast.CType::Array(elem=resolved_elem, size=Some(value), size_expr~)
+                    @ast.CType::Array(
+                      elem=resolved_elem,
+                      size=Some(value),
+                      size_expr~,
+                    )
                   }
                 } else {
                   let expr_ty = type_of_expr(ctx, expr)
@@ -1596,13 +1689,26 @@ fn resolve_array_sizes_for_decl(
                 }
               } else {
                 match const_int_from_expr(ctx, expr, @ast.expr_loc(expr)) {
-                  None => @ast.CType::Array(elem=resolved_elem, size=None, size_expr~)
+                  None =>
+                    @ast.CType::Array(elem=resolved_elem, size=None, size_expr~)
                   Some(value) =>
                     if value < 0 {
-                      add_sem_error(ctx, @ast.expr_loc(expr), "invalid array size")
-                      @ast.CType::Array(elem=resolved_elem, size=None, size_expr~)
+                      add_sem_error(
+                        ctx,
+                        @ast.expr_loc(expr),
+                        "invalid array size",
+                      )
+                      @ast.CType::Array(
+                        elem=resolved_elem,
+                        size=None,
+                        size_expr~,
+                      )
                     } else {
-                      @ast.CType::Array(elem=resolved_elem, size=Some(value), size_expr~)
+                      @ast.CType::Array(
+                        elem=resolved_elem,
+                        size=Some(value),
+                        size_expr~,
+                      )
                     }
                 }
               }
@@ -1639,7 +1745,10 @@ fn type_has_vla_object_size(ty : @ast.CType) -> Bool {
 }
 
 ///|
-pub fn check_translation_unit(unit : @ast.TranslationUnit, diags : @diag.DiagBag) -> SemContext {
+pub fn check_translation_unit(
+  unit : @ast.TranslationUnit,
+  diags : @diag.DiagBag,
+) -> SemContext {
   let ctx = new_sem_context(diags)
   ensure_expr_type_cache(ctx, unit.expr_id_max)
   for decl in unit.decls {
@@ -1672,7 +1781,10 @@ fn check_decl(ctx : SemContext, decl : @ast.Decl) -> Unit {
     @ast.Decl::Typedef(name~, ty~, attrs~, loc~) => {
       register_type_defs(ctx, ty, loc)
       let resolved = resolve_type(ctx, ty, loc)
-      let resolved_with_attrs = @ast.apply_type_attrs(resolved, @ast.type_attrs_from(attrs))
+      let resolved_with_attrs = @ast.apply_type_attrs(
+        resolved,
+        @ast.type_attrs_from(attrs),
+      )
       let final_ty = resolve_array_sizes_for_decl(
         ctx,
         resolved_with_attrs,
@@ -1683,13 +1795,18 @@ fn check_decl(ctx : SemContext, decl : @ast.Decl) -> Unit {
       ctx.type_aliases.set(name, final_ty)
     }
     @ast.Decl::TagDef(ty~, loc~) => register_type_defs(ctx, ty, loc)
-    @ast.Decl::StaticAssert(static_assert) => check_static_assert(ctx, static_assert)
+    @ast.Decl::StaticAssert(static_assert) =>
+      check_static_assert(ctx, static_assert)
     @ast.Decl::Asm(asm_stmt) => check_asm_stmt(ctx, asm_stmt)
   }
 }
 
 ///|
-fn register_type_defs(ctx : SemContext, ty : @ast.CType, loc : @source.SrcLoc) -> Unit {
+fn register_type_defs(
+  ctx : SemContext,
+  ty : @ast.CType,
+  loc : @source.SrcLoc,
+) -> Unit {
   match ty {
     @ast.CType::Qualified(base~, ..) => register_type_defs(ctx, base, loc)
     @ast.CType::Attributed(base~, ..) => register_type_defs(ctx, base, loc)
@@ -1697,7 +1814,8 @@ fn register_type_defs(ctx : SemContext, ty : @ast.CType, loc : @source.SrcLoc) -
       register_struct_def(ctx, name, id, fields, attrs, is_union=false, loc)
     @ast.CType::Union(name~, id~, fields~, attrs~) =>
       register_struct_def(ctx, name, id, fields, attrs, is_union=true, loc)
-    @ast.CType::Enum(name~, id~, items~) => register_enum_def(ctx, name, id, items, loc)
+    @ast.CType::Enum(name~, id~, items~) =>
+      register_enum_def(ctx, name, id, items, loc)
     @ast.CType::Pointer(inner) => register_type_defs(ctx, inner, loc)
     @ast.CType::Array(elem~, ..) => register_type_defs(ctx, elem, loc)
     @ast.CType::Function(return_type~, params~, ..) => {
@@ -1773,7 +1891,8 @@ fn register_struct_def(
       }
       Some(existing) =>
         if existing.fields.length() > 0 && incoming.fields.length() > 0 {
-          if existing.fields == incoming.fields && existing.attrs == incoming.attrs {
+          if existing.fields == incoming.fields &&
+            existing.attrs == incoming.attrs {
             let merged = {
               fields: existing.fields,
               attrs: @ast.merge_attrs(existing.attrs, incoming.attrs),
@@ -1822,7 +1941,8 @@ fn register_struct_def(
       }
       Some(existing) =>
         if existing.fields.length() > 0 && incoming.fields.length() > 0 {
-          if existing.fields == incoming.fields && existing.attrs == incoming.attrs {
+          if existing.fields == incoming.fields &&
+            existing.attrs == incoming.attrs {
             let merged = {
               fields: existing.fields,
               attrs: @ast.merge_attrs(existing.attrs, incoming.attrs),
@@ -1958,6 +2078,7 @@ fn register_enum_def(
     }
   }
 }
+
 ///|
 fn define_enum_const(
   ctx : SemContext,
@@ -2129,10 +2250,14 @@ fn _parse_uint64_literal(text : String, base : Int) -> UInt64 {
 fn parse_uint64_literal_prefix(text : String, base : Int, end : Int) -> UInt64 {
   let mut value : UInt64 = 0
   let mut i = 0
-  if base == 16 && end >= 2 && text[0] == 48 &&
+  if base == 16 &&
+    end >= 2 &&
+    text[0] == 48 &&
     (text[1] == 120 || text[1] == 88) {
     i = 2
-  } else if base == 2 && end >= 2 && text[0] == 48 &&
+  } else if base == 2 &&
+    end >= 2 &&
+    text[0] == 48 &&
     (text[1] == 98 || text[1] == 66) {
     i = 2
   } else if base == 8 && end > 1 && text[0] == 48 {
@@ -2378,7 +2503,8 @@ fn eval_const_expr_value(
         @ast.BinaryOp::Le => (if lhs <= rhs { 1 } else { 0 }, true)
         @ast.BinaryOp::Gt => (if lhs > rhs { 1 } else { 0 }, true)
         @ast.BinaryOp::Ge => (if lhs >= rhs { 1 } else { 0 }, true)
-        @ast.BinaryOp::LogAnd => (if lhs != 0 && rhs != 0 { 1 } else { 0 }, true)
+        @ast.BinaryOp::LogAnd =>
+          (if lhs != 0 && rhs != 0 { 1 } else { 0 }, true)
         @ast.BinaryOp::LogOr => (if lhs != 0 || rhs != 0 { 1 } else { 0 }, true)
         @ast.BinaryOp::Comma => (rhs, true)
         _ => {
@@ -2411,10 +2537,10 @@ fn eval_const_expr_value(
       match strip_top_qualifiers(ty) {
         @ast.CType::Array(size=None, size_expr=Some(_), ..) => (0, false)
         _ =>
-      match type_size_align(ctx, ty, loc) {
-        None => (0, false)
-        Some((size, _)) => (size, true)
-      }
+          match type_size_align(ctx, ty, loc) {
+            None => (0, false)
+            Some((size, _)) => (size, true)
+          }
       }
     }
     @ast.Expr::SizeofType(ty~, loc~, ..) => {
@@ -2422,10 +2548,10 @@ fn eval_const_expr_value(
       match strip_top_qualifiers(resolve_type(ctx, ty, loc)) {
         @ast.CType::Array(size=None, size_expr=Some(_), ..) => (0, false)
         _ =>
-      match type_size_align(ctx, ty, loc) {
-        None => (0, false)
-        Some((size, _)) => (size, true)
-      }
+          match type_size_align(ctx, ty, loc) {
+            None => (0, false)
+            Some((size, _)) => (size, true)
+          }
       }
     }
     @ast.Expr::AlignofExpr(expr~, loc~, ..) => {
@@ -2442,7 +2568,12 @@ fn eval_const_expr_value(
         Some((_, align)) => (align, true)
       }
     }
-    @ast.Expr::Call(callee=@ast.Expr::Ident(name~, id~, ..), args~, loc=call_loc, ..) =>
+    @ast.Expr::Call(
+      callee=@ast.Expr::Ident(name~, id~, ..),
+      args~,
+      loc=call_loc,
+      ..
+    ) =>
       match builtin_call_kind(ctx, name, id) {
         Some(BuiltinCallKind::ChooseExpr) if args.length() == 3 => {
           let (cond_val, ok) = eval_const_expr_value(ctx, args[0], call_loc)
@@ -2482,16 +2613,17 @@ fn cast_const_int64_value(
   let base = strip_top_qualifiers_keep_attrs(resolved)
   match base {
     @ast.CType::Bool => (if value == 0 { 0 } else { 1 }, true)
-    @ast.CType::Enum(..) => cast_const_int64_value(ctx, value, enum_type_for_arith(ctx, base), loc)
-    @ast.CType::Pointer(_) => (value.reinterpret_as_uint64().reinterpret_as_int64(), true)
+    @ast.CType::Enum(..) =>
+      cast_const_int64_value(ctx, value, enum_type_for_arith(ctx, base), loc)
+    @ast.CType::Pointer(_) =>
+      (value.reinterpret_as_uint64().reinterpret_as_int64(), true)
     @ast.CType::Int(kind~, unsigned~) => {
       let bits = int_size(kind) * 8
-      let mask : UInt64 =
-        if bits >= 64 {
-          (0 : UInt64).lnot()
-        } else {
-          ((1 : UInt64) << bits) - (1 : UInt64)
-        }
+      let mask : UInt64 = if bits >= 64 {
+        (0 : UInt64).lnot()
+      } else {
+        ((1 : UInt64) << bits) - (1 : UInt64)
+      }
       let u = value.reinterpret_as_uint64() & mask
       if unsigned || bits >= 64 {
         (u.reinterpret_as_int64(), true)
@@ -2603,7 +2735,8 @@ fn eval_const_expr_value_i64(
         @ast.BinaryOp::Le => (if lhs <= rhs { 1 } else { 0 }, true)
         @ast.BinaryOp::Gt => (if lhs > rhs { 1 } else { 0 }, true)
         @ast.BinaryOp::Ge => (if lhs >= rhs { 1 } else { 0 }, true)
-        @ast.BinaryOp::LogAnd => (if lhs != 0 && rhs != 0 { 1 } else { 0 }, true)
+        @ast.BinaryOp::LogAnd =>
+          (if lhs != 0 && rhs != 0 { 1 } else { 0 }, true)
         @ast.BinaryOp::LogOr => (if lhs != 0 || rhs != 0 { 1 } else { 0 }, true)
         @ast.BinaryOp::Comma => (rhs, true)
         _ => {
@@ -2635,10 +2768,10 @@ fn eval_const_expr_value_i64(
       match strip_top_qualifiers(ty) {
         @ast.CType::Array(size=None, size_expr=Some(_), ..) => (0, false)
         _ =>
-      match type_size_align(ctx, ty, loc) {
-        None => (0, false)
-        Some((size, _)) => (size.to_int64(), true)
-      }
+          match type_size_align(ctx, ty, loc) {
+            None => (0, false)
+            Some((size, _)) => (size.to_int64(), true)
+          }
       }
     }
     @ast.Expr::SizeofType(ty~, loc~, ..) => {
@@ -2646,10 +2779,10 @@ fn eval_const_expr_value_i64(
       match strip_top_qualifiers(resolve_type(ctx, ty, loc)) {
         @ast.CType::Array(size=None, size_expr=Some(_), ..) => (0, false)
         _ =>
-      match type_size_align(ctx, ty, loc) {
-        None => (0, false)
-        Some((size, _)) => (size.to_int64(), true)
-      }
+          match type_size_align(ctx, ty, loc) {
+            None => (0, false)
+            Some((size, _)) => (size.to_int64(), true)
+          }
       }
     }
     @ast.Expr::AlignofExpr(expr~, loc~, ..) => {
@@ -2666,7 +2799,12 @@ fn eval_const_expr_value_i64(
         Some((_, align)) => (align.to_int64(), true)
       }
     }
-    @ast.Expr::Call(callee=@ast.Expr::Ident(name~, id~, ..), args~, loc=call_loc, ..) =>
+    @ast.Expr::Call(
+      callee=@ast.Expr::Ident(name~, id~, ..),
+      args~,
+      loc=call_loc,
+      ..
+    ) =>
       match builtin_call_kind(ctx, name, id) {
         Some(BuiltinCallKind::ChooseExpr) if args.length() == 3 => {
           let (cond_val, ok) = eval_const_expr_value_i64(ctx, args[0], call_loc)
@@ -2696,7 +2834,11 @@ fn eval_const_expr_value_i64(
 }
 
 ///|
-fn eval_const_expr(ctx : SemContext, expr : @ast.Expr, loc : @source.SrcLoc) -> Int {
+fn eval_const_expr(
+  ctx : SemContext,
+  expr : @ast.Expr,
+  loc : @source.SrcLoc,
+) -> Int {
   let (value, _) = eval_const_expr_value(ctx, expr, loc)
   value
 }
@@ -2730,15 +2872,16 @@ fn eval_builtin_offsetof_and_type(
   let mut offset = 0
   for name in path {
     match strip_top_qualifiers(current) {
-      @ast.CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=attrs) =>
-        match ensure_struct_fields(
-          ctx,
-          tag,
-          tag_id,
-          field_list,
-          is_union=false,
-          loc,
-        ) {
+      @ast.CType::Struct(name=tag, id=tag_id, fields=field_list, attrs~) =>
+        match
+          ensure_struct_fields(
+            ctx,
+            tag,
+            tag_id,
+            field_list,
+            is_union=false,
+            loc,
+          ) {
           None => return None
           Some(def) =>
             match struct_field_offset_and_type(ctx, def, attrs, name, loc) {
@@ -2746,30 +2889,31 @@ fn eval_builtin_offsetof_and_type(
                 if suppress_error {
                   return None
                 } else {
-                  add_sem_error(ctx, loc, "unknown field '\{name}' in __builtin_offsetof")
+                  add_sem_error(
+                    ctx,
+                    loc,
+                    "unknown field '\{name}' in __builtin_offsetof",
+                  )
                   return None
                 }
               Some((field_off, field_ty, is_bitfield)) => {
                 if is_bitfield {
                   if !suppress_error {
-                    add_sem_error(ctx, loc, "__builtin_offsetof does not allow bitfields")
+                    add_sem_error(
+                      ctx, loc, "__builtin_offsetof does not allow bitfields",
+                    )
                   }
                   return None
                 }
                 offset = offset + field_off
-                current = resolve_type(ctx, field_ty, loc) |> strip_top_qualifiers
+                current = resolve_type(ctx, field_ty, loc)
+                  |> strip_top_qualifiers
               }
             }
         }
-      @ast.CType::Union(name=tag, id=tag_id, fields=field_list, attrs=attrs) =>
-        match ensure_struct_fields(
-          ctx,
-          tag,
-          tag_id,
-          field_list,
-          is_union=true,
-          loc,
-        ) {
+      @ast.CType::Union(name=tag, id=tag_id, fields=field_list, attrs~) =>
+        match
+          ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=true, loc) {
           None => return None
           Some(def) =>
             match union_field_offset_and_type(ctx, def, attrs, name, loc) {
@@ -2777,24 +2921,33 @@ fn eval_builtin_offsetof_and_type(
                 if suppress_error {
                   return None
                 } else {
-                  add_sem_error(ctx, loc, "unknown field '\{name}' in __builtin_offsetof")
+                  add_sem_error(
+                    ctx,
+                    loc,
+                    "unknown field '\{name}' in __builtin_offsetof",
+                  )
                   return None
                 }
               Some((field_off, field_ty, is_bitfield)) => {
                 if is_bitfield {
                   if !suppress_error {
-                    add_sem_error(ctx, loc, "__builtin_offsetof does not allow bitfields")
+                    add_sem_error(
+                      ctx, loc, "__builtin_offsetof does not allow bitfields",
+                    )
                   }
                   return None
                 }
                 offset = offset + field_off
-                current = resolve_type(ctx, field_ty, loc) |> strip_top_qualifiers
+                current = resolve_type(ctx, field_ty, loc)
+                  |> strip_top_qualifiers
               }
             }
         }
       _ => {
         if !suppress_error {
-          add_sem_error(ctx, loc, "__builtin_offsetof expects struct/union type")
+          add_sem_error(
+            ctx, loc, "__builtin_offsetof expects struct/union type",
+          )
         }
         return None
       }
@@ -2880,8 +3033,9 @@ fn struct_field_offset_and_type(
           size = size + (bit_pos + 7) / 8
           bit_pos = 0
         }
-        let (field_size, field_align) = match strip_top_qualifiers_keep_attrs(field.ty) {
-          @ast.CType::Array(elem~, size=None, size_expr=size_expr) =>
+        let (field_size, field_align) = match
+          strip_top_qualifiers_keep_attrs(field.ty) {
+          @ast.CType::Array(elem~, size=None, size_expr~) =>
             match size_expr {
               None => {
                 let (_elem_size, elem_align) = match
@@ -2915,11 +3069,19 @@ fn struct_field_offset_and_type(
           adjusted_align = value
         }
         size = align_to(size, adjusted_align)
-        if field.name == name { return Some((size, field.ty, false)) }
+        if field.name == name {
+          return Some((size, field.ty, false))
+        }
         if field.name == "" {
           match strip_top_qualifiers(field.ty) {
             @ast.CType::Struct(..) | @ast.CType::Union(..) =>
-              if eval_builtin_offsetof_and_type(ctx, field.ty, [name], loc, true)
+              if eval_builtin_offsetof_and_type(
+                  ctx,
+                  field.ty,
+                  [name],
+                  loc,
+                  true,
+                )
                 is Some((inner_off, inner_ty, _)) {
                 return Some((size + inner_off, inner_ty, false))
               }
@@ -2971,8 +3133,10 @@ fn is_constant_expr_for_builtin(ctx : SemContext, expr : @ast.Expr) -> Bool {
     @ast.Expr::Ident(name~, id~, ..) => enum_const_exists(ctx, name, id)
     @ast.Expr::Unary(op~, expr=inner, ..) =>
       match op {
-        @ast.UnaryOp::Plus | @ast.UnaryOp::Minus | @ast.UnaryOp::BitNot | @ast.UnaryOp::Not =>
-          is_constant_expr_for_builtin(ctx, inner)
+        @ast.UnaryOp::Plus
+        | @ast.UnaryOp::Minus
+        | @ast.UnaryOp::BitNot
+        | @ast.UnaryOp::Not => is_constant_expr_for_builtin(ctx, inner)
         _ => false
       }
     @ast.Expr::Binary(op~, left~, right~, ..) => {
@@ -3012,7 +3176,8 @@ fn is_constant_expr_for_builtin(ctx : SemContext, expr : @ast.Expr) -> Bool {
       }
     @ast.Expr::AlignofExpr(expr=inner, loc~, ..) =>
       type_size_align(ctx, type_for_sizeof(ctx, inner), loc) is Some(_)
-    @ast.Expr::AlignofType(ty~, loc~, ..) => type_size_align(ctx, ty, loc) is Some(_)
+    @ast.Expr::AlignofType(ty~, loc~, ..) =>
+      type_size_align(ctx, ty, loc) is Some(_)
     @ast.Expr::BuiltinTypesCompatibleP(..) => true
     @ast.Expr::BuiltinOffsetof(..) => true
     @ast.Expr::Call(callee=@ast.Expr::Ident(name~, id~, ..), args~, ..) =>
@@ -3085,14 +3250,12 @@ fn check_func_decl(ctx : SemContext, func_decl : @ast.FuncDecl) -> Unit {
   )
   let call_conv = @ast.normalize_call_conv(func_decl.attrs.call_conv)
   let resolved_return = resolve_type(ctx, func_decl.return_type, func_decl.loc)
-  let params = func_decl.params.map(param =>
-    @ast.Param::{
-      name: param.name,
-      id: param.id,
-      ty: resolve_type(ctx, param.ty, param.loc),
-      loc: param.loc,
-    }
-  )
+  let params = func_decl.params.map(param => @ast.Param::{
+    name: param.name,
+    id: param.id,
+    ty: resolve_type(ctx, param.ty, param.loc),
+    loc: param.loc,
+  })
   for param in params {
     if is_void_type(param.ty) {
       add_sem_error(ctx, param.loc, "parameter declared as void")
@@ -3105,7 +3268,14 @@ fn check_func_decl(ctx : SemContext, func_decl : @ast.FuncDecl) -> Unit {
     func_decl.is_old_style,
     call_conv,
   )
-  add_function_sig(ctx, func_decl.name, func_decl.id, sig, func_decl.loc, is_def=false)
+  add_function_sig(
+    ctx,
+    func_decl.name,
+    func_decl.id,
+    sig,
+    func_decl.loc,
+    is_def=false,
+  )
 }
 
 ///|
@@ -3119,14 +3289,12 @@ fn check_func_def(ctx : SemContext, func_def : @ast.FuncDef) -> Unit {
   )
   let call_conv = @ast.normalize_call_conv(func_def.attrs.call_conv)
   let resolved_return = resolve_type(ctx, func_def.return_type, func_def.loc)
-  let resolved_params = func_def.params.map(param =>
-    @ast.Param::{
-      name: param.name,
-      id: param.id,
-      ty: resolve_type(ctx, param.ty, param.loc),
-      loc: param.loc,
-    }
-  )
+  let resolved_params = func_def.params.map(param => @ast.Param::{
+    name: param.name,
+    id: param.id,
+    ty: resolve_type(ctx, param.ty, param.loc),
+    loc: param.loc,
+  })
   let params = if func_def.is_old_style {
     promote_old_style_params(resolved_params)
   } else {
@@ -3139,7 +3307,14 @@ fn check_func_def(ctx : SemContext, func_def : @ast.FuncDef) -> Unit {
     func_def.is_old_style,
     call_conv,
   )
-  add_function_sig(ctx, func_def.name, func_def.id, sig, func_def.loc, is_def=true)
+  add_function_sig(
+    ctx,
+    func_def.name,
+    func_def.id,
+    sig,
+    func_def.loc,
+    is_def=true,
+  )
   let prev_func = ctx.current_func_name
   let prev_func_id = ctx.current_func_id
   let prev_agg_size = ctx.current_agg_temp_size
@@ -3217,7 +3392,11 @@ fn add_function_sig(
     add_sem_error(ctx, loc, "redefinition of '\{name}'")
   }
   let mut updated : FuncSig? = None
-  let existing = if id > 0 { get_function_by_id(ctx, id) } else { ctx.functions.get(name) }
+  let existing = if id > 0 {
+    get_function_by_id(ctx, id)
+  } else {
+    ctx.functions.get(name)
+  }
   match existing {
     Some(existing) =>
       if !func_sig_eq(existing, sig) {
@@ -3285,7 +3464,8 @@ pub fn apply_inferred_array_size(ty : @ast.CType, size : Int) -> @ast.CType {
     }
     @ast.CType::Array(elem~, size=arr_size, size_expr~) =>
       match (arr_size, size_expr) {
-        (None, None) => @ast.CType::Array(elem~, size=Some(size), size_expr=None)
+        (None, None) =>
+          @ast.CType::Array(elem~, size=Some(size), size_expr=None)
         _ => ty
       }
     _ => ty
@@ -3352,20 +3532,27 @@ fn update_decl_type(
 }
 
 ///|
-pub fn record_local_binding(ctx : SemContext, id : Int, ty : @ast.CType) -> Unit {
+pub fn record_local_binding(
+  ctx : SemContext,
+  id : Int,
+  ty : @ast.CType,
+) -> Unit {
   let scope_id = current_local_scope_id(ctx)
   if scope_id == 0 || id <= 0 {
     return
   }
   let idx = ctx.local_overrides.length() - 1
   let overrides = ctx.local_overrides[idx]
-  let prev_scope =
-    if id <= ctx.local_scope_ids_by_id.length() {
-      ctx.local_scope_ids_by_id[id - 1]
-    } else {
-      0
-    }
-  overrides.push({ id, prev_ty: get_opt_by_id(ctx.local_values_by_id, id), prev_scope })
+  let prev_scope = if id <= ctx.local_scope_ids_by_id.length() {
+    ctx.local_scope_ids_by_id[id - 1]
+  } else {
+    0
+  }
+  overrides.push({
+    id,
+    prev_ty: get_opt_by_id(ctx.local_values_by_id, id),
+    prev_scope,
+  })
   ctx.local_overrides[idx] = overrides
   set_opt_by_id(ctx.local_values_by_id, id, ty)
   ensure_int_array_capacity(ctx.local_scope_ids_by_id, id)
@@ -3435,23 +3622,21 @@ fn record_compound_literal(
       keys.push(key)
       set_opt_by_id(ctx.func_compound_literals_by_id, id, keys)
     }
-  } else {
-    if ctx.current_func_name is Some(name) {
-      ctx.func_has_compound_literal.set(name, true)
-      let keys = match ctx.func_compound_literals.get(name) {
-        None => []
-        Some(list) => list
+  } else if ctx.current_func_name is Some(name) {
+    ctx.func_has_compound_literal.set(name, true)
+    let keys = match ctx.func_compound_literals.get(name) {
+      None => []
+      Some(list) => list
+    }
+    let mut has_key = false
+    for existing in keys {
+      if existing == key {
+        has_key = true
       }
-      let mut has_key = false
-      for existing in keys {
-        if existing == key {
-          has_key = true
-        }
-      }
-      if !has_key {
-        keys.push(key)
-        ctx.func_compound_literals.set(name, keys)
-      }
+    }
+    if !has_key {
+      keys.push(key)
+      ctx.func_compound_literals.set(name, keys)
     }
   }
   if !ctx.compound_literal_sizes.contains(key) {
@@ -3478,9 +3663,11 @@ fn require_complete_object_type(
       require_complete_object_type(ctx, elem, loc)
     }
     @ast.CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) =>
-      ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=false, loc) |> ignore
+      ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=false, loc)
+      |> ignore
     @ast.CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) =>
-      ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=true, loc) |> ignore
+      ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=true, loc)
+      |> ignore
     @ast.CType::Enum(name=tag, id=tag_id, items~) =>
       match items {
         Some(list) =>
@@ -3510,7 +3697,11 @@ fn require_complete_object_type(
 }
 
 ///|
-fn check_var_decl(ctx : SemContext, decl : @ast.VarDecl, is_local~ : Bool) -> Unit {
+fn check_var_decl(
+  ctx : SemContext,
+  decl : @ast.VarDecl,
+  is_local~ : Bool,
+) -> Unit {
   register_type_defs(ctx, decl.ty, decl.loc)
   let resolved = resolve_type(ctx, decl.ty, decl.loc)
   let is_local = is_local && decl.storage != @ast.StorageClass::Extern
@@ -3533,7 +3724,13 @@ fn check_var_decl(ctx : SemContext, decl : @ast.VarDecl, is_local~ : Bool) -> Un
   )
   let mut final_ty = resolved_with_sizes
   match strip_top_qualifiers(resolved) {
-    @ast.CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) => {
+    @ast.CType::Function(
+      return_type~,
+      params~,
+      varargs~,
+      is_old_style~,
+      call_conv~
+    ) => {
       check_storage_class(
         ctx,
         decl.storage,
@@ -3608,7 +3805,9 @@ fn check_initializer(
                     None => Some(length)
                     Some(n) => {
                       if length > n + 1 {
-                        add_sem_error(ctx, loc, "string literal too long for array")
+                        add_sem_error(
+                          ctx, loc, "string literal too long for array",
+                        )
                       }
                       None
                     }
@@ -3653,16 +3852,23 @@ fn check_initializer(
           }
         }
       }
-    @ast.Initializer::List(items~, ..) => check_initializer_list(ctx, ty, items, loc)
+    @ast.Initializer::List(items~, ..) =>
+      check_initializer_list(ctx, ty, items, loc)
   }
 }
 
 ///|
-fn is_zero_aggregate_init(ctx : SemContext, ty : @ast.CType, expr : @ast.Expr) -> Bool {
+fn is_zero_aggregate_init(
+  ctx : SemContext,
+  ty : @ast.CType,
+  expr : @ast.Expr,
+) -> Bool {
   match try_eval_int_const(ctx, expr) {
     Some(v) if v == 0 =>
       match strip_top_qualifiers(ty) {
-        @ast.CType::Struct(..) | @ast.CType::Union(..) | @ast.CType::Array(..) => true
+        @ast.CType::Struct(..)
+        | @ast.CType::Union(..)
+        | @ast.CType::Array(..) => true
         _ => false
       }
     _ => false
@@ -3700,7 +3906,9 @@ fn check_initializer_list(
                   has_index = true
                   range_end = Some(end_idx)
                   if end_idx < start_idx {
-                    add_sem_error(ctx, des_loc, "array designator range is empty")
+                    add_sem_error(
+                      ctx, des_loc, "array designator range is empty",
+                    )
                   }
                 }
                 _ => ()
@@ -3718,21 +3926,17 @@ fn check_initializer_list(
         if has_index {
           if size is None && index < 0 {
             add_sem_error(ctx, item.loc, "array designator out of bounds")
-          } else {
-            if size is Some(n) {
-              let end_idx = range_end.unwrap_or(index)
-              if index < 0 || end_idx < 0 || index >= n || end_idx >= n {
-                // TCC accepts excess array initializers and truncates them.
-                ()
-              }
-            }
-          }
-        } else {
-          if size is Some(n) {
-            if index >= n {
+          } else if size is Some(n) {
+            let end_idx = range_end.unwrap_or(index)
+            if index < 0 || end_idx < 0 || index >= n || end_idx >= n {
               // TCC accepts excess array initializers and truncates them.
               ()
             }
+          }
+        } else if size is Some(n) {
+          if index >= n {
+            // TCC accepts excess array initializers and truncates them.
+            ()
           }
         }
         let range_last = range_end.unwrap_or(index)
@@ -3768,7 +3972,13 @@ fn check_initializer_list(
       None
     }
     @ast.CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
-      let fields = resolve_struct_fields(ctx, tag, tag_id, field_list, is_union=true)
+      let fields = resolve_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=true,
+      )
       match fields {
         None => add_sem_error(ctx, loc, "incomplete union '\{tag}'")
         Some(list) =>
@@ -3805,7 +4015,8 @@ fn check_struct_initializer(
           }
         _ => ()
       }
-      if resolve_designator_type(ctx, ty, item.designators, item.loc) is Some(target_ty) {
+      if resolve_designator_type(ctx, ty, item.designators, item.loc)
+        is Some(target_ty) {
         check_initializer(ctx, target_ty, item.value, item.loc) |> ignore
       }
       if is_union {
@@ -3825,29 +4036,30 @@ fn check_struct_initializer(
           let mut consumed = 1
           let mut used_elision = false
           match (strip_top_qualifiers(field.ty), item.value) {
-            (@ast.CType::Array(size=size, ..), @ast.Initializer::Expr(expr~, ..)) =>
+            (@ast.CType::Array(size~, ..), @ast.Initializer::Expr(expr~, ..)) =>
               match expr {
                 @ast.Expr::StringLit(..) => ()
                 _ => {
                   let (elided_items, count) = collect_elided_array_items(
-                    items,
-                    item_index,
-                    size,
+                    items, item_index, size,
                   )
-                  let init = @ast.Initializer::List(items=elided_items, loc=item.loc)
+                  let init = @ast.Initializer::List(
+                    items=elided_items,
+                    loc=item.loc,
+                  )
                   check_initializer(ctx, field.ty, init, item.loc) |> ignore
                   consumed = count
                   used_elision = true
                 }
               }
-            (@ast.CType::Struct(..) | @ast.CType::Union(..), @ast.Initializer::Expr(..)) =>
+            (
+              @ast.CType::Struct(..)
+              | @ast.CType::Union(..),
+              @ast.Initializer::Expr(..),
+            ) =>
               if has_single_init_field(ctx, field.ty) {
                 let init = @ast.Initializer::List(
-                  items=[{
-                    designators: [],
-                    value: item.value,
-                    loc: item.loc,
-                  }],
+                  items=[{ designators: [], value: item.value, loc: item.loc }],
                   loc=item.loc,
                 )
                 check_initializer(ctx, field.ty, init, item.loc) |> ignore
@@ -3892,11 +4104,7 @@ fn collect_elided_array_items(
     if item.designators.length() > 0 {
       break
     }
-    collected.push({
-      designators: [],
-      value: item.value,
-      loc: item.loc,
-    })
+    collected.push({ designators: [], value: item.value, loc: item.loc })
     idx = idx + 1
   }
   (collected, idx - start)
@@ -3944,7 +4152,10 @@ fn has_single_init_field(ctx : SemContext, ty : @ast.CType) -> Bool {
 }
 
 ///|
-pub fn next_init_field(fields : Array[@ast.Field], start : Int) -> (@ast.Field, Int)? {
+pub fn next_init_field(
+  fields : Array[@ast.Field],
+  start : Int,
+) -> (@ast.Field, Int)? {
   let mut i = start
   while i < fields.length() {
     let field = fields[i]
@@ -3958,7 +4169,11 @@ pub fn next_init_field(fields : Array[@ast.Field], start : Int) -> (@ast.Field, 
 }
 
 ///|
-pub fn const_int_from_expr(ctx : SemContext, expr : @ast.Expr, loc : @source.SrcLoc) -> Int? {
+pub fn const_int_from_expr(
+  ctx : SemContext,
+  expr : @ast.Expr,
+  loc : @source.SrcLoc,
+) -> Int? {
   let (value, ok) = eval_const_expr_value(ctx, expr, loc)
   if ok {
     Some(value)
@@ -3968,7 +4183,11 @@ pub fn const_int_from_expr(ctx : SemContext, expr : @ast.Expr, loc : @source.Src
 }
 
 ///|
-pub fn const_int64_from_expr(ctx : SemContext, expr : @ast.Expr, loc : @source.SrcLoc) -> Int64? {
+pub fn const_int64_from_expr(
+  ctx : SemContext,
+  expr : @ast.Expr,
+  loc : @source.SrcLoc,
+) -> Int64? {
   let (value, ok) = eval_const_expr_value_i64(ctx, expr, loc)
   if ok {
     Some(value)
@@ -4019,7 +4238,10 @@ fn resolve_designator_type(
             if size is Some(n) {
               match (start_val, end_val) {
                 (Some(start_idx), Some(end_idx)) =>
-                  if start_idx < 0 || end_idx < 0 || start_idx >= n || end_idx >= n {
+                  if start_idx < 0 ||
+                    end_idx < 0 ||
+                    start_idx >= n ||
+                    end_idx >= n {
                     add_sem_error(ctx, loc, "array designator out of bounds")
                   }
                 _ => ()
@@ -4091,7 +4313,11 @@ fn resolve_designator_type(
 }
 
 ///|
-fn check_stmt(ctx : SemContext, stmt : @ast.Stmt, return_type : @ast.CType) -> Unit {
+fn check_stmt(
+  ctx : SemContext,
+  stmt : @ast.Stmt,
+  return_type : @ast.CType,
+) -> Unit {
   match stmt {
     @ast.Stmt::Compound(stmts~, ..) => {
       let mut scope_open = false
@@ -4163,7 +4389,11 @@ fn check_stmt(ctx : SemContext, stmt : @ast.Stmt, return_type : @ast.CType) -> U
       let end = match end_expr {
         None => start
         Some(end_value) => {
-          let end_val = const_int_from_expr(ctx, end_value, @ast.expr_loc(end_value))
+          let end_val = const_int_from_expr(
+            ctx,
+            end_value,
+            @ast.expr_loc(end_value),
+          )
           if end_val is None {
             add_sem_error(
               ctx,
@@ -4175,7 +4405,8 @@ fn check_stmt(ctx : SemContext, stmt : @ast.Stmt, return_type : @ast.CType) -> U
         }
       }
       match (start, end) {
-        (Some(v1), Some(v2)) => register_case_range(ctx, v1, v2, @ast.expr_loc(expr))
+        (Some(v1), Some(v2)) =>
+          register_case_range(ctx, v1, v2, @ast.expr_loc(expr))
         _ => ()
       }
       check_stmt(ctx, body, return_type)
@@ -4246,7 +4477,8 @@ fn check_stmt(ctx : SemContext, stmt : @ast.Stmt, return_type : @ast.CType) -> U
         check_var_decl(ctx, decl, is_local=true)
       }
     @ast.Stmt::TagDef(ty~, loc~) => register_type_defs(ctx, ty, loc)
-    @ast.Stmt::StaticAssert(static_assert) => check_static_assert(ctx, static_assert)
+    @ast.Stmt::StaticAssert(static_assert) =>
+      check_static_assert(ctx, static_assert)
     @ast.Stmt::Empty(..) => ()
   }
 }
@@ -4255,7 +4487,11 @@ fn check_stmt(ctx : SemContext, stmt : @ast.Stmt, return_type : @ast.CType) -> U
 fn check_cond_expr(ctx : SemContext, expr : @ast.Expr) -> Unit {
   let ty = type_of_expr(ctx, expr)
   if !is_scalar(ty) {
-    add_sem_error(ctx, @ast.expr_loc(expr), "condition expression must be scalar")
+    add_sem_error(
+      ctx,
+      @ast.expr_loc(expr),
+      "condition expression must be scalar",
+    )
   }
 }
 
@@ -4368,7 +4604,8 @@ fn type_eq(a : @ast.CType, b : @ast.CType) -> Bool {
       @ast.CType::Int(kind=a_kind, unsigned=a_unsigned),
       @ast.CType::Int(kind=b_kind, unsigned=b_unsigned),
     ) => a_kind == b_kind && a_unsigned == b_unsigned
-    (@ast.CType::Float(kind=a_kind), @ast.CType::Float(kind=b_kind)) => a_kind == b_kind
+    (@ast.CType::Float(kind=a_kind), @ast.CType::Float(kind=b_kind)) =>
+      a_kind == b_kind
     (@ast.CType::Pointer(inner_a), @ast.CType::Pointer(inner_b)) =>
       type_eq(inner_a, inner_b)
     (
@@ -4417,12 +4654,18 @@ fn type_eq(a : @ast.CType, b : @ast.CType) -> Bool {
       }
       true
     }
-    (@ast.CType::Struct(name=a_name, id=a_id, ..), @ast.CType::Struct(name=b_name, id=b_id, ..)) =>
-      if a_id != 0 && b_id != 0 { a_id == b_id } else { a_name == b_name }
-    (@ast.CType::Union(name=a_name, id=a_id, ..), @ast.CType::Union(name=b_name, id=b_id, ..)) =>
-      if a_id != 0 && b_id != 0 { a_id == b_id } else { a_name == b_name }
-    (@ast.CType::Enum(name=a_name, id=a_id, ..), @ast.CType::Enum(name=b_name, id=b_id, ..)) =>
-      if a_id != 0 && b_id != 0 { a_id == b_id } else { a_name == b_name }
+    (
+      @ast.CType::Struct(name=a_name, id=a_id, ..),
+      @ast.CType::Struct(name=b_name, id=b_id, ..),
+    ) => if a_id != 0 && b_id != 0 { a_id == b_id } else { a_name == b_name }
+    (
+      @ast.CType::Union(name=a_name, id=a_id, ..),
+      @ast.CType::Union(name=b_name, id=b_id, ..),
+    ) => if a_id != 0 && b_id != 0 { a_id == b_id } else { a_name == b_name }
+    (
+      @ast.CType::Enum(name=a_name, id=a_id, ..),
+      @ast.CType::Enum(name=b_name, id=b_id, ..),
+    ) => if a_id != 0 && b_id != 0 { a_id == b_id } else { a_name == b_name }
     _ => false
   }
 }
@@ -4594,7 +4837,7 @@ fn lookup_struct_fields(
   id : Int,
   is_union~ : Bool,
 ) -> Array[@ast.Field]? {
-  match lookup_struct_def(ctx, name, id, is_union=is_union) {
+  match lookup_struct_def(ctx, name, id, is_union~) {
     Some(def) => Some(def.fields)
     None => None
   }
@@ -4635,7 +4878,7 @@ pub fn resolve_struct_fields(
   is_union~ : Bool,
 ) -> Array[@ast.Field]? {
   if tag != "" {
-    if lookup_struct_fields(ctx, tag, tag_id, is_union=is_union) is Some(list) {
+    if lookup_struct_fields(ctx, tag, tag_id, is_union~) is Some(list) {
       return Some(list)
     }
   }
@@ -4772,12 +5015,7 @@ fn collect_field_index_cache_from_field(
       if nested is Some(def) {
         for nested_field in def.fields {
           collect_field_index_cache_from_field(
-            ctx,
-            nested_field,
-            top_index,
-            loc,
-            cache_by_name,
-            cache_by_id,
+            ctx, nested_field, top_index, loc, cache_by_name, cache_by_id,
           )
         }
       }
@@ -4794,12 +5032,7 @@ fn collect_field_index_cache_from_field(
       if nested is Some(def) {
         for nested_field in def.fields {
           collect_field_index_cache_from_field(
-            ctx,
-            nested_field,
-            top_index,
-            loc,
-            cache_by_name,
-            cache_by_id,
+            ctx, nested_field, top_index, loc, cache_by_name, cache_by_id,
           )
         }
       }
@@ -4840,14 +5073,8 @@ pub fn find_field_index_cached(
   let resolved = resolve_type(ctx, record_ty, loc) |> strip_top_qualifiers
   match resolved {
     @ast.CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) =>
-      match ensure_struct_fields(
-        ctx,
-        tag,
-        tag_id,
-        field_list,
-        is_union=false,
-        loc,
-      ) {
+      match
+        ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=false, loc) {
         None => None
         Some(def) =>
           if tag != "" &&
@@ -4857,11 +5084,20 @@ pub fn find_field_index_cached(
               ctx.struct_defs.contains(tag)
             }) {
             if id > 0 && tag_id != 0 {
-              let cache = match get_opt_by_id(ctx.struct_field_index_cache_by_id, tag_id) {
+              let cache = match
+                get_opt_by_id(ctx.struct_field_index_cache_by_id, tag_id) {
                 Some(existing) => existing
                 None => {
-                  let (built_name, built_id) = build_field_index_caches(ctx, def.fields, loc)
-                  set_opt_by_id(ctx.struct_field_index_cache_by_id, tag_id, built_id)
+                  let (built_name, built_id) = build_field_index_caches(
+                    ctx,
+                    def.fields,
+                    loc,
+                  )
+                  set_opt_by_id(
+                    ctx.struct_field_index_cache_by_id,
+                    tag_id,
+                    built_id,
+                  )
                   ctx.struct_field_index_cache.set(tag, built_name)
                   built_id
                 }
@@ -4882,10 +5118,18 @@ pub fn find_field_index_cached(
               let cache = match ctx.struct_field_index_cache.get(tag) {
                 Some(existing) => existing
                 None => {
-                  let (built_name, built_id) = build_field_index_caches(ctx, def.fields, loc)
+                  let (built_name, built_id) = build_field_index_caches(
+                    ctx,
+                    def.fields,
+                    loc,
+                  )
                   ctx.struct_field_index_cache.set(tag, built_name)
                   if tag_id != 0 {
-                    set_opt_by_id(ctx.struct_field_index_cache_by_id, tag_id, built_id)
+                    set_opt_by_id(
+                      ctx.struct_field_index_cache_by_id,
+                      tag_id,
+                      built_id,
+                    )
                   }
                   built_name
                 }
@@ -4897,14 +5141,8 @@ pub fn find_field_index_cached(
           }
       }
     @ast.CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) =>
-      match ensure_struct_fields(
-        ctx,
-        tag,
-        tag_id,
-        field_list,
-        is_union=true,
-        loc,
-      ) {
+      match
+        ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=true, loc) {
         None => None
         Some(def) =>
           if tag != "" &&
@@ -4914,11 +5152,20 @@ pub fn find_field_index_cached(
               ctx.union_defs.contains(tag)
             }) {
             if id > 0 && tag_id != 0 {
-              let cache = match get_opt_by_id(ctx.union_field_index_cache_by_id, tag_id) {
+              let cache = match
+                get_opt_by_id(ctx.union_field_index_cache_by_id, tag_id) {
                 Some(existing) => existing
                 None => {
-                  let (built_name, built_id) = build_field_index_caches(ctx, def.fields, loc)
-                  set_opt_by_id(ctx.union_field_index_cache_by_id, tag_id, built_id)
+                  let (built_name, built_id) = build_field_index_caches(
+                    ctx,
+                    def.fields,
+                    loc,
+                  )
+                  set_opt_by_id(
+                    ctx.union_field_index_cache_by_id,
+                    tag_id,
+                    built_id,
+                  )
                   ctx.union_field_index_cache.set(tag, built_name)
                   built_id
                 }
@@ -4939,10 +5186,18 @@ pub fn find_field_index_cached(
               let cache = match ctx.union_field_index_cache.get(tag) {
                 Some(existing) => existing
                 None => {
-                  let (built_name, built_id) = build_field_index_caches(ctx, def.fields, loc)
+                  let (built_name, built_id) = build_field_index_caches(
+                    ctx,
+                    def.fields,
+                    loc,
+                  )
                   ctx.union_field_index_cache.set(tag, built_name)
                   if tag_id != 0 {
-                    set_opt_by_id(ctx.union_field_index_cache_by_id, tag_id, built_id)
+                    set_opt_by_id(
+                      ctx.union_field_index_cache_by_id,
+                      tag_id,
+                      built_id,
+                    )
                   }
                   built_name
                 }
@@ -5072,7 +5327,8 @@ fn member_access_search(
               return Some(@ast.apply_qualifiers(field.ty, qual))
             }
             if field.name == "" {
-              if member_access_search(ctx, field.ty, combined, name, id, loc) is Some(found) {
+              if member_access_search(ctx, field.ty, combined, name, id, loc)
+                is Some(found) {
                 return Some(found)
               }
             }
@@ -5100,7 +5356,8 @@ fn member_access_search(
               return Some(@ast.apply_qualifiers(field.ty, qual))
             }
             if field.name == "" {
-              if member_access_search(ctx, field.ty, combined, name, id, loc) is Some(found) {
+              if member_access_search(ctx, field.ty, combined, name, id, loc)
+                is Some(found) {
                 return Some(found)
               }
             }
@@ -5149,10 +5406,15 @@ fn member_access_type(
         Some(def_val) =>
           if tag != "" {
             if id > 0 && tag_id != 0 {
-              let cache = match get_opt_by_id(ctx.struct_member_cache_by_id, tag_id) {
+              let cache = match
+                get_opt_by_id(ctx.struct_member_cache_by_id, tag_id) {
                 Some(existing) => existing
                 None => {
-                  let (built_name, built_id) = build_member_caches(ctx, def_val.fields, loc)
+                  let (built_name, built_id) = build_member_caches(
+                    ctx,
+                    def_val.fields,
+                    loc,
+                  )
                   set_opt_by_id(ctx.struct_member_cache_by_id, tag_id, built_id)
                   ctx.struct_member_cache.set(tag, built_name)
                   built_id
@@ -5170,10 +5432,18 @@ fn member_access_type(
               let cache = match ctx.struct_member_cache.get(tag) {
                 Some(existing) => existing
                 None => {
-                  let (built_name, built_id) = build_member_caches(ctx, def_val.fields, loc)
+                  let (built_name, built_id) = build_member_caches(
+                    ctx,
+                    def_val.fields,
+                    loc,
+                  )
                   ctx.struct_member_cache.set(tag, built_name)
                   if tag_id != 0 {
-                    set_opt_by_id(ctx.struct_member_cache_by_id, tag_id, built_id)
+                    set_opt_by_id(
+                      ctx.struct_member_cache_by_id,
+                      tag_id,
+                      built_id,
+                    )
                   }
                   built_name
                 }
@@ -5213,10 +5483,15 @@ fn member_access_type(
         Some(def_val) =>
           if tag != "" {
             if id > 0 && tag_id != 0 {
-              let cache = match get_opt_by_id(ctx.union_member_cache_by_id, tag_id) {
+              let cache = match
+                get_opt_by_id(ctx.union_member_cache_by_id, tag_id) {
                 Some(existing) => existing
                 None => {
-                  let (built_name, built_id) = build_member_caches(ctx, def_val.fields, loc)
+                  let (built_name, built_id) = build_member_caches(
+                    ctx,
+                    def_val.fields,
+                    loc,
+                  )
                   set_opt_by_id(ctx.union_member_cache_by_id, tag_id, built_id)
                   ctx.union_member_cache.set(tag, built_name)
                   built_id
@@ -5234,10 +5509,18 @@ fn member_access_type(
               let cache = match ctx.union_member_cache.get(tag) {
                 Some(existing) => existing
                 None => {
-                  let (built_name, built_id) = build_member_caches(ctx, def_val.fields, loc)
+                  let (built_name, built_id) = build_member_caches(
+                    ctx,
+                    def_val.fields,
+                    loc,
+                  )
                   ctx.union_member_cache.set(tag, built_name)
                   if tag_id != 0 {
-                    set_opt_by_id(ctx.union_member_cache_by_id, tag_id, built_id)
+                    set_opt_by_id(
+                      ctx.union_member_cache_by_id,
+                      tag_id,
+                      built_id,
+                    )
                   }
                   built_name
                 }
@@ -5378,7 +5661,14 @@ fn type_of_lvalue_optional(ctx : SemContext, expr : @ast.Expr) -> @ast.CType? {
         None => None
       }
     @ast.Expr::Member(base~, name~, id~, is_arrow~, loc~, ..) =>
-      member_access_type(ctx, type_of_expr_impl(ctx, base), name, id, is_arrow~, loc)
+      member_access_type(
+        ctx,
+        type_of_expr_impl(ctx, base),
+        name,
+        id,
+        is_arrow~,
+        loc,
+      )
     @ast.Expr::Unary(op=@ast.UnaryOp::Deref, expr=inner, loc~, ..) => {
       let inner_ty = type_of_expr_impl(ctx, inner)
       match strip_top_qualifiers(inner_ty) {
@@ -5413,8 +5703,11 @@ fn current_return_type(ctx : SemContext) -> @ast.CType {
 }
 
 ///|
-fn stmt_expr_result_type(ctx : SemContext, stmts : Array[@ast.Stmt], _loc : @source.SrcLoc) ->
-  @ast.CType {
+fn stmt_expr_result_type(
+  ctx : SemContext,
+  stmts : Array[@ast.Stmt],
+  _loc : @source.SrcLoc,
+) -> @ast.CType {
   record_stmt_expr(ctx)
   let return_type = current_return_type(ctx)
   push_scope(ctx)
@@ -5494,6 +5787,7 @@ fn ensure_expr_type_cache(ctx : SemContext, id : Int) -> Unit {
 }
 
 ///|
+
 ///|
 pub fn type_of_expr(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
   let id = @ast.expr_node_id(expr)
@@ -5568,7 +5862,8 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
       record_compound_literal(ctx, loc, node_id, resolved)
       decay_type(resolved)
     }
-    @ast.Expr::StmtExpr(stmts~, loc~, ..) => stmt_expr_result_type(ctx, stmts, loc)
+    @ast.Expr::StmtExpr(stmts~, loc~, ..) =>
+      stmt_expr_result_type(ctx, stmts, loc)
     @ast.Expr::Unary(op~, expr~, loc~, ..) =>
       match op {
         @ast.UnaryOp::Addr =>
@@ -5913,7 +6208,9 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
         match builtin_call_kind(ctx, name, id) {
           Some(BuiltinCallKind::ChooseExpr) => {
             if args.length() != 3 {
-              add_sem_error(ctx, loc, "__builtin_choose_expr expects 3 arguments")
+              add_sem_error(
+                ctx, loc, "__builtin_choose_expr expects 3 arguments",
+              )
               return default_int_type()
             }
             let cond = eval_const_expr(ctx, args[0], loc)
@@ -5960,9 +6257,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
                   match lookup_local_only(ctx, ap_id) {
                     None =>
                       add_sem_error(
-                        ctx,
-                        ap_loc,
-                        "__builtin_va_start expects a local variable",
+                        ctx, ap_loc, "__builtin_va_start expects a local variable",
                       )
                     Some(_) => ()
                   }
@@ -5979,14 +6274,18 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
             }
             return @ast.CType::Void
           }
-          Some(BuiltinCallKind::FrameAddress) |
-          Some(BuiltinCallKind::ReturnAddress) => {
+          Some(BuiltinCallKind::FrameAddress)
+          | Some(BuiltinCallKind::ReturnAddress) => {
             if args.length() != 1 {
               add_sem_error(ctx, loc, "\{name} expects 1 argument")
             } else {
               let level = eval_const_expr(ctx, args[0], loc)
               if level < 0 {
-                add_sem_error(ctx, loc, "\{name} only takes non-negative integers")
+                add_sem_error(
+                  ctx,
+                  loc,
+                  "\{name} only takes non-negative integers",
+                )
               }
             }
             return void_pointer_type()
@@ -6001,7 +6300,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
         @ast.Expr::Ident(name~, id~, loc=ident_loc, ..) =>
           match lookup_value(ctx, name, id) {
             Some(ty) => ty
-            None => {
+            None =>
               match builtin_func_sig_from_ident(ctx, name, id) {
                 Some(sig) => {
                   add_function_sig(ctx, name, id, sig, ident_loc, is_def=false)
@@ -6031,7 +6330,6 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
                   )
                 }
               }
-            }
           }
         _ => type_of_expr(ctx, callee)
       }
@@ -6047,7 +6345,13 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
       }
       match fn_ty {
         Some(
-          @ast.CType::Function(return_type~, params~, varargs~, is_old_style~, ..)
+          @ast.CType::Function(
+            return_type~,
+            params~,
+            varargs~,
+            is_old_style~,
+            ..
+          )
         ) => {
           if !is_old_style {
             if varargs {
@@ -6301,7 +6605,10 @@ fn builtin_func_sig_by_name(name : String) -> FuncSig? {
         is_old_style: false,
         call_conv: @ast.CallConv::Default,
       })
-    "__builtin_strcpy" | "__builtin_strncpy" | "__builtin_strcat" | "__builtin_strncat" =>
+    "__builtin_strcpy"
+    | "__builtin_strncpy"
+    | "__builtin_strcat"
+    | "__builtin_strncat" =>
       Some({
         return_type: charp,
         params: if name == "__builtin_strncpy" || name == "__builtin_strncat" {
@@ -6651,12 +6958,11 @@ fn declare_local(
   if scope_id == 0 || id <= 0 {
     return
   }
-  let prev_scope =
-    if id <= ctx.local_scope_ids_by_id.length() {
-      ctx.local_scope_ids_by_id[id - 1]
-    } else {
-      0
-    }
+  let prev_scope = if id <= ctx.local_scope_ids_by_id.length() {
+    ctx.local_scope_ids_by_id[id - 1]
+  } else {
+    0
+  }
   if prev_scope == scope_id {
     add_sem_error(ctx, loc, "redefinition of '\{name}'")
   } else {
@@ -6677,7 +6983,11 @@ fn declare_global(
     return
   }
   let mut updated : @ast.CType? = None
-  let existing = if id > 0 { get_global_by_id(ctx, id) } else { ctx.globals.get(name) }
+  let existing = if id > 0 {
+    get_global_by_id(ctx, id)
+  } else {
+    ctx.globals.get(name)
+  }
   match existing {
     None => {
       ctx.globals.set(name, ty)
@@ -6700,7 +7010,10 @@ fn declare_global(
 }
 
 ///|
-fn merge_global_decl_type(existing : @ast.CType, incoming : @ast.CType) -> @ast.CType {
+fn merge_global_decl_type(
+  existing : @ast.CType,
+  incoming : @ast.CType,
+) -> @ast.CType {
   match (existing, incoming) {
     (@ast.CType::Qualified(qual~, base~), _) => {
       let merged = merge_global_decl_type(base, incoming)
@@ -6715,7 +7028,10 @@ fn merge_global_decl_type(existing : @ast.CType, incoming : @ast.CType) -> @ast.
       @ast.CType::Attributed(attrs=attrs_b, base=base_b),
     ) => {
       let merged_base = merge_global_decl_type(base_a, base_b)
-      @ast.CType::Attributed(attrs=@ast.merge_attrs(attrs_a, attrs_b), base=merged_base)
+      @ast.CType::Attributed(
+        attrs=@ast.merge_attrs(attrs_a, attrs_b),
+        base=merged_base,
+      )
     }
     (@ast.CType::Attributed(attrs=attrs_a, base=base_a), _) => {
       let merged = merge_global_decl_type(base_a, incoming)
@@ -6752,12 +7068,24 @@ fn merge_global_decl_type(existing : @ast.CType, incoming : @ast.CType) -> @ast.
 
 ///|
 fn lookup_value(ctx : SemContext, name : String, id : Int) -> @ast.CType? {
-  let mut found = if id > 0 { get_opt_by_id(ctx.local_values_by_id, id) } else { None }
-  if found is None {
-    found = if id > 0 { get_global_by_id(ctx, id) } else { ctx.globals.get(name) }
+  let mut found = if id > 0 {
+    get_opt_by_id(ctx.local_values_by_id, id)
+  } else {
+    None
   }
   if found is None {
-    let sig = if id > 0 { get_function_by_id(ctx, id) } else { ctx.functions.get(name) }
+    found = if id > 0 {
+      get_global_by_id(ctx, id)
+    } else {
+      ctx.globals.get(name)
+    }
+  }
+  if found is None {
+    let sig = if id > 0 {
+      get_function_by_id(ctx, id)
+    } else {
+      ctx.functions.get(name)
+    }
     if sig is Some(value) {
       found = Some(
         @ast.CType::Function(
@@ -6774,14 +7102,20 @@ fn lookup_value(ctx : SemContext, name : String, id : Int) -> @ast.CType? {
     if enum_const_exists(ctx, name, id) {
       found = Some(default_int_type())
     } else if name == "__func__" {
-      let elem = @ast.apply_qualifiers(char_type(), @ast.with_const(@ast.empty_qual()))
+      let elem = @ast.apply_qualifiers(
+        char_type(),
+        @ast.with_const(@ast.empty_qual()),
+      )
       let len = match ctx.current_func_name {
         None => 1
         Some(func) => func.length() + 1
       }
       found = Some(@ast.CType::Array(elem~, size=Some(len), size_expr=None))
     } else if name == "__FUNCTION__" || name == "__PRETTY_FUNCTION__" {
-      let elem = @ast.apply_qualifiers(char_type(), @ast.with_const(@ast.empty_qual()))
+      let elem = @ast.apply_qualifiers(
+        char_type(),
+        @ast.with_const(@ast.empty_qual()),
+      )
       let len = match ctx.current_func_name {
         None => 1
         Some(func) => func.length() + 1
@@ -6825,7 +7159,11 @@ pub fn pop_scope(ctx : SemContext) -> Unit {
 }
 
 ///|
-pub fn add_sem_error(ctx : SemContext, loc : @source.SrcLoc, message : String) -> Unit {
+pub fn add_sem_error(
+  ctx : SemContext,
+  loc : @source.SrcLoc,
+  message : String,
+) -> Unit {
   @diag.add_error(ctx.diags, loc, message)
 }
 

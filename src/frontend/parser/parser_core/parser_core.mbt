@@ -42,8 +42,9 @@ fn new_parser(pp : @preproc.Preprocessor) -> Parser {
   let typedef_scope_levels : Array[Int] = Array::new(capacity=id_capacity)
   let typedef_scope_stack : Array[Int] = Array::new(capacity=scope_capacity)
   typedef_scope_stack.push(1)
-  let typedef_overrides : Array[Array[(Int, @ast.CType?, Int)]] =
-    Array::new(capacity=override_capacity)
+  let typedef_overrides : Array[Array[(Int, @ast.CType?, Int)]] = Array::new(
+    capacity=override_capacity,
+  )
   typedef_overrides.push([])
   let pending_typedef_scopes : Array[Bool] = Array::new(capacity=scope_capacity)
   let buffer : Array[@tokens.Token] = Array::new(capacity=buffer_capacity)
@@ -56,10 +57,7 @@ fn new_parser(pp : @preproc.Preprocessor) -> Parser {
     let (name, ty) = def
     let (_, id) = pp.interner.intern_view_with_id(name[:])
     ensure_typedef_capacity_with(
-      typedef_counts,
-      typedef_values,
-      typedef_scope_levels,
-      id,
+      typedef_counts, typedef_values, typedef_scope_levels, id,
     )
     typedef_counts[id - 1] = 1
     typedef_values[id - 1] = Some(ty)
@@ -67,11 +65,15 @@ fn new_parser(pp : @preproc.Preprocessor) -> Parser {
   }
   let current = @preproc.next_pp_token(pp)
   let lookahead = @preproc.next_pp_token(pp)
-  let (_, builtin_types_compatible_p) =
-    pp.interner.intern_view_with_id("__builtin_types_compatible_p"[:])
-  let (_, builtin_offsetof) =
-    pp.interner.intern_view_with_id("__builtin_offsetof"[:])
-  let (_, builtin_va_arg) = pp.interner.intern_view_with_id("__builtin_va_arg"[:])
+  let (_, builtin_types_compatible_p) = pp.interner.intern_view_with_id(
+    "__builtin_types_compatible_p"[:],
+  )
+  let (_, builtin_offsetof) = pp.interner.intern_view_with_id(
+    "__builtin_offsetof"[:],
+  )
+  let (_, builtin_va_arg) = pp.interner.intern_view_with_id(
+    "__builtin_va_arg"[:],
+  )
   {
     pp,
     current,
@@ -104,7 +106,10 @@ fn new_expr_id(p : Parser) -> Int {
 }
 
 ///|
-fn special_ident_kind(tok : @tokens.Token, ids : @tokens.KeywordIds) -> @tokens.TokenKind? {
+fn special_ident_kind(
+  tok : @tokens.Token,
+  ids : @tokens.KeywordIds,
+) -> @tokens.TokenKind? {
   match @tokens.keyword_kind_from_id(@tokens.token_id(tok), ids) {
     Some(kind) =>
       match kind {
@@ -131,7 +136,9 @@ fn special_ident_kind(tok : @tokens.Token, ids : @tokens.KeywordIds) -> @tokens.
 }
 
 ///|
-pub fn parse_translation_unit(pp : @preproc.Preprocessor) -> @ast.TranslationUnit {
+pub fn parse_translation_unit(
+  pp : @preproc.Preprocessor,
+) -> @ast.TranslationUnit {
   let parser = new_parser(pp)
   parse_translation_unit_with(parser)
 }
@@ -162,7 +169,8 @@ fn parse_translation_unit_with(p : Parser) -> @ast.TranslationUnit {
 fn parse_decl(p : Parser) -> Array[@ast.Decl]? {
   if match_token(p, @tokens.TokenKind::KwStaticAssert) is Some(assert_tok) {
     let static_assert = parse_static_assert(p, assert_tok.loc)
-    expect(p, @tokens.TokenKind::Semicolon, "expected ';' after _Static_assert") |> ignore
+    expect(p, @tokens.TokenKind::Semicolon, "expected ';' after _Static_assert")
+    |> ignore
     return Some([@ast.Decl::StaticAssert(static_assert)])
   }
   if match_token(p, @tokens.TokenKind::KwAsm) is Some(asm_tok) {
@@ -244,7 +252,10 @@ fn parse_decl(p : Parser) -> Array[@ast.Decl]? {
                     match adjusted_ty {
                       @ast.CType::Function(return_type~, ..) => {
                         let mut final_params = params
-                        let mut lbrace = match_token(p, @tokens.TokenKind::LBrace)
+                        let mut lbrace = match_token(
+                          p,
+                          @tokens.TokenKind::LBrace,
+                        )
                         if lbrace is None &&
                           decl.is_old_style &&
                           is_type_start(p, peek_token(p)) {
@@ -366,7 +377,12 @@ fn parse_decl(p : Parser) -> Array[@ast.Decl]? {
           }
           break
         }
-        expect(p, @tokens.TokenKind::Semicolon, "expected ';' after declaration") |> ignore
+        expect(
+          p,
+          @tokens.TokenKind::Semicolon,
+          "expected ';' after declaration",
+        )
+        |> ignore
         Some(decls)
       }
     }
@@ -454,13 +470,20 @@ fn parse_old_style_param_decls(
         if !any_decl {
           add_parse_error(p, specs.loc, "expected parameter declarator")
         }
-        ignore(expect(p, @tokens.TokenKind::Semicolon, "expected ';' after parameter declaration"))
+        ignore(
+          expect(
+            p,
+            @tokens.TokenKind::Semicolon,
+            "expected ';' after parameter declaration",
+          ),
+        )
       }
     }
   }
   updated
 }
 
+///|
 fn strip_type_qualifiers(ty : @ast.CType) -> @ast.CType {
   match ty {
     @ast.CType::Qualified(base~, ..) => strip_type_qualifiers(base)
@@ -563,7 +586,11 @@ fn parse_type_specifiers(
         saw_any = true
         continue
       }
-      @tokens.TokenKind::KwExtern | @tokens.TokenKind::KwStatic | @tokens.TokenKind::KwAuto | @tokens.TokenKind::KwRegister | @tokens.TokenKind::KwInline =>
+      @tokens.TokenKind::KwExtern
+      | @tokens.TokenKind::KwStatic
+      | @tokens.TokenKind::KwAuto
+      | @tokens.TokenKind::KwRegister
+      | @tokens.TokenKind::KwInline =>
         if allow_storage {
           match kind {
             @tokens.TokenKind::KwInline => is_inline = true
@@ -618,7 +645,12 @@ fn parse_type_specifiers(
               return None
             }
             Some(ty) => {
-              expect(p, @tokens.TokenKind::RParen, "expected ')' after _Atomic type") |> ignore
+              expect(
+                p,
+                @tokens.TokenKind::RParen,
+                "expected ')' after _Atomic type",
+              )
+              |> ignore
               if base is Some(_) {
                 add_parse_error(p, tok.loc, "multiple type specifiers")
               } else {
@@ -863,12 +895,11 @@ fn parse_type_specifiers(
         } else {
           @ast.CIntKind::Int
         }
-        let unsigned =
-          if kind == @ast.CIntKind::Char && signedness == 0 {
-            @util.char_is_unsigned
-          } else {
-            signedness == 2
-          }
+        let unsigned = if kind == @ast.CIntKind::Char && signedness == 0 {
+          @util.char_is_unsigned
+        } else {
+          signedness == 2
+        }
         @ast.CType::Int(kind~, unsigned~)
       }
   }
@@ -938,13 +969,15 @@ fn parse_typeof_spec(p : Parser, loc : @source.SrcLoc) -> @ast.CType? {
         return None
       }
       Some(ty) => {
-        expect(p, @tokens.TokenKind::RParen, "expected ')' after typeof type") |> ignore
+        expect(p, @tokens.TokenKind::RParen, "expected ')' after typeof type")
+        |> ignore
         return Some(ty)
       }
     }
   }
   let expr = parse_expr(p)
-  expect(p, @tokens.TokenKind::RParen, "expected ')' after typeof expression") |> ignore
+  expect(p, @tokens.TokenKind::RParen, "expected ')' after typeof expression")
+  |> ignore
   Some(@ast.CType::TypeofExpr(expr~))
 }
 
@@ -980,13 +1013,15 @@ fn parse_attr_string(p : Parser, loc : @source.SrcLoc) -> String? {
 
 ///|
 fn parse_static_assert(p : Parser, loc : @source.SrcLoc) -> @ast.StaticAssert {
-  expect(p, @tokens.TokenKind::LParen, "expected '(' after _Static_assert") |> ignore
+  expect(p, @tokens.TokenKind::LParen, "expected '(' after _Static_assert")
+  |> ignore
   let expr = parse_expr_cond(p)
   let mut message : String? = None
   if match_token(p, @tokens.TokenKind::Comma) is Some(_) {
     message = parse_attr_string(p, loc)
   }
-  expect(p, @tokens.TokenKind::RParen, "expected ')' after _Static_assert") |> ignore
+  expect(p, @tokens.TokenKind::RParen, "expected ')' after _Static_assert")
+  |> ignore
   { expr, message, loc }
 }
 
@@ -1012,7 +1047,12 @@ fn parse_asm_operands(p : Parser) -> Array[@ast.AsmOperand] {
         None => ""
         Some(tok) => token_lexeme(p, tok)
       }
-      expect(p, @tokens.TokenKind::RBracket, "expected ']' after asm operand name") |> ignore
+      expect(
+        p,
+        @tokens.TokenKind::RBracket,
+        "expected ']' after asm operand name",
+      )
+      |> ignore
       if id == "" {
         None
       } else {
@@ -1022,9 +1062,11 @@ fn parse_asm_operands(p : Parser) -> Array[@ast.AsmOperand] {
       None
     }
     let constraint = parse_attr_string(p, start_loc).unwrap_or("")
-    expect(p, @tokens.TokenKind::LParen, "expected '(' after asm constraint") |> ignore
+    expect(p, @tokens.TokenKind::LParen, "expected '(' after asm constraint")
+    |> ignore
     let expr = parse_expr(p)
-    expect(p, @tokens.TokenKind::RParen, "expected ')' after asm operand") |> ignore
+    expect(p, @tokens.TokenKind::RParen, "expected ')' after asm operand")
+    |> ignore
     operands.push({ name, constraint, expr, loc: start_loc })
     if match_token(p, @tokens.TokenKind::Comma) is Some(_) {
       continue
@@ -1128,7 +1170,12 @@ fn parse_asm_stmt(p : Parser, loc : @source.SrcLoc) -> @ast.AsmStmt {
 ///|
 fn is_attr_name_token(kind : @tokens.TokenKind) -> Bool {
   match kind {
-    @tokens.TokenKind::Ident | @tokens.TokenKind::KwConst | @tokens.TokenKind::KwVolatile | @tokens.TokenKind::KwRestrict | @tokens.TokenKind::KwInline | @tokens.TokenKind::KwSigned => true
+    @tokens.TokenKind::Ident
+    | @tokens.TokenKind::KwConst
+    | @tokens.TokenKind::KwVolatile
+    | @tokens.TokenKind::KwRestrict
+    | @tokens.TokenKind::KwInline
+    | @tokens.TokenKind::KwSigned => true
     _ => false
   }
 }
@@ -1184,7 +1231,12 @@ fn parse_attribute_clause(p : Parser, loc : @source.SrcLoc) -> @ast.Attributes {
         }
         attrs = @ast.merge_attrs(attrs, @ast.attrs_with(aligned=Some(spec)))
         if has_args {
-          expect(p, @tokens.TokenKind::RParen, "expected ')' after aligned attribute") |> ignore
+          expect(
+            p,
+            @tokens.TokenKind::RParen,
+            "expected ')' after aligned attribute",
+          )
+          |> ignore
         }
       }
       "packed" => {
@@ -1229,7 +1281,8 @@ fn parse_attribute_clause(p : Parser, loc : @source.SrcLoc) -> @ast.Attributes {
         } else {
           let section = parse_attr_string(p, name_tok.loc)
           attrs = @ast.merge_attrs(attrs, @ast.attrs_with(section~))
-          expect(p, @tokens.TokenKind::RParen, "expected ')' after section") |> ignore
+          expect(p, @tokens.TokenKind::RParen, "expected ')' after section")
+          |> ignore
         }
       "alias" =>
         if !has_args {
@@ -1237,7 +1290,8 @@ fn parse_attribute_clause(p : Parser, loc : @source.SrcLoc) -> @ast.Attributes {
         } else {
           let alias_name = parse_attr_string(p, name_tok.loc)
           attrs = @ast.merge_attrs(attrs, @ast.attrs_with(alias_name~))
-          expect(p, @tokens.TokenKind::RParen, "expected ')' after alias") |> ignore
+          expect(p, @tokens.TokenKind::RParen, "expected ')' after alias")
+          |> ignore
         }
       "visibility" =>
         if !has_args {
@@ -1260,19 +1314,27 @@ fn parse_attribute_clause(p : Parser, loc : @source.SrcLoc) -> @ast.Attributes {
             None => None
           }
           attrs = @ast.merge_attrs(attrs, @ast.attrs_with(visibility=value))
-          expect(p, @tokens.TokenKind::RParen, "expected ')' after visibility") |> ignore
+          expect(p, @tokens.TokenKind::RParen, "expected ')' after visibility")
+          |> ignore
         }
       "cleanup" =>
         if !has_args {
           add_parse_error(p, name_tok.loc, "expected '(' after cleanup")
         } else {
           if expect_ident(p, "expected cleanup function name") is Some(id) {
-            attrs = @ast.merge_attrs(attrs, @ast.attrs_with(cleanup=Some(token_lexeme(p, id))))
+            attrs = @ast.merge_attrs(
+              attrs,
+              @ast.attrs_with(cleanup=Some(token_lexeme(p, id))),
+            )
           }
-          expect(p, @tokens.TokenKind::RParen, "expected ')' after cleanup") |> ignore
+          expect(p, @tokens.TokenKind::RParen, "expected ')' after cleanup")
+          |> ignore
         }
       "cdecl" => {
-        attrs = @ast.merge_attrs(attrs, @ast.attrs_with(call_conv=Some(@ast.CallConv::Cdecl)))
+        attrs = @ast.merge_attrs(
+          attrs,
+          @ast.attrs_with(call_conv=Some(@ast.CallConv::Cdecl)),
+        )
         if has_args {
           skip_paren_group(p)
         }
@@ -1310,15 +1372,15 @@ fn parse_attribute_clause(p : Parser, loc : @source.SrcLoc) -> @ast.Attributes {
         } else {
           let raw = if peek_token(p).kind is @tokens.TokenKind::IntLit {
             let tok = advance_token(p)
-            let parsed = try @strconv.parse_int(
-              token_lexeme(p, tok),
-              base=0,
-            ) catch {
+            let parsed = try
+              @strconv.parse_int(token_lexeme(p, tok), base=0)
+            catch {
               _ => 0
             } noraise {
               v => v
             }
-            expect(p, @tokens.TokenKind::RParen, "expected ')' after regparm") |> ignore
+            expect(p, @tokens.TokenKind::RParen, "expected ')' after regparm")
+            |> ignore
             parsed
           } else {
             skip_paren_group(p)
@@ -1368,7 +1430,8 @@ fn parse_attribute_clause(p : Parser, loc : @source.SrcLoc) -> @ast.Attributes {
     }
     break
   }
-  expect(p, @tokens.TokenKind::RParen, "expected ')' after attribute list") |> ignore
+  expect(p, @tokens.TokenKind::RParen, "expected ')' after attribute list")
+  |> ignore
   expect(p, @tokens.TokenKind::RParen, "expected ')' after attribute") |> ignore
   attrs
 }
@@ -1384,7 +1447,10 @@ fn parse_attributes(p : Parser) -> @ast.Attributes {
 }
 
 ///|
-fn parse_pointer_chain(p : Parser, ty_in : @ast.CType) -> (@ast.CType, @ast.Attributes) {
+fn parse_pointer_chain(
+  p : Parser,
+  ty_in : @ast.CType,
+) -> (@ast.CType, @ast.Attributes) {
   let mut ty = ty_in
   let mut attrs = @ast.empty_attrs()
   while match_token(p, @tokens.TokenKind::Star) is Some(_) {
@@ -1473,7 +1539,10 @@ fn parse_declarator(p : Parser, base : @ast.CType) -> Declarator? {
         attrs = @ast.merge_attrs(attrs, suffix_attrs)
         if match_token(p, @tokens.TokenKind::KwAsm) is Some(asm_tok) {
           if parse_asm_label(p, asm_tok.loc) is Some(label) {
-            attrs = @ast.merge_attrs(attrs, @ast.attrs_with(asm_label=Some(label)))
+            attrs = @ast.merge_attrs(
+              attrs,
+              @ast.attrs_with(asm_label=Some(label)),
+            )
           }
           attrs = @ast.merge_attrs(attrs, parse_attributes(p))
         }
@@ -1570,7 +1639,12 @@ fn parse_initializer(p : Parser) -> @ast.Initializer {
         }
         continue
       }
-      expect(p, @tokens.TokenKind::RBrace, "expected '}' after initializer list") |> ignore
+      expect(
+        p,
+        @tokens.TokenKind::RBrace,
+        "expected '}' after initializer list",
+      )
+      |> ignore
       break
     }
     return @ast.Initializer::List(items~, loc=lbrace.loc)
@@ -1580,7 +1654,9 @@ fn parse_initializer(p : Parser) -> @ast.Initializer {
 }
 
 ///|
-fn parse_designator_list(p : Parser) -> (Array[@ast.InitDesignator], @source.SrcLoc) {
+fn parse_designator_list(
+  p : Parser,
+) -> (Array[@ast.InitDesignator], @source.SrcLoc) {
   let designators : Array[@ast.InitDesignator] = Array::new(capacity=2)
   let mut start_loc = peek_token(p).loc
   while true {
@@ -1598,16 +1674,19 @@ fn parse_designator_list(p : Parser) -> (Array[@ast.InitDesignator], @source.Src
       let lbrack = advance_token(p)
       start_loc = lbrack.loc
       let start = parse_expr_cond(p)
-      let end_expr =
-        if p.current.kind is @tokens.TokenKind::Ellipsis {
-          advance_token(p) |> ignore
-          Some(parse_expr_cond(p))
-        } else {
-          None
-        }
-      expect(p, @tokens.TokenKind::RBracket, "expected ']' after designator") |> ignore
+      let end_expr = if p.current.kind is @tokens.TokenKind::Ellipsis {
+        advance_token(p) |> ignore
+        Some(parse_expr_cond(p))
+      } else {
+        None
+      }
+      expect(p, @tokens.TokenKind::RBracket, "expected ']' after designator")
+      |> ignore
       match end_expr {
-        None => designators.push(@ast.InitDesignator::Index(expr=start, loc=lbrack.loc))
+        None =>
+          designators.push(
+            @ast.InitDesignator::Index(expr=start, loc=lbrack.loc),
+          )
         Some(end) =>
           designators.push(
             @ast.InitDesignator::IndexRange(start~, end~, loc=lbrack.loc),
@@ -1615,10 +1694,12 @@ fn parse_designator_list(p : Parser) -> (Array[@ast.InitDesignator], @source.Src
       }
       continue
     }
-    if peek_token(p).kind is @tokens.TokenKind::Ident && peek_kind(p, 1) is @tokens.TokenKind::Colon {
+    if peek_token(p).kind is @tokens.TokenKind::Ident &&
+      peek_kind(p, 1) is @tokens.TokenKind::Colon {
       let name_tok = advance_token(p)
       start_loc = name_tok.loc
-      expect(p, @tokens.TokenKind::Colon, "expected ':' after designator") |> ignore
+      expect(p, @tokens.TokenKind::Colon, "expected ':' after designator")
+      |> ignore
       designators.push(
         @ast.InitDesignator::Field(
           name=token_lexeme(p, name_tok),
@@ -1655,11 +1736,7 @@ fn is_paren_pointer_declarator(p : Parser) -> Bool {
         }
         depth = depth - 1
       }
-      @tokens.TokenKind::Star => {
-        if depth == 0 {
-          return true
-        }
-      }
+      @tokens.TokenKind::Star => if depth == 0 { return true }
       _ => ()
     }
     i = i + 1
@@ -1687,7 +1764,10 @@ priv struct ParenDeclParts {
 }
 
 ///|
-fn apply_decl_wrappers(base : @ast.CType, wrappers : Array[DeclWrapper]) -> @ast.CType {
+fn apply_decl_wrappers(
+  base : @ast.CType,
+  wrappers : Array[DeclWrapper],
+) -> @ast.CType {
   let mut ty = base
   let mut i = wrappers.length()
   while i > 0 {
@@ -1721,7 +1801,8 @@ fn parse_inner_suffix_wrappers(
   let wrappers : Array[DeclWrapper] = []
   while match_token(p, @tokens.TokenKind::LBracket) is Some(_) {
     let (size, size_expr) = parse_array_size(p)
-    expect(p, @tokens.TokenKind::RBracket, "expected ']' after array size") |> ignore
+    expect(p, @tokens.TokenKind::RBracket, "expected ']' after array size")
+    |> ignore
     wrappers.push(DeclWrapper::Array(size, size_expr))
   }
   let mut params : Array[@ast.Param]? = None
@@ -1745,7 +1826,8 @@ fn parse_suffix_wrappers(
   let wrappers : Array[DeclWrapper] = []
   while match_token(p, @tokens.TokenKind::LBracket) is Some(_) {
     let (size, size_expr) = parse_array_size(p)
-    expect(p, @tokens.TokenKind::RBracket, "expected ']' after array size") |> ignore
+    expect(p, @tokens.TokenKind::RBracket, "expected ']' after array size")
+    |> ignore
     wrappers.push(DeclWrapper::Array(size, size_expr))
   }
   let mut params : Array[@ast.Param]? = None
@@ -1853,7 +1935,10 @@ fn parse_paren_pointer_declarator(p : Parser, base : @ast.CType) -> Declarator? 
       let mut attrs = @ast.merge_attrs(parts.attrs, suffix_attrs)
       if match_token(p, @tokens.TokenKind::KwAsm) is Some(asm_tok) {
         if parse_asm_label(p, asm_tok.loc) is Some(label) {
-          attrs = @ast.merge_attrs(attrs, @ast.attrs_with(asm_label=Some(label)))
+          attrs = @ast.merge_attrs(
+            attrs,
+            @ast.attrs_with(asm_label=Some(label)),
+          )
         }
         attrs = @ast.merge_attrs(attrs, parse_attributes(p))
       }
@@ -1915,7 +2000,8 @@ fn parse_declarator_suffix(
   let array_sizes : Array[(Int?, @ast.Expr?)] = []
   while match_token(p, @tokens.TokenKind::LBracket) is Some(_) {
     let size = parse_array_size(p)
-    expect(p, @tokens.TokenKind::RBracket, "expected ']' after array size") |> ignore
+    expect(p, @tokens.TokenKind::RBracket, "expected ']' after array size")
+    |> ignore
     array_sizes.push(size)
   }
   let mut i = array_sizes.length()
@@ -1955,20 +2041,29 @@ fn parse_array_size(p : Parser) -> (Int?, @ast.Expr?) {
     ignore(advance_token(p))
   }
   let loc = peek_token(p).loc
-  if peek_token(p).kind is @tokens.TokenKind::IntLit && peek_kind(p, 1) is @tokens.TokenKind::RBracket {
+  if peek_token(p).kind is @tokens.TokenKind::IntLit &&
+    peek_kind(p, 1) is @tokens.TokenKind::RBracket {
     let tok = advance_token(p)
     let text = token_lexeme(p, tok)
     match @ast.parse_int64_literal(text) {
       Some(v) =>
         if v < 0 {
           add_parse_error(p, loc, "invalid array size")
-          let expr = @ast.Expr::IntLit(value=text, node_id=new_expr_id(p), loc=tok.loc)
+          let expr = @ast.Expr::IntLit(
+            value=text,
+            node_id=new_expr_id(p),
+            loc=tok.loc,
+          )
           return (None, Some(expr))
         } else {
           return (Some(v.to_int()), None)
         }
       None => {
-        let expr = @ast.Expr::IntLit(value=text, node_id=new_expr_id(p), loc=tok.loc)
+        let expr = @ast.Expr::IntLit(
+          value=text,
+          node_id=new_expr_id(p),
+          loc=tok.loc,
+        )
         return (None, Some(expr))
       }
     }
@@ -1996,7 +2091,10 @@ fn next_anon_tag(p : Parser) -> (String, Int) {
 }
 
 ///|
-fn parse_struct_type(p : Parser, is_union~ : Bool) -> (@ast.CType, @source.SrcLoc)? {
+fn parse_struct_type(
+  p : Parser,
+  is_union~ : Bool,
+) -> (@ast.CType, @source.SrcLoc)? {
   let kw = advance_token(p)
   let mut attrs = parse_attributes(p)
   let mut name = ""
@@ -2043,7 +2141,12 @@ fn parse_struct_fields(p : Parser) -> Array[@ast.RecordItem] {
   while !is_at_end(p) && peek_token(p).kind != @tokens.TokenKind::RBrace {
     if match_token(p, @tokens.TokenKind::KwStaticAssert) is Some(assert_tok) {
       let static_assert = parse_static_assert(p, assert_tok.loc)
-      expect(p, @tokens.TokenKind::Semicolon, "expected ';' after _Static_assert") |> ignore
+      expect(
+        p,
+        @tokens.TokenKind::Semicolon,
+        "expected ';' after _Static_assert",
+      )
+      |> ignore
       items.push(@ast.RecordItem::StaticAssert(static_assert))
       continue
     }
@@ -2053,7 +2156,10 @@ fn parse_struct_fields(p : Parser) -> Array[@ast.RecordItem] {
         break
       }
       Some(specs) => {
-        let base = @ast.apply_type_attrs(specs.ty, @ast.type_attrs_from(specs.attrs))
+        let base = @ast.apply_type_attrs(
+          specs.ty,
+          @ast.type_attrs_from(specs.attrs),
+        )
         let loc = specs.loc
         let is_typedef = specs.is_typedef
         if is_typedef {
@@ -2084,10 +2190,16 @@ fn parse_struct_fields(p : Parser) -> Array[@ast.RecordItem] {
             let stripped = strip_type_qualifiers(field_decl.ty)
             let allow_anon = field_decl.name == "" &&
               bit_width is None &&
-              (stripped is @ast.CType::Struct(..) || stripped is @ast.CType::Union(..))
+              (
+                stripped is @ast.CType::Struct(..) ||
+                stripped is @ast.CType::Union(..)
+              )
             if field_decl.name != "" || bit_width is Some(_) || allow_anon {
               any_field = true
-              let combined_attrs = @ast.merge_attrs(specs.attrs, field_decl.attrs)
+              let combined_attrs = @ast.merge_attrs(
+                specs.attrs,
+                field_decl.attrs,
+              )
               let adjusted_ty = @ast.apply_call_conv_to_type(
                 field_decl.ty,
                 @ast.normalize_call_conv(combined_attrs.call_conv),
@@ -2114,7 +2226,12 @@ fn parse_struct_fields(p : Parser) -> Array[@ast.RecordItem] {
         if !any_field {
           add_parse_error(p, loc, "expected field declarator")
         }
-        expect(p, @tokens.TokenKind::Semicolon, "expected ';' after struct field") |> ignore
+        expect(
+          p,
+          @tokens.TokenKind::Semicolon,
+          "expected ';' after struct field",
+        )
+        |> ignore
       }
     }
   }
@@ -2201,7 +2318,8 @@ fn parse_param_list(p : Parser) -> (Array[@ast.Param], Bool, Bool) {
   } else {
     None
   }
-  if first.kind is @tokens.TokenKind::Ident && first_mapped is None &&
+  if first.kind is @tokens.TokenKind::Ident &&
+    first_mapped is None &&
     !has_typedef(p, first) {
     old_style = true
     while true {
@@ -2220,7 +2338,8 @@ fn parse_param_list(p : Parser) -> (Array[@ast.Param], Bool, Bool) {
       }
       break
     }
-    expect(p, @tokens.TokenKind::RParen, "expected ')' after parameter list") |> ignore
+    expect(p, @tokens.TokenKind::RParen, "expected ')' after parameter list")
+    |> ignore
     return (params, varargs, old_style)
   }
   if peek_token(p).kind is @tokens.TokenKind::KwVoid {
@@ -2228,31 +2347,41 @@ fn parse_param_list(p : Parser) -> (Array[@ast.Param], Bool, Bool) {
     if match_token(p, @tokens.TokenKind::RParen) is Some(_) {
       return (params, varargs, false)
     }
-    if parse_param_after_base(p, @ast.CType::Void, @ast.empty_attrs(), void_tok.loc) is Some(param) {
+    if parse_param_after_base(
+        p,
+        @ast.CType::Void,
+        @ast.empty_attrs(),
+        void_tok.loc,
+      )
+      is Some(param) {
       params.push(param)
     }
-  } else {
-    if parse_type_specifiers(p, allow_storage=false, allow_typedef=false) is Some(specs) {
-      if parse_param_after_base(p, specs.ty, specs.attrs, specs.loc) is Some(param) {
-        params.push(param)
-      }
+  } else if parse_type_specifiers(p, allow_storage=false, allow_typedef=false)
+    is Some(specs) {
+    if parse_param_after_base(p, specs.ty, specs.attrs, specs.loc)
+      is Some(param) {
+      params.push(param)
     }
   }
   while true {
     if match_token(p, @tokens.TokenKind::Comma) is Some(_) {
       if match_token(p, @tokens.TokenKind::Ellipsis) is Some(_) {
         varargs = true
-        expect(p, @tokens.TokenKind::RParen, "expected ')' after '...'") |> ignore
+        expect(p, @tokens.TokenKind::RParen, "expected ')' after '...'")
+        |> ignore
         break
       }
-      if parse_type_specifiers(p, allow_storage=false, allow_typedef=false) is Some(specs) {
-        if parse_param_after_base(p, specs.ty, specs.attrs, specs.loc) is Some(param) {
+      if parse_type_specifiers(p, allow_storage=false, allow_typedef=false)
+        is Some(specs) {
+        if parse_param_after_base(p, specs.ty, specs.attrs, specs.loc)
+          is Some(param) {
           params.push(param)
         }
       }
       continue
     }
-    expect(p, @tokens.TokenKind::RParen, "expected ')' after parameter list") |> ignore
+    expect(p, @tokens.TokenKind::RParen, "expected ')' after parameter list")
+    |> ignore
     break
   }
   (params, varargs, old_style)
@@ -2269,12 +2398,7 @@ fn parse_param_after_base(
     Some(param) => {
       let call_conv = @ast.normalize_call_conv(attrs.call_conv)
       let adjusted_ty = @ast.apply_call_conv_to_type(param.ty, call_conv)
-      Some({
-        name: param.name,
-        id: param.id,
-        ty: adjusted_ty,
-        loc: param.loc,
-      })
+      Some({ name: param.name, id: param.id, ty: adjusted_ty, loc: param.loc })
     }
     None => {
       add_parse_error(p, loc, "expected parameter declarator")
@@ -2294,7 +2418,6 @@ fn parse_param_declarator(
   //   void *(*transform)(void*)
   let (ty0, pointer_attrs) = parse_pointer_chain(p, base)
   let mut attrs = @ast.merge_attrs(pointer_attrs, parse_attributes(p))
-
   if is_paren_pointer_declarator(p) {
     let parts = parse_paren_pointer_parts(p, true, fallback_loc)
     let parts = match parts {
@@ -2317,14 +2440,8 @@ fn parse_param_declarator(
     let mut ty = apply_decl_wrappers(ty0, wrappers)
     let call_conv = @ast.normalize_call_conv(attrs.call_conv)
     ty = @ast.apply_call_conv_to_type(ty, call_conv)
-    return Some({
-      name: parts.name,
-      id: parts.id,
-      ty,
-      loc: parts.loc,
-    })
+    return Some({ name: parts.name, id: parts.id, ty, loc: parts.loc })
   }
-
   if peek_token(p).kind is @tokens.TokenKind::Ident {
     let name_tok = advance_token(p)
     let (ty, _params, _varargs, _old_style, suffix_attrs) = parse_declarator_suffix(
@@ -2342,7 +2459,9 @@ fn parse_param_declarator(
   }
 
   // Unnamed parameter: still allow declarator suffixes like `int[10]`.
-  let (ty, _params, _varargs, _old_style, suffix_attrs) = parse_declarator_suffix(p, ty0)
+  let (ty, _params, _varargs, _old_style, suffix_attrs) = parse_declarator_suffix(
+    p, ty0,
+  )
   attrs = @ast.merge_attrs(attrs, suffix_attrs)
   let call_conv = @ast.normalize_call_conv(attrs.call_conv)
   let adjusted_ty = @ast.apply_call_conv_to_type(ty, call_conv)
@@ -2361,7 +2480,9 @@ fn parse_compound_stmt(p : Parser, loc : @source.SrcLoc) -> @ast.Stmt {
   }
   expect(p, @tokens.TokenKind::RBrace, "expected '}'") |> ignore
   let did_scope = p.pending_typedef_scopes.pop().unwrap_or(false)
-  if did_scope { pop_typedef_scope(p) }
+  if did_scope {
+    pop_typedef_scope(p)
+  }
   @ast.Stmt::Compound(stmts~, loc~)
 }
 
@@ -2376,13 +2497,19 @@ fn parse_stmt(p : Parser) -> @ast.Stmt {
     @tokens.TokenKind::KwStaticAssert => {
       let assert_tok = advance_token(p)
       let static_assert = parse_static_assert(p, assert_tok.loc)
-      expect(p, @tokens.TokenKind::Semicolon, "expected ';' after _Static_assert") |> ignore
+      expect(
+        p,
+        @tokens.TokenKind::Semicolon,
+        "expected ';' after _Static_assert",
+      )
+      |> ignore
       return @ast.Stmt::StaticAssert(static_assert)
     }
     @tokens.TokenKind::KwAsm => {
       let asm_tok = advance_token(p)
       let asm_stmt = parse_asm_stmt(p, asm_tok.loc)
-      expect(p, @tokens.TokenKind::Semicolon, "expected ';' after asm") |> ignore
+      expect(p, @tokens.TokenKind::Semicolon, "expected ';' after asm")
+      |> ignore
       return @ast.Stmt::Asm(asm_stmt)
     }
     @tokens.TokenKind::KwCase => {
@@ -2399,7 +2526,8 @@ fn parse_stmt(p : Parser) -> @ast.Stmt {
     }
     @tokens.TokenKind::KwDefault => {
       let def_tok = advance_token(p)
-      expect(p, @tokens.TokenKind::Colon, "expected ':' after default") |> ignore
+      expect(p, @tokens.TokenKind::Colon, "expected ':' after default")
+      |> ignore
       let body = parse_stmt(p)
       return @ast.Stmt::Default(body~, loc=def_tok.loc)
     }
@@ -2425,12 +2553,14 @@ fn parse_stmt(p : Parser) -> @ast.Stmt {
     }
     @tokens.TokenKind::KwBreak => {
       let break_tok = advance_token(p)
-      expect(p, @tokens.TokenKind::Semicolon, "expected ';' after break") |> ignore
+      expect(p, @tokens.TokenKind::Semicolon, "expected ';' after break")
+      |> ignore
       return @ast.Stmt::Break(loc=break_tok.loc)
     }
     @tokens.TokenKind::KwContinue => {
       let cont_tok = advance_token(p)
-      expect(p, @tokens.TokenKind::Semicolon, "expected ';' after continue") |> ignore
+      expect(p, @tokens.TokenKind::Semicolon, "expected ';' after continue")
+      |> ignore
       return @ast.Stmt::Continue(loc=cont_tok.loc)
     }
     @tokens.TokenKind::KwGoto => {
@@ -2438,14 +2568,16 @@ fn parse_stmt(p : Parser) -> @ast.Stmt {
       if p.current.kind is @tokens.TokenKind::Star {
         ignore(advance_token(p))
         let expr = parse_expr(p)
-        expect(p, @tokens.TokenKind::Semicolon, "expected ';' after goto") |> ignore
+        expect(p, @tokens.TokenKind::Semicolon, "expected ';' after goto")
+        |> ignore
         return @ast.Stmt::GotoExpr(expr~, loc=goto_tok.loc)
       } else {
         let name = match expect_ident(p, "expected label after goto") {
           None => ""
           Some(tok) => token_lexeme(p, tok)
         }
-        expect(p, @tokens.TokenKind::Semicolon, "expected ';' after goto") |> ignore
+        expect(p, @tokens.TokenKind::Semicolon, "expected ';' after goto")
+        |> ignore
         return @ast.Stmt::Goto(name~, loc=goto_tok.loc)
       }
     }
@@ -2455,7 +2587,8 @@ fn parse_stmt(p : Parser) -> @ast.Stmt {
         return @ast.Stmt::Return(value=None, loc=ret_tok.loc)
       }
       let value = parse_expr(p)
-      expect(p, @tokens.TokenKind::Semicolon, "expected ';' after return") |> ignore
+      expect(p, @tokens.TokenKind::Semicolon, "expected ';' after return")
+      |> ignore
       return @ast.Stmt::Return(value=Some(value), loc=ret_tok.loc)
     }
     @tokens.TokenKind::Semicolon => {
@@ -2464,7 +2597,8 @@ fn parse_stmt(p : Parser) -> @ast.Stmt {
     }
     _ => ()
   }
-  if tok.kind is @tokens.TokenKind::Ident && peek_kind(p, 1) is @tokens.TokenKind::Colon {
+  if tok.kind is @tokens.TokenKind::Ident &&
+    peek_kind(p, 1) is @tokens.TokenKind::Colon {
     let label_tok = advance_token(p)
     expect(p, @tokens.TokenKind::Colon, "expected ':' after label") |> ignore
     ignore(parse_attributes(p))
@@ -2558,7 +2692,12 @@ fn parse_stmt(p : Parser) -> @ast.Stmt {
             }
             break
           }
-          expect(p, @tokens.TokenKind::Semicolon, "expected ';' after declaration") |> ignore
+          expect(
+            p,
+            @tokens.TokenKind::Semicolon,
+            "expected ';' after declaration",
+          )
+          |> ignore
           if is_typedef {
             return @ast.Stmt::Empty(loc=decl_loc)
           }
@@ -2575,7 +2714,8 @@ fn parse_stmt(p : Parser) -> @ast.Stmt {
     }
   }
   let expr = parse_expr(p)
-  expect(p, @tokens.TokenKind::Semicolon, "expected ';' after expression") |> ignore
+  expect(p, @tokens.TokenKind::Semicolon, "expected ';' after expression")
+  |> ignore
   @ast.Stmt::ExprStmt(expr~, loc=@ast.expr_loc(expr))
 }
 
@@ -2583,7 +2723,8 @@ fn parse_stmt(p : Parser) -> @ast.Stmt {
 fn parse_if_stmt(p : Parser, loc : @source.SrcLoc) -> @ast.Stmt {
   expect(p, @tokens.TokenKind::LParen, "expected '(' after if") |> ignore
   let cond = parse_expr(p)
-  expect(p, @tokens.TokenKind::RParen, "expected ')' after if condition") |> ignore
+  expect(p, @tokens.TokenKind::RParen, "expected ')' after if condition")
+  |> ignore
   let then_branch = parse_stmt(p)
   let else_branch = match p.current.kind {
     @tokens.TokenKind::KwElse => {
@@ -2599,7 +2740,8 @@ fn parse_if_stmt(p : Parser, loc : @source.SrcLoc) -> @ast.Stmt {
 fn parse_while_stmt(p : Parser, loc : @source.SrcLoc) -> @ast.Stmt {
   expect(p, @tokens.TokenKind::LParen, "expected '(' after while") |> ignore
   let cond = parse_expr(p)
-  expect(p, @tokens.TokenKind::RParen, "expected ')' after while condition") |> ignore
+  expect(p, @tokens.TokenKind::RParen, "expected ')' after while condition")
+  |> ignore
   let body = parse_stmt(p)
   @ast.Stmt::While(cond~, body~, loc~)
 }
@@ -2610,8 +2752,10 @@ fn parse_do_while_stmt(p : Parser, loc : @source.SrcLoc) -> @ast.Stmt {
   expect(p, @tokens.TokenKind::KwWhile, "expected while after do") |> ignore
   expect(p, @tokens.TokenKind::LParen, "expected '(' after while") |> ignore
   let cond = parse_expr(p)
-  expect(p, @tokens.TokenKind::RParen, "expected ')' after do-while condition") |> ignore
-  expect(p, @tokens.TokenKind::Semicolon, "expected ';' after do-while") |> ignore
+  expect(p, @tokens.TokenKind::RParen, "expected ')' after do-while condition")
+  |> ignore
+  expect(p, @tokens.TokenKind::Semicolon, "expected ';' after do-while")
+  |> ignore
   @ast.Stmt::DoWhile(cond~, body~, loc~)
 }
 
@@ -2631,20 +2775,24 @@ fn parse_for_stmt(p : Parser, loc : @source.SrcLoc) -> @ast.Stmt {
     None
   } else {
     let cond_expr = parse_expr(p)
-    expect(p, @tokens.TokenKind::Semicolon, "expected ';' after for condition") |> ignore
+    expect(p, @tokens.TokenKind::Semicolon, "expected ';' after for condition")
+    |> ignore
     Some(cond_expr)
   }
   let step = if match_token(p, @tokens.TokenKind::RParen) is Some(_) {
     None
   } else {
     let step_expr = parse_expr(p)
-    expect(p, @tokens.TokenKind::RParen, "expected ')' after for step") |> ignore
+    expect(p, @tokens.TokenKind::RParen, "expected ')' after for step")
+    |> ignore
     Some(step_expr)
   }
   let body = parse_stmt(p)
   if did_scope {
     let opened = p.pending_typedef_scopes.pop().unwrap_or(false)
-    if opened { pop_typedef_scope(p) }
+    if opened {
+      pop_typedef_scope(p)
+    }
   }
   @ast.Stmt::For(init~, cond~, step~, body~, loc~)
 }
@@ -2653,7 +2801,8 @@ fn parse_for_stmt(p : Parser, loc : @source.SrcLoc) -> @ast.Stmt {
 fn parse_switch_stmt(p : Parser, loc : @source.SrcLoc) -> @ast.Stmt {
   expect(p, @tokens.TokenKind::LParen, "expected '(' after switch") |> ignore
   let cond = parse_expr(p)
-  expect(p, @tokens.TokenKind::RParen, "expected ')' after switch condition") |> ignore
+  expect(p, @tokens.TokenKind::RParen, "expected ')' after switch condition")
+  |> ignore
   let body = parse_stmt(p)
   @ast.Stmt::Switch(cond~, body~, loc~)
 }
@@ -2746,7 +2895,12 @@ fn parse_for_init(p : Parser) -> @ast.Stmt? {
             }
             break
           }
-          expect(p, @tokens.TokenKind::Semicolon, "expected ';' after for declaration") |> ignore
+          expect(
+            p,
+            @tokens.TokenKind::Semicolon,
+            "expected ';' after for declaration",
+          )
+          |> ignore
           if is_typedef || !saw_decl {
             return None
           }
@@ -2760,7 +2914,8 @@ fn parse_for_init(p : Parser) -> @ast.Stmt? {
     }
   }
   let expr = parse_expr(p)
-  expect(p, @tokens.TokenKind::Semicolon, "expected ';' after for init") |> ignore
+  expect(p, @tokens.TokenKind::Semicolon, "expected ';' after for init")
+  |> ignore
   Some(@ast.Stmt::ExprStmt(expr~, loc=@ast.expr_loc(expr)))
 }
 
@@ -2777,14 +2932,13 @@ fn parse_expr_comma(p : Parser) -> @ast.Expr {
       @tokens.TokenKind::Comma => {
         let tok = advance_token(p)
         let right = parse_expr_eq(p)
-        expr =
-          @ast.Expr::Binary(
-            op=@ast.BinaryOp::Comma,
-            left=expr,
-            right~,
-            node_id=new_expr_id(p),
-            loc=tok.loc,
-          )
+        expr = @ast.Expr::Binary(
+          op=@ast.BinaryOp::Comma,
+          left=expr,
+          right~,
+          node_id=new_expr_id(p),
+          loc=tok.loc,
+        )
       }
       _ => break
     }
@@ -2814,13 +2968,7 @@ fn parse_expr_eq(p : Parser) -> @ast.Expr {
     Some(op) => {
       let tok = advance_token(p)
       let right = parse_expr_eq(p)
-      @ast.Expr::Binary(
-        op~,
-        left~,
-        right~,
-        node_id=new_expr_id(p),
-        loc=tok.loc,
-      )
+      @ast.Expr::Binary(op~, left~, right~, node_id=new_expr_id(p), loc=tok.loc)
     }
   }
 }
@@ -2832,7 +2980,12 @@ fn parse_expr_cond(p : Parser) -> @ast.Expr {
     @tokens.TokenKind::Question => {
       let tok = advance_token(p)
       let then_expr = parse_expr(p)
-      expect(p, @tokens.TokenKind::Colon, "expected ':' in conditional expression") |> ignore
+      expect(
+        p,
+        @tokens.TokenKind::Colon,
+        "expected ':' in conditional expression",
+      )
+      |> ignore
       let else_expr = parse_expr_cond(p)
       @ast.Expr::Conditional(
         cond~,
@@ -2847,6 +3000,7 @@ fn parse_expr_cond(p : Parser) -> @ast.Expr {
 }
 
 ///|
+
 ///|
 fn parse_expr_binary(p : Parser, min_prec : Int) -> @ast.Expr {
   let mut expr = parse_expr_unary(p)
@@ -2933,7 +3087,13 @@ fn parse_expr_binary(p : Parser, min_prec : Int) -> @ast.Expr {
     }
     let tok = advance_token(p)
     let right = parse_expr_binary(p, prec + 1)
-    expr = @ast.Expr::Binary(op~, left=expr, right~, node_id=new_expr_id(p), loc=tok.loc)
+    expr = @ast.Expr::Binary(
+      op~,
+      left=expr,
+      right~,
+      node_id=new_expr_id(p),
+      loc=tok.loc,
+    )
   }
   expr
 }
@@ -2943,16 +3103,31 @@ fn parse_expr_unary(p : Parser) -> @ast.Expr {
   match p.current.kind {
     @tokens.TokenKind::KwSizeof => {
       let tok = advance_token(p)
-      if peek_kind(p, 0) is @tokens.TokenKind::LParen && is_type_start(p, peek_token_at(p, 1)) {
-        expect(p, @tokens.TokenKind::LParen, "expected '(' after sizeof") |> ignore
+      if peek_kind(p, 0) is @tokens.TokenKind::LParen &&
+        is_type_start(p, peek_token_at(p, 1)) {
+        expect(p, @tokens.TokenKind::LParen, "expected '(' after sizeof")
+        |> ignore
         match parse_type_name(p) {
           None => {
             add_parse_error(p, tok.loc, "expected type name after sizeof")
-            return @ast.Expr::IntLit(value="0", node_id=new_expr_id(p), loc=tok.loc)
+            return @ast.Expr::IntLit(
+              value="0",
+              node_id=new_expr_id(p),
+              loc=tok.loc,
+            )
           }
           Some(ty) => {
-            expect(p, @tokens.TokenKind::RParen, "expected ')' after sizeof type") |> ignore
-            return @ast.Expr::SizeofType(ty~, node_id=new_expr_id(p), loc=tok.loc)
+            expect(
+              p,
+              @tokens.TokenKind::RParen,
+              "expected ')' after sizeof type",
+            )
+            |> ignore
+            return @ast.Expr::SizeofType(
+              ty~,
+              node_id=new_expr_id(p),
+              loc=tok.loc,
+            )
           }
         }
       }
@@ -2961,16 +3136,31 @@ fn parse_expr_unary(p : Parser) -> @ast.Expr {
     }
     @tokens.TokenKind::KwAlignof => {
       let tok = advance_token(p)
-      if peek_kind(p, 0) is @tokens.TokenKind::LParen && is_type_start(p, peek_token_at(p, 1)) {
-        expect(p, @tokens.TokenKind::LParen, "expected '(' after alignof") |> ignore
+      if peek_kind(p, 0) is @tokens.TokenKind::LParen &&
+        is_type_start(p, peek_token_at(p, 1)) {
+        expect(p, @tokens.TokenKind::LParen, "expected '(' after alignof")
+        |> ignore
         match parse_type_name(p) {
           None => {
             add_parse_error(p, tok.loc, "expected type name after alignof")
-            return @ast.Expr::IntLit(value="0", node_id=new_expr_id(p), loc=tok.loc)
+            return @ast.Expr::IntLit(
+              value="0",
+              node_id=new_expr_id(p),
+              loc=tok.loc,
+            )
           }
           Some(ty) => {
-            expect(p, @tokens.TokenKind::RParen, "expected ')' after alignof type") |> ignore
-            return @ast.Expr::AlignofType(ty~, node_id=new_expr_id(p), loc=tok.loc)
+            expect(
+              p,
+              @tokens.TokenKind::RParen,
+              "expected ')' after alignof type",
+            )
+            |> ignore
+            return @ast.Expr::AlignofType(
+              ty~,
+              node_id=new_expr_id(p),
+              loc=tok.loc,
+            )
           }
         }
       }
@@ -2979,28 +3169,38 @@ fn parse_expr_unary(p : Parser) -> @ast.Expr {
     }
     _ => ()
   }
-  if peek_kind(p, 0) is @tokens.TokenKind::LParen && is_type_start(p, peek_token_at(p, 1)) {
+  if peek_kind(p, 0) is @tokens.TokenKind::LParen &&
+    is_type_start(p, peek_token_at(p, 1)) {
     let lparen = advance_token(p)
     match parse_type_name(p) {
       None => {
         add_parse_error(p, lparen.loc, "expected type name in cast")
-        return @ast.Expr::IntLit(value="0", node_id=new_expr_id(p), loc=lparen.loc)
+        return @ast.Expr::IntLit(
+          value="0",
+          node_id=new_expr_id(p),
+          loc=lparen.loc,
+        )
       }
       Some(ty) => {
-        expect(p, @tokens.TokenKind::RParen, "expected ')' after cast type") |> ignore
+        expect(p, @tokens.TokenKind::RParen, "expected ')' after cast type")
+        |> ignore
         if peek_kind(p, 0) is @tokens.TokenKind::LBrace {
           let init = parse_initializer(p)
-          let literal =
-            @ast.Expr::CompoundLiteral(
-              ty~,
-              init~,
-              node_id=new_expr_id(p),
-              loc=lparen.loc,
-            )
+          let literal = @ast.Expr::CompoundLiteral(
+            ty~,
+            init~,
+            node_id=new_expr_id(p),
+            loc=lparen.loc,
+          )
           return parse_postfix_tail(p, literal)
         }
         let expr = parse_expr_unary(p)
-        return @ast.Expr::Cast(ty~, expr~, node_id=new_expr_id(p), loc=lparen.loc)
+        return @ast.Expr::Cast(
+          ty~,
+          expr~,
+          node_id=new_expr_id(p),
+          loc=lparen.loc,
+        )
       }
     }
   }
@@ -3009,7 +3209,8 @@ fn parse_expr_unary(p : Parser) -> @ast.Expr {
       let tok = advance_token(p)
       let name_tok = expect_ident(p, "expected label identifier after &&")
       match name_tok {
-        None => @ast.Expr::IntLit(value="0", node_id=new_expr_id(p), loc=tok.loc)
+        None =>
+          @ast.Expr::IntLit(value="0", node_id=new_expr_id(p), loc=tok.loc)
         Some(label_tok) =>
           @ast.Expr::LabelAddr(
             name=token_lexeme(p, label_tok),
@@ -3022,42 +3223,82 @@ fn parse_expr_unary(p : Parser) -> @ast.Expr {
     @tokens.TokenKind::PlusPlus => {
       let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      @ast.Expr::Unary(op=@ast.UnaryOp::PreInc, expr~, node_id=new_expr_id(p), loc=tok.loc)
+      @ast.Expr::Unary(
+        op=@ast.UnaryOp::PreInc,
+        expr~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     @tokens.TokenKind::MinusMinus => {
       let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      @ast.Expr::Unary(op=@ast.UnaryOp::PreDec, expr~, node_id=new_expr_id(p), loc=tok.loc)
+      @ast.Expr::Unary(
+        op=@ast.UnaryOp::PreDec,
+        expr~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     @tokens.TokenKind::Plus => {
       let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      @ast.Expr::Unary(op=@ast.UnaryOp::Plus, expr~, node_id=new_expr_id(p), loc=tok.loc)
+      @ast.Expr::Unary(
+        op=@ast.UnaryOp::Plus,
+        expr~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     @tokens.TokenKind::Minus => {
       let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      @ast.Expr::Unary(op=@ast.UnaryOp::Minus, expr~, node_id=new_expr_id(p), loc=tok.loc)
+      @ast.Expr::Unary(
+        op=@ast.UnaryOp::Minus,
+        expr~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     @tokens.TokenKind::Bang => {
       let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      @ast.Expr::Unary(op=@ast.UnaryOp::Not, expr~, node_id=new_expr_id(p), loc=tok.loc)
+      @ast.Expr::Unary(
+        op=@ast.UnaryOp::Not,
+        expr~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     @tokens.TokenKind::Tilde => {
       let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      @ast.Expr::Unary(op=@ast.UnaryOp::BitNot, expr~, node_id=new_expr_id(p), loc=tok.loc)
+      @ast.Expr::Unary(
+        op=@ast.UnaryOp::BitNot,
+        expr~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     @tokens.TokenKind::Amp => {
       let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      @ast.Expr::Unary(op=@ast.UnaryOp::Addr, expr~, node_id=new_expr_id(p), loc=tok.loc)
+      @ast.Expr::Unary(
+        op=@ast.UnaryOp::Addr,
+        expr~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     @tokens.TokenKind::Star => {
       let tok = advance_token(p)
       let expr = parse_expr_unary(p)
-      @ast.Expr::Unary(op=@ast.UnaryOp::Deref, expr~, node_id=new_expr_id(p), loc=tok.loc)
+      @ast.Expr::Unary(
+        op=@ast.UnaryOp::Deref,
+        expr~,
+        node_id=new_expr_id(p),
+        loc=tok.loc,
+      )
     }
     _ => parse_expr_postfix(p)
   }
@@ -3077,16 +3318,25 @@ fn parse_postfix_tail(p : Parser, base : @ast.Expr) -> @ast.Expr {
       @tokens.TokenKind::LParen => {
         let tok = advance_token(p)
         let args = parse_call_args(p)
-        expr =
-          @ast.Expr::Call(callee=expr, args~, node_id=new_expr_id(p), loc=tok.loc)
+        expr = @ast.Expr::Call(
+          callee=expr,
+          args~,
+          node_id=new_expr_id(p),
+          loc=tok.loc,
+        )
         continue
       }
       @tokens.TokenKind::LBracket => {
         let tok = advance_token(p)
         let index = parse_expr(p)
-        expect(p, @tokens.TokenKind::RBracket, "expected ']' after index") |> ignore
-        expr =
-          @ast.Expr::Index(base=expr, index~, node_id=new_expr_id(p), loc=tok.loc)
+        expect(p, @tokens.TokenKind::RBracket, "expected ']' after index")
+        |> ignore
+        expr = @ast.Expr::Index(
+          base=expr,
+          index~,
+          node_id=new_expr_id(p),
+          loc=tok.loc,
+        )
         continue
       }
       @tokens.TokenKind::Dot => {
@@ -3095,15 +3345,14 @@ fn parse_postfix_tail(p : Parser, base : @ast.Expr) -> @ast.Expr {
           None => ("", 0)
           Some(tok) => (token_lexeme(p, tok), @tokens.token_id(tok))
         }
-        expr =
-          @ast.Expr::Member(
-            base=expr,
-            name~,
-            id~,
-            is_arrow=false,
-            node_id=new_expr_id(p),
-            loc=tok.loc,
-          )
+        expr = @ast.Expr::Member(
+          base=expr,
+          name~,
+          id~,
+          is_arrow=false,
+          node_id=new_expr_id(p),
+          loc=tok.loc,
+        )
         continue
       }
       @tokens.TokenKind::Arrow => {
@@ -3112,37 +3361,34 @@ fn parse_postfix_tail(p : Parser, base : @ast.Expr) -> @ast.Expr {
           None => ("", 0)
           Some(tok) => (token_lexeme(p, tok), @tokens.token_id(tok))
         }
-        expr =
-          @ast.Expr::Member(
-            base=expr,
-            name~,
-            id~,
-            is_arrow=true,
-            node_id=new_expr_id(p),
-            loc=tok.loc,
-          )
+        expr = @ast.Expr::Member(
+          base=expr,
+          name~,
+          id~,
+          is_arrow=true,
+          node_id=new_expr_id(p),
+          loc=tok.loc,
+        )
         continue
       }
       @tokens.TokenKind::PlusPlus => {
         let tok = advance_token(p)
-        expr =
-          @ast.Expr::Unary(
-            op=@ast.UnaryOp::PostInc,
-            expr~,
-            node_id=new_expr_id(p),
-            loc=tok.loc,
-          )
+        expr = @ast.Expr::Unary(
+          op=@ast.UnaryOp::PostInc,
+          expr~,
+          node_id=new_expr_id(p),
+          loc=tok.loc,
+        )
         continue
       }
       @tokens.TokenKind::MinusMinus => {
         let tok = advance_token(p)
-        expr =
-          @ast.Expr::Unary(
-            op=@ast.UnaryOp::PostDec,
-            expr~,
-            node_id=new_expr_id(p),
-            loc=tok.loc,
-          )
+        expr = @ast.Expr::Unary(
+          op=@ast.UnaryOp::PostDec,
+          expr~,
+          node_id=new_expr_id(p),
+          loc=tok.loc,
+        )
         continue
       }
       _ => break
@@ -3170,7 +3416,8 @@ fn parse_call_args(p : Parser) -> Array[@ast.Expr] {
       }
       _ => ()
     }
-    expect(p, @tokens.TokenKind::RParen, "expected ')' after arguments") |> ignore
+    expect(p, @tokens.TokenKind::RParen, "expected ')' after arguments")
+    |> ignore
     break
   }
   args
@@ -3208,7 +3455,8 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
               p,
               @tokens.TokenKind::LParen,
               "expected '(' after __builtin_types_compatible_p",
-            ) |> ignore
+            )
+            |> ignore
             let a = match parse_type_name(p) {
               None => {
                 add_parse_error(p, tok.loc, "expected type name in builtin")
@@ -3216,7 +3464,11 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
               }
               Some(ty) => ty
             }
-            expect(p, @tokens.TokenKind::Comma, "expected ',' in __builtin_types_compatible_p")
+            expect(
+              p,
+              @tokens.TokenKind::Comma,
+              "expected ',' in __builtin_types_compatible_p",
+            )
             |> ignore
             let b = match parse_type_name(p) {
               None => {
@@ -3229,7 +3481,8 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
               p,
               @tokens.TokenKind::RParen,
               "expected ')' after __builtin_types_compatible_p",
-            ) |> ignore
+            )
+            |> ignore
             @ast.Expr::BuiltinTypesCompatibleP(
               a~,
               b~,
@@ -3237,24 +3490,42 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
               loc=tok.loc,
             )
           } else if id == p.builtin_ids.offsetof {
-            expect(p, @tokens.TokenKind::LParen, "expected '(' after __builtin_offsetof") |> ignore
+            expect(
+              p,
+              @tokens.TokenKind::LParen,
+              "expected '(' after __builtin_offsetof",
+            )
+            |> ignore
             let ty = match parse_type_name(p) {
               None => {
-                add_parse_error(p, tok.loc, "expected type name in __builtin_offsetof")
+                add_parse_error(
+                  p,
+                  tok.loc,
+                  "expected type name in __builtin_offsetof",
+                )
                 @ast.default_int_type()
               }
               Some(v) => v
             }
-            expect(p, @tokens.TokenKind::Comma, "expected ',' in __builtin_offsetof") |> ignore
+            expect(
+              p,
+              @tokens.TokenKind::Comma,
+              "expected ',' in __builtin_offsetof",
+            )
+            |> ignore
             let path : Array[String] = []
-            if expect_ident(p, "expected member name in __builtin_offsetof") is Some(id) {
+            if expect_ident(p, "expected member name in __builtin_offsetof")
+              is Some(id) {
               path.push(token_lexeme(p, id))
             }
             while true {
               match p.current.kind {
                 @tokens.TokenKind::Dot => {
                   advance_token(p) |> ignore
-                  if expect_ident(p, "expected member name in __builtin_offsetof") is Some(id) {
+                  if expect_ident(
+                      p, "expected member name in __builtin_offsetof",
+                    )
+                    is Some(id) {
                     path.push(token_lexeme(p, id))
                   } else {
                     break
@@ -3263,7 +3534,12 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
                 _ => break
               }
             }
-            expect(p, @tokens.TokenKind::RParen, "expected ')' after __builtin_offsetof") |> ignore
+            expect(
+              p,
+              @tokens.TokenKind::RParen,
+              "expected ')' after __builtin_offsetof",
+            )
+            |> ignore
             @ast.Expr::BuiltinOffsetof(
               ty~,
               path~,
@@ -3271,9 +3547,19 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
               loc=tok.loc,
             )
           } else if id == p.builtin_ids.va_arg {
-            expect(p, @tokens.TokenKind::LParen, "expected '(' after __builtin_va_arg") |> ignore
+            expect(
+              p,
+              @tokens.TokenKind::LParen,
+              "expected '(' after __builtin_va_arg",
+            )
+            |> ignore
             let list = parse_expr_eq(p)
-            expect(p, @tokens.TokenKind::Comma, "expected ',' in __builtin_va_arg") |> ignore
+            expect(
+              p,
+              @tokens.TokenKind::Comma,
+              "expected ',' in __builtin_va_arg",
+            )
+            |> ignore
             let ty = match parse_type_name(p) {
               None => {
                 add_parse_error(p, tok.loc, "expected type name in builtin")
@@ -3281,8 +3567,18 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
               }
               Some(v) => v
             }
-            expect(p, @tokens.TokenKind::RParen, "expected ')' after __builtin_va_arg") |> ignore
-            @ast.Expr::BuiltinVaArg(list~, ty~, node_id=new_expr_id(p), loc=tok.loc)
+            expect(
+              p,
+              @tokens.TokenKind::RParen,
+              "expected ')' after __builtin_va_arg",
+            )
+            |> ignore
+            @ast.Expr::BuiltinVaArg(
+              list~,
+              ty~,
+              node_id=new_expr_id(p),
+              loc=tok.loc,
+            )
           } else {
             @ast.Expr::Ident(
               name=token_lexeme(p, tok),
@@ -3305,11 +3601,17 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
         @tokens.TokenKind::LBrace => {
           let lbrace = advance_token(p)
           let block = parse_compound_stmt(p, lbrace.loc)
-          expect(p, @tokens.TokenKind::RParen, "expected ')' after statement expression") |> ignore
+          expect(
+            p,
+            @tokens.TokenKind::RParen,
+            "expected ')' after statement expression",
+          )
+          |> ignore
           match block {
             @ast.Stmt::Compound(stmts~, ..) =>
               @ast.Expr::StmtExpr(stmts~, node_id=new_expr_id(p), loc=tok.loc)
-            _ => @ast.Expr::StmtExpr(stmts=[], node_id=new_expr_id(p), loc=tok.loc)
+            _ =>
+              @ast.Expr::StmtExpr(stmts=[], node_id=new_expr_id(p), loc=tok.loc)
           }
         }
         _ => {
@@ -3326,16 +3628,13 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
 }
 
 ///|
+
 ///|
 fn parse_string_literal_expr(p : Parser, first : @tokens.Token) -> @ast.Expr {
-  let (value, len) = decode_string_literal(
-    p,
-    token_lexeme(p, first),
-    first.loc,
-  )
+  let (value, len) = decode_string_literal(p, token_lexeme(p, first), first.loc)
   if peek_token(p).kind != @tokens.TokenKind::StrLit {
     return @ast.Expr::StringLit(
-      value=value,
+      value~,
       length=len + 1,
       node_id=new_expr_id(p),
       loc=first.loc,
@@ -3346,8 +3645,11 @@ fn parse_string_literal_expr(p : Parser, first : @tokens.Token) -> @ast.Expr {
   sb.write_string(value)
   while peek_token(p).kind is @tokens.TokenKind::StrLit {
     let tok = advance_token(p)
-    let (part, part_len) =
-      decode_string_literal(p, token_lexeme(p, tok), tok.loc)
+    let (part, part_len) = decode_string_literal(
+      p,
+      token_lexeme(p, tok),
+      tok.loc,
+    )
     sb.write_string(part)
     byte_len = byte_len + part_len
   }
@@ -3367,7 +3669,7 @@ fn decode_string_literal(
 ) -> (String, Int) {
   let len = lexeme.length()
   let size_hint = if len > 2 { len - 2 } else { 0 }
-  let sb = StringBuilder::new(size_hint=size_hint)
+  let sb = StringBuilder::new(size_hint~)
   let mut i = 1
   let mut count = 0
   while i + 1 < len {
@@ -3628,7 +3930,11 @@ fn set_typedef_scope_level(p : Parser, id : Int, level : Int) -> Unit {
 ///|
 fn current_typedef_scope_id(p : Parser) -> Int {
   let len = p.typedef_scope_stack.length()
-  if len == 0 { 0 } else { p.typedef_scope_stack[len - 1] }
+  if len == 0 {
+    0
+  } else {
+    p.typedef_scope_stack[len - 1]
+  }
 }
 
 ///|
@@ -3716,7 +4022,13 @@ fn typedef_ref_type(ty : @ast.CType) -> @ast.CType {
     @ast.CType::Pointer(inner) => @ast.CType::Pointer(typedef_ref_type(inner))
     @ast.CType::Array(elem~, size~, size_expr~) =>
       @ast.CType::Array(elem=typedef_ref_type(elem), size~, size_expr~)
-    @ast.CType::Function(return_type~, params~, varargs~, is_old_style~, call_conv~) =>
+    @ast.CType::Function(
+      return_type~,
+      params~,
+      varargs~,
+      is_old_style~,
+      call_conv~
+    ) =>
       @ast.CType::Function(
         return_type=typedef_ref_type(return_type),
         params=params.map(t => typedef_ref_type(t)),
@@ -3728,7 +4040,8 @@ fn typedef_ref_type(ty : @ast.CType) -> @ast.CType {
       @ast.CType::Struct(name~, id~, fields=None, attrs~)
     @ast.CType::Union(name~, id~, fields=Some(_), attrs~) =>
       @ast.CType::Union(name~, id~, fields=None, attrs~)
-    @ast.CType::Enum(name~, id~, items=Some(_)) => @ast.CType::Enum(name~, id~, items=None)
+    @ast.CType::Enum(name~, id~, items=Some(_)) =>
+      @ast.CType::Enum(name~, id~, items=None)
     _ => ty
   }
 }
@@ -3841,7 +4154,11 @@ fn match_token(p : Parser, kind : @tokens.TokenKind) -> @tokens.Token? {
 }
 
 ///|
-fn expect(p : Parser, kind : @tokens.TokenKind, message : String) -> @tokens.Token {
+fn expect(
+  p : Parser,
+  kind : @tokens.TokenKind,
+  message : String,
+) -> @tokens.Token {
   let tok = p.current
   if tok.kind == kind {
     return advance_token(p)
