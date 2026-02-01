@@ -33,7 +33,7 @@ test "cli parse help" {
 test "cli parse listfile expansion" {
   let case_dir = @testutil.make_case_dir("cli-args")
   let args_path = @testutil.join_path(case_dir, "args.txt")
-  let contents = (
+  let contents =
     #| -Iinc
     #| -DNAME=1
     #| -DNOVAL
@@ -41,7 +41,6 @@ test "cli parse listfile expansion" {
     #| foo.c
     #| bar.o
     #|   
-  )
   @testutil.write_string(args_path, contents)
   let cfg = must_run(["tinycc.mbt", "@" + args_path])
   assert_eq(cfg.include_paths, ["inc"])
@@ -83,22 +82,8 @@ test "cli parse run args" {
 ///|
 test "cli parse option variants" {
   let cfg = must_run([
-    "tinycc.mbt",
-    "-bench",
-    "-fPIC",
-    "-Q",
-    "-O2",
-    "-g",
-    "-Wextra",
-    "-w",
-    "-isystem/usr/include",
-    "-Iinclude",
-    "-L/usr/lib",
-    "-l",
-    "m",
-    "-lfoo",
-    "-oout.o",
-    "main.c",
+    "tinycc.mbt", "-bench", "-fPIC", "-Q", "-O2", "-g", "-Wextra", "-w", "-isystem/usr/include",
+    "-Iinclude", "-L/usr/lib", "-l", "m", "-lfoo", "-oout.o", "main.c",
   ])
   assert_true(cfg.bench)
   assert_true(!cfg.compile_only)

@@ -30,7 +30,7 @@ pub fn make_token(
   id? : Int = 0,
   lexeme_id? : Int = 0,
 ) -> @tokens.Token {
-  @lexer_core.make_token(kind, loc, line_start, id=id, lexeme_id=lexeme_id)
+  @lexer_core.make_token(kind, loc, line_start, id~, lexeme_id~)
 }
 
 ///|
@@ -64,7 +64,11 @@ pub fn skip_block_comment(lex : Lexer, loc : @source.SrcLoc) -> Unit {
 }
 
 ///|
-pub fn skip_string_literal(lex : Lexer, loc : @source.SrcLoc, quote : UInt16) -> Unit {
+pub fn skip_string_literal(
+  lex : Lexer,
+  loc : @source.SrcLoc,
+  quote : UInt16,
+) -> Unit {
   @lexer_core.skip_string_literal(lex, loc, quote)
 }
 
@@ -74,7 +78,11 @@ pub fn advance_punct(lex : Lexer) -> Unit {
 }
 
 ///|
-pub fn lex_ident(lex : Lexer, loc : @source.SrcLoc, line_start : Bool) -> @tokens.Token {
+pub fn lex_ident(
+  lex : Lexer,
+  loc : @source.SrcLoc,
+  line_start : Bool,
+) -> @tokens.Token {
   @lexer_core.lex_ident(lex, loc, line_start)
 }
 
@@ -99,7 +107,11 @@ pub fn lex_string_literal(
 }
 
 ///|
-pub fn lex_punct(lex : Lexer, loc : @source.SrcLoc, line_start : Bool) -> @tokens.Token {
+pub fn lex_punct(
+  lex : Lexer,
+  loc : @source.SrcLoc,
+  line_start : Bool,
+) -> @tokens.Token {
   @lexer_core.lex_punct(lex, loc, line_start)
 }
 
@@ -139,6 +151,10 @@ pub fn slice_to_view(text : String, start : Int, end : Int) -> StringView {
 }
 
 ///|
-pub fn add_lex_error(lex : Lexer, loc : @source.SrcLoc, message : String) -> Unit {
+pub fn add_lex_error(
+  lex : Lexer,
+  loc : @source.SrcLoc,
+  message : String,
+) -> Unit {
   @lexer_core.add_lex_error(lex, loc, message)
 }

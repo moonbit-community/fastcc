@@ -85,13 +85,21 @@ pub fn parse_uint64_literal(text : String, base : Int) -> UInt64 {
 }
 
 ///|
-pub fn parse_uint64_literal_prefix(text : String, base : Int, end : Int) -> UInt64 {
+pub fn parse_uint64_literal_prefix(
+  text : String,
+  base : Int,
+  end : Int,
+) -> UInt64 {
   let mut value : UInt64 = 0
   let mut i = 0
-  if base == 16 && end >= 2 && text[0] == 48 &&
+  if base == 16 &&
+    end >= 2 &&
+    text[0] == 48 &&
     (text[1] == 120 || text[1] == 88) {
     i = 2
-  } else if base == 2 && end >= 2 && text[0] == 48 &&
+  } else if base == 2 &&
+    end >= 2 &&
+    text[0] == 48 &&
     (text[1] == 98 || text[1] == 66) {
     i = 2
   } else if base == 8 && end > 1 && text[0] == 48 {

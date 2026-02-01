@@ -3,9 +3,7 @@ test "parser tracks typedef struct name" {
   let bag = @diag.new_diag_bag()
   let map = @source.new_source_map()
   let file = @source.add_file(
-    map,
-    "<test>",
-    "typedef struct { int x; } T; int main(){ T r; return r.x; }",
+    map, "<test>", "typedef struct { int x; } T; int main(){ T r; return r.x; }",
   )
   let pp = @preproc.new_preprocessor(map, file, bag)
   let parser = new_parser(pp)

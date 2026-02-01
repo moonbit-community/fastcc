@@ -23,13 +23,7 @@ priv struct BenchStats {
 
 ///|
 fn bench_stats_new() -> BenchStats {
-  {
-    parse_ns: 0UL,
-    sem_ns: 0UL,
-    codegen_ns: 0UL,
-    total_ns: 0UL,
-    files: 0,
-  }
+  { parse_ns: 0UL, sem_ns: 0UL, codegen_ns: 0UL, total_ns: 0UL, files: 0 }
 }
 
 ///|
@@ -143,7 +137,10 @@ fn format_diag_for_cli(map : @source.SourceMap, d : @diag.Diag) -> String {
 }
 
 ///|
-fn lex_cli_macro_tokens(pp : @preproc.Preprocessor, value : String) -> Array[@tokens.Token] {
+fn lex_cli_macro_tokens(
+  pp : @preproc.Preprocessor,
+  value : String,
+) -> Array[@tokens.Token] {
   if value == "" {
     return []
   }
@@ -167,13 +164,17 @@ fn lex_cli_macro_tokens(pp : @preproc.Preprocessor, value : String) -> Array[@to
 }
 
 ///|
-fn apply_cli_macros(pp : @preproc.Preprocessor, actions : Array[CliMacroAction]) -> Unit {
+fn apply_cli_macros(
+  pp : @preproc.Preprocessor,
+  actions : Array[CliMacroAction],
+) -> Unit {
   for action in actions {
     match action {
       CliMacroAction::Define(name~, value~) =>
         match value {
           None => @preproc.define_int_macro(pp, name, 1)
-          Some(v) => @preproc.define_macro(pp, name, lex_cli_macro_tokens(pp, v))
+          Some(v) =>
+            @preproc.define_macro(pp, name, lex_cli_macro_tokens(pp, v))
         }
       CliMacroAction::Undef(name~) =>
         @preproc.remove_macro(pp, @preproc.macro_id_from_name(pp, name))
@@ -286,9 +287,14 @@ fn compile_to_object_path(
         }
       }
       if !@diag.has_errors(bag) {
-        let codegen_start = if bench_enabled { @ffi.bench_now_ns() } else { 0UL }
+        let codegen_start = if bench_enabled {
+          @ffi.bench_now_ns()
+        } else {
+          0UL
+        }
         if sem_ctx is Some(ctx) {
-          if @codegen.codegen_arm64_object_bytes_with_sem(unit, ctx, bag) is Some(bytes) {
+          if @codegen.codegen_arm64_object_bytes_with_sem(unit, ctx, bag)
+            is Some(bytes) {
             @fs.write_bytes_to_file(output_path, bytes) catch {
               err => @diag.add_error(bag, @source.dummy_loc(0), err.to_string())
             }
@@ -354,7 +360,7 @@ fn run_with_args(args : Array[String]) -> Int {
   match parse_cli_args(args) {
     CliParse::Help => 0
     CliParse::Error => 1
-    CliParse::Run(cfg) => {
+    CliParse::Run(cfg) =>
       if cfg.run {
         if cfg.output is Some(_) {
           println("error: -o is not supported with -run")
@@ -370,7 +376,9 @@ fn run_with_args(args : Array[String]) -> Int {
         if !compile_to_object_path(cfg, cfg.inputs[0], obj_path, None) {
           return 1
         }
-        let link_status = run_shell_command(build_clang_link_args(obj_path, exe_path, cfg))
+        let link_status = run_shell_command(
+          build_clang_link_args(obj_path, exe_path, cfg),
+        )
         if link_status != 0 {
           println("error: clang link failed")
           return 1
@@ -414,7 +422,9 @@ fn run_with_args(args : Array[String]) -> Int {
                 apply_cli_macros(pp, cfg.macro_actions)
                 let toks = @preproc.dump_tokens(pp, 32)
                 for t in toks {
-                  println(@tokens.token_text_with(pp.interner, pp.lexeme_pool, t))
+                  println(
+                    @tokens.token_text_with(pp.interner, pp.lexeme_pool, t),
+                  )
                 }
                 if @diag.has_errors(bag) {
                   any_errors = true
@@ -429,7 +439,12 @@ fn run_with_args(args : Array[String]) -> Int {
               None => default_output_path(input_path)
               Some(v) => v
             }
-            if !compile_to_object_path(cfg, input_path, out_path, Some(bench_stats)) {
+            if !compile_to_object_path(
+                cfg,
+                input_path,
+                out_path,
+                Some(bench_stats),
+              ) {
               any_errors = true
             }
           }
@@ -442,6 +457,5 @@ fn run_with_args(args : Array[String]) -> Int {
         }
         0
       }
-    }
   }
 }

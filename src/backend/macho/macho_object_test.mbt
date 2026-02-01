@@ -4,12 +4,7 @@ test "macho encode and write" {
     name: ".text",
     data: [0x1234],
     relocs: [
-      {
-        offset: 0,
-        kind: @arm64.R_AARCH64_POINTER,
-        sym: { id: 1 },
-        addend: 0,
-      },
+      { offset: 0, kind: @arm64.R_AARCH64_POINTER, sym: { id: 1 }, addend: 0 },
       {
         offset: 0,
         kind: @arm64.R_AARCH64_ADR_PREL_PG_HI21_NC,
@@ -28,12 +23,23 @@ test "macho encode and write" {
     size_bytes: 0,
   }
   let symbols : Array[@macho.ObjSymbol] = [
-    { id: 1, name: "sym_text", section: Some(".text"), value: 0, is_external: false },
-    { id: 2, name: "sym_missing", section: Some(".missing"), value: 0, is_external: false },
+    {
+      id: 1,
+      name: "sym_text",
+      section: Some(".text"),
+      value: 0,
+      is_external: false,
+    },
+    {
+      id: 2,
+      name: "sym_missing",
+      section: Some(".missing"),
+      value: 0,
+      is_external: false,
+    },
   ]
   let bytes = @macho.encode_macho_object([sec_text, sec_custom], symbols)
   assert_true(bytes.length() > 0)
-
   let case_dir = @testutil.make_case_dir("macho")
   let path = @testutil.join_path(case_dir, "tinycc.o")
   @macho.write_macho_object(path, [sec_text, sec_custom], symbols)
@@ -43,7 +49,13 @@ test "macho encode and write" {
 ///|
 test "macho symtab missing section" {
   let symbols : Array[@macho.ObjSymbol] = [
-    { id: 10, name: "sym_missing", section: Some(".nowhere"), value: 0, is_external: true },
+    {
+      id: 10,
+      name: "sym_missing",
+      section: Some(".nowhere"),
+      value: 0,
+      is_external: true,
+    },
   ]
   let bytes = @macho.encode_macho_object([], symbols)
   assert_true(bytes.length() > 0)
@@ -60,7 +72,6 @@ test "macho bss section encode and write" {
   }
   let bytes = @macho.encode_macho_object([sec_bss], [])
   assert_true(bytes.length() > 0)
-
   let case_dir = @testutil.make_case_dir("macho-bss")
   let path = @testutil.join_path(case_dir, "bss.o")
   @macho.write_macho_object(path, [sec_bss], [])
@@ -79,24 +90,9 @@ test "macho reloc variants" {
     name: ".text",
     data: [0x90],
     relocs: [
-      {
-        offset: 0,
-        kind: @arm64.R_AARCH64_POINTER,
-        sym: { id: 1 },
-        addend: 0,
-      },
-      {
-        offset: 0,
-        kind: @arm64.R_AARCH64_CALL26,
-        sym: { id: 2 },
-        addend: 0,
-      },
-      {
-        offset: 0,
-        kind: 999,
-        sym: { id: 99 },
-        addend: 0,
-      },
+      { offset: 0, kind: @arm64.R_AARCH64_POINTER, sym: { id: 1 }, addend: 0 },
+      { offset: 0, kind: @arm64.R_AARCH64_CALL26, sym: { id: 2 }, addend: 0 },
+      { offset: 0, kind: 999, sym: { id: 99 }, addend: 0 },
     ],
     align: 4,
     size_bytes: 0,
@@ -109,13 +105,24 @@ test "macho reloc variants" {
     size_bytes: 0,
   }
   let symbols : Array[@macho.ObjSymbol] = [
-    { id: 1, name: "sym_text", section: Some(".text"), value: 0, is_external: false },
+    {
+      id: 1,
+      name: "sym_text",
+      section: Some(".text"),
+      value: 0,
+      is_external: false,
+    },
     { id: 2, name: "sym_undef", section: None, value: 0, is_external: true },
-    { id: 3, name: "sym_data", section: Some(".data"), value: 4, is_external: false },
+    {
+      id: 3,
+      name: "sym_data",
+      section: Some(".data"),
+      value: 4,
+      is_external: false,
+    },
   ]
   let bytes = @macho.encode_macho_object([sec_text, sec_data], symbols)
   assert_true(bytes.length() > 0)
-
   let case_dir = @testutil.make_case_dir("macho-reloc")
   let path = @testutil.join_path(case_dir, "reloc.o")
   @macho.write_macho_object(path, [sec_text, sec_data], symbols)

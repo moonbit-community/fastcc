@@ -125,13 +125,21 @@ pub fn token_value_from_parts(id : Int, lexeme_id : Int) -> Int {
 ///|
 pub fn token_id(tok : Token) -> Int {
   let value = tok.value
-  if value > 0 { value } else { 0 }
+  if value > 0 {
+    value
+  } else {
+    0
+  }
 }
 
 ///|
 pub fn token_lexeme_id(tok : Token) -> Int {
   let value = tok.value
-  if value < 0 { -value } else { 0 }
+  if value < 0 {
+    -value
+  } else {
+    0
+  }
 }
 
 ///|
@@ -178,7 +186,7 @@ pub fn lexeme_pool_get(pool : LexemePool, id : Int) -> String {
   let idx = id - 1
   match pool.entries[idx] {
     LexemeEntry::Owned(value) => value
-    LexemeEntry::Slice(text=text, start=start, len=len) => {
+    LexemeEntry::Slice(text~, start~, len~) => {
       let value = @util.slice_string(text, start, start + len)
       pool.entries[idx] = LexemeEntry::Owned(value)
       value
@@ -197,7 +205,7 @@ pub fn lexeme_pool_intern_slice(
   if len <= 0 {
     return 0
   }
-  pool.entries.push(LexemeEntry::Slice(text=text, start=start, len=len))
+  pool.entries.push(LexemeEntry::Slice(text~, start~, len~))
   pool.entries.length()
 }
 
@@ -208,7 +216,7 @@ pub fn lexeme_pool_len(pool : LexemePool, id : Int) -> Int {
   }
   match pool.entries[id - 1] {
     LexemeEntry::Owned(value) => value.length()
-    LexemeEntry::Slice(len=len, ..) => len
+    LexemeEntry::Slice(len~, ..) => len
   }
 }
 
@@ -280,10 +288,10 @@ pub fn init_keyword_ids(interner : @intern.StringInterner) -> KeywordIds {
   let (_, kw_du_restrict_du) = interner.intern_view_with_id("__restrict__"[:])
   let (_, kw_du_unsigned_du) = interner.intern_view_with_id("__unsigned__"[:])
   let (_, kw_du_attribute_du) = interner.intern_view_with_id("__attribute__"[:])
-  let (_, kw_u_static_assert) =
-    interner.intern_view_with_id("_Static_assert"[:])
-  let kind_by_id : Array[TokenKind?] =
-    Array::make(kw_u_static_assert + 1, None)
+  let (_, kw_u_static_assert) = interner.intern_view_with_id(
+    "_Static_assert"[:],
+  )
+  let kind_by_id : Array[TokenKind?] = Array::make(kw_u_static_assert + 1, None)
   kind_by_id[kw_if] = Some(KwIf)
   kind_by_id[kw_do] = Some(KwDo)
   kind_by_id[kw_for] = Some(KwFor)
@@ -346,9 +354,7 @@ pub fn init_keyword_ids(interner : @intern.StringInterner) -> KeywordIds {
   kind_by_id[kw_du_unsigned_du] = Some(KwUnsigned)
   kind_by_id[kw_du_attribute_du] = Some(KwAttribute)
   kind_by_id[kw_u_static_assert] = Some(KwStaticAssert)
-  {
-    kind_by_id,
-  }
+  { kind_by_id, }
 }
 
 ///|
@@ -421,54 +427,53 @@ pub fn token_kind_text(kind : TokenKind) -> String {
 ///|
 pub fn token_kind_text_len(kind : TokenKind) -> Int {
   match kind {
-    LParen |
-    RParen |
-    LBrace |
-    RBrace |
-    LBracket |
-    RBracket |
-    Comma |
-    Semicolon |
-    Colon |
-    Question |
-    Dot |
-    Assign |
-    Plus |
-    Minus |
-    Star |
-    Slash |
-    Percent |
-    Lt |
-    Gt |
-    Amp |
-    Pipe |
-    Caret |
-    Tilde |
-    Bang |
-    Hash => 1
+    LParen
+    | RParen
+    | LBrace
+    | RBrace
+    | LBracket
+    | RBracket
+    | Comma
+    | Semicolon
+    | Colon
+    | Question
+    | Dot
+    | Assign
+    | Plus
+    | Minus
+    | Star
+    | Slash
+    | Percent
+    | Lt
+    | Gt
+    | Amp
+    | Pipe
+    | Caret
+    | Tilde
+    | Bang
+    | Hash => 1
     Ellipsis => 3
-    Arrow |
-    PlusPlus |
-    MinusMinus |
-    PlusAssign |
-    MinusAssign |
-    StarAssign |
-    SlashAssign |
-    PercentAssign |
-    Eq |
-    Ne |
-    Le |
-    Ge |
-    ShiftLeft |
-    ShiftRight |
-    AmpAmp |
-    PipePipe |
-    AmpAssign |
-    PipeAssign |
-    CaretAssign |
-    HashHash => 2
-    ShiftLeftAssign |
-    ShiftRightAssign => 3
+    Arrow
+    | PlusPlus
+    | MinusMinus
+    | PlusAssign
+    | MinusAssign
+    | StarAssign
+    | SlashAssign
+    | PercentAssign
+    | Eq
+    | Ne
+    | Le
+    | Ge
+    | ShiftLeft
+    | ShiftRight
+    | AmpAmp
+    | PipePipe
+    | AmpAssign
+    | PipeAssign
+    | CaretAssign
+    | HashHash => 2
+    ShiftLeftAssign | ShiftRightAssign => 3
     _ => 0
   }
 }

@@ -33,7 +33,11 @@ pub fn parse_uint64_literal(text : String, base : Int) -> UInt64 {
 }
 
 ///|
-pub fn parse_uint64_literal_prefix(text : String, base : Int, end : Int) -> UInt64 {
+pub fn parse_uint64_literal_prefix(
+  text : String,
+  base : Int,
+  end : Int,
+) -> UInt64 {
   @int_literals.parse_uint64_literal_prefix(text, base, end)
 }
 

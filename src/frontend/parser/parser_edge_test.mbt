@@ -17,7 +17,7 @@ test "parser static assert with message" {
 
 ///|
 test "parser control flow constructs" {
-  let source = (
+  let source =
     #|int f(int x) {
     #|  int sum = 0;
     #|  int i;
@@ -33,7 +33,6 @@ test "parser control flow constructs" {
     #|done:
     #|  return sum;
     #|}
-  )
   let (_unit, bag) = parse_unit(source)
   assert_true(!@diag.has_errors(bag))
 }

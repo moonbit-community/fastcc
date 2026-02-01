@@ -148,36 +148,38 @@ fn run_case(case : CCase) -> Unit raise {
   let base_dir = @testutil.join_path(root, "target/blackbox")
   @testutil.ensure_dir(base_dir)
   let stamp = @ffi.bench_now_ns()
-  let case_dir = @testutil.join_path(base_dir, case.name + "-" + stamp.to_string())
+  let case_dir = @testutil.join_path(
+    base_dir,
+    case.name + "-" + stamp.to_string(),
+  )
   @testutil.ensure_dir(case_dir)
-
   let include_dirs : Array[String] = []
   if case.headers.length() > 0 {
     include_dirs.push(case_dir)
   }
-
   for item in case.headers {
     let (name, contents) = item
     @testutil.write_string(@testutil.join_path(case_dir, name), contents)
   }
-
   let c_path = @testutil.join_path(case_dir, case.name + ".c")
   @testutil.write_string(c_path, case.source)
-
   let tiny_obj = @testutil.join_path(case_dir, "tiny.o")
   let tiny_exe = @testutil.join_path(case_dir, "tiny.out")
   let sys_exe = @testutil.join_path(case_dir, "sys.out")
   let tiny_out = @testutil.join_path(case_dir, "tiny.txt")
   let sys_out = @testutil.join_path(case_dir, "sys.txt")
-
   assert_true(compile_tinycc(c_path, tiny_obj, include_dirs, case.defines))
   assert_eq(link_exe(tiny_obj, tiny_exe, []), 0)
-
   let tiny_status = run_command_capture([tiny_exe], tiny_out)
-  let sys_build_status = compile_system(c_path, sys_exe, include_dirs, case.defines, [])
+  let sys_build_status = compile_system(
+    c_path,
+    sys_exe,
+    include_dirs,
+    case.defines,
+    [],
+  )
   assert_eq(sys_build_status, 0)
   let sys_status = run_command_capture([sys_exe], sys_out)
-
   assert_eq(tiny_status, sys_status)
   assert_eq(read_string(tiny_out), read_string(sys_out))
 }
@@ -190,13 +192,10 @@ fn compile_failure(source : String) -> Unit raise {
   let stamp = @ffi.bench_now_ns()
   let case_dir = @testutil.join_path(base_dir, "fail-" + stamp.to_string())
   @testutil.ensure_dir(case_dir)
-
   let c_path = @testutil.join_path(case_dir, "fail.c")
   @testutil.write_string(c_path, source)
-
   let obj_path = @testutil.join_path(case_dir, "fail.o")
   let sys_exe = @testutil.join_path(case_dir, "fail.out")
-
   assert_true(!compile_tinycc(c_path, obj_path, [], []))
   let sys_status = compile_system(c_path, sys_exe, [], [], [])
   assert_true(sys_status != 0)
@@ -303,9 +302,7 @@ test "blackbox compare outputs" {
         #|  return 0;
         #|}
       ),
-      headers: [
-        ("bb_hdr.h", "#define HDRVAL 7\n"),
-      ],
+      headers: [("bb_hdr.h", "#define HDRVAL 7\n")],
       defines: [],
     },
     {
@@ -683,7 +680,6 @@ test "blackbox compare outputs" {
       defines: [],
     },
   ]
-
   for case in cases {
     run_case(case)
   }
@@ -691,191 +687,251 @@ test "blackbox compare outputs" {
 
 ///|
 test "blackbox compile failures" {
-  compile_failure((
-    #|#include "missing_header.h"
-    #|int main() { return 0; }
-  ))
-  compile_failure((
-    #|#define F(x) x
-    #|int main() { return F(1, 2); }
-  ))
-  compile_failure((
-    #|#if
-    #|int main() { return 0; }
-    #|#endif
-  ))
-  compile_failure((
-    #|#line
-    #|int main() { return 0; }
-  ))
-  compile_failure((
-    #|#if 123z
-    #|int main() { return 0; }
-    #|#endif
-  ))
-  compile_failure((
-    #|#if 1/0
-    #|int main() { return 0; }
-    #|#endif
-  ))
-  compile_failure((
-    #|#if 1%0
-    #|int main() { return 0; }
-    #|#endif
-  ))
-  compile_failure((
-    #|#if '\x'
-    #|int main() { return 0; }
-    #|#endif
-  ))
-  compile_failure((
-    #|#if defined()
-    #|int main() { return 0; }
-    #|#endif
-  ))
-  compile_failure((
-    #|#if defined(FOO
-    #|int main() { return 0; }
-    #|#endif
-  ))
-  compile_failure((
-    #|int main() {
-    #|  default: return 0;
-    #|}
-  ))
-  compile_failure((
-    #|int main() {
-    #|  case 1: return 0;
-    #|}
-  ))
-  compile_failure((
-    #|int main() {
-    #|  int x = 3;
-    #|  switch (x) {
-    #|    case x: return 0;
-    #|  }
-    #|  return 1;
-    #|}
-  ))
-  compile_failure((
-    #|int main() {
-    #|  switch (1) {
-    #|    case 0: break;
-    #|    case 0: break;
-    #|  }
-    #|  return 0;
-    #|}
-  ))
-  compile_failure((
-    #|int main() {
-    #|  break;
-    #|}
-  ))
-  compile_failure((
-    #|int main() {
-    #|  continue;
-    #|}
-  ))
-  compile_failure((
-    #|void f() {
-    #|  return 1;
-    #|}
-    #|int main() {
-    #|  f();
-    #|  return 0;
-    #|}
-  ))
-  compile_failure((
-    #|int main() {
-    #|  double x = 1.0;
-    #|  switch (x) {
-    #|    case 1: break;
-    #|  }
-    #|  return 0;
-    #|}
-  ))
-  compile_failure((
-    #|struct S { int a; };
-    #|int main() {
-    #|  struct S s = {1};
-    #|  if (s) {
-    #|    return 0;
-    #|  }
-    #|  return 1;
-    #|}
-  ))
-  compile_failure((
-    #|int main() {
-    #|  goto L;
-    #|  L: ;
-    #|  L: ;
-    #|  return 0;
-    #|}
-  ))
-  compile_failure((
-    #|int f(int);
-    #|int f(double);
-    #|int main() { return 0; }
-  ))
-  compile_failure((
-    #|int g(int, ...);
-    #|int g(int);
-    #|int main() { return 0; }
-  ))
-  compile_failure((
-    #|int arr[2];
-    #|int arr[3];
-    #|int main() { return 0; }
-  ))
-  compile_failure((
-    #|int main() {
-    #|  int x = 3;
-    #|  switch (1) {
-    #|    case 1 ... x: return 0;
-    #|  }
-    #|  return 1;
-    #|}
-  ))
-  compile_failure((
-    #|int main() {
-    #|  switch (1) {
-    #|    default: break;
-    #|    default: break;
-    #|  }
-    #|  return 0;
-    #|}
-  ))
-  compile_failure((
-    #|int main() {
-    #|  switch (1) {
-    #|    case 5 ... 6: break;
-    #|    case 1 ... 2: break;
-    #|    case 1 ... 3: break;
-    #|  }
-    #|  return 0;
-    #|}
-  ))
-  compile_failure((
-    #|int main() {
-    #|  goto *5;
-    #|}
-  ))
-  compile_failure((
-    #|int v;
-    #|float v;
-    #|int main() { return 0; }
-  ))
-  compile_failure((
-    #|int arr4c[2];
-    #|int arr4c[2];
-    #|int arr4c[3];
-    #|int main() { return 0; }
-  ))
-  compile_failure((
-    #|int fn2(int a, int b);
-    #|int fn2(int a);
-    #|int main() { return 0; }
-  ))
+  compile_failure(
+    (
+      #|#include "missing_header.h"
+      #|int main() { return 0; }
+    ),
+  )
+  compile_failure(
+    (
+      #|#define F(x) x
+      #|int main() { return F(1, 2); }
+    ),
+  )
+  compile_failure(
+    (
+      #|#if
+      #|int main() { return 0; }
+      #|#endif
+    ),
+  )
+  compile_failure(
+    (
+      #|#line
+      #|int main() { return 0; }
+    ),
+  )
+  compile_failure(
+    (
+      #|#if 123z
+      #|int main() { return 0; }
+      #|#endif
+    ),
+  )
+  compile_failure(
+    (
+      #|#if 1/0
+      #|int main() { return 0; }
+      #|#endif
+    ),
+  )
+  compile_failure(
+    (
+      #|#if 1%0
+      #|int main() { return 0; }
+      #|#endif
+    ),
+  )
+  compile_failure(
+    (
+      #|#if '\x'
+      #|int main() { return 0; }
+      #|#endif
+    ),
+  )
+  compile_failure(
+    (
+      #|#if defined()
+      #|int main() { return 0; }
+      #|#endif
+    ),
+  )
+  compile_failure(
+    (
+      #|#if defined(FOO
+      #|int main() { return 0; }
+      #|#endif
+    ),
+  )
+  compile_failure(
+    (
+      #|int main() {
+      #|  default: return 0;
+      #|}
+    ),
+  )
+  compile_failure(
+    (
+      #|int main() {
+      #|  case 1: return 0;
+      #|}
+    ),
+  )
+  compile_failure(
+    (
+      #|int main() {
+      #|  int x = 3;
+      #|  switch (x) {
+      #|    case x: return 0;
+      #|  }
+      #|  return 1;
+      #|}
+    ),
+  )
+  compile_failure(
+    (
+      #|int main() {
+      #|  switch (1) {
+      #|    case 0: break;
+      #|    case 0: break;
+      #|  }
+      #|  return 0;
+      #|}
+    ),
+  )
+  compile_failure(
+    (
+      #|int main() {
+      #|  break;
+      #|}
+    ),
+  )
+  compile_failure(
+    (
+      #|int main() {
+      #|  continue;
+      #|}
+    ),
+  )
+  compile_failure(
+    (
+      #|void f() {
+      #|  return 1;
+      #|}
+      #|int main() {
+      #|  f();
+      #|  return 0;
+      #|}
+    ),
+  )
+  compile_failure(
+    (
+      #|int main() {
+      #|  double x = 1.0;
+      #|  switch (x) {
+      #|    case 1: break;
+      #|  }
+      #|  return 0;
+      #|}
+    ),
+  )
+  compile_failure(
+    (
+      #|struct S { int a; };
+      #|int main() {
+      #|  struct S s = {1};
+      #|  if (s) {
+      #|    return 0;
+      #|  }
+      #|  return 1;
+      #|}
+    ),
+  )
+  compile_failure(
+    (
+      #|int main() {
+      #|  goto L;
+      #|  L: ;
+      #|  L: ;
+      #|  return 0;
+      #|}
+    ),
+  )
+  compile_failure(
+    (
+      #|int f(int);
+      #|int f(double);
+      #|int main() { return 0; }
+    ),
+  )
+  compile_failure(
+    (
+      #|int g(int, ...);
+      #|int g(int);
+      #|int main() { return 0; }
+    ),
+  )
+  compile_failure(
+    (
+      #|int arr[2];
+      #|int arr[3];
+      #|int main() { return 0; }
+    ),
+  )
+  compile_failure(
+    (
+      #|int main() {
+      #|  int x = 3;
+      #|  switch (1) {
+      #|    case 1 ... x: return 0;
+      #|  }
+      #|  return 1;
+      #|}
+    ),
+  )
+  compile_failure(
+    (
+      #|int main() {
+      #|  switch (1) {
+      #|    default: break;
+      #|    default: break;
+      #|  }
+      #|  return 0;
+      #|}
+    ),
+  )
+  compile_failure(
+    (
+      #|int main() {
+      #|  switch (1) {
+      #|    case 5 ... 6: break;
+      #|    case 1 ... 2: break;
+      #|    case 1 ... 3: break;
+      #|  }
+      #|  return 0;
+      #|}
+    ),
+  )
+  compile_failure(
+    (
+      #|int main() {
+      #|  goto *5;
+      #|}
+    ),
+  )
+  compile_failure(
+    (
+      #|int v;
+      #|float v;
+      #|int main() { return 0; }
+    ),
+  )
+  compile_failure(
+    (
+      #|int arr4c[2];
+      #|int arr4c[2];
+      #|int arr4c[3];
+      #|int main() { return 0; }
+    ),
+  )
+  compile_failure(
+    (
+      #|int fn2(int a, int b);
+      #|int fn2(int a);
+      #|int main() { return 0; }
+    ),
+  )
 }
 
 ///|
@@ -886,13 +942,13 @@ test "driver run args" {
   let stamp = @ffi.bench_now_ns()
   let case_dir = @testutil.join_path(base_dir, "driver-" + stamp.to_string())
   @testutil.ensure_dir(case_dir)
-
   let run_path = @testutil.join_path(case_dir, "run.c")
   @testutil.write_string(run_path, "int main() { return 3; }\n")
   assert_eq(@driver.run_args(["tinycc", "-run", run_path]), 3)
-
   let obj_path = @testutil.join_path(case_dir, "run.o")
-  let compile_status = @driver.run_args(["tinycc", "-c", run_path, "-o", obj_path])
+  let compile_status = @driver.run_args([
+    "tinycc", "-c", run_path, "-o", obj_path,
+  ])
   assert_eq(compile_status, 0)
-  assert_true(try @fs.is_file(obj_path) catch { _ => false })
+  assert_true(@fs.is_file(obj_path) catch { _ => false })
 }

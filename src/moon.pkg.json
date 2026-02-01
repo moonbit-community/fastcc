@@ -5,5 +5,10 @@
       "path": "hackwaly/tinycc/cmd/tinycc",
       "alias": "cmd_tinycc"
     }
-  ]
+  ],
+  "link": {
+    "native": {
+      "cc-flags": "-w"
+    }
+  }
 }

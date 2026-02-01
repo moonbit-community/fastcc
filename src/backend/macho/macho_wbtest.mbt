@@ -58,8 +58,14 @@ test "macho section records reloc count" {
 
 ///|
 test "macho maps arm64 relocation kinds" {
-  assert_eq(macho_reloc_type(@arm64.R_AARCH64_CALL26), (ARM64_RELOC_BRANCH26, true))
-  assert_eq(macho_reloc_type(@arm64.R_AARCH64_JUMP26), (ARM64_RELOC_BRANCH26, true))
+  assert_eq(
+    macho_reloc_type(@arm64.R_AARCH64_CALL26),
+    (ARM64_RELOC_BRANCH26, true),
+  )
+  assert_eq(
+    macho_reloc_type(@arm64.R_AARCH64_JUMP26),
+    (ARM64_RELOC_BRANCH26, true),
+  )
   assert_eq(
     macho_reloc_type(@arm64.R_AARCH64_ADR_PREL_PG_HI21),
     (ARM64_RELOC_PAGE21, true),

@@ -73,14 +73,7 @@ fn ensure_struct_fields(
   is_union~ : Bool,
   loc : @source.SrcLoc,
 ) -> RecordDef? {
-  @sem.ensure_struct_fields(
-    ctx,
-    tag,
-    tag_id,
-    fields,
-    is_union=is_union,
-    loc,
-  )
+  @sem.ensure_struct_fields(ctx, tag, tag_id, fields, is_union~, loc)
 }
 
 ///|
@@ -143,7 +136,7 @@ fn resolve_struct_fields(
   fields : Array[@ast.RecordItem]?,
   is_union~ : Bool,
 ) -> Array[@ast.Field]? {
-  @sem.resolve_struct_fields(ctx, tag, tag_id, fields, is_union=is_union)
+  @sem.resolve_struct_fields(ctx, tag, tag_id, fields, is_union~)
 }
 
 ///|

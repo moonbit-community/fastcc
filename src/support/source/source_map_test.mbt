@@ -2,13 +2,11 @@
 test "source map add file" {
   let map = @source.new_source_map()
   assert_eq(map.files.length(), 0)
-
   let file0 = @source.add_file(map, "<a>", "int a;")
   assert_eq(file0.id, 0)
   assert_eq(file0.path, "<a>")
   assert_eq(file0.text, "int a;")
   assert_eq(map.files.length(), 1)
-
   let file1 = @source.add_file(map, "<b>", "int b;")
   assert_eq(file1.id, 1)
   assert_eq(file1.path, "<b>")

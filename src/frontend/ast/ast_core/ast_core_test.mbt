@@ -7,21 +7,30 @@ test "attributes helpers" {
   assert_true(merged.packed)
   assert_true(merged.weak)
 }
+
 ///|
 test "type qualifiers helpers" {
   let base = @ast_core.empty_qual()
   let const_qual = @ast_core.with_const(base)
-  let combined = @ast_core.merge_qual(const_qual, @ast_core.with_volatile(@ast_core.empty_qual()))
-  let ty = @ast_core.apply_qualifiers(@ast_core.CType::Int(kind=@ast_core.CIntKind::Int, unsigned=false), combined)
+  let combined = @ast_core.merge_qual(
+    const_qual,
+    @ast_core.with_volatile(@ast_core.empty_qual()),
+  )
+  let ty = @ast_core.apply_qualifiers(
+    @ast_core.CType::Int(kind=@ast_core.CIntKind::Int, unsigned=false),
+    combined,
+  )
   match ty {
-    @ast_core.CType::Qualified(qual~, ..) => assert_true(qual.is_const && qual.is_volatile)
+    @ast_core.CType::Qualified(qual~, ..) =>
+      assert_true(qual.is_const && qual.is_volatile)
     _ => fail("expected qualified type")
   }
 }
+
 ///|
 test "expr helpers" {
   let loc = @source.dummy_loc(0)
-  let expr = @ast_core.Expr::IntLit(value="1", node_id=42, loc=loc)
+  let expr = @ast_core.Expr::IntLit(value="1", node_id=42, loc~)
   assert_true(@ast_core.expr_loc(expr) == loc)
   assert_eq(@ast_core.expr_node_id(expr), 42)
   assert_true(@ast_core.parse_int64_literal("0x10") is Some(16))

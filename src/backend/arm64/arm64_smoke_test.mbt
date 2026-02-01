@@ -13,7 +13,7 @@ fn uses_movi_e64(value : UInt64) -> Bool {
   if (value & (m << 48).lnot()) == 0 {
     return false
   }
-  if (value & m.lnot()) == (m << 16) {
+  if (value & m.lnot()) == m << 16 {
     return false
   }
   if (value & (m << 16).lnot()) == m {
@@ -45,16 +45,13 @@ test "arm64 emitter helpers" {
   let emitter = @arm64.new_arm64_emitter_with_capacity(0, 2)
   assert_eq(emitter.code.length(), 0)
   assert_eq(emitter.relocs.length(), 0)
-
   let sym : @arm64.Sym = { id: 1 }
   @arm64.greloc(emitter, sym, 4, @arm64.R_AARCH64_POINTER)
   assert_eq(emitter.relocs.length(), 1)
   assert_eq(emitter.relocs[0].addend, 0)
-
   let fallback = @arm64.new_arm64_emitter_with_capacity(0, 0)
   assert_eq(fallback.code.length(), 0)
   assert_eq(fallback.relocs.length(), 0)
-
   emitter.code_len = 3
   assert_eq(@arm64.gind(emitter), 12)
 }
@@ -66,7 +63,6 @@ test "arm64 emit32 expansion and errors" {
   @arm64.emit32(emitter, 0xd503201f)
   assert_true(emitter.code.length() >= 2)
   assert_eq(emitter.code_len, 2)
-
   let bad_fill : Result[Unit, Error] = try? @arm64.gen_fill_nops(emitter, 3)
   assert_true(bad_fill is Err(_))
 }
@@ -75,7 +71,6 @@ test "arm64 emit32 expansion and errors" {
 test "arm64 movi and bimm64 coverage" {
   ignore(@arm64.arm64_encode_bimm64((0x100000000 : UInt64)))
   assert_eq(@arm64.arm64_type_size(0), 0)
-
   let candidates : Array[UInt64] = [
     (0x00ff00ff00ff00ff : UInt64),
     (0x0f0f0f0f0f0f0f0f : UInt64),
@@ -104,9 +99,10 @@ test "arm64 movi and bimm64 coverage" {
 test "arm64 branch range errors" {
   let emitter = @arm64.new_arm64_emitter_with_capacity(2, 0)
   emitter.code_len = 2
-  let bad_gsym : Result[Unit, Error] = try? @arm64.gsym_addr(emitter, 4, 0x20000000)
+  let bad_gsym : Result[Unit, Error] = try? @arm64.gsym_addr(
+    emitter, 4, 0x20000000,
+  )
   assert_true(bad_gsym is Err(_))
-
   let bad_jmp : Result[Unit, Error] = try? @arm64.gjmp_addr(emitter, 0x20000000)
   assert_true(bad_jmp is Err(_))
 }

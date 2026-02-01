@@ -93,7 +93,9 @@ pub(all) struct Preprocessor {
 }
 
 ///|
-pub(all) struct ExpandingGuard { restore_len : Int }
+pub(all) struct ExpandingGuard {
+  restore_len : Int
+}
 
 ///|
 pub fn new_hidden_pool() -> HiddenPool {
@@ -123,11 +125,14 @@ pub fn make_builtin_token(
 }
 
 ///|
-pub fn make_builtin_word_token(pp : Preprocessor, word : String) -> @tokens.Token {
+pub fn make_builtin_word_token(
+  pp : Preprocessor,
+  word : String,
+) -> @tokens.Token {
   let (_, id) = pp.interner.intern_view_with_id(word[:])
   match @tokens.keyword_kind_from_id(id, pp.keyword_ids) {
-    Some(kind) => make_builtin_token(kind, id=id)
-    None => make_builtin_token(@tokens.TokenKind::Ident, id=id)
+    Some(kind) => make_builtin_token(kind, id~)
+    None => make_builtin_token(@tokens.TokenKind::Ident, id~)
   }
 }
 
@@ -164,8 +169,11 @@ pub fn define_macro(
 }
 
 ///|
-pub fn define_words_macro(pp : Preprocessor, name : String, words : Array[String]) ->
-  Unit {
+pub fn define_words_macro(
+  pp : Preprocessor,
+  name : String,
+  words : Array[String],
+) -> Unit {
   let tokens = words.map(w => make_builtin_word_token(pp, w))
   define_macro(pp, name, tokens)
 }
@@ -173,7 +181,9 @@ pub fn define_words_macro(pp : Preprocessor, name : String, words : Array[String
 ///|
 pub fn define_int_macro(pp : Preprocessor, name : String, value : Int) -> Unit {
   let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, value.to_string())
-  define_macro(pp, name, [make_builtin_token(@tokens.TokenKind::IntLit, lexeme_id=lexeme_id)])
+  define_macro(pp, name, [
+    make_builtin_token(@tokens.TokenKind::IntLit, lexeme_id~),
+  ])
 }
 
 ///|
@@ -184,7 +194,7 @@ pub fn define_func_macro_zero(pp : Preprocessor, name : String) -> Unit {
   }
   let param_id = macro_id_from_name(pp, "x")
   let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, "0")
-  let replacement = [make_builtin_token(@tokens.TokenKind::IntLit, lexeme_id=lexeme_id)]
+  let replacement = [make_builtin_token(@tokens.TokenKind::IntLit, lexeme_id~)]
   set_macro(pp, id, {
     params: [param_id],
     is_variadic: true,
@@ -223,7 +233,6 @@ pub fn init_builtin_macros(pp : Preprocessor) -> Unit {
   define_int_macro(pp, "__arm64__", 1)
   define_int_macro(pp, "__LP64__", 1)
   define_int_macro(pp, "__TINYC__", 928)
-
   define_macro(pp, "__ORDER_LITTLE_ENDIAN__", [
     make_builtin_token(
       @tokens.TokenKind::IntLit,
@@ -246,7 +255,6 @@ pub fn init_builtin_macros(pp : Preprocessor) -> Unit {
     make_builtin_word_token(pp, "__ORDER_LITTLE_ENDIAN__"),
   ])
   define_int_macro(pp, "__LITTLE_ENDIAN__", 1)
-
   define_words_macro(pp, "__SIZE_TYPE__", ["unsigned", "long"])
   define_words_macro(pp, "__PTRDIFF_TYPE__", ["long"])
   define_words_macro(pp, "__INTMAX_TYPE__", ["long", "int"])
@@ -263,7 +271,6 @@ pub fn init_builtin_macros(pp : Preprocessor) -> Unit {
   define_words_macro(pp, "__UINT64_TYPE__", ["unsigned", "long", "long"])
   define_words_macro(pp, "__int128_t", ["long", "double"])
   define_words_macro(pp, "__uint128_t", ["long", "double"])
-
   define_int_macro(pp, "__CHAR_BIT__", 8)
   if @util.char_is_unsigned {
     define_int_macro(pp, "__CHAR_UNSIGNED__", 1)
@@ -277,10 +284,8 @@ pub fn init_builtin_macros(pp : Preprocessor) -> Unit {
   define_int_macro(pp, "__SIZEOF_PTRDIFF_T__", 8)
   define_int_macro(pp, "__SIZEOF_WCHAR_T__", 4)
   define_int_macro(pp, "__SIZEOF_WINT_T__", 4)
-
   define_words_macro(pp, "__WCHAR_TYPE__", ["int"])
   define_words_macro(pp, "__WINT_TYPE__", ["int"])
-
   define_int_macro(pp, "__STDC__", 1)
   define_int_macro(pp, "__STDC_HOSTED__", 1)
   define_macro(pp, "__STDC_VERSION__", [
@@ -289,7 +294,6 @@ pub fn init_builtin_macros(pp : Preprocessor) -> Unit {
       lexeme_id=@tokens.lexeme_pool_intern(pp.lexeme_pool, "201112"),
     ),
   ])
-
   define_int_macro(pp, "__GNUC__", 4)
   define_int_macro(pp, "__GNUC_MINOR__", 2)
   define_int_macro(pp, "__GNUC_PATCHLEVEL__", 1)
@@ -299,7 +303,6 @@ pub fn init_builtin_macros(pp : Preprocessor) -> Unit {
   define_int_macro(pp, "_DONT_USE_CTYPE_INLINE_", 1)
   define_int_macro(pp, "_FORTIFY_SOURCE", 0)
   define_words_macro(pp, "_Float16", ["short", "unsigned", "int"])
-
   define_func_macro_zero(pp, "__has_builtin")
   define_func_macro_zero(pp, "__has_feature")
   define_func_macro_zero(pp, "__has_extension")
@@ -324,8 +327,11 @@ pub fn init_builtin_macros(pp : Preprocessor) -> Unit {
 }
 
 ///|
-pub fn new_preprocessor(map : @source.SourceMap, file : @source.SourceFile, diags : @diag.DiagBag) ->
-  Preprocessor {
+pub fn new_preprocessor(
+  map : @source.SourceMap,
+  file : @source.SourceFile,
+  diags : @diag.DiagBag,
+) -> Preprocessor {
   let (date_literal, time_literal) = init_datetime_literals()
   let text_len = file.text.length()
   let mut interner_capacity = text_len / 128
@@ -343,7 +349,9 @@ pub fn new_preprocessor(map : @source.SourceMap, file : @source.SourceFile, diag
   }
   let include_stack_capacity = 16
   let cond_capacity = 64
-  let interner = @intern.new_string_interner_with_capacity(capacity=interner_capacity)
+  let interner = @intern.new_string_interner_with_capacity(
+    capacity=interner_capacity,
+  )
   let keyword_ids = @tokens.init_keyword_ids(interner)
   let (_, line_macro_id) = interner.intern_view_with_id("__LINE__"[:])
   let (_, file_macro_id) = interner.intern_view_with_id("__FILE__"[:])
@@ -351,8 +359,9 @@ pub fn new_preprocessor(map : @source.SourceMap, file : @source.SourceFile, diag
   let (_, time_macro_id) = interner.intern_view_with_id("__TIME__"[:])
   let (_, defined_id) = interner.intern_view_with_id("defined"[:])
   let (_, has_include_id) = interner.intern_view_with_id("__has_include"[:])
-  let (_, has_include_next_id) =
-    interner.intern_view_with_id("__has_include_next"[:])
+  let (_, has_include_next_id) = interner.intern_view_with_id(
+    "__has_include_next"[:],
+  )
   let (_, dir_define_id) = interner.intern_view_with_id("define"[:])
   let (_, dir_undef_id) = interner.intern_view_with_id("undef"[:])
   let (_, dir_if_id) = interner.intern_view_with_id("if"[:])
@@ -432,7 +441,13 @@ pub fn finalize_preprocessor(pp : Preprocessor) -> Unit {
     path: pp.current_path,
     text: "",
   }
-  pp.lexer = @lexer.new_lexer(dummy_file, pp.diags, pp.interner, pp.keyword_ids, pp.lexeme_pool)
+  pp.lexer = @lexer.new_lexer(
+    dummy_file,
+    pp.diags,
+    pp.interner,
+    pp.keyword_ids,
+    pp.lexeme_pool,
+  )
   pp.lexer_stack.clear()
   pp.held_stack.clear()
   pp.path_stack.clear()
@@ -473,11 +488,16 @@ pub fn current_active(pp : Preprocessor) -> Bool {
 }
 
 ///|
-pub fn add_pp_error(pp : Preprocessor, loc : @source.SrcLoc, message : String) -> Unit {
+pub fn add_pp_error(
+  pp : Preprocessor,
+  loc : @source.SrcLoc,
+  message : String,
+) -> Unit {
   @diag.add_error(pp.diags, loc, message)
 }
 
 ///|
+
 ///|
 pub fn is_macro_name_token(tok : @tokens.Token) -> Bool {
   @tokens.token_id(tok) > 0
@@ -772,6 +792,7 @@ pub fn read_directive_text(pp : Preprocessor) -> String {
         saw_non_ws = true
         sb.write_char(code.unsafe_to_char())
         let _ = @lexer.advance(pp.lexer)
+
       }
     }
   }
@@ -779,7 +800,10 @@ pub fn read_directive_text(pp : Preprocessor) -> String {
 }
 
 ///|
-pub fn slice_tokens(tokens : Array[@tokens.Token], start : Int) -> Array[@tokens.Token] {
+pub fn slice_tokens(
+  tokens : Array[@tokens.Token],
+  start : Int,
+) -> Array[@tokens.Token] {
   if start <= 0 {
     return tokens
   }
@@ -790,13 +814,16 @@ pub fn slice_tokens(tokens : Array[@tokens.Token], start : Int) -> Array[@tokens
 }
 
 ///|
-pub fn prefix_tokens(tokens : Array[@tokens.Token], end : Int) -> Array[@tokens.Token] {
+pub fn prefix_tokens(
+  tokens : Array[@tokens.Token],
+  end : Int,
+) -> Array[@tokens.Token] {
   if end <= 0 {
     return []
   }
   let total_len = tokens.length()
   let capacity = if total_len > end { total_len } else { end }
-  let out : Array[@tokens.Token] = Array::new(capacity=capacity)
+  let out : Array[@tokens.Token] = Array::new(capacity~)
   let mut i = 0
   while i < end {
     out.push(tokens[i])
@@ -806,6 +833,7 @@ pub fn prefix_tokens(tokens : Array[@tokens.Token], end : Int) -> Array[@tokens.
 }
 
 ///|
+
 ///|
 pub fn dir_name(path : String) -> String {
   match path.rev_find("/") {
@@ -874,7 +902,10 @@ pub fn parse_include_path(
 }
 
 ///|
-pub fn parse_has_include_path(pp : Preprocessor, args : Array[@tokens.Token]) -> IncludeSpec? {
+pub fn parse_has_include_path(
+  pp : Preprocessor,
+  args : Array[@tokens.Token],
+) -> IncludeSpec? {
   if args.length() == 0 {
     return None
   }
@@ -1107,7 +1138,10 @@ pub fn push_back(pp : Preprocessor, tok : @tokens.Token) -> Unit {
 }
 
 ///|
-pub fn read_macro_args(pp : Preprocessor, loc : @source.SrcLoc) -> Array[Array[@tokens.Token]]? {
+pub fn read_macro_args(
+  pp : Preprocessor,
+  loc : @source.SrcLoc,
+) -> Array[Array[@tokens.Token]]? {
   let args : Array[Array[@tokens.Token]] = []
   let mut current : Array[@tokens.Token] = []
   let mut depth_paren = 0
@@ -1195,15 +1229,13 @@ pub fn normalize_macro_args(
     let var_tokens : Array[@tokens.Token] = []
     for i = param_count - 1; i < args.length(); i = i + 1 {
       if var_tokens.length() > 0 {
-        var_tokens.push(
-          {
-            kind: @tokens.TokenKind::Comma,
-            value: 0,
-            loc,
-            line_start: false,
-            hidden: @tokens.empty_hidden,
-          },
-        )
+        var_tokens.push({
+          kind: @tokens.TokenKind::Comma,
+          value: 0,
+          loc,
+          line_start: false,
+          hidden: @tokens.empty_hidden,
+        })
       }
       for t in args[i] {
         var_tokens.push(t)
@@ -1219,7 +1251,11 @@ pub fn normalize_macro_args(
 }
 
 ///|
-pub fn is_adjacent(pp : Preprocessor, left : @tokens.Token, right : @tokens.Token) -> Bool {
+pub fn is_adjacent(
+  pp : Preprocessor,
+  left : @tokens.Token,
+  right : @tokens.Token,
+) -> Bool {
   left.loc.file_id == right.loc.file_id &&
   right.loc.offset == left.loc.offset + pp_token_lexeme_len(pp, left)
 }
@@ -1245,7 +1281,10 @@ pub fn pop_expanding(pp : Preprocessor) -> Unit {
 }
 
 ///|
-pub fn stringize_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> String {
+pub fn stringize_tokens(
+  pp : Preprocessor,
+  tokens : Array[@tokens.Token],
+) -> String {
   if tokens.length() == 0 {
     return ""
   }
@@ -1259,7 +1298,7 @@ pub fn stringize_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Str
   if size_hint > 0 {
     size_hint = size_hint - 1
   }
-  let sb = StringBuilder::new(size_hint=size_hint)
+  let sb = StringBuilder::new(size_hint~)
   let mut first = true
   let mut prev : @tokens.Token? = None
   for tok in tokens {
@@ -1267,11 +1306,10 @@ pub fn stringize_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Str
       first = false
     } else {
       match prev {
-        Some(prev_tok) => {
+        Some(prev_tok) =>
           if !is_adjacent(pp, prev_tok, tok) {
             sb.write_char(' ')
           }
-        }
         None => sb.write_char(' ')
       }
     }
@@ -1282,9 +1320,16 @@ pub fn stringize_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Str
 }
 
 ///|
-pub fn make_string_literal(pp : Preprocessor, text : String, loc : @source.SrcLoc) -> @tokens.Token {
+pub fn make_string_literal(
+  pp : Preprocessor,
+  text : String,
+  loc : @source.SrcLoc,
+) -> @tokens.Token {
   let escaped = escape_string(text)
-  let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, "\"" + escaped + "\"")
+  let lexeme_id = @tokens.lexeme_pool_intern(
+    pp.lexeme_pool,
+    "\"" + escaped + "\"",
+  )
   let token_value = @tokens.token_value_from_parts(0, lexeme_id)
   {
     kind: @tokens.TokenKind::StrLit,
@@ -1331,7 +1376,11 @@ pub fn logical_line(pp : Preprocessor, loc : @source.SrcLoc) -> Int {
 }
 
 ///|
-pub fn make_int_literal_token(pp : Preprocessor, value : Int, loc : @source.SrcLoc) -> @tokens.Token {
+pub fn make_int_literal_token(
+  pp : Preprocessor,
+  value : Int,
+  loc : @source.SrcLoc,
+) -> @tokens.Token {
   let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, value.to_string())
   let token_value = @tokens.token_value_from_parts(0, lexeme_id)
   {
@@ -1344,12 +1393,13 @@ pub fn make_int_literal_token(pp : Preprocessor, value : Int, loc : @source.SrcL
 }
 
 ///|
-pub fn builtin_macro_tokens(pp : Preprocessor, tok : @tokens.Token) -> Array[@tokens.Token]? {
+pub fn builtin_macro_tokens(
+  pp : Preprocessor,
+  tok : @tokens.Token,
+) -> Array[@tokens.Token]? {
   let id = @tokens.token_id(tok)
   if id == pp.builtin_ids.line_macro {
-    return Some([
-      make_int_literal_token(pp, logical_line(pp, tok.loc), tok.loc),
-    ])
+    return Some([make_int_literal_token(pp, logical_line(pp, tok.loc), tok.loc)])
   }
   if id == pp.builtin_ids.file_macro {
     let path = if pp.logical_path == "" {
@@ -1377,7 +1427,10 @@ pub fn is_builtin_macro_id(pp : Preprocessor, id : Int) -> Bool {
 }
 
 ///|
-pub fn tokens_need_expansion(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Bool {
+pub fn tokens_need_expansion(
+  pp : Preprocessor,
+  tokens : Array[@tokens.Token],
+) -> Bool {
   for tok in tokens {
     if token_needs_expansion(pp, tok) {
       return true
@@ -1406,16 +1459,15 @@ pub fn macro_replacement_needs_expand(
   }
   let needs = tokens_need_expansion(pp, macro_def.replacement)
   if macro_id > 0 && macro_id <= pp.macros.length() {
-    pp.macros[macro_id - 1] =
-      Some({
-        params: macro_def.params,
-        is_variadic: macro_def.is_variadic,
-        is_function: macro_def.is_function,
-        replacement: macro_def.replacement,
-        replacement_has_id: macro_def.replacement_has_id,
-        replacement_needs_expand: needs,
-        replacement_needs_epoch: pp.macro_epoch,
-      })
+    pp.macros[macro_id - 1] = Some({
+      params: macro_def.params,
+      is_variadic: macro_def.is_variadic,
+      is_function: macro_def.is_function,
+      replacement: macro_def.replacement,
+      replacement_has_id: macro_def.replacement_has_id,
+      replacement_needs_expand: needs,
+      replacement_needs_epoch: pp.macro_epoch,
+    })
   }
   needs
 }
@@ -1540,14 +1592,17 @@ pub fn lex_paste_tokens(
     add_pp_error(
       pp,
       loc,
-      "warning: pasting \"" + left +
-      "\" and \"" + right +
+      "warning: pasting \"" +
+      left +
+      "\" and \"" +
+      right +
       "\" does not give a valid preprocessing token",
     )
   }
   out
 }
 
+///|
 pub fn substitute_macro(
   pp : Preprocessor,
   macro_def : Macro,
@@ -1555,16 +1610,25 @@ pub fn substitute_macro(
   loc : @source.SrcLoc,
 ) -> (Array[@tokens.Token], Bool) {
   if !macro_def.is_function {
-    return (macro_def.replacement, tokens_need_expansion(pp, macro_def.replacement))
+    return (
+      macro_def.replacement,
+      tokens_need_expansion(pp, macro_def.replacement),
+    )
   }
-  let out : Array[@tokens.Token] = Array::new(capacity=macro_def.replacement.length())
+  let out : Array[@tokens.Token] = Array::new(
+    capacity=macro_def.replacement.length(),
+  )
   let mut needs_expand = false
   let params = macro_def.params
-  let expanded_cache : Array[Array[@tokens.Token]?] = Array::make(raw_args.length(), None)
+  let expanded_cache : Array[Array[@tokens.Token]?] = Array::make(
+    raw_args.length(),
+    None,
+  )
   let mut i = 0
   while i < macro_def.replacement.length() {
     let tok = macro_def.replacement[i]
-    if tok.kind == @tokens.TokenKind::Hash && i + 1 < macro_def.replacement.length() {
+    if tok.kind == @tokens.TokenKind::Hash &&
+      i + 1 < macro_def.replacement.length() {
       let next_tok = macro_def.replacement[i + 1]
       if next_tok.kind == @tokens.TokenKind::Ident {
         let param_id = @tokens.token_id(next_tok)
@@ -1575,8 +1639,11 @@ pub fn substitute_macro(
             } else {
               []
             }
-            let string_tok =
-              make_string_literal(pp, stringize_tokens(pp, arg_tokens), loc)
+            let string_tok = make_string_literal(
+              pp,
+              stringize_tokens(pp, arg_tokens),
+              loc,
+            )
             out.push(string_tok)
             if !needs_expand && token_needs_expansion(pp, string_tok) {
               needs_expand = true
@@ -1628,15 +1695,13 @@ pub fn substitute_macro(
       let last_text = pp_token_lexeme(pp, last)
       let next_text = pp_token_lexeme(pp, next_tokens[0])
       let merged_lexeme = last_text + next_text
-      let merged_hidden =
-        merge_hidden(pp.hidden_pool, last.hidden, next_tokens[0].hidden)
+      let merged_hidden = merge_hidden(
+        pp.hidden_pool,
+        last.hidden,
+        next_tokens[0].hidden,
+      )
       let merged_tokens = lex_paste_tokens(
-        pp,
-        merged_lexeme,
-        last_text,
-        next_text,
-        loc,
-        merged_hidden,
+        pp, merged_lexeme, last_text, next_text, loc, merged_hidden,
       )
       for t in merged_tokens {
         out.push(t)
@@ -1670,7 +1735,9 @@ pub fn substitute_macro(
       let param_id = @tokens.token_id(tok)
       if param_id > 0 {
         if lookup_param_index(params, param_id) is Some(idx) {
-          let arg_tokens = ensure_expanded_arg(pp, raw_args, expanded_cache, idx)
+          let arg_tokens = ensure_expanded_arg(
+            pp, raw_args, expanded_cache, idx,
+          )
           for t in arg_tokens {
             let out_tok = @tokens.Token::{
               kind: t.kind,
@@ -1804,7 +1871,10 @@ pub fn ensure_expanded_arg(
 }
 
 ///|
-pub fn expand_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Array[@tokens.Token] {
+pub fn expand_tokens(
+  pp : Preprocessor,
+  tokens : Array[@tokens.Token],
+) -> Array[@tokens.Token] {
   let mut out_opt : Array[@tokens.Token]? = None
   let mut changed = false
   let len = tokens.length()
@@ -1836,76 +1906,48 @@ pub fn expand_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Array[
       (macro_id != 0 && !hidden_contains(pp.hidden_pool, tok.hidden, macro_id))
     if is_macro_name && macro_id != 0 && hidden_ok {
       if get_macro(pp, macro_id) is Some(macro_def) {
-          if is_expanding(pp, macro_id) {
-            if out_opt is Some(arr) {
-              arr.push(tok)
-            }
-            i = i + 1
-            continue
+        if is_expanding(pp, macro_id) {
+          if out_opt is Some(arr) {
+            arr.push(tok)
           }
-          if macro_def.is_function {
-            if i + 1 < len && tokens[i + 1].kind == @tokens.TokenKind::LParen {
-              match read_macro_args_from_tokens(pp, tokens, i + 2, tok.loc) {
-                None => {
-                  if out_opt is Some(arr) {
-                    arr.push(tok)
-                  }
-                  i = i + 1
-                  continue
+          i = i + 1
+          continue
+        }
+        if macro_def.is_function {
+          if i + 1 < len && tokens[i + 1].kind == @tokens.TokenKind::LParen {
+            match read_macro_args_from_tokens(pp, tokens, i + 2, tok.loc) {
+              None => {
+                if out_opt is Some(arr) {
+                  arr.push(tok)
                 }
-                Some((raw_args, next_i)) =>
-                  match normalize_macro_args(macro_def, raw_args, tok.loc) {
-                    None => {
-                      add_pp_error(pp, tok.loc, "macro argument count mismatch")
-                      if out_opt is Some(arr) {
-                        arr.push(tok)
-                      }
-                      i = next_i
-                      continue
+                i = i + 1
+                continue
+              }
+              Some((raw_args, next_i)) =>
+                match normalize_macro_args(macro_def, raw_args, tok.loc) {
+                  None => {
+                    add_pp_error(pp, tok.loc, "macro argument count mismatch")
+                    if out_opt is Some(arr) {
+                      arr.push(tok)
                     }
-                    Some(norm_raw) => {
-                      if @tokens.token_id(tok) == pp.builtin_ids.has_include ||
-                        @tokens.token_id(tok) == pp.builtin_ids.has_include_next {
-                        let include_next =
-                          @tokens.token_id(tok) == pp.builtin_ids.has_include_next
-                        let arg_tokens = if norm_raw.length() > 0 {
-                          expand_tokens(pp, norm_raw[0])
-                        } else {
-                          []
-                        }
-                        let value = eval_has_include(
-                          pp,
-                          arg_tokens,
-                          include_next~,
-                        )
-                        let out = match out_opt {
-                          Some(arr) => arr
-                          None => {
-                            let arr = prefix_tokens(tokens, i)
-                            out_opt = Some(arr)
-                            arr
-                          }
-                        }
-                        out.push(make_int_literal_token(pp, value, tok.loc))
-                        changed = true
-                        i = next_i
-                        continue
-                      }
-                      let (replaced, needs_expand) = substitute_macro(
-                        pp,
-                        macro_def,
-                        norm_raw,
-                        tok.loc,
-                      )
-                      let expanded = if needs_expand {
-                        push_expanding(pp, macro_id)
-                        let expanded =
-                          add_hidden_tokens(pp, expand_tokens(pp, replaced), macro_id)
-                        pop_expanding(pp)
-                        expanded
+                    i = next_i
+                    continue
+                  }
+                  Some(norm_raw) => {
+                    if @tokens.token_id(tok) == pp.builtin_ids.has_include ||
+                      @tokens.token_id(tok) == pp.builtin_ids.has_include_next {
+                      let include_next = @tokens.token_id(tok) ==
+                        pp.builtin_ids.has_include_next
+                      let arg_tokens = if norm_raw.length() > 0 {
+                        expand_tokens(pp, norm_raw[0])
                       } else {
-                        replaced
+                        []
                       }
+                      let value = eval_has_include(
+                        pp,
+                        arg_tokens,
+                        include_next~,
+                      )
                       let out = match out_opt {
                         Some(arr) => arr
                         None => {
@@ -1914,50 +1956,82 @@ pub fn expand_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Array[
                           arr
                         }
                       }
-                      for t in expanded {
-                        out.push(t)
-                      }
+                      out.push(make_int_literal_token(pp, value, tok.loc))
                       changed = true
                       i = next_i
                       continue
                     }
+                    let (replaced, needs_expand) = substitute_macro(
+                      pp,
+                      macro_def,
+                      norm_raw,
+                      tok.loc,
+                    )
+                    let expanded = if needs_expand {
+                      push_expanding(pp, macro_id)
+                      let expanded = add_hidden_tokens(
+                        pp,
+                        expand_tokens(pp, replaced),
+                        macro_id,
+                      )
+                      pop_expanding(pp)
+                      expanded
+                    } else {
+                      replaced
+                    }
+                    let out = match out_opt {
+                      Some(arr) => arr
+                      None => {
+                        let arr = prefix_tokens(tokens, i)
+                        out_opt = Some(arr)
+                        arr
+                      }
+                    }
+                    for t in expanded {
+                      out.push(t)
+                    }
+                    changed = true
+                    i = next_i
+                    continue
                   }
-              }
+                }
             }
-            if out_opt is Some(arr) {
-              arr.push(tok)
-            }
-            i = i + 1
-            continue
-          } else {
-            let expanded =
-              if macro_replacement_needs_expand(pp, macro_id, macro_def) {
-                push_expanding(pp, macro_id)
-                let expanded = add_hidden_tokens(
-                  pp,
-                  expand_tokens(pp, macro_def.replacement),
-                  macro_id,
-                )
-                pop_expanding(pp)
-                expanded
-              } else {
-                macro_def.replacement
-              }
-            let out = match out_opt {
-              Some(arr) => arr
-              None => {
-                let arr = prefix_tokens(tokens, i)
-                out_opt = Some(arr)
-                arr
-              }
-            }
-            for t in expanded {
-              out.push(t)
-            }
-            changed = true
-            i = i + 1
-            continue
           }
+          if out_opt is Some(arr) {
+            arr.push(tok)
+          }
+          i = i + 1
+          continue
+        } else {
+          let expanded = if macro_replacement_needs_expand(
+              pp, macro_id, macro_def,
+            ) {
+            push_expanding(pp, macro_id)
+            let expanded = add_hidden_tokens(
+              pp,
+              expand_tokens(pp, macro_def.replacement),
+              macro_id,
+            )
+            pop_expanding(pp)
+            expanded
+          } else {
+            macro_def.replacement
+          }
+          let out = match out_opt {
+            Some(arr) => arr
+            None => {
+              let arr = prefix_tokens(tokens, i)
+              out_opt = Some(arr)
+              arr
+            }
+          }
+          for t in expanded {
+            out.push(t)
+          }
+          changed = true
+          i = i + 1
+          continue
+        }
       }
     }
     if out_opt is Some(arr) {
@@ -1985,7 +2059,11 @@ pub fn push_cond(pp : Preprocessor, cond : Bool) -> Unit {
 }
 
 ///|
-pub fn update_elif(pp : Preprocessor, cond : Bool, loc : @source.SrcLoc) -> Unit {
+pub fn update_elif(
+  pp : Preprocessor,
+  cond : Bool,
+  loc : @source.SrcLoc,
+) -> Unit {
   if pp.cond_stack.length() == 0 {
     add_pp_error(pp, loc, "unexpected #elif without #if")
     return
@@ -2042,7 +2120,9 @@ pub fn pop_cond(pp : Preprocessor, loc : @source.SrcLoc) -> Unit {
 }
 
 ///|
-pub fn normalize_macro_tokens(tokens : Array[@tokens.Token]) -> Array[@tokens.Token] {
+pub fn normalize_macro_tokens(
+  tokens : Array[@tokens.Token],
+) -> Array[@tokens.Token] {
   let mut needs_copy = false
   for tok in tokens {
     if tok.line_start {
@@ -2067,10 +2147,14 @@ pub fn normalize_macro_tokens(tokens : Array[@tokens.Token]) -> Array[@tokens.To
 }
 
 ///|
-pub fn expand_if_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Array[@tokens.Token] {
+pub fn expand_if_tokens(
+  pp : Preprocessor,
+  tokens : Array[@tokens.Token],
+) -> Array[@tokens.Token] {
   let mut has_defined = false
   for tok in tokens {
-    if tok.kind == @tokens.TokenKind::Ident && @tokens.token_id(tok) == pp.builtin_ids.defined {
+    if tok.kind == @tokens.TokenKind::Ident &&
+      @tokens.token_id(tok) == pp.builtin_ids.defined {
       has_defined = true
       break
     }
@@ -2084,7 +2168,8 @@ pub fn expand_if_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Arr
   let mut i = 0
   while i < len {
     let tok = tokens[i]
-    if tok.kind == @tokens.TokenKind::Ident && @tokens.token_id(tok) == pp.builtin_ids.defined {
+    if tok.kind == @tokens.TokenKind::Ident &&
+      @tokens.token_id(tok) == pp.builtin_ids.defined {
       if segment.length() > 0 {
         let expanded = expand_tokens(pp, segment)
         for t in expanded {
@@ -2135,9 +2220,7 @@ pub fn push_tokens(pp : Preprocessor, tokens : Array[@tokens.Token]) -> Unit {
 ///|
 pub fn release_expanding_guards(pp : Preprocessor) -> Unit {
   while pp.expanding_guards.length() > 0 {
-    let guard_restore = pp.expanding_guards[
-      pp.expanding_guards.length() - 1
-    ].restore_len
+    let guard_restore = pp.expanding_guards[pp.expanding_guards.length() - 1].restore_len
     if pp.pending.length() <= guard_restore {
       pop_expanding(pp)
       ignore(pp.expanding_guards.pop())
@@ -2211,7 +2294,11 @@ pub fn merge_hidden(pool : HiddenPool, a : Int, b : Int) -> Int {
 }
 
 ///|
-pub fn add_hidden(pp : Preprocessor, tok : @tokens.Token, id : Int) -> @tokens.Token {
+pub fn add_hidden(
+  pp : Preprocessor,
+  tok : @tokens.Token,
+  id : Int,
+) -> @tokens.Token {
   let new_hidden = hidden_add(pp.hidden_pool, tok.hidden, id)
   if new_hidden == tok.hidden {
     tok
@@ -2272,7 +2359,11 @@ pub fn handle_line_directive(
 ///|
 
 ///|
-pub fn eval_if_expr(pp : Preprocessor, tokens : Array[@tokens.Token], loc : @source.SrcLoc) -> Bool {
+pub fn eval_if_expr(
+  pp : Preprocessor,
+  tokens : Array[@tokens.Token],
+  loc : @source.SrcLoc,
+) -> Bool {
   if tokens.length() == 0 {
     add_pp_error(pp, loc, "empty #if expression")
     return false
@@ -2346,7 +2437,11 @@ pub fn match_kind(p : IfParser, kind : @tokens.TokenKind) -> Bool {
 }
 
 ///|
-pub fn parse_line_int_literal(pp : Preprocessor, lexeme : String, loc : @source.SrcLoc) -> Int {
+pub fn parse_line_int_literal(
+  pp : Preprocessor,
+  lexeme : String,
+  loc : @source.SrcLoc,
+) -> Int {
   let end = @util.int_literal_end(lexeme)
   if end <= 0 {
     add_pp_error(pp, loc, "invalid integer in #line")
@@ -2543,11 +2638,13 @@ pub fn macro_int_value(
       }
       if macro_def.replacement.length() == 1 &&
         macro_def.replacement[0].kind == @tokens.TokenKind::IntLit {
-        return Some(parse_pp_int_literal(
-          pp,
-          pp_token_lexeme(pp, macro_def.replacement[0]),
-          loc,
-        ))
+        return Some(
+          parse_pp_int_literal(
+            pp,
+            pp_token_lexeme(pp, macro_def.replacement[0]),
+            loc,
+          ),
+        )
       }
       None
     }
@@ -2961,7 +3058,8 @@ pub fn handle_directive(pp : Preprocessor, _hash_tok : @tokens.Token) -> Unit {
       add_pp_error(pp, name_tok.loc, "invalid macro name in #define")
       return
     }
-    if parse_define_macro(pp, args[0], slice_tokens(args, 1), name_tok.loc) is Some(macro_def) {
+    if parse_define_macro(pp, args[0], slice_tokens(args, 1), name_tok.loc)
+      is Some(macro_def) {
       set_macro(pp, macro_id, macro_def)
     }
     return
@@ -3165,87 +3263,92 @@ pub fn next_pp_token(pp : Preprocessor) -> @tokens.Token {
       (macro_id != 0 && !hidden_contains(pp.hidden_pool, tok.hidden, macro_id))
     if is_macro_name && macro_id != 0 && hidden_ok {
       if get_macro(pp, macro_id) is Some(macro_def) {
-          if is_expanding(pp, macro_id) {
-            return tok
-          }
-          if macro_def.is_function {
-            let next_tok = next_raw_token(pp)
-            match next_tok.kind {
-              @tokens.TokenKind::LParen => ()
-              _ => {
-                push_back(pp, next_tok)
-                return tok
-              }
+        if is_expanding(pp, macro_id) {
+          return tok
+        }
+        if macro_def.is_function {
+          let next_tok = next_raw_token(pp)
+          match next_tok.kind {
+            @tokens.TokenKind::LParen => ()
+            _ => {
+              push_back(pp, next_tok)
+              return tok
             }
-            match read_macro_args(pp, tok.loc) {
-              None => return tok
-              Some(args) =>
-                match normalize_macro_args(macro_def, args, tok.loc) {
-                  None => {
-                    add_pp_error(pp, tok.loc, "macro argument count mismatch")
-                    return tok
+          }
+          match read_macro_args(pp, tok.loc) {
+            None => return tok
+            Some(args) =>
+              match normalize_macro_args(macro_def, args, tok.loc) {
+                None => {
+                  add_pp_error(pp, tok.loc, "macro argument count mismatch")
+                  return tok
+                }
+                Some(norm_args) => {
+                  let restore_len = pp.pending.length()
+                  let (replaced, needs_expand) = substitute_macro(
+                    pp,
+                    macro_def,
+                    norm_args,
+                    tok.loc,
+                  )
+                  let mut did_push = false
+                  let expanded = if needs_expand {
+                    push_expanding(pp, macro_id)
+                    did_push = true
+                    add_hidden_tokens(pp, expand_tokens(pp, replaced), macro_id)
+                  } else {
+                    replaced
                   }
-                  Some(norm_args) => {
-                    let restore_len = pp.pending.length()
-                    let (replaced, needs_expand) = substitute_macro(
-                      pp,
-                      macro_def,
-                      norm_args,
-                      tok.loc,
-                    )
-                    let mut did_push = false
-                    let expanded = if needs_expand {
-                      push_expanding(pp, macro_id)
-                      did_push = true
-                      add_hidden_tokens(pp, expand_tokens(pp, replaced), macro_id)
-                    } else {
-                      replaced
+                  if expanded.length() > 0 {
+                    if did_push {
+                      pp.expanding_guards.push({ restore_len, })
                     }
-                    if expanded.length() > 0 {
-                      if did_push {
-                        pp.expanding_guards.push({ restore_len, })
-                      }
-                      push_tokens(pp, expanded)
-                      if did_push {
-                        release_expanding_guards(pp)
-                      }
-                      if did_push && is_expanding(pp, macro_id) {
-                        pop_expanding(pp)
-                      }
-                    } else if did_push {
+                    push_tokens(pp, expanded)
+                    if did_push {
+                      release_expanding_guards(pp)
+                    }
+                    if did_push && is_expanding(pp, macro_id) {
                       pop_expanding(pp)
                     }
-                    continue
+                  } else if did_push {
+                    pop_expanding(pp)
                   }
+                  continue
                 }
-            }
+              }
+          }
+        } else {
+          let restore_len = pp.pending.length()
+          let mut did_push = false
+          let expanded = if macro_replacement_needs_expand(
+              pp, macro_id, macro_def,
+            ) {
+            push_expanding(pp, macro_id)
+            did_push = true
+            add_hidden_tokens(
+              pp,
+              expand_tokens(pp, macro_def.replacement),
+              macro_id,
+            )
           } else {
-            let restore_len = pp.pending.length()
-            let mut did_push = false
-            let expanded =
-              if macro_replacement_needs_expand(pp, macro_id, macro_def) {
-                push_expanding(pp, macro_id)
-                did_push = true
-                add_hidden_tokens(pp, expand_tokens(pp, macro_def.replacement), macro_id)
-              } else {
-                macro_def.replacement
-              }
-            if expanded.length() > 0 {
-              if did_push {
-                pp.expanding_guards.push({ restore_len, })
-              }
-              push_tokens(pp, expanded)
-              if did_push {
-                release_expanding_guards(pp)
-              }
-              if did_push && is_expanding(pp, macro_id) {
-                pop_expanding(pp)
-              }
-            } else if did_push {
+            macro_def.replacement
+          }
+          if expanded.length() > 0 {
+            if did_push {
+              pp.expanding_guards.push({ restore_len, })
+            }
+            push_tokens(pp, expanded)
+            if did_push {
+              release_expanding_guards(pp)
+            }
+            if did_push && is_expanding(pp, macro_id) {
               pop_expanding(pp)
             }
-            continue
+          } else if did_push {
+            pop_expanding(pp)
           }
+          continue
+        }
       }
     }
     return tok

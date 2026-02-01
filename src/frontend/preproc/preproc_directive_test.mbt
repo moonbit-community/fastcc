@@ -41,53 +41,49 @@ test "preproc directive hash newline" {
 
 ///|
 test "preproc directive missing names" {
-  let source = (
+  let source =
     #|#define
     #|#define 1
     #|#undef
     #|#undef 1
-  )
   let (bag, _kinds) = run_pp_collect(source, [])
   assert_true(@diag.has_errors(bag))
 }
 
 ///|
 test "preproc directive stray else/elif/endif" {
-  let source = (
+  let source =
     #|#elif 1
     #|#else
     #|#endif
-  )
   let (bag, _kinds) = run_pp_collect(source, [])
   assert_true(@diag.has_errors(bag))
 }
 
 ///|
 test "preproc directive error warning active" {
-  let source = (
+  let source =
     #|#error fail
     #|#warning warn
-  )
   let (bag, _kinds) = run_pp_collect(source, [])
   assert_true(@diag.has_errors(bag))
 }
 
 ///|
 test "preproc directive error warning inactive" {
-  let source = (
+  let source =
     #|#if 0
     #|#error fail
     #|#warning warn
     #|#endif
     #|int x;
-  )
   let (bag, _kinds) = run_pp_collect(source, [])
   assert_true(!@diag.has_errors(bag))
 }
 
 ///|
 test "preproc directive inactive ifdef ifndef" {
-  let source = (
+  let source =
     #|#if 0
     #|#ifdef FOO
     #|int a;
@@ -96,58 +92,51 @@ test "preproc directive inactive ifdef ifndef" {
     #|int b;
     #|#endif
     #|#endif
-  )
   let (bag, _kinds) = run_pp_collect(source, [])
   assert_true(!@diag.has_errors(bag))
 }
 
 ///|
 test "preproc directive elif branches" {
-  let source_taken = (
+  let source_taken =
     #|#if 1
     #|#elif 1
     #|#endif
-  )
   let (bag_taken, _kinds) = run_pp_collect(source_taken, [])
   assert_true(!@diag.has_errors(bag_taken))
-
-  let source_eval = (
+  let source_eval =
     #|#if 0
     #|#elif 1
     #|#endif
-  )
   let (bag_eval, _kinds) = run_pp_collect(source_eval, [])
   assert_true(!@diag.has_errors(bag_eval))
 }
 
 ///|
 test "preproc directive line inactive" {
-  let source = (
+  let source =
     #|#if 0
     #|#line 99 "ignored.c"
     #|#endif
     #|int x;
-  )
   let (bag, _kinds) = run_pp_collect(source, [])
   assert_true(!@diag.has_errors(bag))
 }
 
 ///|
 test "preproc directive pragma" {
-  let source = (
+  let source =
     #|#pragma once
     #|int x;
-  )
   let (bag, _kinds) = run_pp_collect(source, [])
   assert_true(!@diag.has_errors(bag))
 }
 
 ///|
 test "preproc directive unknown" {
-  let source = (
+  let source =
     #|#unknown abc
     #|int x;
-  )
   let (bag, _kinds) = run_pp_collect(source, [])
   assert_true(@diag.has_errors(bag))
 }
@@ -159,16 +148,21 @@ test "preproc directive include_next" {
   let inc2 = @testutil.join_path(case_dir, "inc2")
   @testutil.ensure_dir(inc1)
   @testutil.ensure_dir(inc2)
-  @testutil.write_string(@testutil.join_path(inc1, "inc.h"), "#define INC_VAL 1\n")
-  @testutil.write_string(@testutil.join_path(inc2, "inc.h"), "#define INC_VAL 2\n")
-  let source = (
+  @testutil.write_string(
+    @testutil.join_path(inc1, "inc.h"),
+    "#define INC_VAL 1\n",
+  )
+  @testutil.write_string(
+    @testutil.join_path(inc2, "inc.h"),
+    "#define INC_VAL 2\n",
+  )
+  let source =
     #|#include_next <inc.h>
     #|#if INC_VAL == 2
     #|int ok;
     #|#else
     #|#error wrong_include
     #|#endif
-  )
   let (bag, _kinds) = run_pp_collect(source, [inc1, inc2])
   assert_true(!@diag.has_errors(bag))
 }

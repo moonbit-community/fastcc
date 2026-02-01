@@ -85,9 +85,11 @@ fn expand_cli_args(args : Array[String]) -> Array[String]? {
     let arg = args[i]
     if arg.has_prefix("@") && arg.length() > 1 {
       let path = @util.slice_string(arg, 1, arg.length())
-      let contents = try @fs.read_file_to_string(path) catch {
+      let contents = @fs.read_file_to_string(path) catch {
         err => {
-          println("error: failed to read argument file '\{path}': \{err.to_string()}")
+          println(
+            "error: failed to read argument file '\{path}': \{err.to_string()}",
+          )
           return None
         }
       }
@@ -108,9 +110,7 @@ fn is_c_source_path(path : String) -> Bool {
 }
 
 ///|
-pub fn parse_cli_args(
-  args : Array[String],
-) -> CliParse {
+pub fn parse_cli_args(args : Array[String]) -> CliParse {
   let expanded = match expand_cli_args(args) {
     None => return CliParse::Error
     Some(v) => v
@@ -126,7 +126,6 @@ pub fn parse_cli_args(
   let mut compile_only = false
   let mut run = false
   let mut bench = false
-
   let mut i = 1
   let mut run_input = false
   while i < expanded.length() {
@@ -258,7 +257,7 @@ pub fn parse_cli_args(
         print_usage()
         return CliParse::Error
       }
-      macro_actions.push(CliMacroAction::Undef(name=name))
+      macro_actions.push(CliMacroAction::Undef(name~))
       i = i + 2
       continue
     }
@@ -350,7 +349,6 @@ pub fn parse_cli_args(
     }
     i = i + 1
   }
-
   if run && compile_only {
     println("error: -run cannot be combined with -c")
     return CliParse::Error

@@ -1,14 +1,9 @@
 ///|
 test "cli parses -I/-c/-o and input" {
-  let cfg = match @driver.parse_cli_args([
-    "prog",
-    "-Iinc1",
-    "-I",
-    "inc2",
-    "-c",
-    "-oout.o",
-    "in.c",
-  ]) {
+  let cfg = match
+    @driver.parse_cli_args([
+      "prog", "-Iinc1", "-I", "inc2", "-c", "-oout.o", "in.c",
+    ]) {
     @driver.CliParse::Run(v) => v
     _ => fail("expected args")
   }
@@ -39,15 +34,10 @@ test "cli ignores -Z flags" {
 
 ///|
 test "cli ignores common warning/debug flags" {
-  let cfg = match @driver.parse_cli_args([
-    "prog",
-    "-Wall",
-    "-Winvalid",
-    "-O2",
-    "-g",
-    "-c",
-    "in.c",
-  ]) {
+  let cfg = match
+    @driver.parse_cli_args([
+      "prog", "-Wall", "-Winvalid", "-O2", "-g", "-c", "in.c",
+    ]) {
     @driver.CliParse::Run(v) => v
     _ => fail("expected args")
   }
@@ -68,7 +58,8 @@ test "cli supports multiple input files" {
 
 ///|
 test "cli parses -isystem" {
-  let cfg = match @driver.parse_cli_args(["prog", "-isystem", "sysinc", "-c", "in.c"]) {
+  let cfg = match
+    @driver.parse_cli_args(["prog", "-isystem", "sysinc", "-c", "in.c"]) {
     @driver.CliParse::Run(v) => v
     _ => fail("expected args")
   }
@@ -78,18 +69,10 @@ test "cli parses -isystem" {
 
 ///|
 test "cli parses -D and -U" {
-  let cfg = match @driver.parse_cli_args([
-    "prog",
-    "-D",
-    "FOO",
-    "-DBAR=2",
-    "-DBAZ=",
-    "-U",
-    "FOO",
-    "-UQUX",
-    "-c",
-    "in.c",
-  ]) {
+  let cfg = match
+    @driver.parse_cli_args([
+      "prog", "-D", "FOO", "-DBAR=2", "-DBAZ=", "-U", "FOO", "-UQUX", "-c", "in.c",
+    ]) {
     @driver.CliParse::Run(v) => v
     _ => fail("expected args")
   }
@@ -120,7 +103,9 @@ test "cli expands @listfile" {
   }
   assert_eq(cfg.include_paths, ["inc"])
   assert_eq(cfg.inputs, ["in.c"])
-  assert_eq(cfg.macro_actions, [@driver.CliMacroAction::Define(name="TEST", value=Some("1"))])
+  assert_eq(cfg.macro_actions, [
+    @driver.CliMacroAction::Define(name="TEST", value=Some("1")),
+  ])
   @fs.remove_file(path) catch {
     _ => ()
   }
@@ -128,16 +113,10 @@ test "cli expands @listfile" {
 
 ///|
 test "cli parses -run" {
-  let cfg = match @driver.parse_cli_args([
-    "prog",
-    "-L",
-    "libdir",
-    "-lfoo",
-    "libbar.dylib",
-    "-run",
-    "main.c",
-    "arg1",
-  ]) {
+  let cfg = match
+    @driver.parse_cli_args([
+      "prog", "-L", "libdir", "-lfoo", "libbar.dylib", "-run", "main.c", "arg1",
+    ]) {
     @driver.CliParse::Run(v) => v
     _ => fail("expected args")
   }
