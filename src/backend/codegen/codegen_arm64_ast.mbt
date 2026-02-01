@@ -22,7 +22,7 @@ fn[K, V] fast_map_new(capacity? : Int) -> FastMap[K, V] {
 }
 
 ///|
-struct RegPool {
+priv struct RegPool {
   free : Array[Int]
 }
 
@@ -54,7 +54,7 @@ fn give_reg(pool : RegPool, r : Int) -> Unit {
 }
 
 ///|
-struct LocalSlot {
+priv struct LocalSlot {
   offset : Int
   ty : @ast.CType
   vla_size_offset : Int?
@@ -64,12 +64,12 @@ struct LocalSlot {
 }
 
 ///|
-struct StaticLocalInfo {
+priv struct StaticLocalInfo {
   name : String
   ty : @ast.CType
 }
 
-struct LocalAlloc {
+priv struct LocalAlloc {
   sem : SemContext
   ret_ty : @ast.CType
   mut ret_loc : Int?
@@ -92,7 +92,7 @@ struct LocalAlloc {
 }
 
 ///|
-struct VlaScopeInfo {
+priv struct VlaScopeInfo {
   num : Int
   loc : Int
   locorig : Int
@@ -1397,7 +1397,7 @@ fn reserve_compound_literals_initializer(
 ///|
 fn reserve_compound_literals_expr(alloc : LocalAlloc, expr : @ast.Expr) -> Unit {
   match expr {
-    @ast.Expr::CompoundLiteral(ty~, init~, node_id~, loc~, ..) => {
+    @ast.Expr::CompoundLiteral(ty~, init~, node_id~, loc~) => {
       reserve_compound_literal_slot(alloc, ty, init, loc, node_id)
       reserve_compound_literals_initializer(alloc, init)
     }
@@ -3729,7 +3729,7 @@ fn gen_initializer_to_addr(
 }
 
 ///|
-struct SymTable {
+priv struct SymTable {
   names : Array[String]
   name_to_id : FastMap[String, Int]
   externals : FastMap[Int, Bool]
@@ -4314,7 +4314,7 @@ fn gen_builtin_va_arg_load(
 }
 
 ///|
-struct Arm64PcsLayout {
+priv struct Arm64PcsLayout {
   ret_loc : Int
   arg_locs : Array[Int]
   stack_size : Int
@@ -4326,7 +4326,7 @@ struct Arm64PcsLayout {
 }
 
 ///|
-struct Arm64PcsAuxInfo {
+priv struct Arm64PcsAuxInfo {
   locs : Array[Int]
   stack_size : Int
   sizes : Array[Int]
@@ -4337,7 +4337,7 @@ struct Arm64PcsAuxInfo {
 }
 
 ///|
-struct SRetAddr {
+priv struct SRetAddr {
   base_reg : Int
   off : Int
 }
@@ -4688,7 +4688,7 @@ fn arm64_pcs(
 }
 
 ///|
-fn call_arg_slot_count(
+fn _call_arg_slot_count(
   alloc : LocalAlloc,
   ty : @ast.CType,
   loc : @source.SrcLoc,
@@ -6118,7 +6118,7 @@ fn gen_lvalue_addr(
         }
       }
     }
-    @ast.Expr::CompoundLiteral(ty~, init~, node_id~, loc~, ..) => {
+    @ast.Expr::CompoundLiteral(ty~, init~, node_id~, loc~) => {
       ignore(
         gen_compound_literal_addr_with_type(
           emitter,
@@ -6345,7 +6345,7 @@ fn struct_field_access_info(
           bit_pos = 0
         }
         let (field_size, field_align) = match strip_top_qualifiers_keep_attrs(field.ty) {
-          @ast.CType::Array(elem~, size=None, size_expr=size_expr, ..) =>
+          @ast.CType::Array(elem~, size=None, size_expr=size_expr) =>
             match size_expr {
               None => {
                 let (_elem_size, elem_align) = match
@@ -6576,7 +6576,7 @@ fn collect_struct_field_access_cache(
           bit_pos = 0
         }
         let (field_size, field_align) = match strip_top_qualifiers_keep_attrs(field.ty) {
-          @ast.CType::Array(elem~, size=None, size_expr=size_expr, ..) =>
+          @ast.CType::Array(elem~, size=None, size_expr=size_expr) =>
             match size_expr {
               None => {
                 let (_elem_size, elem_align) = match
@@ -8713,7 +8713,7 @@ fn gen_expr_int32(
       }
       give_reg(pool, addr)
     }
-    @ast.Expr::CompoundLiteral(ty~, init~, node_id~, loc~, ..) => {
+    @ast.Expr::CompoundLiteral(ty~, init~, node_id~, loc~) => {
       let addr = take_reg(pool) catch {
         err => {
           @diag.add_error(bag, loc, err.to_string())
@@ -10798,7 +10798,7 @@ fn gen_expr_ptr(
       }
       give_reg(pool, addr)
     }
-    @ast.Expr::CompoundLiteral(ty~, init~, node_id~, loc~, ..) => {
+    @ast.Expr::CompoundLiteral(ty~, init~, node_id~, loc~) => {
       let addr = take_reg(pool) catch {
         err => {
           @diag.add_error(bag, loc, err.to_string())
@@ -11538,7 +11538,7 @@ fn stmt_loc(stmt : @ast.Stmt) -> @source.SrcLoc {
 }
 
 ///|
-struct LoopChains {
+priv struct LoopChains {
   break_chain : Int
   cont_chain : Int
   break_depth : Int
@@ -11546,13 +11546,13 @@ struct LoopChains {
 }
 
 ///|
-struct SwitchChains {
+priv struct SwitchChains {
   break_chain : Int
   break_depth : Int
 }
 
 ///|
-struct LabelCtx {
+priv struct LabelCtx {
   addrs : FastMap[String, Int]
   chains : FastMap[String, Int]
   addr_patches : FastMap[String, Array[Int]]
@@ -11748,7 +11748,7 @@ fn switch_append_break(
 }
 
 ///|
-struct SwitchCaseInfo {
+priv struct SwitchCaseInfo {
   start : Int64
   end : Int64
 }
@@ -12803,7 +12803,7 @@ fn gen_stmt(
 }
 
 ///|
-struct FramePlan {
+priv struct FramePlan {
   frame_size : Int
   used_bytes_after_hidden : Int
   agg_temp_size : Int
@@ -13226,13 +13226,13 @@ fn gen_func_def(
 }
 
 ///|
-struct StringEntry {
+priv struct StringEntry {
   index : Int
   value : String
 }
 
 ///|
-struct CstringPool {
+priv struct CstringPool {
   order : Array[String]
   syms : FastMap[String, Sym]
 }
@@ -13411,7 +13411,7 @@ fn store_bitfield_init_le(
 }
 
 ///|
-struct LabelAddrContext {
+priv struct LabelAddrContext {
   func_sym : Sym
   func_start : Int
   labels : FastMap[String, Int]
@@ -14525,7 +14525,7 @@ pub fn codegen_arm64_object_bytes_with_sem(
               let mut j = 0
               while j < 4 && i + j < bytes.length() {
                 word = word.lor(
-                  (bytes[i + j].to_uint() & 0xff) << ((j & 3) << 3),
+                  (bytes[i + j].reinterpret_as_uint() & 0xff) << ((j & 3) << 3),
                 )
                 j = j + 1
               }

@@ -5,9 +5,6 @@ type SemContext = @sem.SemContext
 type FieldAccessInfo = @sem.FieldAccessInfo
 
 ///|
-type FuncSig = @sem.FuncSig
-
-///|
 type RecordDef = @sem.RecordDef
 
 ///|
@@ -153,12 +150,6 @@ fn resolve_struct_fields(
 let resolve_type = @sem.resolve_type
 
 ///|
-let strip_qual_attrs = @sem.strip_qual_attrs
-
-///|
-let strip_qualifiers = @sem.strip_qualifiers
-
-///|
 let strip_top_qualifiers = @sem.strip_top_qualifiers
 
 ///|
@@ -174,9 +165,6 @@ let struct_size_align = @sem.struct_size_align
 
 ///|
 let try_eval_int_const = @sem.try_eval_int_const
-
-///|
-let type_contains_vla = @sem.type_contains_vla
 
 ///|
 let type_for_sizeof = @sem.type_for_sizeof

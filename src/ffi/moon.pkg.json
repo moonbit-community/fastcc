@@ -6,5 +6,10 @@
   "targets": {
     "bench_timer_native.mbt": ["native"],
     "bench_timer_stub.mbt": ["not", "native"]
-  }
+  },
+  "test-import": [
+    "moonbitlang/core/env",
+    { "path": "moonbitlang/core/encoding/utf8", "alias": "encoding/utf8" },
+    "moonbitlang/core/buffer"
+  ]
 }

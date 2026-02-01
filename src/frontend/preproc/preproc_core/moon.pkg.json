@@ -7,6 +7,10 @@
     "hackwaly/tinycc/support/source",
     "hackwaly/tinycc/support/util",
     "moonbitlang/x/fs",
-    "moonbitlang/x/time"
+    "moonbitlang/x/time",
+    "moonbitlang/core/env"
+  ],
+  "wbtest-import": [
+    "moonbitlang/core/json"
   ]
 }
