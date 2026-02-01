@@ -423,7 +423,7 @@ fn parse_float_literal_bits(text : String, kind : @ast.CFloatKind) -> UInt64? {
   match parse_float_literal_value(text) {
     None => None
     Some(d) =>
-      if kind == @ast.CFloatKind::Float {
+      if kind == Float {
         let f = Float::from_double(d)
         Some(f.reinterpret_as_uint().to_uint64())
       } else {
@@ -451,7 +451,7 @@ fn float_bits_from_double(kind : @ast.CFloatKind, value : Double) -> UInt64? {
   if !float_kind_supported(kind) {
     return None
   }
-  if kind == @ast.CFloatKind::Float {
+  if kind == Float {
     let f = Float::from_double(value)
     Some(f.reinterpret_as_uint().to_uint64())
   } else {
@@ -461,7 +461,7 @@ fn float_bits_from_double(kind : @ast.CFloatKind, value : Double) -> UInt64? {
 
 ///|
 fn cast_float_value(kind : @ast.CFloatKind, value : Double) -> Double {
-  if kind == @ast.CFloatKind::Float {
+  if kind == Float {
     Float::from_double(value).to_double()
   } else {
     value
@@ -1862,13 +1862,13 @@ fn emit_cast_value(
       if from_kind == to_kind {
         return
       }
-      if from_kind == @ast.CFloatKind::Float &&
-        to_kind == @ast.CFloatKind::Double {
+      if from_kind == Float &&
+        to_kind == Double {
         emit_fmov_w_to_s(emitter, 0, reg)
         @arm64.emit32(emitter, (0x1e22c000 : UInt))
         emit_fmov_d_to_x(emitter, reg, 0)
-      } else if from_kind == @ast.CFloatKind::Double &&
-        to_kind == @ast.CFloatKind::Float {
+      } else if from_kind == Double &&
+        to_kind == Float {
         emit_fmov_x_to_d(emitter, 0, reg)
         @arm64.emit32(emitter, (0x1e624000 : UInt))
         emit_fmov_s_to_w(emitter, reg, 0)

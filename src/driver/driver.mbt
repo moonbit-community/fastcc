@@ -170,13 +170,13 @@ fn apply_cli_macros(
 ) -> Unit {
   for action in actions {
     match action {
-      CliMacroAction::Define(name~, value~) =>
+      Define(name~, value~) =>
         match value {
           None => @preproc.define_int_macro(pp, name, 1)
           Some(v) =>
             @preproc.define_macro(pp, name, lex_cli_macro_tokens(pp, v))
         }
-      CliMacroAction::Undef(name~) =>
+      Undef(name~) =>
         @preproc.remove_macro(pp, @preproc.macro_id_from_name(pp, name))
     }
   }
