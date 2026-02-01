@@ -38,12 +38,7 @@ pub fn new_lexer(
 
 ///|
 pub fn lexer_loc(lex : Lexer) -> @source.SrcLoc {
-  @source.SrcLoc::{
-    file_id: lex.file_id,
-    line: lex.line,
-    col: lex.col,
-    offset: lex.index,
-  }
+  { file_id: lex.file_id, line: lex.line, col: lex.col, offset: lex.index }
 }
 
 ///|
@@ -52,7 +47,7 @@ pub fn next_token(lex : Lexer) -> @tokens.Token {
   let loc = lexer_loc(lex)
   let line_start = lex.line_start
   match peek_char(lex) {
-    None => make_token(@tokens.TokenKind::Eof, loc, line_start)
+    None => make_token(Eof, loc, line_start)
     Some(code) => {
       if is_ident_start(code) {
         return lex_ident(lex, loc, line_start)
@@ -331,7 +326,7 @@ pub fn lex_ident(
   let (_, id) = lex.interner.intern_view_with_id_hash(name_view, hash)
   match @tokens.keyword_kind_from_id(id, lex.keyword_ids) {
     Some(kind) => make_token(kind, loc, line_start, id~)
-    None => make_token(@tokens.TokenKind::Ident, loc, line_start, id~)
+    None => make_token(Ident, loc, line_start, id~)
   }
 }
 
@@ -421,11 +416,7 @@ pub fn lex_number(
   lex.index = idx
   lex.col = lex.col + (idx - start)
   lex.line_start = false
-  let kind = if is_float {
-    @tokens.TokenKind::FloatLit
-  } else {
-    @tokens.TokenKind::IntLit
-  }
+  let kind = if is_float { @tokens.TokenKind::FloatLit } else { IntLit }
   let lexeme_id = @tokens.lexeme_pool_intern_slice(
     lex.lexeme_pool,
     text,
@@ -501,11 +492,7 @@ pub fn lex_string_literal(
 ) -> @tokens.Token {
   let start = lex.index
   skip_string_literal(lex, loc, quote)
-  let kind = if quote == 34 {
-    @tokens.TokenKind::StrLit
-  } else {
-    @tokens.TokenKind::CharLit
-  }
+  let kind = if quote == 34 { @tokens.TokenKind::StrLit } else { CharLit }
   let lexeme_id = @tokens.lexeme_pool_intern_slice(
     lex.lexeme_pool,
     lex.text,
@@ -523,7 +510,7 @@ pub fn lex_punct(
 ) -> @tokens.Token {
   let idx = lex.index
   if idx >= lex.text_len {
-    return make_token(@tokens.TokenKind::Eof, loc, line_start)
+    return make_token(Eof, loc, line_start)
   }
   let text = lex.text
   let len = lex.text_len
@@ -538,22 +525,22 @@ pub fn lex_punct(
     lex.line_start = false
   }
   match code {
-    40 => make_token(@tokens.TokenKind::LParen, loc, line_start)
-    41 => make_token(@tokens.TokenKind::RParen, loc, line_start)
-    123 => make_token(@tokens.TokenKind::LBrace, loc, line_start)
-    125 => make_token(@tokens.TokenKind::RBrace, loc, line_start)
-    91 => make_token(@tokens.TokenKind::LBracket, loc, line_start)
-    93 => make_token(@tokens.TokenKind::RBracket, loc, line_start)
-    59 => make_token(@tokens.TokenKind::Semicolon, loc, line_start)
-    44 => make_token(@tokens.TokenKind::Comma, loc, line_start)
-    58 => make_token(@tokens.TokenKind::Colon, loc, line_start)
-    63 => make_token(@tokens.TokenKind::Question, loc, line_start)
+    40 => make_token(LParen, loc, line_start)
+    41 => make_token(RParen, loc, line_start)
+    123 => make_token(LBrace, loc, line_start)
+    125 => make_token(RBrace, loc, line_start)
+    91 => make_token(LBracket, loc, line_start)
+    93 => make_token(RBracket, loc, line_start)
+    59 => make_token(Semicolon, loc, line_start)
+    44 => make_token(Comma, loc, line_start)
+    58 => make_token(Colon, loc, line_start)
+    63 => make_token(Question, loc, line_start)
     35 => {
       if lex.index < len && text[lex.index] == 35 {
         advance_punct(lex)
-        return make_token(@tokens.TokenKind::HashHash, loc, line_start)
+        return make_token(HashHash, loc, line_start)
       }
-      make_token(@tokens.TokenKind::Hash, loc, line_start)
+      make_token(Hash, loc, line_start)
     }
     46 => {
       if lex.index + 1 < len &&
@@ -561,147 +548,143 @@ pub fn lex_punct(
         text[lex.index + 1] == 46 {
         advance_punct(lex)
         advance_punct(lex)
-        return make_token(@tokens.TokenKind::Ellipsis, loc, line_start)
+        return make_token(Ellipsis, loc, line_start)
       }
-      make_token(@tokens.TokenKind::Dot, loc, line_start)
+      make_token(Dot, loc, line_start)
     }
     45 => {
       if lex.index < len {
         let next = text[lex.index]
         if next == 62 {
           advance_punct(lex)
-          return make_token(@tokens.TokenKind::Arrow, loc, line_start)
+          return make_token(Arrow, loc, line_start)
         }
         if next == 45 {
           advance_punct(lex)
-          return make_token(@tokens.TokenKind::MinusMinus, loc, line_start)
+          return make_token(MinusMinus, loc, line_start)
         }
         if next == 61 {
           advance_punct(lex)
-          return make_token(@tokens.TokenKind::MinusAssign, loc, line_start)
+          return make_token(MinusAssign, loc, line_start)
         }
       }
-      make_token(@tokens.TokenKind::Minus, loc, line_start)
+      make_token(Minus, loc, line_start)
     }
     43 => {
       if lex.index < len {
         let next = text[lex.index]
         if next == 43 {
           advance_punct(lex)
-          return make_token(@tokens.TokenKind::PlusPlus, loc, line_start)
+          return make_token(PlusPlus, loc, line_start)
         }
         if next == 61 {
           advance_punct(lex)
-          return make_token(@tokens.TokenKind::PlusAssign, loc, line_start)
+          return make_token(PlusAssign, loc, line_start)
         }
       }
-      make_token(@tokens.TokenKind::Plus, loc, line_start)
+      make_token(Plus, loc, line_start)
     }
     42 => {
       if lex.index < len && text[lex.index] == 61 {
         advance_punct(lex)
-        return make_token(@tokens.TokenKind::StarAssign, loc, line_start)
+        return make_token(StarAssign, loc, line_start)
       }
-      make_token(@tokens.TokenKind::Star, loc, line_start)
+      make_token(Star, loc, line_start)
     }
     47 => {
       if lex.index < len && text[lex.index] == 61 {
         advance_punct(lex)
-        return make_token(@tokens.TokenKind::SlashAssign, loc, line_start)
+        return make_token(SlashAssign, loc, line_start)
       }
-      make_token(@tokens.TokenKind::Slash, loc, line_start)
+      make_token(Slash, loc, line_start)
     }
     37 => {
       if lex.index < len && text[lex.index] == 61 {
         advance_punct(lex)
-        return make_token(@tokens.TokenKind::PercentAssign, loc, line_start)
+        return make_token(PercentAssign, loc, line_start)
       }
-      make_token(@tokens.TokenKind::Percent, loc, line_start)
+      make_token(Percent, loc, line_start)
     }
     61 => {
       if lex.index < len && text[lex.index] == 61 {
         advance_punct(lex)
-        return make_token(@tokens.TokenKind::Eq, loc, line_start)
+        return make_token(Eq, loc, line_start)
       }
-      make_token(@tokens.TokenKind::Assign, loc, line_start)
+      make_token(Assign, loc, line_start)
     }
     33 => {
       if lex.index < len && text[lex.index] == 61 {
         advance_punct(lex)
-        return make_token(@tokens.TokenKind::Ne, loc, line_start)
+        return make_token(Ne, loc, line_start)
       }
-      make_token(@tokens.TokenKind::Bang, loc, line_start)
+      make_token(Bang, loc, line_start)
     }
     60 => {
       if lex.index < len && text[lex.index] == 60 {
         advance_punct(lex)
         if lex.index < len && text[lex.index] == 61 {
           advance_punct(lex)
-          return make_token(@tokens.TokenKind::ShiftLeftAssign, loc, line_start)
+          return make_token(ShiftLeftAssign, loc, line_start)
         }
-        return make_token(@tokens.TokenKind::ShiftLeft, loc, line_start)
+        return make_token(ShiftLeft, loc, line_start)
       }
       if lex.index < len && text[lex.index] == 61 {
         advance_punct(lex)
-        return make_token(@tokens.TokenKind::Le, loc, line_start)
+        return make_token(Le, loc, line_start)
       }
-      make_token(@tokens.TokenKind::Lt, loc, line_start)
+      make_token(Lt, loc, line_start)
     }
     62 => {
       if lex.index < len && text[lex.index] == 62 {
         advance_punct(lex)
         if lex.index < len && text[lex.index] == 61 {
           advance_punct(lex)
-          return make_token(
-            @tokens.TokenKind::ShiftRightAssign,
-            loc,
-            line_start,
-          )
+          return make_token(ShiftRightAssign, loc, line_start)
         }
-        return make_token(@tokens.TokenKind::ShiftRight, loc, line_start)
+        return make_token(ShiftRight, loc, line_start)
       }
       if lex.index < len && text[lex.index] == 61 {
         advance_punct(lex)
-        return make_token(@tokens.TokenKind::Ge, loc, line_start)
+        return make_token(Ge, loc, line_start)
       }
-      make_token(@tokens.TokenKind::Gt, loc, line_start)
+      make_token(Gt, loc, line_start)
     }
     38 => {
       if lex.index < len {
         let next = text[lex.index]
         if next == 38 {
           advance_punct(lex)
-          return make_token(@tokens.TokenKind::AmpAmp, loc, line_start)
+          return make_token(AmpAmp, loc, line_start)
         }
         if next == 61 {
           advance_punct(lex)
-          return make_token(@tokens.TokenKind::AmpAssign, loc, line_start)
+          return make_token(AmpAssign, loc, line_start)
         }
       }
-      make_token(@tokens.TokenKind::Amp, loc, line_start)
+      make_token(Amp, loc, line_start)
     }
     124 => {
       if lex.index < len {
         let next = text[lex.index]
         if next == 124 {
           advance_punct(lex)
-          return make_token(@tokens.TokenKind::PipePipe, loc, line_start)
+          return make_token(PipePipe, loc, line_start)
         }
         if next == 61 {
           advance_punct(lex)
-          return make_token(@tokens.TokenKind::PipeAssign, loc, line_start)
+          return make_token(PipeAssign, loc, line_start)
         }
       }
-      make_token(@tokens.TokenKind::Pipe, loc, line_start)
+      make_token(Pipe, loc, line_start)
     }
     94 => {
       if lex.index < len && text[lex.index] == 61 {
         advance_punct(lex)
-        return make_token(@tokens.TokenKind::CaretAssign, loc, line_start)
+        return make_token(CaretAssign, loc, line_start)
       }
-      make_token(@tokens.TokenKind::Caret, loc, line_start)
+      make_token(Caret, loc, line_start)
     }
-    126 => make_token(@tokens.TokenKind::Tilde, loc, line_start)
+    126 => make_token(Tilde, loc, line_start)
     _ => {
       add_lex_error(lex, loc, "unexpected character")
       let lexeme_id = @tokens.lexeme_pool_intern_slice(
@@ -710,7 +693,7 @@ pub fn lex_punct(
         loc.offset,
         lex.index,
       )
-      make_token(@tokens.TokenKind::Invalid, loc, line_start, lexeme_id~)
+      make_token(Invalid, loc, line_start, lexeme_id~)
     }
   }
 }

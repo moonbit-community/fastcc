@@ -64,57 +64,50 @@ fn collect_ident_ids_expr(
   out : Array[Int],
 ) -> Unit {
   match expr {
-    @ast.Expr::Ident(name=ident_name, id~, ..) =>
-      if ident_name == name {
-        out.push(id)
-      }
-    @ast.Expr::LabelAddr(..)
-    | @ast.Expr::IntLit(..)
-    | @ast.Expr::FloatLit(..)
-    | @ast.Expr::CharLit(..)
-    | @ast.Expr::StringLit(..)
-    | @ast.Expr::BuiltinTypesCompatibleP(..)
-    | @ast.Expr::BuiltinOffsetof(..)
-    | @ast.Expr::SizeofType(..)
-    | @ast.Expr::AlignofType(..) => ()
-    @ast.Expr::BuiltinVaArg(list~, ..) =>
-      collect_ident_ids_expr(list, name, out)
-    @ast.Expr::Unary(expr=inner, ..)
-    | @ast.Expr::Cast(expr=inner, ..)
-    | @ast.Expr::SizeofExpr(expr=inner, ..)
-    | @ast.Expr::AlignofExpr(expr=inner, ..) =>
-      collect_ident_ids_expr(inner, name, out)
-    @ast.Expr::CompoundLiteral(init~, ..) =>
-      collect_ident_ids_init(init, name, out)
-    @ast.Expr::StmtExpr(stmts~, ..) =>
+    Ident(name=ident_name, id~, ..) => if ident_name == name { out.push(id) }
+    LabelAddr(..)
+    | IntLit(..)
+    | FloatLit(..)
+    | CharLit(..)
+    | StringLit(..)
+    | BuiltinTypesCompatibleP(..)
+    | BuiltinOffsetof(..)
+    | SizeofType(..)
+    | AlignofType(..) => ()
+    BuiltinVaArg(list~, ..) => collect_ident_ids_expr(list, name, out)
+    Unary(expr=inner, ..)
+    | Cast(expr=inner, ..)
+    | SizeofExpr(expr=inner, ..)
+    | AlignofExpr(expr=inner, ..) => collect_ident_ids_expr(inner, name, out)
+    CompoundLiteral(init~, ..) => collect_ident_ids_init(init, name, out)
+    StmtExpr(stmts~, ..) =>
       for stmt in stmts {
         match stmt {
-          @ast.Stmt::ExprStmt(expr=inner, ..)
-          | @ast.Stmt::Return(value=Some(inner), ..) =>
+          ExprStmt(expr=inner, ..) | Return(value=Some(inner), ..) =>
             collect_ident_ids_expr(inner, name, out)
           _ => ()
         }
       }
-    @ast.Expr::Binary(left~, right~, ..) => {
+    Binary(left~, right~, ..) => {
       collect_ident_ids_expr(left, name, out)
       collect_ident_ids_expr(right, name, out)
     }
-    @ast.Expr::Conditional(cond~, then_expr~, else_expr~, ..) => {
+    Conditional(cond~, then_expr~, else_expr~, ..) => {
       collect_ident_ids_expr(cond, name, out)
       collect_ident_ids_expr(then_expr, name, out)
       collect_ident_ids_expr(else_expr, name, out)
     }
-    @ast.Expr::Call(callee~, args~, ..) => {
+    Call(callee~, args~, ..) => {
       collect_ident_ids_expr(callee, name, out)
       for arg in args {
         collect_ident_ids_expr(arg, name, out)
       }
     }
-    @ast.Expr::Index(base~, index~, ..) => {
+    Index(base~, index~, ..) => {
       collect_ident_ids_expr(base, name, out)
       collect_ident_ids_expr(index, name, out)
     }
-    @ast.Expr::Member(base~, ..) => collect_ident_ids_expr(base, name, out)
+    Member(base~, ..) => collect_ident_ids_expr(base, name, out)
   }
 }
 
@@ -125,9 +118,8 @@ fn collect_ident_ids_init(
   out : Array[Int],
 ) -> Unit {
   match init {
-    @ast.Initializer::Expr(expr=inner, ..) =>
-      collect_ident_ids_expr(inner, name, out)
-    @ast.Initializer::List(items~, ..) =>
+    Expr(expr=inner, ..) => collect_ident_ids_expr(inner, name, out)
+    List(items~, ..) =>
       for item in items {
         collect_ident_ids_init(item.value, name, out)
       }
@@ -140,7 +132,7 @@ test "parse function with return" {
   assert_true(!@diag.has_errors(bag))
   guard unit.decls.length() == 1 else { fail("expected single declaration") }
   match unit.decls[0] {
-    @ast.Decl::FuncDef(func) => assert_eq(func.name, "main")
+    FuncDef(func) => assert_eq(func.name, "main")
     _ => fail("expected function definition")
   }
 }
@@ -163,22 +155,22 @@ test "sem accepts static local arrays used in sizeof macro" {
   assert_true(!@diag.has_errors(bag))
   guard unit.decls.length() == 2 else { fail("expected two declarations") }
   match unit.decls[1] {
-    @ast.Decl::FuncDef(func) =>
+    FuncDef(func) =>
       match func.body {
-        @ast.Stmt::Compound(stmts~, ..) => {
+        Compound(stmts~, ..) => {
           guard stmts.length() >= 2 else { fail("expected decl and return") }
           let decl = match stmts[0] {
-            @ast.Stmt::DeclStmt(decls~, ..) => {
+            DeclStmt(decls~, ..) => {
               guard decls.length() > 0 else { fail("expected static decl") }
               decls[0]
             }
             _ => fail("expected decl statement")
           }
           assert_eq(decl.name, "aTable")
-          assert_eq(decl.storage, @ast.StorageClass::Static)
+          assert_eq(decl.storage, Static)
           assert_true(decl.id > 0)
           let ret_expr = match stmts[1] {
-            @ast.Stmt::Return(value=Some(expr), ..) => expr
+            Return(value=Some(expr), ..) => expr
             _ => fail("expected return statement")
           }
           let ids : Array[Int] = []
@@ -245,12 +237,12 @@ test "parse typedef struct local decl" {
   assert_eq(unit.decls.length(), 2)
   guard unit.decls.length() >= 2 else { fail("expected two declarations") }
   match unit.decls[1] {
-    @ast.Decl::FuncDef(func) =>
+    FuncDef(func) =>
       match func.body {
-        @ast.Stmt::Compound(stmts~, ..) => {
+        Compound(stmts~, ..) => {
           let mut found = false
           for stmt in stmts {
-            if stmt is @ast.Stmt::DeclStmt(..) {
+            if stmt is DeclStmt(..) {
               found = true
             }
           }
@@ -268,13 +260,13 @@ test "parse __builtin_expect call" {
   let (unit, bag) = parse_text("int main(){return __builtin_expect(1, 0);}")
   assert_true(!@diag.has_errors(bag))
   match unit.decls[0] {
-    @ast.Decl::FuncDef(func) =>
+    FuncDef(func) =>
       match func.body {
-        @ast.Stmt::Compound(stmts~, ..) =>
+        Compound(stmts~, ..) =>
           match stmts[0] {
-            @ast.Stmt::Return(value=Some(expr), ..) =>
+            Return(value=Some(expr), ..) =>
               match expr {
-                @ast.Expr::Call(callee=@ast.Expr::Ident(name~, ..), args~, ..) => {
+                Call(callee=Ident(name~, ..), args~, ..) => {
                   assert_eq(name, "__builtin_expect")
                   assert_eq(args.length(), 2)
                 }
@@ -450,7 +442,7 @@ test "parse paren pointer declarator with attribute" {
   assert_true(!@diag.has_errors(bag))
   guard unit.decls.length() == 1 else { fail("expected one declaration") }
   match unit.decls[0] {
-    @ast.Decl::Var(decl) => assert_eq(decl.name, "fp")
+    Var(decl) => assert_eq(decl.name, "fp")
     _ => fail("expected variable declaration")
   }
 }
@@ -461,7 +453,7 @@ test "parse paren declarator without inner pointer" {
   assert_true(!@diag.has_errors(bag))
   guard unit.decls.length() == 1 else { fail("expected one declaration") }
   match unit.decls[0] {
-    @ast.Decl::Typedef(name="Func", ..) => ()
+    Typedef(name="Func", ..) => ()
     _ => fail("expected typedef declaration")
   }
 }
@@ -934,7 +926,7 @@ test "parse asm label on declaration" {
   assert_true(!@diag.has_errors(bag))
   guard unit.decls.length() == 1 else { fail("expected single declaration") }
   match unit.decls[0] {
-    @ast.Decl::FuncDecl(func) => assert_eq(func.attrs.asm_label, Some("foo"))
+    FuncDecl(func) => assert_eq(func.attrs.asm_label, Some("foo"))
     _ => fail("expected function declaration")
   }
 }
@@ -945,7 +937,7 @@ test "parse global asm block" {
   assert_true(!@diag.has_errors(bag))
   guard unit.decls.length() == 2 else { fail("expected two declarations") }
   match unit.decls[0] {
-    @ast.Decl::Asm(_) => ()
+    Asm(_) => ()
     _ => fail("expected asm declaration")
   }
 }
@@ -988,11 +980,11 @@ test "attribute in pointer declarator sets call conv" {
   assert_true(!@diag.has_errors(bag))
   guard unit.decls.length() == 1 else { fail("expected single declaration") }
   match unit.decls[0] {
-    @ast.Decl::Typedef(name="Fn", ty~, ..) =>
+    Typedef(name="Fn", ty~, ..) =>
       match ty {
-        @ast.CType::Pointer(inner) =>
+        Pointer(inner) =>
           match inner {
-            @ast.CType::Function(call_conv=@ast.CallConv::Stdcall, ..) => ()
+            Function(call_conv=Stdcall, ..) => ()
             _ => fail("expected function type")
           }
         _ => fail("expected pointer type")

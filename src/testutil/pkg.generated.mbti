@@ -1,0 +1,22 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/testutil"
+
+// Values
+pub fn ensure_dir(String) -> Unit raise
+
+pub fn join_path(String, String) -> String
+
+pub fn make_case_dir(String) -> String raise
+
+pub fn project_root() -> String
+
+pub fn write_string(String, String) -> Unit raise
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

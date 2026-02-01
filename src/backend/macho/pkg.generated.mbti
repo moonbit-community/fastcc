@@ -16,12 +16,6 @@ pub fn write_macho_object(String, Array[@object.Section], Array[ObjSymbol]) -> U
 // Errors
 
 // Types and methods
-type MachoSectionInfo
-
-type MachoSectionLayout
-
-type MachoSegmentLayout
-
 pub(all) struct ObjSymbol {
   id : Int
   name : String

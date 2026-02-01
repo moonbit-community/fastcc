@@ -1,7 +1,7 @@
 ///|
 test "cli parses -c" {
   let cfg = match @cli.parse_cli_args(["prog", "-c", "main.c"]) {
-    @cli.CliParse::Run(v) => v
+    Run(v) => v
     _ => fail("expected run")
   }
   assert_true(cfg.compile_only)

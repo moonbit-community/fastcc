@@ -12,7 +12,7 @@ fn parse_unit(source : String) -> (@ast.TranslationUnit, @diag.DiagBag) {
 fn find_var_decl(unit : @ast.TranslationUnit, name : String) -> @ast.VarDecl? {
   for decl in unit.decls {
     match decl {
-      @ast.Decl::Var(v) => if v.name == name { return Some(v) }
+      Var(v) => if v.name == name { return Some(v) }
       _ => ()
     }
   }
@@ -24,7 +24,7 @@ fn collect_asm_decls(unit : @ast.TranslationUnit) -> Array[@ast.AsmStmt] {
   let out : Array[@ast.AsmStmt] = []
   for decl in unit.decls {
     match decl {
-      @ast.Decl::Asm(asm_stmt) => out.push(asm_stmt)
+      Asm(asm_stmt) => out.push(asm_stmt)
       _ => ()
     }
   }
@@ -39,7 +39,7 @@ test "parser handles static assert and asm decls" {
   let mut static_asserts = 0
   for decl in unit.decls {
     match decl {
-      @ast.Decl::StaticAssert(sa) => {
+      StaticAssert(sa) => {
         static_asserts = static_asserts + 1
         assert_true(sa.message is None)
       }
@@ -96,7 +96,7 @@ test "parser typeof and default int" {
     None => fail("expected y declaration")
   }
   match y_decl.ty {
-    @ast.CType::TypeofExpr(_) => ()
+    TypeofExpr(_) => ()
     _ => fail("expected typeof expr type")
   }
   let foo_decl = match find_var_decl(unit, "foo") {
@@ -104,7 +104,7 @@ test "parser typeof and default int" {
     None => fail("expected foo declaration")
   }
   match foo_decl.ty {
-    @ast.CType::Int(kind=@ast.CIntKind::Int, unsigned=false) => ()
+    Int(kind=Int, unsigned=false) => ()
     _ => fail("expected default int type")
   }
 }

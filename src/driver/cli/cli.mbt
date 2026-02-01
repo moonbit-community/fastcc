@@ -146,7 +146,7 @@ pub fn parse_cli_args(args : Array[String]) -> CliParse {
       }
       if arg.has_prefix("-") && arg != "-" {
         println("error: unsupported option after -run '\{arg}'")
-        return CliParse::Error
+        return Error
       }
       inputs.push(arg)
       run_input = true
@@ -155,7 +155,7 @@ pub fn parse_cli_args(args : Array[String]) -> CliParse {
     }
     if arg == "-h" || arg == "--help" {
       print_usage()
-      return CliParse::Help
+      return Help
     }
     if arg == "-c" {
       compile_only = true
@@ -176,7 +176,7 @@ pub fn parse_cli_args(args : Array[String]) -> CliParse {
       if i + 1 >= expanded.length() {
         println("error: missing argument for -o")
         print_usage()
-        return CliParse::Error
+        return Error
       }
       output = Some(expanded[i + 1])
       i = i + 2
@@ -191,7 +191,7 @@ pub fn parse_cli_args(args : Array[String]) -> CliParse {
       if i + 1 >= expanded.length() {
         println("error: missing argument for -I")
         print_usage()
-        return CliParse::Error
+        return Error
       }
       include_paths.push(expanded[i + 1])
       i = i + 2
@@ -206,21 +206,21 @@ pub fn parse_cli_args(args : Array[String]) -> CliParse {
       if i + 1 >= expanded.length() {
         println("error: missing argument for -D")
         print_usage()
-        return CliParse::Error
+        return Error
       }
       match split_define_spec(expanded[i + 1]) {
         None => {
           println("error: empty macro name in -D")
           print_usage()
-          return CliParse::Error
+          return Error
         }
         Some((name, value)) =>
           if name == "" {
             println("error: empty macro name in -D")
             print_usage()
-            return CliParse::Error
+            return Error
           } else {
-            macro_actions.push(CliMacroAction::Define(name~, value~))
+            macro_actions.push(Define(name~, value~))
           }
       }
       i = i + 2
@@ -231,15 +231,15 @@ pub fn parse_cli_args(args : Array[String]) -> CliParse {
         None => {
           println("error: empty macro name in -D")
           print_usage()
-          return CliParse::Error
+          return Error
         }
         Some((name, value)) =>
           if name == "" {
             println("error: empty macro name in -D")
             print_usage()
-            return CliParse::Error
+            return Error
           } else {
-            macro_actions.push(CliMacroAction::Define(name~, value~))
+            macro_actions.push(Define(name~, value~))
           }
       }
       i = i + 1
@@ -249,15 +249,15 @@ pub fn parse_cli_args(args : Array[String]) -> CliParse {
       if i + 1 >= expanded.length() {
         println("error: missing argument for -U")
         print_usage()
-        return CliParse::Error
+        return Error
       }
       let name = expanded[i + 1]
       if name == "" {
         println("error: empty macro name in -U")
         print_usage()
-        return CliParse::Error
+        return Error
       }
-      macro_actions.push(CliMacroAction::Undef(name~))
+      macro_actions.push(Undef(name~))
       i = i + 2
       continue
     }
@@ -266,9 +266,9 @@ pub fn parse_cli_args(args : Array[String]) -> CliParse {
       if name == "" {
         println("error: empty macro name in -U")
         print_usage()
-        return CliParse::Error
+        return Error
       }
-      macro_actions.push(CliMacroAction::Undef(name~))
+      macro_actions.push(Undef(name~))
       i = i + 1
       continue
     }
@@ -296,7 +296,7 @@ pub fn parse_cli_args(args : Array[String]) -> CliParse {
       if i + 1 >= expanded.length() {
         println("error: missing argument for -isystem")
         print_usage()
-        return CliParse::Error
+        return Error
       }
       include_paths.push(expanded[i + 1])
       i = i + 2
@@ -311,7 +311,7 @@ pub fn parse_cli_args(args : Array[String]) -> CliParse {
       if i + 1 >= expanded.length() {
         println("error: missing argument for -L")
         print_usage()
-        return CliParse::Error
+        return Error
       }
       link_paths.push(expanded[i + 1])
       i = i + 2
@@ -326,7 +326,7 @@ pub fn parse_cli_args(args : Array[String]) -> CliParse {
       if i + 1 >= expanded.length() {
         println("error: missing argument for -l")
         print_usage()
-        return CliParse::Error
+        return Error
       }
       link_libs.push(expanded[i + 1])
       i = i + 2
@@ -340,7 +340,7 @@ pub fn parse_cli_args(args : Array[String]) -> CliParse {
     if arg.has_prefix("-") {
       println("error: unsupported option '\{arg}'")
       print_usage()
-      return CliParse::Error
+      return Error
     }
     if is_c_source_path(arg) {
       inputs.push(arg)
@@ -351,22 +351,22 @@ pub fn parse_cli_args(args : Array[String]) -> CliParse {
   }
   if run && compile_only {
     println("error: -run cannot be combined with -c")
-    return CliParse::Error
+    return Error
   }
   if run && !run_input {
     println("error: -run requires an input file")
-    return CliParse::Error
+    return Error
   }
   if inputs.length() == 0 {
     println("error: no input files")
     print_usage()
-    return CliParse::Error
+    return Error
   }
   if output is Some(_) && inputs.length() != 1 {
     println("error: -o requires exactly one input file")
-    return CliParse::Error
+    return Error
   }
-  CliParse::Run({
+  Run({
     include_paths,
     link_paths,
     link_libs,

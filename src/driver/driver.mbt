@@ -358,9 +358,9 @@ pub fn run_main() -> Unit {
 fn run_with_args(args : Array[String]) -> Int {
   @codegen.touch_unused_symbols()
   match parse_cli_args(args) {
-    CliParse::Help => 0
-    CliParse::Error => 1
-    CliParse::Run(cfg) =>
+    Help => 0
+    Error => 1
+    Run(cfg) =>
       if cfg.run {
         if cfg.output is Some(_) {
           println("error: -o is not supported with -run")

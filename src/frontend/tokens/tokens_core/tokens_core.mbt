@@ -174,7 +174,7 @@ pub fn lexeme_pool_intern(pool : LexemePool, text : String) -> Int {
   if text.length() == 0 {
     return 0
   }
-  pool.entries.push(LexemeEntry::Owned(text))
+  pool.entries.push(Owned(text))
   pool.entries.length()
 }
 
@@ -185,10 +185,10 @@ pub fn lexeme_pool_get(pool : LexemePool, id : Int) -> String {
   }
   let idx = id - 1
   match pool.entries[idx] {
-    LexemeEntry::Owned(value) => value
-    LexemeEntry::Slice(text~, start~, len~) => {
+    Owned(value) => value
+    Slice(text~, start~, len~) => {
       let value = @util.slice_string(text, start, start + len)
-      pool.entries[idx] = LexemeEntry::Owned(value)
+      pool.entries[idx] = Owned(value)
       value
     }
   }
@@ -205,7 +205,7 @@ pub fn lexeme_pool_intern_slice(
   if len <= 0 {
     return 0
   }
-  pool.entries.push(LexemeEntry::Slice(text~, start~, len~))
+  pool.entries.push(Slice(text~, start~, len~))
   pool.entries.length()
 }
 
@@ -215,8 +215,8 @@ pub fn lexeme_pool_len(pool : LexemePool, id : Int) -> Int {
     return 0
   }
   match pool.entries[id - 1] {
-    LexemeEntry::Owned(value) => value.length()
-    LexemeEntry::Slice(len~, ..) => len
+    Owned(value) => value.length()
+    Slice(len~, ..) => len
   }
 }
 

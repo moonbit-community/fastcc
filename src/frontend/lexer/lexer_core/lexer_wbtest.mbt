@@ -18,16 +18,11 @@ fn lex_tokens(
   while out.length() < 512 {
     let tok = next_token(lexer)
     out.push(tok)
-    if tok.kind == @tokens.TokenKind::Eof {
+    if tok.kind == Eof {
       break
     }
   }
-  (
-    out.filter(tok => tok.kind != @tokens.TokenKind::Eof),
-    bag,
-    interner,
-    lexeme_pool,
-  )
+  (out.filter(tok => tok.kind != Eof), bag, interner, lexeme_pool)
 }
 
 ///|

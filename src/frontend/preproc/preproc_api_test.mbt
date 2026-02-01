@@ -19,7 +19,7 @@ fn tok_with_offset(tok : @tokens.Token, offset : Int) -> @tokens.Token {
   {
     kind: tok.kind,
     value: tok.value,
-    loc: @source.SrcLoc::{ file_id: 0, line: 1, col: offset + 1, offset },
+    loc: { file_id: 0, line: 1, col: offset + 1, offset },
     line_start: false,
     hidden: tok.hidden,
   }
@@ -56,7 +56,7 @@ test "preproc api macro registry" {
   let foo_tok = tok_word(pp, "FOO")
   assert_eq(@preproc.macro_id_from_token(pp, foo_tok), foo_id)
   assert_true(@preproc.is_macro_name_token(foo_tok))
-  let empty_tok = @preproc.make_builtin_token(@tokens.TokenKind::Ident)
+  let empty_tok = @preproc.make_builtin_token(Ident)
   assert_true(!@preproc.is_macro_name_token(empty_tok))
   assert_eq(@preproc.macro_id_from_token(pp, empty_tok), 0)
   @preproc.ensure_macro_capacity(pp, foo_id + 2)
@@ -97,9 +97,9 @@ test "preproc api macro registry" {
 test "preproc api directive tokens" {
   let (pp, bag) = new_pp_with_source("#define FOO 1\n")
   let hash = @preproc.next_input_token(pp)
-  assert_eq(hash.kind, @tokens.TokenKind::Hash)
+  assert_eq(hash.kind, Hash)
   let name = @preproc.next_input_token(pp)
-  assert_eq(name.kind, @tokens.TokenKind::Ident)
+  assert_eq(name.kind, Ident)
   let args = @preproc.read_directive_tokens(pp)
   assert_eq(args.length(), 2)
   assert_eq(@preproc.pp_token_lexeme(pp, args[0]), "FOO")
@@ -122,7 +122,7 @@ test "preproc api directive head and skip" {
   let _name2 = @preproc.next_input_token(pp)
   @preproc.skip_directive_line(pp)
   let next_tok = @preproc.next_input_token(pp)
-  assert_eq(next_tok.kind, @tokens.TokenKind::KwInt)
+  assert_eq(next_tok.kind, KwInt)
   @preproc.finalize_preprocessor(pp)
   assert_true(!@diag.has_errors(bag))
 }
@@ -158,8 +158,8 @@ test "preproc api include helpers" {
       assert_true(!spec.is_angle)
     }
   }
-  let lt = @preproc.make_builtin_token(@tokens.TokenKind::Lt)
-  let gt = @preproc.make_builtin_token(@tokens.TokenKind::Gt)
+  let lt = @preproc.make_builtin_token(Lt)
+  let gt = @preproc.make_builtin_token(Gt)
   let word = tok_word(pp, "foo.h")
   match @preproc.parse_has_include_path(pp, [lt, word, gt]) {
     None => fail("expected has-include spec")
@@ -182,7 +182,7 @@ test "preproc api include helpers" {
   let spec = @preproc.IncludeSpec::{ path: "foo.h", is_angle: false }
   @preproc.include_file(pp, spec, @source.dummy_loc(0), include_next=false)
   let tok = @preproc.next_input_token(pp)
-  assert_eq(tok.kind, @tokens.TokenKind::KwInt)
+  assert_eq(tok.kind, KwInt)
   @preproc.finalize_preprocessor(pp)
   assert_true(!@diag.has_errors(bag))
 }
@@ -193,7 +193,7 @@ test "preproc api token helpers" {
   let tokens = [
     tok_word(pp, "a"),
     tok_word(pp, "b"),
-    @preproc.make_builtin_token(@tokens.TokenKind::Plus),
+    @preproc.make_builtin_token(Plus),
   ]
   let slice = @preproc.slice_tokens(tokens, 1)
   assert_eq(slice.length(), 2)
@@ -215,13 +215,13 @@ test "preproc api token helpers" {
   assert_true(@preproc.is_builtin_macro_id(pp, @tokens.token_id(line_tok)))
   match @preproc.builtin_macro_tokens(pp, line_tok) {
     None => fail("expected builtin tokens")
-    Some(out) => assert_eq(out[0].kind, @tokens.TokenKind::IntLit)
+    Some(out) => assert_eq(out[0].kind, IntLit)
   }
   let file_tok = tok_word(pp, "__FILE__")
   pp.logical_path = ""
   match @preproc.builtin_macro_tokens(pp, file_tok) {
     None => fail("expected file tokens")
-    Some(out) => assert_eq(out[0].kind, @tokens.TokenKind::StrLit)
+    Some(out) => assert_eq(out[0].kind, StrLit)
   }
   @preproc.define_int_macro(pp, "FOO", 1)
   let foo_tok = tok_word(pp, "FOO")
@@ -234,10 +234,10 @@ test "preproc api token helpers" {
   assert_true(
     !@preproc.is_expanding(pp, @preproc.macro_id_from_name(pp, "FOO")),
   )
-  let pushed = @preproc.make_builtin_token(@tokens.TokenKind::Ident)
+  let pushed = @preproc.make_builtin_token(Ident)
   @preproc.push_back(pp, pushed)
   let raw = @preproc.next_raw_token(pp)
-  assert_eq(raw.kind, @tokens.TokenKind::Ident)
+  assert_eq(raw.kind, Ident)
   @preproc.add_pp_error(pp, @source.dummy_loc(0), "oops")
   assert_true(@diag.has_errors(bag))
   @preproc.finalize_preprocessor(pp)
@@ -261,7 +261,7 @@ test "preproc api error helpers" {
   assert_eq(@preproc.join_path("base/", "file.h"), "base/file.h")
   let loc = @source.dummy_loc(0)
   let _ = @preproc.parse_include_path(pp, [], loc)
-  let lt = @preproc.make_builtin_token(@tokens.TokenKind::Lt)
+  let lt = @preproc.make_builtin_token(Lt)
   let ident = tok_word(pp, "missing.h")
   let _ = @preproc.parse_include_path(pp, [lt, ident], loc)
   let _ = @preproc.parse_include_path(pp, [tok_word(pp, "bad")], loc)
@@ -284,40 +284,34 @@ test "preproc api error helpers" {
   pp.current_dir = case_dir
   @preproc.include_file(pp, spec, loc, include_next=false)
   let name_tok = tok_with_offset(tok_word(pp, "F"), 0)
-  let lparen = tok_with_offset(
-    @preproc.make_builtin_token(@tokens.TokenKind::LParen),
-    1,
-  )
-  let bad_args = [lparen, @preproc.make_builtin_token(@tokens.TokenKind::Comma)]
+  let lparen = tok_with_offset(@preproc.make_builtin_token(LParen), 1)
+  let bad_args = [lparen, @preproc.make_builtin_token(Comma)]
   assert_true(@preproc.parse_define_macro(pp, name_tok, bad_args, loc) is None)
   let args_ellipsis = [
-    @preproc.make_builtin_token(@tokens.TokenKind::LParen),
-    @preproc.make_builtin_token(@tokens.TokenKind::Ellipsis),
-    @preproc.make_builtin_token(@tokens.TokenKind::RParen),
+    @preproc.make_builtin_token(LParen),
+    @preproc.make_builtin_token(Ellipsis),
+    @preproc.make_builtin_token(RParen),
   ]
   assert_true(@preproc.parse_macro_params(pp, args_ellipsis, loc) is Some(_))
   let args_bad_ident = [
-    @preproc.make_builtin_token(@tokens.TokenKind::LParen),
-    @preproc.make_builtin_token(@tokens.TokenKind::Ident),
-    @preproc.make_builtin_token(@tokens.TokenKind::RParen),
+    @preproc.make_builtin_token(LParen),
+    @preproc.make_builtin_token(Ident),
+    @preproc.make_builtin_token(RParen),
   ]
   assert_true(@preproc.parse_macro_params(pp, args_bad_ident, loc) is None)
   let args_bad_token = [
-    @preproc.make_builtin_token(@tokens.TokenKind::LParen),
-    @preproc.make_builtin_token(@tokens.TokenKind::Plus),
+    @preproc.make_builtin_token(LParen),
+    @preproc.make_builtin_token(Plus),
   ]
   assert_true(@preproc.parse_macro_params(pp, args_bad_token, loc) is None)
-  let args_unterm = [
-    @preproc.make_builtin_token(@tokens.TokenKind::LParen),
-    tok_word(pp, "x"),
-  ]
+  let args_unterm = [@preproc.make_builtin_token(LParen), tok_word(pp, "x")]
   assert_true(@preproc.parse_macro_params(pp, args_unterm, loc) is None)
   let args_var = [
-    @preproc.make_builtin_token(@tokens.TokenKind::LParen),
+    @preproc.make_builtin_token(LParen),
     tok_word(pp, "x"),
-    @preproc.make_builtin_token(@tokens.TokenKind::Comma),
-    @preproc.make_builtin_token(@tokens.TokenKind::Ellipsis),
-    @preproc.make_builtin_token(@tokens.TokenKind::RParen),
+    @preproc.make_builtin_token(Comma),
+    @preproc.make_builtin_token(Ellipsis),
+    @preproc.make_builtin_token(RParen),
   ]
   assert_true(@preproc.parse_macro_params(pp, args_var, loc) is Some(_))
   assert_true(@preproc.read_macro_args(pp, loc) is None)
@@ -364,10 +358,7 @@ test "preproc api error helpers" {
   let bad_pp = @preproc.parse_pp_int_literal(pp, "1z", loc)
   assert_true(@preproc.pp_is_zero(bad_pp))
   let bad_char_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, "''")
-  let bad_char = @preproc.make_builtin_token(
-    @tokens.TokenKind::CharLit,
-    lexeme_id=bad_char_id,
-  )
+  let bad_char = @preproc.make_builtin_token(CharLit, lexeme_id=bad_char_id)
   ignore(@preproc.parse_pp_char_literal(pp, bad_char))
   ignore(@preproc.decode_pp_escape_value(pp, "\\'", 1, loc))
   @preproc.finalize_preprocessor(pp)
@@ -417,11 +408,11 @@ test "preproc api macro parsing helpers" {
     }
   }
   let args = [
-    @preproc.make_builtin_token(@tokens.TokenKind::LParen),
+    @preproc.make_builtin_token(LParen),
     tok_word(pp, "x"),
-    @preproc.make_builtin_token(@tokens.TokenKind::Comma),
+    @preproc.make_builtin_token(Comma),
     tok_word(pp, "y"),
-    @preproc.make_builtin_token(@tokens.TokenKind::RParen),
+    @preproc.make_builtin_token(RParen),
     tok_word(pp, "z"),
   ]
   match @preproc.parse_macro_params(pp, args, loc) {
@@ -444,9 +435,9 @@ test "preproc api macro parsing helpers" {
     replacement_needs_expand: false,
     replacement_needs_epoch: -1,
   }
-  @preproc.push_back(pp, @preproc.make_builtin_token(@tokens.TokenKind::RParen))
+  @preproc.push_back(pp, @preproc.make_builtin_token(RParen))
   @preproc.push_back(pp, @preproc.make_int_literal_token(pp, 2, loc))
-  @preproc.push_back(pp, @preproc.make_builtin_token(@tokens.TokenKind::Comma))
+  @preproc.push_back(pp, @preproc.make_builtin_token(Comma))
   @preproc.push_back(pp, @preproc.make_int_literal_token(pp, 1, loc))
   match @preproc.read_macro_args(pp, loc) {
     None => fail("expected macro args")
@@ -458,11 +449,11 @@ test "preproc api macro parsing helpers" {
   }
   let tokens = [
     tok_word(pp, "F"),
-    @preproc.make_builtin_token(@tokens.TokenKind::LParen),
+    @preproc.make_builtin_token(LParen),
     @preproc.make_int_literal_token(pp, 1, loc),
-    @preproc.make_builtin_token(@tokens.TokenKind::Comma),
+    @preproc.make_builtin_token(Comma),
     @preproc.make_int_literal_token(pp, 2, loc),
-    @preproc.make_builtin_token(@tokens.TokenKind::RParen),
+    @preproc.make_builtin_token(RParen),
   ]
   match @preproc.read_macro_args_from_tokens(pp, tokens, 2, loc) {
     None => fail("expected args from tokens")
@@ -473,19 +464,19 @@ test "preproc api macro parsing helpers" {
   }
   let tokens_nested = [
     tok_word(pp, "F"),
-    @preproc.make_builtin_token(@tokens.TokenKind::LParen),
-    @preproc.make_builtin_token(@tokens.TokenKind::LParen),
+    @preproc.make_builtin_token(LParen),
+    @preproc.make_builtin_token(LParen),
     tok_word(pp, "x"),
-    @preproc.make_builtin_token(@tokens.TokenKind::RParen),
-    @preproc.make_builtin_token(@tokens.TokenKind::Comma),
-    @preproc.make_builtin_token(@tokens.TokenKind::LBrace),
+    @preproc.make_builtin_token(RParen),
+    @preproc.make_builtin_token(Comma),
+    @preproc.make_builtin_token(LBrace),
     tok_word(pp, "y"),
-    @preproc.make_builtin_token(@tokens.TokenKind::RBrace),
-    @preproc.make_builtin_token(@tokens.TokenKind::Comma),
-    @preproc.make_builtin_token(@tokens.TokenKind::LBracket),
+    @preproc.make_builtin_token(RBrace),
+    @preproc.make_builtin_token(Comma),
+    @preproc.make_builtin_token(LBracket),
     tok_word(pp, "z"),
-    @preproc.make_builtin_token(@tokens.TokenKind::RBracket),
-    @preproc.make_builtin_token(@tokens.TokenKind::RParen),
+    @preproc.make_builtin_token(RBracket),
+    @preproc.make_builtin_token(RParen),
   ]
   match @preproc.read_macro_args_from_tokens(pp, tokens_nested, 2, loc) {
     None => fail("expected nested args")
@@ -493,7 +484,7 @@ test "preproc api macro parsing helpers" {
   }
   let tokens_unterm = [
     tok_word(pp, "F"),
-    @preproc.make_builtin_token(@tokens.TokenKind::LParen),
+    @preproc.make_builtin_token(LParen),
     tok_word(pp, "x"),
   ]
   assert_true(
@@ -508,7 +499,7 @@ test "preproc api expansion helpers" {
   let (pp, bag) = new_pp_with_source("/*skip*/\n#\n")
   @preproc.skip_inactive(pp)
   let hash = @preproc.next_input_token(pp)
-  assert_eq(hash.kind, @tokens.TokenKind::Hash)
+  assert_eq(hash.kind, Hash)
   @preproc.finalize_preprocessor(pp)
   assert_true(!@diag.has_errors(bag))
 }
@@ -527,10 +518,7 @@ test "preproc api substitute macro branches" {
     params: [x_id],
     is_variadic: false,
     is_function: true,
-    replacement: [
-      @preproc.make_builtin_token(@tokens.TokenKind::Hash),
-      tok_word(pp, "x"),
-    ],
+    replacement: [@preproc.make_builtin_token(Hash), tok_word(pp, "x")],
     replacement_has_id: true,
     replacement_needs_expand: false,
     replacement_needs_epoch: -1,
@@ -541,10 +529,7 @@ test "preproc api substitute macro branches" {
     params: [],
     is_variadic: false,
     is_function: true,
-    replacement: [
-      @preproc.make_builtin_token(@tokens.TokenKind::HashHash),
-      a_tok,
-    ],
+    replacement: [@preproc.make_builtin_token(HashHash), a_tok],
     replacement_has_id: true,
     replacement_needs_expand: false,
     replacement_needs_epoch: -1,
@@ -556,7 +541,7 @@ test "preproc api substitute macro branches" {
     is_function: true,
     replacement: [
       a_tok,
-      @preproc.make_builtin_token(@tokens.TokenKind::HashHash),
+      @preproc.make_builtin_token(HashHash),
       tok_word(pp, "x"),
     ],
     replacement_has_id: true,
@@ -568,11 +553,7 @@ test "preproc api substitute macro branches" {
     params: [],
     is_variadic: false,
     is_function: true,
-    replacement: [
-      a_tok,
-      @preproc.make_builtin_token(@tokens.TokenKind::HashHash),
-      b_tok,
-    ],
+    replacement: [a_tok, @preproc.make_builtin_token(HashHash), b_tok],
     replacement_has_id: true,
     replacement_needs_expand: false,
     replacement_needs_epoch: -1,
@@ -584,8 +565,8 @@ test "preproc api substitute macro branches" {
     is_function: true,
     replacement: [
       a_tok,
-      @preproc.make_builtin_token(@tokens.TokenKind::HashHash),
-      @preproc.make_builtin_token(@tokens.TokenKind::Ident),
+      @preproc.make_builtin_token(HashHash),
+      @preproc.make_builtin_token(Ident),
     ],
     replacement_has_id: false,
     replacement_needs_expand: false,
@@ -598,7 +579,7 @@ test "preproc api substitute macro branches" {
     is_function: true,
     replacement: [
       a_tok,
-      @preproc.make_builtin_token(@tokens.TokenKind::HashHash),
+      @preproc.make_builtin_token(HashHash),
       @preproc.make_int_literal_token(pp, 1, loc),
     ],
     replacement_has_id: false,
@@ -612,7 +593,7 @@ test "preproc api substitute macro branches" {
     is_function: true,
     replacement: [
       a_tok,
-      @preproc.make_builtin_token(@tokens.TokenKind::HashHash),
+      @preproc.make_builtin_token(HashHash),
       tok_word(pp, "x"),
     ],
     replacement_has_id: true,
@@ -659,8 +640,8 @@ test "preproc api expand tokens branches" {
   @preproc.set_macro(pp, func_id, func_def)
   let line_tok = tok_word(pp, "__LINE__")
   let has_inc = tok_word(pp, "__has_include")
-  let lparen = @preproc.make_builtin_token(@tokens.TokenKind::LParen)
-  let rparen = @preproc.make_builtin_token(@tokens.TokenKind::RParen)
+  let lparen = @preproc.make_builtin_token(LParen)
+  let rparen = @preproc.make_builtin_token(RParen)
   let int_tok = @preproc.make_int_literal_token(pp, 1, loc)
   @preproc.push_expanding(pp, exp_id)
   ignore(@preproc.expand_tokens(pp, [line_tok, tok_word(pp, "EXP")]))
@@ -709,22 +690,22 @@ test "preproc api next_pp_token branches" {
   @preproc.push_back(pp, tok_word(pp, "EXP"))
   @preproc.push_expanding(pp, exp_id)
   let t1 = @preproc.next_pp_token(pp)
-  assert_eq(t1.kind, @tokens.TokenKind::Ident)
+  assert_eq(t1.kind, Ident)
   @preproc.pop_expanding(pp)
   @preproc.push_back(pp, tok_word(pp, "x"))
   @preproc.push_back(pp, tok_word(pp, "F"))
   let t2 = @preproc.next_pp_token(pp)
-  assert_eq(t2.kind, @tokens.TokenKind::Ident)
-  @preproc.push_back(pp, @preproc.make_builtin_token(@tokens.TokenKind::LParen))
+  assert_eq(t2.kind, Ident)
+  @preproc.push_back(pp, @preproc.make_builtin_token(LParen))
   @preproc.push_back(pp, tok_word(pp, "F"))
   let t3 = @preproc.next_pp_token(pp)
-  assert_eq(t3.kind, @tokens.TokenKind::Ident)
-  @preproc.push_back(pp, @preproc.make_builtin_token(@tokens.TokenKind::RParen))
+  assert_eq(t3.kind, Ident)
+  @preproc.push_back(pp, @preproc.make_builtin_token(RParen))
   @preproc.push_back(
     pp,
     @preproc.make_int_literal_token(pp, 1, @source.dummy_loc(0)),
   )
-  @preproc.push_back(pp, @preproc.make_builtin_token(@tokens.TokenKind::LParen))
+  @preproc.push_back(pp, @preproc.make_builtin_token(LParen))
   @preproc.push_back(pp, tok_word(pp, "F"))
   let _t4 = @preproc.next_pp_token(pp)
   @preproc.finalize_preprocessor(pp)
@@ -758,7 +739,7 @@ test "preproc api skip inactive branches" {
   let (pp, bag) = new_pp_with_source(source)
   @preproc.skip_inactive(pp)
   let tok = @preproc.next_input_token(pp)
-  assert_eq(tok.kind, @tokens.TokenKind::Hash)
+  assert_eq(tok.kind, Hash)
   @preproc.finalize_preprocessor(pp)
   assert_true(!@diag.has_errors(bag))
 }
@@ -769,7 +750,7 @@ test "preproc api skip inactive line comments" {
   let (pp, bag) = new_pp_with_source(source)
   @preproc.skip_inactive(pp)
   let tok = @preproc.next_input_token(pp)
-  assert_eq(tok.kind, @tokens.TokenKind::Hash)
+  assert_eq(tok.kind, Hash)
   @preproc.finalize_preprocessor(pp)
   assert_true(!@diag.has_errors(bag))
 }
@@ -809,7 +790,7 @@ test "preproc api expansion and line helpers" {
     }
   }
   let marked = @tokens.Token::{
-    kind: @tokens.TokenKind::Ident,
+    kind: Ident,
     value: @tokens.token_value_from_parts(0, 0),
     loc,
     line_start: true,
@@ -837,7 +818,7 @@ test "preproc api expansion and line helpers" {
   assert_eq(hidden_list.length(), 1)
   @preproc.push_tokens(pp, [int_tok])
   let raw = @preproc.next_raw_token(pp)
-  assert_eq(raw.kind, @tokens.TokenKind::IntLit)
+  assert_eq(raw.kind, IntLit)
   @preproc.push_expanding(pp, obj_id)
   pp.expanding_guards.push({ restore_len: 0 })
   @preproc.release_expanding_guards(pp)
@@ -914,13 +895,13 @@ test "preproc api if parser wrappers" {
   let parser12 = @preproc.IfParser::{ tokens: [num_tok], index: 0, pp }
   ignore(@preproc.parse_defined(parser12, loc))
   let parser13 = @preproc.IfParser::{
-    tokens: [@preproc.make_builtin_token(@tokens.TokenKind::RParen)],
+    tokens: [@preproc.make_builtin_token(RParen)],
     index: 0,
     pp,
   }
   assert_true(@preproc.peek_is_rparen(parser13))
   let parser14 = @preproc.IfParser::{
-    tokens: [tok2, @preproc.make_builtin_token(@tokens.TokenKind::RParen)],
+    tokens: [tok2, @preproc.make_builtin_token(RParen)],
     index: 0,
     pp,
   }
@@ -928,16 +909,13 @@ test "preproc api if parser wrappers" {
   let parser15 = @preproc.IfParser::{ tokens: [tok1, tok2], index: 0, pp }
   assert_true(@preproc.peek_if(parser15) is Some(_))
   assert_true(@preproc.advance_if(parser15) is Some(_))
-  assert_true(@preproc.match_kind(parser15, @tokens.TokenKind::IntLit))
+  assert_true(@preproc.match_kind(parser15, IntLit))
   let line_val = @preproc.parse_line_int_literal(pp, "12", loc)
   assert_eq(line_val, 12)
   let int_val = @preproc.parse_pp_int_literal(pp, "13", loc)
   assert_eq(int_val.value.to_int(), 13)
   let char_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, "'a'")
-  let char_tok = @preproc.make_builtin_token(
-    @tokens.TokenKind::CharLit,
-    lexeme_id=char_id,
-  )
+  let char_tok = @preproc.make_builtin_token(CharLit, lexeme_id=char_id)
   ignore(@preproc.parse_pp_char_literal(pp, char_tok))
   let (hex_val, _hex_idx) = @preproc.parse_pp_hex_escape(pp, "1f", 0, loc)
   assert_eq(hex_val, 31)

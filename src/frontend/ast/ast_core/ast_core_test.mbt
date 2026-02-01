@@ -16,13 +16,9 @@ test "type qualifiers helpers" {
     const_qual,
     @ast_core.with_volatile(@ast_core.empty_qual()),
   )
-  let ty = @ast_core.apply_qualifiers(
-    @ast_core.CType::Int(kind=@ast_core.CIntKind::Int, unsigned=false),
-    combined,
-  )
+  let ty = @ast_core.apply_qualifiers(Int(kind=Int, unsigned=false), combined)
   match ty {
-    @ast_core.CType::Qualified(qual~, ..) =>
-      assert_true(qual.is_const && qual.is_volatile)
+    Qualified(qual~, ..) => assert_true(qual.is_const && qual.is_volatile)
     _ => fail("expected qualified type")
   }
 }

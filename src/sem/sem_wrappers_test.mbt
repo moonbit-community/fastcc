@@ -12,16 +12,14 @@ test "sem wrapper basics" {
   let (ctx_err, bag_err) = new_sem_ctx()
   @sem.add_sem_error(ctx_err, loc, "oops")
   assert_true(@diag.has_errors(bag_err))
-  let base_int = @ast.CType::Int(kind=@ast.CIntKind::Int, unsigned=false)
+  let base_int = @ast.CType::Int(kind=Int, unsigned=false)
   let array_ty = @ast.CType::Array(elem=base_int, size=None, size_expr=None)
   let sized = @sem.apply_inferred_array_size(array_ty, 4)
   match sized {
-    @ast.CType::Array(size=Some(4), ..) => ()
+    Array(size=Some(4), ..) => ()
     _ => fail("expected inferred array size")
   }
-  assert_true(
-    @sem.is_char_type(@ast.CType::Int(kind=@ast.CIntKind::Char, unsigned=false)),
-  )
+  assert_true(@sem.is_char_type(Int(kind=Char, unsigned=false)))
   assert_true(!@sem.is_char_type(base_int))
   let qual : @ast.TypeQual = {
     is_const: true,
@@ -44,7 +42,7 @@ test "sem wrapper basics" {
   let str_expr = @ast.Expr::StringLit(value="hi", length=2, node_id=2, loc~)
   let sizeof_ty = @sem.type_for_sizeof(ctx_sizeof, str_expr)
   match sizeof_ty {
-    @ast.CType::Array(size=Some(2), ..) => ()
+    Array(size=Some(2), ..) => ()
     _ => fail("expected sizeof string to yield array type")
   }
   assert_true(!@diag.has_errors(bag_sizeof))
