@@ -12,17 +12,6 @@ pub fn parse_translation_unit(@preproc_core.Preprocessor) -> @ast_core.Translati
 // Errors
 
 // Types and methods
-type BuiltinIds
-
-type DeclSpecs
-
-type DeclWrapper
-
-type Declarator
-
-type ParenDeclParts
-
-type Parser
 
 // Type aliases
 

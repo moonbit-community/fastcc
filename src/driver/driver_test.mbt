@@ -4,7 +4,7 @@ test "cli parses -I/-c/-o and input" {
     @driver.parse_cli_args([
       "prog", "-Iinc1", "-I", "inc2", "-c", "-oout.o", "in.c",
     ]) {
-    @driver.CliParse::Run(v) => v
+    Run(v) => v
     _ => fail("expected args")
   }
   assert_eq(cfg.include_paths, ["inc1", "inc2"])
@@ -17,7 +17,7 @@ test "cli parses -I/-c/-o and input" {
 ///|
 test "cli rejects unknown flags" {
   match @driver.parse_cli_args(["prog", "-bogus", "-c", "in.c"]) {
-    @driver.CliParse::Error => ()
+    Error => ()
     _ => fail("expected parse error")
   }
 }
@@ -25,7 +25,7 @@ test "cli rejects unknown flags" {
 ///|
 test "cli ignores -Z flags" {
   let cfg = match @driver.parse_cli_args(["prog", "-Zunknown", "-c", "in.c"]) {
-    @driver.CliParse::Run(v) => v
+    Run(v) => v
     _ => fail("expected args")
   }
   assert_true(cfg.compile_only)
@@ -38,7 +38,7 @@ test "cli ignores common warning/debug flags" {
     @driver.parse_cli_args([
       "prog", "-Wall", "-Winvalid", "-O2", "-g", "-c", "in.c",
     ]) {
-    @driver.CliParse::Run(v) => v
+    Run(v) => v
     _ => fail("expected args")
   }
   assert_true(cfg.compile_only)
@@ -49,7 +49,7 @@ test "cli ignores common warning/debug flags" {
 ///|
 test "cli supports multiple input files" {
   let cfg = match @driver.parse_cli_args(["prog", "-c", "a.c", "b.c"]) {
-    @driver.CliParse::Run(v) => v
+    Run(v) => v
     _ => fail("expected args")
   }
   assert_eq(cfg.inputs, ["a.c", "b.c"])
@@ -60,7 +60,7 @@ test "cli supports multiple input files" {
 test "cli parses -isystem" {
   let cfg = match
     @driver.parse_cli_args(["prog", "-isystem", "sysinc", "-c", "in.c"]) {
-    @driver.CliParse::Run(v) => v
+    Run(v) => v
     _ => fail("expected args")
   }
   assert_eq(cfg.include_paths, ["sysinc"])
@@ -73,15 +73,15 @@ test "cli parses -D and -U" {
     @driver.parse_cli_args([
       "prog", "-D", "FOO", "-DBAR=2", "-DBAZ=", "-U", "FOO", "-UQUX", "-c", "in.c",
     ]) {
-    @driver.CliParse::Run(v) => v
+    Run(v) => v
     _ => fail("expected args")
   }
   assert_eq(cfg.macro_actions, [
-    @driver.CliMacroAction::Define(name="FOO", value=None),
-    @driver.CliMacroAction::Define(name="BAR", value=Some("2")),
-    @driver.CliMacroAction::Define(name="BAZ", value=Some("")),
-    @driver.CliMacroAction::Undef(name="FOO"),
-    @driver.CliMacroAction::Undef(name="QUX"),
+    Define(name="FOO", value=None),
+    Define(name="BAR", value=Some("2")),
+    Define(name="BAZ", value=Some("")),
+    Undef(name="FOO"),
+    Undef(name="QUX"),
   ])
 }
 
@@ -98,14 +98,12 @@ test "cli expands @listfile" {
     err => fail("failed to write listfile: \{err.to_string()}")
   }
   let cfg = match @driver.parse_cli_args(["prog", "@" + path]) {
-    @driver.CliParse::Run(v) => v
+    Run(v) => v
     _ => fail("expected args")
   }
   assert_eq(cfg.include_paths, ["inc"])
   assert_eq(cfg.inputs, ["in.c"])
-  assert_eq(cfg.macro_actions, [
-    @driver.CliMacroAction::Define(name="TEST", value=Some("1")),
-  ])
+  assert_eq(cfg.macro_actions, [Define(name="TEST", value=Some("1"))])
   @fs.remove_file(path) catch {
     _ => ()
   }
@@ -117,7 +115,7 @@ test "cli parses -run" {
     @driver.parse_cli_args([
       "prog", "-L", "libdir", "-lfoo", "libbar.dylib", "-run", "main.c", "arg1",
     ]) {
-    @driver.CliParse::Run(v) => v
+    Run(v) => v
     _ => fail("expected args")
   }
   assert_true(cfg.run)

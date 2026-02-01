@@ -1,19 +1,18 @@
 ///|
 pub fn expr_is_lvalue_simple(expr : Expr) -> Bool {
   match expr {
-    Expr::Ident(..) => true
-    Expr::Index(..) => true
-    Expr::Member(base~, is_arrow~, ..) =>
-      is_arrow || expr_is_lvalue_simple(base)
-    Expr::Unary(op=UnaryOp::Deref, ..) => true
-    Expr::CompoundLiteral(..) => true
-    Expr::StmtExpr(stmts~, ..) => {
+    Ident(..) => true
+    Index(..) => true
+    Member(base~, is_arrow~, ..) => is_arrow || expr_is_lvalue_simple(base)
+    Unary(op=Deref, ..) => true
+    CompoundLiteral(..) => true
+    StmtExpr(stmts~, ..) => {
       let len = stmts.length()
       if len == 0 {
         false
       } else {
         match stmts[len - 1] {
-          Stmt::ExprStmt(expr~, ..) => expr_is_lvalue_simple(expr)
+          ExprStmt(expr~, ..) => expr_is_lvalue_simple(expr)
           _ => false
         }
       }
@@ -25,21 +24,18 @@ pub fn expr_is_lvalue_simple(expr : Expr) -> Bool {
 ///|
 pub fn expr_may_call(expr : Expr) -> Bool {
   match expr {
-    Expr::Call(..) => true
-    Expr::Unary(expr=inner, ..) | Expr::Cast(expr=inner, ..) =>
-      expr_may_call(inner)
-    Expr::SizeofExpr(..) | Expr::AlignofExpr(..) => false
-    Expr::Binary(left~, right~, ..) =>
-      expr_may_call(left) || expr_may_call(right)
-    Expr::Conditional(cond~, then_expr~, else_expr~, ..) =>
+    Call(..) => true
+    Unary(expr=inner, ..) | Cast(expr=inner, ..) => expr_may_call(inner)
+    SizeofExpr(..) | AlignofExpr(..) => false
+    Binary(left~, right~, ..) => expr_may_call(left) || expr_may_call(right)
+    Conditional(cond~, then_expr~, else_expr~, ..) =>
       expr_may_call(cond) ||
       expr_may_call(then_expr) ||
       expr_may_call(else_expr)
-    Expr::Index(base~, index~, ..) =>
-      expr_may_call(base) || expr_may_call(index)
-    Expr::Member(base~, ..) => expr_may_call(base)
-    Expr::BuiltinVaArg(list~, ..) => expr_may_call(list)
-    Expr::StmtExpr(..) => true
+    Index(base~, index~, ..) => expr_may_call(base) || expr_may_call(index)
+    Member(base~, ..) => expr_may_call(base)
+    BuiltinVaArg(list~, ..) => expr_may_call(list)
+    StmtExpr(..) => true
     _ => false
   }
 }
@@ -124,9 +120,9 @@ pub fn parse_int64_literal(text : String) -> Int64? {
 ///|
 pub fn const_i64_from_expr(expr : Expr) -> Int64? {
   match expr {
-    Expr::IntLit(value~, ..) => parse_int64_literal(value)
-    Expr::Unary(op=UnaryOp::Plus, expr=inner, ..) => const_i64_from_expr(inner)
-    Expr::Unary(op=UnaryOp::Minus, expr=inner, ..) =>
+    IntLit(value~, ..) => parse_int64_literal(value)
+    Unary(op=Plus, expr=inner, ..) => const_i64_from_expr(inner)
+    Unary(op=Minus, expr=inner, ..) =>
       match const_i64_from_expr(inner) {
         None => None
         Some(v) => Some(-v)
@@ -138,56 +134,56 @@ pub fn const_i64_from_expr(expr : Expr) -> Int64? {
 ///|
 pub fn expr_loc(expr : Expr) -> @source.SrcLoc {
   match expr {
-    Expr::IntLit(loc~, ..) => loc
-    Expr::FloatLit(loc~, ..) => loc
-    Expr::CharLit(loc~, ..) => loc
-    Expr::StringLit(loc~, ..) => loc
-    Expr::Ident(loc~, ..) => loc
-    Expr::LabelAddr(loc~, ..) => loc
-    Expr::BuiltinTypesCompatibleP(loc~, ..) => loc
-    Expr::BuiltinOffsetof(loc~, ..) => loc
-    Expr::BuiltinVaArg(loc~, ..) => loc
-    Expr::Unary(loc~, ..) => loc
-    Expr::Cast(loc~, ..) => loc
-    Expr::CompoundLiteral(loc~, ..) => loc
-    Expr::StmtExpr(loc~, ..) => loc
-    Expr::SizeofExpr(loc~, ..) => loc
-    Expr::SizeofType(loc~, ..) => loc
-    Expr::AlignofExpr(loc~, ..) => loc
-    Expr::AlignofType(loc~, ..) => loc
-    Expr::Binary(loc~, ..) => loc
-    Expr::Conditional(loc~, ..) => loc
-    Expr::Call(loc~, ..) => loc
-    Expr::Index(loc~, ..) => loc
-    Expr::Member(loc~, ..) => loc
+    IntLit(loc~, ..) => loc
+    FloatLit(loc~, ..) => loc
+    CharLit(loc~, ..) => loc
+    StringLit(loc~, ..) => loc
+    Ident(loc~, ..) => loc
+    LabelAddr(loc~, ..) => loc
+    BuiltinTypesCompatibleP(loc~, ..) => loc
+    BuiltinOffsetof(loc~, ..) => loc
+    BuiltinVaArg(loc~, ..) => loc
+    Unary(loc~, ..) => loc
+    Cast(loc~, ..) => loc
+    CompoundLiteral(loc~, ..) => loc
+    StmtExpr(loc~, ..) => loc
+    SizeofExpr(loc~, ..) => loc
+    SizeofType(loc~, ..) => loc
+    AlignofExpr(loc~, ..) => loc
+    AlignofType(loc~, ..) => loc
+    Binary(loc~, ..) => loc
+    Conditional(loc~, ..) => loc
+    Call(loc~, ..) => loc
+    Index(loc~, ..) => loc
+    Member(loc~, ..) => loc
   }
 }
 
 ///|
 pub fn expr_node_id(expr : Expr) -> Int {
   match expr {
-    Expr::IntLit(node_id~, ..) => node_id
-    Expr::FloatLit(node_id~, ..) => node_id
-    Expr::CharLit(node_id~, ..) => node_id
-    Expr::StringLit(node_id~, ..) => node_id
-    Expr::Ident(node_id~, ..) => node_id
-    Expr::LabelAddr(node_id~, ..) => node_id
-    Expr::BuiltinTypesCompatibleP(node_id~, ..) => node_id
-    Expr::BuiltinOffsetof(node_id~, ..) => node_id
-    Expr::BuiltinVaArg(node_id~, ..) => node_id
-    Expr::Unary(node_id~, ..) => node_id
-    Expr::Cast(node_id~, ..) => node_id
-    Expr::CompoundLiteral(node_id~, ..) => node_id
-    Expr::StmtExpr(node_id~, ..) => node_id
-    Expr::SizeofExpr(node_id~, ..) => node_id
-    Expr::SizeofType(node_id~, ..) => node_id
-    Expr::AlignofExpr(node_id~, ..) => node_id
-    Expr::AlignofType(node_id~, ..) => node_id
-    Expr::Binary(node_id~, ..) => node_id
-    Expr::Conditional(node_id~, ..) => node_id
-    Expr::Call(node_id~, ..) => node_id
-    Expr::Index(node_id~, ..) => node_id
-    Expr::Member(node_id~, ..) => node_id
+    IntLit(node_id~, ..) => node_id
+    FloatLit(node_id~, ..) => node_id
+    CharLit(node_id~, ..) => node_id
+    StringLit(node_id~, ..) => node_id
+    Ident(node_id~, ..) => node_id
+    LabelAddr(node_id~, ..) => node_id
+    BuiltinTypesCompatibleP(node_id~, ..) => node_id
+    BuiltinOffsetof(node_id~, ..) => node_id
+    BuiltinVaArg(node_id~, ..) => node_id
+    Unary(node_id~, ..) => node_id
+    Cast(node_id~, ..) => node_id
+    CompoundLiteral(node_id~, ..) => node_id
+    StmtExpr(node_id~, ..) => node_id
+    SizeofExpr(node_id~, ..) => node_id
+    SizeofType(node_id~, ..) => node_id
+    AlignofExpr(node_id~, ..) => node_id
+    AlignofType(node_id~, ..) => node_id
+    Binary(node_id~, ..) => node_id
+    Conditional(node_id~, ..) => node_id
+    Call(node_id~, ..) => node_id
+    Index(node_id~, ..) => node_id
+    Member(node_id~, ..) => node_id
   }
 }
 

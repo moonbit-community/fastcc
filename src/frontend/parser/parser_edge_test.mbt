@@ -5,7 +5,7 @@ test "parser static assert with message" {
   let mut found = false
   for decl in unit.decls {
     match decl {
-      @ast.Decl::StaticAssert(sa) => {
+      StaticAssert(sa) => {
         found = true
         assert_true(sa.message is Some(_))
       }

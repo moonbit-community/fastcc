@@ -127,12 +127,12 @@ struct SwitchInfo {
 ///|
 fn default_type_aliases() -> @util.FastMap[String, @ast.CType] {
   let aliases : @util.FastMap[String, @ast.CType] = @util.fast_map_new()
-  aliases.set("__builtin_va_list", @ast.CType::Pointer(@ast.CType::Void))
+  aliases.set("__builtin_va_list", Pointer(Void))
   aliases.set(
     "jmp_buf",
     Array(elem=default_int_type(), size=Some(1), size_expr=None),
   )
-  aliases.set("FILE", @ast.CType::Pointer(@ast.CType::Void))
+  aliases.set("FILE", Pointer(Void))
   aliases
 }
 
@@ -388,22 +388,19 @@ pub fn attrs_layout_empty(attrs : @ast.Attributes) -> Bool {
 ///|
 
 ///|
-let size_t_type_value : @ast.CType = @ast.CType::Int(
-  kind=@ast.CIntKind::Long,
-  unsigned=true,
-)
+let size_t_type_value : @ast.CType = Int(kind=Long, unsigned=true)
 
 ///|
-let char_type_value : @ast.CType = @ast.CType::Int(
-  kind=@ast.CIntKind::Char,
+let char_type_value : @ast.CType = Int(
+  kind=Char,
   unsigned=@util.char_is_unsigned,
 )
 
 ///|
-let void_pointer_type_value : @ast.CType = @ast.CType::Pointer(@ast.CType::Void)
+let void_pointer_type_value : @ast.CType = Pointer(Void)
 
 ///|
-let char_pointer_type_value : @ast.CType = @ast.CType::Pointer(char_type_value)
+let char_pointer_type_value : @ast.CType = Pointer(char_type_value)
 
 ///|
 pub fn default_int_type() -> @ast.CType {
@@ -458,11 +455,11 @@ fn enum_int_type_from_range(min_value : Int, max_value : Int) -> @ast.CType {
   let max_int = 2147483647
   let min_int = -2147483647 - 1
   if min_value >= 0 {
-    @ast.CType::Int(kind=@ast.CIntKind::Int, unsigned=true)
+    Int(kind=Int, unsigned=true)
   } else if min_value < min_int || max_value > max_int {
-    @ast.CType::Int(kind=@ast.CIntKind::LongLong, unsigned=false)
+    Int(kind=LongLong, unsigned=false)
   } else {
-    @ast.CType::Int(kind=@ast.CIntKind::Int, unsigned=false)
+    Int(kind=Int, unsigned=false)
   }
 }
 
@@ -504,20 +501,13 @@ fn enum_type_from_items(
 ///|
 pub fn strip_qualifiers(ty : @ast.CType) -> @ast.CType {
   match ty {
-    @ast.CType::Qualified(base~, ..) => strip_qualifiers(base)
-    @ast.CType::Attributed(attrs~, base~) =>
-      @ast.CType::Attributed(attrs~, base=strip_qualifiers(base))
-    @ast.CType::Pointer(inner) => @ast.CType::Pointer(strip_qualifiers(inner))
-    @ast.CType::Array(elem~, size~, size_expr~) =>
-      @ast.CType::Array(elem=strip_qualifiers(elem), size~, size_expr~)
-    @ast.CType::Function(
-      return_type~,
-      params~,
-      varargs~,
-      is_old_style~,
-      call_conv~
-    ) =>
-      @ast.CType::Function(
+    Qualified(base~, ..) => strip_qualifiers(base)
+    Attributed(attrs~, base~) => Attributed(attrs~, base=strip_qualifiers(base))
+    Pointer(inner) => Pointer(strip_qualifiers(inner))
+    Array(elem~, size~, size_expr~) =>
+      Array(elem=strip_qualifiers(elem), size~, size_expr~)
+    Function(return_type~, params~, varargs~, is_old_style~, call_conv~) =>
+      Function(
         return_type=strip_qualifiers(return_type),
         params=params.map(strip_qualifiers),
         varargs~,
@@ -531,19 +521,13 @@ pub fn strip_qualifiers(ty : @ast.CType) -> @ast.CType {
 ///|
 pub fn strip_qual_attrs(ty : @ast.CType) -> @ast.CType {
   match ty {
-    @ast.CType::Qualified(base~, ..) => strip_qual_attrs(base)
-    @ast.CType::Attributed(base~, ..) => strip_qual_attrs(base)
-    @ast.CType::Pointer(inner) => @ast.CType::Pointer(strip_qual_attrs(inner))
-    @ast.CType::Array(elem~, size~, size_expr~) =>
-      @ast.CType::Array(elem=strip_qual_attrs(elem), size~, size_expr~)
-    @ast.CType::Function(
-      return_type~,
-      params~,
-      varargs~,
-      is_old_style~,
-      call_conv~
-    ) =>
-      @ast.CType::Function(
+    Qualified(base~, ..) => strip_qual_attrs(base)
+    Attributed(base~, ..) => strip_qual_attrs(base)
+    Pointer(inner) => Pointer(strip_qual_attrs(inner))
+    Array(elem~, size~, size_expr~) =>
+      Array(elem=strip_qual_attrs(elem), size~, size_expr~)
+    Function(return_type~, params~, varargs~, is_old_style~, call_conv~) =>
+      Function(
         return_type=strip_qual_attrs(return_type),
         params=params.map(strip_qual_attrs),
         varargs~,
@@ -559,8 +543,8 @@ pub fn strip_top_qualifiers(ty : @ast.CType) -> @ast.CType {
   let mut current = ty
   while true {
     match current {
-      @ast.CType::Qualified(base~, ..) => current = base
-      @ast.CType::Attributed(base~, ..) => current = base
+      Qualified(base~, ..) => current = base
+      Attributed(base~, ..) => current = base
       _ => break
     }
   }
@@ -572,7 +556,7 @@ pub fn strip_top_qualifiers_keep_attrs(ty : @ast.CType) -> @ast.CType {
   let mut current = ty
   while true {
     match current {
-      @ast.CType::Qualified(base~, ..) => current = base
+      Qualified(base~, ..) => current = base
       _ => break
     }
   }
@@ -582,8 +566,8 @@ pub fn strip_top_qualifiers_keep_attrs(ty : @ast.CType) -> @ast.CType {
 ///|
 fn split_top_qual(ty : @ast.CType) -> (@ast.TypeQual, @ast.CType) {
   match ty {
-    @ast.CType::Qualified(qual~, base~) => (qual, base)
-    @ast.CType::Attributed(base~, ..) => split_top_qual(base)
+    Qualified(qual~, base~) => (qual, base)
+    Attributed(base~, ..) => split_top_qual(base)
     _ => (@ast.empty_qual(), ty)
   }
 }
@@ -591,66 +575,66 @@ fn split_top_qual(ty : @ast.CType) -> (@ast.TypeQual, @ast.CType) {
 ///|
 fn is_const_qualified(ty : @ast.CType) -> Bool {
   match ty {
-    @ast.CType::Qualified(qual~, ..) => qual.is_const
-    @ast.CType::Attributed(base~, ..) => is_const_qualified(base)
+    Qualified(qual~, ..) => qual.is_const
+    Attributed(base~, ..) => is_const_qualified(base)
     _ => false
   }
 }
 
 ///|
 fn is_void_type(ty : @ast.CType) -> Bool {
-  strip_top_qualifiers(ty) is @ast.CType::Void
+  strip_top_qualifiers(ty) is Void
 }
 
 ///|
 fn int_rank(kind : @ast.CIntKind) -> Int {
   match kind {
-    @ast.CIntKind::Char => 1
-    @ast.CIntKind::Short => 2
-    @ast.CIntKind::Int => 3
-    @ast.CIntKind::Long => 4
-    @ast.CIntKind::LongLong => 5
+    Char => 1
+    Short => 2
+    Int => 3
+    Long => 4
+    LongLong => 5
   }
 }
 
 ///|
 fn int_bits(kind : @ast.CIntKind) -> Int {
   match kind {
-    @ast.CIntKind::Char => 8
-    @ast.CIntKind::Short => 16
-    @ast.CIntKind::Int => 32
-    @ast.CIntKind::Long => 64
-    @ast.CIntKind::LongLong => 64
+    Char => 8
+    Short => 16
+    Int => 32
+    Long => 64
+    LongLong => 64
   }
 }
 
 ///|
 fn float_rank(kind : @ast.CFloatKind) -> Int {
   match kind {
-    @ast.CFloatKind::Float => 1
-    @ast.CFloatKind::Double => 2
-    @ast.CFloatKind::LongDouble => 3
+    Float => 1
+    Double => 2
+    LongDouble => 3
   }
 }
 
 ///|
 pub fn int_size(kind : @ast.CIntKind) -> Int {
   match kind {
-    @ast.CIntKind::Char => 1
-    @ast.CIntKind::Short => 2
-    @ast.CIntKind::Int => 4
-    @ast.CIntKind::Long => 8
-    @ast.CIntKind::LongLong => 8
+    Char => 1
+    Short => 2
+    Int => 4
+    Long => 8
+    LongLong => 8
   }
 }
 
 ///|
 pub fn float_size(kind : @ast.CFloatKind) -> Int {
   match kind {
-    @ast.CFloatKind::Float => 4
-    @ast.CFloatKind::Double => 8
+    Float => 4
+    Double => 8
     // AArch64 uses 8-byte long double (same as double)
-    @ast.CFloatKind::LongDouble => 8
+    LongDouble => 8
   }
 }
 
@@ -677,8 +661,8 @@ fn resolve_align_spec(
   loc : @source.SrcLoc,
 ) -> Int? {
   match spec {
-    @ast.AlignSpec::Default => Some(max_align)
-    @ast.AlignSpec::Expr(expr~) =>
+    Default => Some(max_align)
+    Expr(expr~) =>
       match const_int_from_expr(ctx, expr, loc) {
         None => None
         Some(value) =>
@@ -707,7 +691,7 @@ pub fn attr_align_value(
 ///|
 fn is_float_type(ty : @ast.CType) -> Bool {
   match strip_top_qualifiers(ty) {
-    @ast.CType::Float(..) => true
+    Float(..) => true
     _ => false
   }
 }
@@ -715,7 +699,7 @@ fn is_float_type(ty : @ast.CType) -> Bool {
 ///|
 fn enum_type_for_arith(ctx : SemContext, ty : @ast.CType) -> @ast.CType {
   match strip_top_qualifiers(ty) {
-    @ast.CType::Enum(name~, id~, ..) =>
+    Enum(name~, id~, ..) =>
       if id != 0 {
         match get_opt_by_id(ctx.enum_types_by_id, id) {
           Some(base) => base
@@ -734,14 +718,14 @@ fn enum_type_for_arith(ctx : SemContext, ty : @ast.CType) -> @ast.CType {
 ///|
 fn promote_int_type(ctx : SemContext, ty : @ast.CType) -> @ast.CType {
   match strip_top_qualifiers(ty) {
-    @ast.CType::Int(kind~, unsigned~) =>
-      if int_rank(kind) < int_rank(@ast.CIntKind::Int) {
+    Int(kind~, unsigned~) =>
+      if int_rank(kind) < int_rank(Int) {
         default_int_type()
       } else {
-        @ast.CType::Int(kind~, unsigned~)
+        Int(kind~, unsigned~)
       }
-    @ast.CType::Bool => default_int_type()
-    @ast.CType::Enum(..) => promote_int_type(ctx, enum_type_for_arith(ctx, ty))
+    Bool => default_int_type()
+    Enum(..) => promote_int_type(ctx, enum_type_for_arith(ctx, ty))
     _ => default_int_type()
   }
 }
@@ -756,8 +740,8 @@ pub fn common_int_type(
   let right = promote_int_type(ctx, rhs)
   match (left, right) {
     (
-      @ast.CType::Int(kind=l_kind, unsigned=l_unsigned),
-      @ast.CType::Int(kind=r_kind, unsigned=r_unsigned),
+      Int(kind=l_kind, unsigned=l_unsigned),
+      Int(kind=r_kind, unsigned=r_unsigned),
     ) => {
       if l_unsigned == r_unsigned {
         let rank = if int_rank(l_kind) >= int_rank(r_kind) {
@@ -765,7 +749,7 @@ pub fn common_int_type(
         } else {
           r_kind
         }
-        return @ast.CType::Int(kind=rank, unsigned=l_unsigned)
+        return Int(kind=rank, unsigned=l_unsigned)
       }
       let (u_kind, u_unsigned, s_kind) = if l_unsigned {
         (l_kind, true, r_kind)
@@ -773,14 +757,14 @@ pub fn common_int_type(
         (r_kind, true, l_kind)
       }
       if int_rank(u_kind) >= int_rank(s_kind) {
-        return @ast.CType::Int(kind=u_kind, unsigned=u_unsigned)
+        return Int(kind=u_kind, unsigned=u_unsigned)
       }
       let u_bits = int_bits(u_kind)
       let s_bits = int_bits(s_kind)
       if s_bits > u_bits {
-        @ast.CType::Int(kind=s_kind, unsigned=false)
+        Int(kind=s_kind, unsigned=false)
       } else {
-        @ast.CType::Int(kind=s_kind, unsigned=true)
+        Int(kind=s_kind, unsigned=true)
       }
     }
     _ => default_int_type()
@@ -796,14 +780,14 @@ fn arithmetic_result_type(
   let left = strip_top_qualifiers(lhs)
   let right = strip_top_qualifiers(rhs)
   match (left, right) {
-    (@ast.CType::Float(kind=l_kind), @ast.CType::Float(kind=r_kind)) =>
+    (Float(kind=l_kind), Float(kind=r_kind)) =>
       if float_rank(l_kind) >= float_rank(r_kind) {
-        @ast.CType::Float(kind=l_kind)
+        Float(kind=l_kind)
       } else {
-        @ast.CType::Float(kind=r_kind)
+        Float(kind=r_kind)
       }
-    (@ast.CType::Float(kind~), _) => @ast.CType::Float(kind~)
-    (_, @ast.CType::Float(kind~)) => @ast.CType::Float(kind~)
+    (Float(kind~), _) => Float(kind~)
+    (_, Float(kind~)) => Float(kind~)
     _ => common_int_type(ctx, lhs, rhs)
   }
 }
@@ -821,8 +805,7 @@ fn can_assign(dst : @ast.CType, src : @ast.CType) -> Bool {
     return true
   }
   match (dst_ty, src_ty) {
-    (@ast.CType::Pointer(inner_a), @ast.CType::Pointer(inner_b)) =>
-      pointer_compatible(inner_a, inner_b)
+    (Pointer(inner_a), Pointer(inner_b)) => pointer_compatible(inner_a, inner_b)
     _ => type_eq(dst_ty, src_ty)
   }
 }
@@ -835,8 +818,8 @@ fn pointer_compatible(a : @ast.CType, b : @ast.CType) -> Bool {
   // Match tcc leniency: same-size integer pointer types are compatible.
   match (strip_top_qualifiers(a), strip_top_qualifiers(b)) {
     (
-      @ast.CType::Int(kind=a_kind, unsigned=a_unsigned),
-      @ast.CType::Int(kind=b_kind, unsigned=b_unsigned),
+      Int(kind=a_kind, unsigned=a_unsigned),
+      Int(kind=b_kind, unsigned=b_unsigned),
     ) => a_unsigned == b_unsigned && int_size(a_kind) == int_size(b_kind)
     _ => false
   }
@@ -852,9 +835,9 @@ fn check_storage_class(
 ) -> Unit {
   if is_function {
     match storage {
-      @ast.StorageClass::Auto | @ast.StorageClass::Register =>
+      Auto | Register =>
         add_sem_error(ctx, loc, "invalid storage class for function")
-      @ast.StorageClass::Static =>
+      Static =>
         if is_local {
           add_sem_error(
             ctx, loc, "function without file scope cannot be static",
@@ -864,7 +847,7 @@ fn check_storage_class(
     }
   } else if !is_local {
     match storage {
-      @ast.StorageClass::Auto | @ast.StorageClass::Register =>
+      Auto | Register =>
         add_sem_error(ctx, loc, "invalid storage class for global")
       _ => ()
     }
@@ -878,9 +861,8 @@ pub fn type_size_align(
   loc : @source.SrcLoc,
 ) -> (Int, Int)? {
   match strip_top_qualifiers_keep_attrs(ty) {
-    @ast.CType::TypeofExpr(expr~) =>
-      type_size_align(ctx, type_for_typeof(ctx, expr), loc)
-    @ast.CType::Attributed(attrs~, base~) =>
+    TypeofExpr(expr~) => type_size_align(ctx, type_for_typeof(ctx, expr), loc)
+    Attributed(attrs~, base~) =>
       match type_size_align(ctx, base, loc) {
         None => None
         Some((size, align)) => {
@@ -893,21 +875,21 @@ pub fn type_size_align(
           Some((size, final_align))
         }
       }
-    @ast.CType::Void => {
+    Void => {
       add_sem_error(ctx, loc, "invalid application of sizeof to void")
       None
     }
-    @ast.CType::Bool => Some((1, 1))
-    @ast.CType::Int(kind~, ..) => {
+    Bool => Some((1, 1))
+    Int(kind~, ..) => {
       let size = int_size(kind)
       Some((size, size))
     }
-    @ast.CType::Float(kind~) => {
+    Float(kind~) => {
       let size = float_size(kind)
       Some((size, size))
     }
-    @ast.CType::Pointer(_) => Some((8, 8))
-    @ast.CType::Enum(name~, id~, items~) => {
+    Pointer(_) => Some((8, 8))
+    Enum(name~, id~, items~) => {
       let enum_ty = if id != 0 {
         match get_opt_by_id(ctx.enum_types_by_id, id) {
           Some(base) => Some(base)
@@ -959,8 +941,8 @@ pub fn type_size_align(
         Some(base) => type_size_align(ctx, base, loc)
       }
     }
-    @ast.CType::Function(..) => Some((8, 8))
-    @ast.CType::Array(elem~, size~, size_expr~) => {
+    Function(..) => Some((8, 8))
+    Array(elem~, size~, size_expr~) => {
       let (elem_size, elem_align) = match type_size_align(ctx, elem, loc) {
         None => return None
         Some(v) => v
@@ -991,12 +973,7 @@ pub fn type_size_align(
           }
       }
     }
-    @ast.CType::Struct(
-      name=tag,
-      id=tag_id,
-      fields=field_list,
-      attrs=struct_attrs
-    ) =>
+    Struct(name=tag, id=tag_id, fields=field_list, attrs=struct_attrs) =>
       match
         ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=false, loc) {
         None => None
@@ -1027,12 +1004,7 @@ pub fn type_size_align(
           }
         }
       }
-    @ast.CType::Union(
-      name=tag,
-      id=tag_id,
-      fields=field_list,
-      attrs=struct_attrs
-    ) =>
+    Union(name=tag, id=tag_id, fields=field_list, attrs=struct_attrs) =>
       match
         ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=true, loc) {
         None => None
@@ -1063,7 +1035,7 @@ pub fn type_size_align(
           }
         }
       }
-    @ast.CType::Qualified(base~, ..) => type_size_align(ctx, base, loc)
+    Qualified(base~, ..) => type_size_align(ctx, base, loc)
   }
 }
 
@@ -1080,7 +1052,7 @@ fn record_agg_temp_for_type(
     return
   }
   match strip_top_qualifiers(ty) {
-    @ast.CType::Struct(..) | @ast.CType::Union(..) =>
+    Struct(..) | Union(..) =>
       if type_size_align(ctx, ty, loc) is Some((size, align)) {
         if size > 0 {
           if size > ctx.current_agg_temp_size {
@@ -1108,7 +1080,7 @@ fn maybe_record_agg_temp_for_expr(
     return
   }
   match strip_top_qualifiers(ty) {
-    @ast.CType::Struct(..) | @ast.CType::Union(..) =>
+    Struct(..) | Union(..) =>
       if !@ast.expr_is_lvalue_simple(expr) {
         record_agg_temp_for_type(ctx, ty, @ast.expr_loc(expr))
       }
@@ -1199,8 +1171,8 @@ fn record_items_to_fields(items : Array[@ast.RecordItem]) -> Array[@ast.Field] {
   let fields : Array[@ast.Field] = []
   for item in items {
     match item {
-      @ast.RecordItem::Field(field) => fields.push(field)
-      @ast.RecordItem::StaticAssert(_) => ()
+      Field(field) => fields.push(field)
+      StaticAssert(_) => ()
     }
   }
   fields
@@ -1214,9 +1186,8 @@ fn record_items_to_fields_checked(
   let fields : Array[@ast.Field] = []
   for item in items {
     match item {
-      @ast.RecordItem::Field(field) => fields.push(field)
-      @ast.RecordItem::StaticAssert(static_assert) =>
-        check_static_assert(ctx, static_assert)
+      Field(field) => fields.push(field)
+      StaticAssert(static_assert) => check_static_assert(ctx, static_assert)
     }
   }
   fields
@@ -1293,7 +1264,7 @@ pub fn struct_size_align(
         }
         let (field_size, field_align) = match
           strip_top_qualifiers_keep_attrs(field.ty) {
-          @ast.CType::Array(elem~, size=None, size_expr~) =>
+          Array(elem~, size=None, size_expr~) =>
             match size_expr {
               None => {
                 if i != fields.length() - 1 {
@@ -1375,7 +1346,7 @@ pub fn union_size_align(
       }
       None =>
         match strip_top_qualifiers_keep_attrs(field.ty) {
-          @ast.CType::Array(elem=_, size=None, size_expr~) =>
+          Array(elem=_, size=None, size_expr~) =>
             match size_expr {
               None =>
                 match type_size_align(ctx, field.ty, loc) {
@@ -1428,7 +1399,7 @@ pub fn type_for_sizeof(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
   let prev = ctx.record_agg_temps
   ctx.record_agg_temps = false
   let ty = match expr {
-    @ast.Expr::Ident(name~, id~, loc~, ..) =>
+    Ident(name~, id~, loc~, ..) =>
       match lookup_value(ctx, name, id) {
         Some(ty) => ty
         None => {
@@ -1436,8 +1407,8 @@ pub fn type_for_sizeof(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
           default_int_type()
         }
       }
-    @ast.Expr::StringLit(length~, ..) =>
-      @ast.CType::Array(elem=char_type(), size=Some(length), size_expr=None)
+    StringLit(length~, ..) =>
+      Array(elem=char_type(), size=Some(length), size_expr=None)
     _ =>
       match type_of_lvalue_optional(ctx, expr) {
         Some(ty) => ty
@@ -1453,7 +1424,7 @@ fn type_for_typeof(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
   let prev = ctx.record_agg_temps
   ctx.record_agg_temps = false
   let ty = match expr {
-    @ast.Expr::Ident(name~, id~, loc~, ..) =>
+    Ident(name~, id~, loc~, ..) =>
       match lookup_value(ctx, name, id) {
         Some(ty) => ty
         None => {
@@ -1461,8 +1432,8 @@ fn type_for_typeof(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
           default_int_type()
         }
       }
-    @ast.Expr::StringLit(length~, ..) =>
-      @ast.CType::Array(elem=char_type(), size=Some(length), size_expr=None)
+    StringLit(length~, ..) =>
+      Array(elem=char_type(), size=Some(length), size_expr=None)
     _ => type_of_expr_impl(ctx, expr)
   }
   ctx.record_agg_temps = prev
@@ -1486,45 +1457,39 @@ fn resolve_type_inner(
   loc : @source.SrcLoc,
 ) -> (@ast.CType, Bool) {
   match ty {
-    @ast.CType::Qualified(qual~, base~) => {
+    Qualified(qual~, base~) => {
       let (resolved_base, changed) = resolve_type_inner(ctx, base, loc)
       if changed {
-        (@ast.CType::Qualified(qual~, base=resolved_base), true)
+        (Qualified(qual~, base=resolved_base), true)
       } else {
         (ty, false)
       }
     }
-    @ast.CType::Attributed(attrs~, base~) => {
+    Attributed(attrs~, base~) => {
       let (resolved_base, changed) = resolve_type_inner(ctx, base, loc)
       if changed {
-        (@ast.CType::Attributed(attrs~, base=resolved_base), true)
+        (Attributed(attrs~, base=resolved_base), true)
       } else {
         (ty, false)
       }
     }
-    @ast.CType::Pointer(inner) => {
+    Pointer(inner) => {
       let (resolved_inner, changed) = resolve_type_inner(ctx, inner, loc)
       if changed {
-        (@ast.CType::Pointer(resolved_inner), true)
+        (Pointer(resolved_inner), true)
       } else {
         (ty, false)
       }
     }
-    @ast.CType::Array(elem~, size~, size_expr~) => {
+    Array(elem~, size~, size_expr~) => {
       let (resolved_elem, changed) = resolve_type_inner(ctx, elem, loc)
       if changed {
-        (@ast.CType::Array(elem=resolved_elem, size~, size_expr~), true)
+        (Array(elem=resolved_elem, size~, size_expr~), true)
       } else {
         (ty, false)
       }
     }
-    @ast.CType::Function(
-      return_type~,
-      params~,
-      varargs~,
-      is_old_style~,
-      call_conv~
-    ) => {
+    Function(return_type~, params~, varargs~, is_old_style~, call_conv~) => {
       let (resolved_ret, ret_changed) = resolve_type_inner(
         ctx, return_type, loc,
       )
@@ -1562,7 +1527,7 @@ fn resolve_type_inner(
           None => params
         }
         (
-          @ast.CType::Function(
+          Function(
             return_type=resolved_ret,
             params=resolved_params,
             varargs~,
@@ -1573,7 +1538,7 @@ fn resolve_type_inner(
         )
       }
     }
-    @ast.CType::TypeofExpr(expr~) => {
+    TypeofExpr(expr~) => {
       let resolved = type_for_typeof(ctx, expr)
       let (final_ty, _) = resolve_type_inner(ctx, resolved, @ast.expr_loc(expr))
       (final_ty, true)
@@ -1588,9 +1553,7 @@ fn decl_allows_vla(is_local : Bool, storage : @ast.StorageClass) -> Bool {
     return false
   }
   match storage {
-    @ast.StorageClass::Default
-    | @ast.StorageClass::Auto
-    | @ast.StorageClass::Register => true
+    Default | Auto | Register => true
     _ => false
   }
 }
@@ -1604,28 +1567,20 @@ fn resolve_array_sizes_for_decl(
   loc : @source.SrcLoc,
 ) -> @ast.CType {
   match ty {
-    @ast.CType::Qualified(qual~, base~) =>
-      @ast.CType::Qualified(
+    Qualified(qual~, base~) =>
+      Qualified(
         qual~,
         base=resolve_array_sizes_for_decl(ctx, base, is_local, storage, loc),
       )
-    @ast.CType::Attributed(attrs~, base~) =>
-      @ast.CType::Attributed(
+    Attributed(attrs~, base~) =>
+      Attributed(
         attrs~,
         base=resolve_array_sizes_for_decl(ctx, base, is_local, storage, loc),
       )
-    @ast.CType::Pointer(inner) =>
-      @ast.CType::Pointer(
-        resolve_array_sizes_for_decl(ctx, inner, is_local, storage, loc),
-      )
-    @ast.CType::Function(
-      return_type~,
-      params~,
-      varargs~,
-      is_old_style~,
-      call_conv~
-    ) =>
-      @ast.CType::Function(
+    Pointer(inner) =>
+      Pointer(resolve_array_sizes_for_decl(ctx, inner, is_local, storage, loc))
+    Function(return_type~, params~, varargs~, is_old_style~, call_conv~) =>
+      Function(
         return_type=resolve_array_sizes_for_decl(
           ctx, return_type, is_local, storage, loc,
         ),
@@ -1636,7 +1591,7 @@ fn resolve_array_sizes_for_decl(
         is_old_style~,
         call_conv~,
       )
-    @ast.CType::Array(elem~, size~, size_expr~) => {
+    Array(elem~, size~, size_expr~) => {
       let resolved_elem = resolve_array_sizes_for_decl(
         ctx, elem, is_local, storage, loc,
       )
@@ -1644,14 +1599,13 @@ fn resolve_array_sizes_for_decl(
         Some(n) =>
           if n < 0 {
             add_sem_error(ctx, loc, "invalid array size")
-            @ast.CType::Array(elem=resolved_elem, size=None, size_expr~)
+            Array(elem=resolved_elem, size=None, size_expr~)
           } else {
-            @ast.CType::Array(elem=resolved_elem, size=Some(n), size_expr~)
+            Array(elem=resolved_elem, size=Some(n), size_expr~)
           }
         None =>
           match size_expr {
-            None =>
-              @ast.CType::Array(elem=resolved_elem, size=None, size_expr=None)
+            None => Array(elem=resolved_elem, size=None, size_expr=None)
             Some(expr) =>
               if decl_allows_vla(is_local, storage) {
                 if is_constant_expr_for_builtin(ctx, expr) {
@@ -1661,20 +1615,16 @@ fn resolve_array_sizes_for_decl(
                     @ast.expr_loc(expr),
                   )
                   if !ok {
-                    @ast.CType::Array(elem=resolved_elem, size=None, size_expr~)
+                    Array(elem=resolved_elem, size=None, size_expr~)
                   } else if value < 0 {
                     add_sem_error(
                       ctx,
                       @ast.expr_loc(expr),
                       "invalid array size",
                     )
-                    @ast.CType::Array(elem=resolved_elem, size=None, size_expr~)
+                    Array(elem=resolved_elem, size=None, size_expr~)
                   } else {
-                    @ast.CType::Array(
-                      elem=resolved_elem,
-                      size=Some(value),
-                      size_expr~,
-                    )
+                    Array(elem=resolved_elem, size=Some(value), size_expr~)
                   }
                 } else {
                   let expr_ty = type_of_expr(ctx, expr)
@@ -1685,12 +1635,11 @@ fn resolve_array_sizes_for_decl(
                       "size of variable length array should be an integer",
                     )
                   }
-                  @ast.CType::Array(elem=resolved_elem, size=None, size_expr~)
+                  Array(elem=resolved_elem, size=None, size_expr~)
                 }
               } else {
                 match const_int_from_expr(ctx, expr, @ast.expr_loc(expr)) {
-                  None =>
-                    @ast.CType::Array(elem=resolved_elem, size=None, size_expr~)
+                  None => Array(elem=resolved_elem, size=None, size_expr~)
                   Some(value) =>
                     if value < 0 {
                       add_sem_error(
@@ -1698,17 +1647,9 @@ fn resolve_array_sizes_for_decl(
                         @ast.expr_loc(expr),
                         "invalid array size",
                       )
-                      @ast.CType::Array(
-                        elem=resolved_elem,
-                        size=None,
-                        size_expr~,
-                      )
+                      Array(elem=resolved_elem, size=None, size_expr~)
                     } else {
-                      @ast.CType::Array(
-                        elem=resolved_elem,
-                        size=Some(value),
-                        size_expr~,
-                      )
+                      Array(elem=resolved_elem, size=Some(value), size_expr~)
                     }
                 }
               }
@@ -1722,13 +1663,13 @@ fn resolve_array_sizes_for_decl(
 ///|
 pub fn type_contains_vla(ty : @ast.CType) -> Bool {
   match strip_top_qualifiers(ty) {
-    @ast.CType::Array(size=None, size_expr=Some(_), ..) => true
-    @ast.CType::Array(elem~, ..) => type_contains_vla(elem)
-    @ast.CType::Pointer(inner) => type_contains_vla(inner)
-    @ast.CType::Function(return_type~, params~, ..) =>
+    Array(size=None, size_expr=Some(_), ..) => true
+    Array(elem~, ..) => type_contains_vla(elem)
+    Pointer(inner) => type_contains_vla(inner)
+    Function(return_type~, params~, ..) =>
       type_contains_vla(return_type) || params.any(type_contains_vla)
-    @ast.CType::Qualified(base~, ..) => type_contains_vla(base)
-    @ast.CType::Attributed(base~, ..) => type_contains_vla(base)
+    Qualified(base~, ..) => type_contains_vla(base)
+    Attributed(base~, ..) => type_contains_vla(base)
     _ => false
   }
 }
@@ -1736,10 +1677,10 @@ pub fn type_contains_vla(ty : @ast.CType) -> Bool {
 ///|
 fn type_has_vla_object_size(ty : @ast.CType) -> Bool {
   match strip_top_qualifiers(ty) {
-    @ast.CType::Array(size=None, size_expr=Some(_), ..) => true
-    @ast.CType::Array(elem~, ..) => type_has_vla_object_size(elem)
-    @ast.CType::Qualified(base~, ..) => type_has_vla_object_size(base)
-    @ast.CType::Attributed(base~, ..) => type_has_vla_object_size(base)
+    Array(size=None, size_expr=Some(_), ..) => true
+    Array(elem~, ..) => type_has_vla_object_size(elem)
+    Qualified(base~, ..) => type_has_vla_object_size(base)
+    Attributed(base~, ..) => type_has_vla_object_size(base)
     _ => false
   }
 }
@@ -1760,25 +1701,25 @@ pub fn check_translation_unit(
 ///|
 fn check_decl(ctx : SemContext, decl : @ast.Decl) -> Unit {
   match decl {
-    @ast.Decl::Var(var_decl) => {
+    Var(var_decl) => {
       register_type_defs(ctx, var_decl.ty, var_decl.loc)
       check_var_decl(ctx, var_decl, is_local=false)
     }
-    @ast.Decl::FuncDecl(func_decl) => {
+    FuncDecl(func_decl) => {
       register_type_defs(ctx, func_decl.return_type, func_decl.loc)
       for param in func_decl.params {
         register_type_defs(ctx, param.ty, param.loc)
       }
       check_func_decl(ctx, func_decl)
     }
-    @ast.Decl::FuncDef(func_def) => {
+    FuncDef(func_def) => {
       register_type_defs(ctx, func_def.return_type, func_def.loc)
       for param in func_def.params {
         register_type_defs(ctx, param.ty, param.loc)
       }
       check_func_def(ctx, func_def)
     }
-    @ast.Decl::Typedef(name~, ty~, attrs~, loc~) => {
+    Typedef(name~, ty~, attrs~, loc~) => {
       register_type_defs(ctx, ty, loc)
       let resolved = resolve_type(ctx, ty, loc)
       let resolved_with_attrs = @ast.apply_type_attrs(
@@ -1789,15 +1730,14 @@ fn check_decl(ctx : SemContext, decl : @ast.Decl) -> Unit {
         ctx,
         resolved_with_attrs,
         false,
-        @ast.StorageClass::Default,
+        Default,
         loc,
       )
       ctx.type_aliases.set(name, final_ty)
     }
-    @ast.Decl::TagDef(ty~, loc~) => register_type_defs(ctx, ty, loc)
-    @ast.Decl::StaticAssert(static_assert) =>
-      check_static_assert(ctx, static_assert)
-    @ast.Decl::Asm(asm_stmt) => check_asm_stmt(ctx, asm_stmt)
+    TagDef(ty~, loc~) => register_type_defs(ctx, ty, loc)
+    StaticAssert(static_assert) => check_static_assert(ctx, static_assert)
+    Asm(asm_stmt) => check_asm_stmt(ctx, asm_stmt)
   }
 }
 
@@ -1808,17 +1748,16 @@ fn register_type_defs(
   loc : @source.SrcLoc,
 ) -> Unit {
   match ty {
-    @ast.CType::Qualified(base~, ..) => register_type_defs(ctx, base, loc)
-    @ast.CType::Attributed(base~, ..) => register_type_defs(ctx, base, loc)
-    @ast.CType::Struct(name~, id~, fields~, attrs~) =>
+    Qualified(base~, ..) => register_type_defs(ctx, base, loc)
+    Attributed(base~, ..) => register_type_defs(ctx, base, loc)
+    Struct(name~, id~, fields~, attrs~) =>
       register_struct_def(ctx, name, id, fields, attrs, is_union=false, loc)
-    @ast.CType::Union(name~, id~, fields~, attrs~) =>
+    Union(name~, id~, fields~, attrs~) =>
       register_struct_def(ctx, name, id, fields, attrs, is_union=true, loc)
-    @ast.CType::Enum(name~, id~, items~) =>
-      register_enum_def(ctx, name, id, items, loc)
-    @ast.CType::Pointer(inner) => register_type_defs(ctx, inner, loc)
-    @ast.CType::Array(elem~, ..) => register_type_defs(ctx, elem, loc)
-    @ast.CType::Function(return_type~, params~, ..) => {
+    Enum(name~, id~, items~) => register_enum_def(ctx, name, id, items, loc)
+    Pointer(inner) => register_type_defs(ctx, inner, loc)
+    Array(elem~, ..) => register_type_defs(ctx, elem, loc)
+    Function(return_type~, params~, ..) => {
       register_type_defs(ctx, return_type, loc)
       for param_ty in params {
         register_type_defs(ctx, param_ty, loc)
@@ -2136,7 +2075,7 @@ fn int_literal_type(text : String) -> @ast.CType {
   let (long_count, unsigned) = parse_int_suffix_range(text, end)
   let base = int_literal_base_from(text, end)
   if base == 10 && end <= 9 && long_count == 0 && !unsigned {
-    return @ast.CType::Int(kind=@ast.CIntKind::Int, unsigned=false)
+    return Int(kind=Int, unsigned=false)
   }
   let value = parse_uint64_literal_prefix(text, base, end)
   let (adj_long_count, adj_unsigned) = adjust_int_literal_kind(
@@ -2145,11 +2084,11 @@ fn int_literal_type(text : String) -> @ast.CType {
   let kind = if adj_long_count >= 2 {
     @ast.CIntKind::LongLong
   } else if adj_long_count == 1 {
-    @ast.CIntKind::Long
+    Long
   } else {
-    @ast.CIntKind::Int
+    Int
   }
-  @ast.CType::Int(kind~, unsigned=adj_unsigned)
+  Int(kind~, unsigned=adj_unsigned)
 }
 
 ///|
@@ -2397,15 +2336,15 @@ fn adjust_int_literal_kind(
 fn float_type_from_literal(lit : String) -> @ast.CType {
   let len = lit.length()
   if len == 0 {
-    return @ast.CType::Float(kind=@ast.CFloatKind::Double)
+    return Float(kind=Double)
   }
   let last = lit[len - 1]
   if last == 102 || last == 70 {
-    @ast.CType::Float(kind=@ast.CFloatKind::Float)
+    Float(kind=Float)
   } else if last == 108 || last == 76 {
-    @ast.CType::Float(kind=@ast.CFloatKind::LongDouble)
+    Float(kind=LongDouble)
   } else {
-    @ast.CType::Float(kind=@ast.CFloatKind::Double)
+    Float(kind=Double)
   }
 }
 
@@ -2416,17 +2355,17 @@ fn eval_const_expr_value(
   loc : @source.SrcLoc,
 ) -> (Int, Bool) {
   match expr {
-    @ast.Expr::IntLit(value~, ..) => (parse_int_value(value), true)
-    @ast.Expr::CharLit(value~, ..) => (value, true)
-    @ast.Expr::FloatLit(..) => {
+    IntLit(value~, ..) => (parse_int_value(value), true)
+    CharLit(value~, ..) => (value, true)
+    FloatLit(..) => {
       add_sem_error(ctx, loc, "invalid constant expression")
       (0, false)
     }
-    @ast.Expr::StringLit(..) => {
+    StringLit(..) => {
       add_sem_error(ctx, loc, "invalid constant expression")
       (0, false)
     }
-    @ast.Expr::Ident(name~, id~, ..) =>
+    Ident(name~, id~, ..) =>
       match enum_const_value(ctx, name, id) {
         Some(v) => (v, true)
         None => {
@@ -2434,86 +2373,85 @@ fn eval_const_expr_value(
           (0, false)
         }
       }
-    @ast.Expr::BuiltinTypesCompatibleP(a~, b~, loc=type_loc, ..) => {
+    BuiltinTypesCompatibleP(a~, b~, loc=type_loc, ..) => {
       register_type_defs(ctx, a, type_loc)
       register_type_defs(ctx, b, type_loc)
       let lhs = resolve_type(ctx, a, type_loc)
       let rhs = resolve_type(ctx, b, type_loc)
       (if types_compatible_for_decl(lhs, rhs) { 1 } else { 0 }, true)
     }
-    @ast.Expr::BuiltinOffsetof(ty~, path~, loc=type_loc, ..) => {
+    BuiltinOffsetof(ty~, path~, loc=type_loc, ..) => {
       register_type_defs(ctx, ty, type_loc)
       match eval_builtin_offsetof(ctx, ty, path, type_loc) {
         None => (0, false)
         Some(v) => (v, true)
       }
     }
-    @ast.Expr::BuiltinVaArg(..) => {
+    BuiltinVaArg(..) => {
       add_sem_error(ctx, loc, "invalid constant expression")
       (0, false)
     }
-    @ast.Expr::Unary(op~, expr~, ..) => {
+    Unary(op~, expr~, ..) => {
       let (v, ok) = eval_const_expr_value(ctx, expr, loc)
       if !ok {
         return (0, false)
       }
       match op {
-        @ast.UnaryOp::Plus => (v, true)
-        @ast.UnaryOp::Minus => (0 - v, true)
-        @ast.UnaryOp::BitNot => (v ^ -1, true)
-        @ast.UnaryOp::Not => (if v == 0 { 1 } else { 0 }, true)
+        Plus => (v, true)
+        Minus => (0 - v, true)
+        BitNot => (v ^ -1, true)
+        Not => (if v == 0 { 1 } else { 0 }, true)
         _ => {
           add_sem_error(ctx, loc, "invalid constant expression")
           (0, false)
         }
       }
     }
-    @ast.Expr::Binary(op~, left~, right~, ..) => {
+    Binary(op~, left~, right~, ..) => {
       let (lhs, ok_lhs) = eval_const_expr_value(ctx, left, loc)
       let (rhs, ok_rhs) = eval_const_expr_value(ctx, right, loc)
       if !ok_lhs || !ok_rhs {
         return (0, false)
       }
       match op {
-        @ast.BinaryOp::Add => (lhs + rhs, true)
-        @ast.BinaryOp::Sub => (lhs - rhs, true)
-        @ast.BinaryOp::Mul => (lhs * rhs, true)
-        @ast.BinaryOp::Div =>
+        Add => (lhs + rhs, true)
+        Sub => (lhs - rhs, true)
+        Mul => (lhs * rhs, true)
+        Div =>
           if rhs == 0 {
             add_sem_error(ctx, loc, "division by zero in constant expression")
             (0, false)
           } else {
             (lhs / rhs, true)
           }
-        @ast.BinaryOp::Mod =>
+        Mod =>
           if rhs == 0 {
             add_sem_error(ctx, loc, "division by zero in constant expression")
             (0, false)
           } else {
             (lhs % rhs, true)
           }
-        @ast.BinaryOp::Shl => (lhs << rhs, true)
-        @ast.BinaryOp::Shr => (lhs >> rhs, true)
-        @ast.BinaryOp::BitAnd => (lhs & rhs, true)
-        @ast.BinaryOp::BitOr => (lhs | rhs, true)
-        @ast.BinaryOp::BitXor => (lhs ^ rhs, true)
-        @ast.BinaryOp::Eq => (if lhs == rhs { 1 } else { 0 }, true)
-        @ast.BinaryOp::Ne => (if lhs != rhs { 1 } else { 0 }, true)
-        @ast.BinaryOp::Lt => (if lhs < rhs { 1 } else { 0 }, true)
-        @ast.BinaryOp::Le => (if lhs <= rhs { 1 } else { 0 }, true)
-        @ast.BinaryOp::Gt => (if lhs > rhs { 1 } else { 0 }, true)
-        @ast.BinaryOp::Ge => (if lhs >= rhs { 1 } else { 0 }, true)
-        @ast.BinaryOp::LogAnd =>
-          (if lhs != 0 && rhs != 0 { 1 } else { 0 }, true)
-        @ast.BinaryOp::LogOr => (if lhs != 0 || rhs != 0 { 1 } else { 0 }, true)
-        @ast.BinaryOp::Comma => (rhs, true)
+        Shl => (lhs << rhs, true)
+        Shr => (lhs >> rhs, true)
+        BitAnd => (lhs & rhs, true)
+        BitOr => (lhs | rhs, true)
+        BitXor => (lhs ^ rhs, true)
+        Eq => (if lhs == rhs { 1 } else { 0 }, true)
+        Ne => (if lhs != rhs { 1 } else { 0 }, true)
+        Lt => (if lhs < rhs { 1 } else { 0 }, true)
+        Le => (if lhs <= rhs { 1 } else { 0 }, true)
+        Gt => (if lhs > rhs { 1 } else { 0 }, true)
+        Ge => (if lhs >= rhs { 1 } else { 0 }, true)
+        LogAnd => (if lhs != 0 && rhs != 0 { 1 } else { 0 }, true)
+        LogOr => (if lhs != 0 || rhs != 0 { 1 } else { 0 }, true)
+        Comma => (rhs, true)
         _ => {
           add_sem_error(ctx, loc, "invalid constant expression")
           (0, false)
         }
       }
     }
-    @ast.Expr::Conditional(cond~, then_expr~, else_expr~, ..) => {
+    Conditional(cond~, then_expr~, else_expr~, ..) => {
       let (cond_val, ok) = eval_const_expr_value(ctx, cond, loc)
       if !ok {
         return (0, false)
@@ -2524,7 +2462,7 @@ fn eval_const_expr_value(
         eval_const_expr_value(ctx, else_expr, loc)
       }
     }
-    @ast.Expr::Cast(ty~, expr~, ..) => {
+    Cast(ty~, expr~, ..) => {
       let (v, ok) = eval_const_expr_value(ctx, expr, loc)
       if !ok {
         return (0, false)
@@ -2532,10 +2470,10 @@ fn eval_const_expr_value(
       let (casted, ok_cast) = cast_const_int64_value(ctx, v.to_int64(), ty, loc)
       (casted.to_int(), ok_cast)
     }
-    @ast.Expr::SizeofExpr(expr~, loc~, ..) => {
+    SizeofExpr(expr~, loc~, ..) => {
       let ty = type_for_sizeof(ctx, expr)
       match strip_top_qualifiers(ty) {
-        @ast.CType::Array(size=None, size_expr=Some(_), ..) => (0, false)
+        Array(size=None, size_expr=Some(_), ..) => (0, false)
         _ =>
           match type_size_align(ctx, ty, loc) {
             None => (0, false)
@@ -2543,10 +2481,10 @@ fn eval_const_expr_value(
           }
       }
     }
-    @ast.Expr::SizeofType(ty~, loc~, ..) => {
+    SizeofType(ty~, loc~, ..) => {
       register_type_defs(ctx, ty, loc)
       match strip_top_qualifiers(resolve_type(ctx, ty, loc)) {
-        @ast.CType::Array(size=None, size_expr=Some(_), ..) => (0, false)
+        Array(size=None, size_expr=Some(_), ..) => (0, false)
         _ =>
           match type_size_align(ctx, ty, loc) {
             None => (0, false)
@@ -2554,28 +2492,23 @@ fn eval_const_expr_value(
           }
       }
     }
-    @ast.Expr::AlignofExpr(expr~, loc~, ..) => {
+    AlignofExpr(expr~, loc~, ..) => {
       let ty = type_for_sizeof(ctx, expr)
       match type_size_align(ctx, ty, loc) {
         None => (0, false)
         Some((_, align)) => (align, true)
       }
     }
-    @ast.Expr::AlignofType(ty~, loc~, ..) => {
+    AlignofType(ty~, loc~, ..) => {
       register_type_defs(ctx, ty, loc)
       match type_size_align(ctx, ty, loc) {
         None => (0, false)
         Some((_, align)) => (align, true)
       }
     }
-    @ast.Expr::Call(
-      callee=@ast.Expr::Ident(name~, id~, ..),
-      args~,
-      loc=call_loc,
-      ..
-    ) =>
+    Call(callee=Ident(name~, id~, ..), args~, loc=call_loc, ..) =>
       match builtin_call_kind(ctx, name, id) {
-        Some(BuiltinCallKind::ChooseExpr) if args.length() == 3 => {
+        Some(ChooseExpr) if args.length() == 3 => {
           let (cond_val, ok) = eval_const_expr_value(ctx, args[0], call_loc)
           if !ok {
             return (0, false)
@@ -2586,9 +2519,9 @@ fn eval_const_expr_value(
             eval_const_expr_value(ctx, args[2], call_loc)
           }
         }
-        Some(BuiltinCallKind::Expect) if args.length() == 2 =>
+        Some(Expect) if args.length() == 2 =>
           eval_const_expr_value(ctx, args[0], call_loc)
-        Some(BuiltinCallKind::ConstantP) if args.length() == 1 =>
+        Some(ConstantP) if args.length() == 1 =>
           (if is_constant_expr_for_builtin(ctx, args[0]) { 1 } else { 0 }, true)
         _ => {
           add_sem_error(ctx, loc, "invalid constant expression")
@@ -2612,12 +2545,11 @@ fn cast_const_int64_value(
   let resolved = resolve_type(ctx, ty, loc)
   let base = strip_top_qualifiers_keep_attrs(resolved)
   match base {
-    @ast.CType::Bool => (if value == 0 { 0 } else { 1 }, true)
-    @ast.CType::Enum(..) =>
+    Bool => (if value == 0 { 0 } else { 1 }, true)
+    Enum(..) =>
       cast_const_int64_value(ctx, value, enum_type_for_arith(ctx, base), loc)
-    @ast.CType::Pointer(_) =>
-      (value.reinterpret_as_uint64().reinterpret_as_int64(), true)
-    @ast.CType::Int(kind~, unsigned~) => {
+    Pointer(_) => (value.reinterpret_as_uint64().reinterpret_as_int64(), true)
+    Int(kind~, unsigned~) => {
       let bits = int_size(kind) * 8
       let mask : UInt64 = if bits >= 64 {
         (0 : UInt64).lnot()
@@ -2647,18 +2579,18 @@ fn eval_const_expr_value_i64(
   loc : @source.SrcLoc,
 ) -> (Int64, Bool) {
   match expr {
-    @ast.Expr::IntLit(value~, ..) =>
+    IntLit(value~, ..) =>
       (parse_uint64_value(value).reinterpret_as_int64(), true)
-    @ast.Expr::CharLit(value~, ..) => (value.to_int64(), true)
-    @ast.Expr::FloatLit(..) => {
+    CharLit(value~, ..) => (value.to_int64(), true)
+    FloatLit(..) => {
       add_sem_error(ctx, loc, "invalid constant expression")
       (0, false)
     }
-    @ast.Expr::StringLit(..) => {
+    StringLit(..) => {
       add_sem_error(ctx, loc, "invalid constant expression")
       (0, false)
     }
-    @ast.Expr::Ident(name~, id~, ..) =>
+    Ident(name~, id~, ..) =>
       match enum_const_value(ctx, name, id) {
         Some(v) => (v.to_int64(), true)
         None => {
@@ -2666,86 +2598,85 @@ fn eval_const_expr_value_i64(
           (0, false)
         }
       }
-    @ast.Expr::BuiltinTypesCompatibleP(a~, b~, loc=type_loc, ..) => {
+    BuiltinTypesCompatibleP(a~, b~, loc=type_loc, ..) => {
       register_type_defs(ctx, a, type_loc)
       register_type_defs(ctx, b, type_loc)
       let lhs = resolve_type(ctx, a, type_loc)
       let rhs = resolve_type(ctx, b, type_loc)
       (if types_compatible_for_decl(lhs, rhs) { 1 } else { 0 }, true)
     }
-    @ast.Expr::BuiltinOffsetof(ty~, path~, loc=type_loc, ..) => {
+    BuiltinOffsetof(ty~, path~, loc=type_loc, ..) => {
       register_type_defs(ctx, ty, type_loc)
       match eval_builtin_offsetof(ctx, ty, path, type_loc) {
         None => (0, false)
         Some(v) => (v.to_int64(), true)
       }
     }
-    @ast.Expr::BuiltinVaArg(..) => {
+    BuiltinVaArg(..) => {
       add_sem_error(ctx, loc, "invalid constant expression")
       (0, false)
     }
-    @ast.Expr::Unary(op~, expr~, ..) => {
+    Unary(op~, expr~, ..) => {
       let (v, ok) = eval_const_expr_value_i64(ctx, expr, loc)
       if !ok {
         return (0, false)
       }
       match op {
-        @ast.UnaryOp::Plus => (v, true)
-        @ast.UnaryOp::Minus => (0 - v, true)
-        @ast.UnaryOp::BitNot => (v ^ (-1 : Int64), true)
-        @ast.UnaryOp::Not => (if v == 0 { 1 } else { 0 }, true)
+        Plus => (v, true)
+        Minus => (0 - v, true)
+        BitNot => (v ^ (-1 : Int64), true)
+        Not => (if v == 0 { 1 } else { 0 }, true)
         _ => {
           add_sem_error(ctx, loc, "invalid constant expression")
           (0, false)
         }
       }
     }
-    @ast.Expr::Binary(op~, left~, right~, ..) => {
+    Binary(op~, left~, right~, ..) => {
       let (lhs, ok_lhs) = eval_const_expr_value_i64(ctx, left, loc)
       let (rhs, ok_rhs) = eval_const_expr_value_i64(ctx, right, loc)
       if !ok_lhs || !ok_rhs {
         return (0, false)
       }
       match op {
-        @ast.BinaryOp::Add => (lhs + rhs, true)
-        @ast.BinaryOp::Sub => (lhs - rhs, true)
-        @ast.BinaryOp::Mul => (lhs * rhs, true)
-        @ast.BinaryOp::Div =>
+        Add => (lhs + rhs, true)
+        Sub => (lhs - rhs, true)
+        Mul => (lhs * rhs, true)
+        Div =>
           if rhs == 0 {
             add_sem_error(ctx, loc, "division by zero in constant expression")
             (0, false)
           } else {
             (lhs / rhs, true)
           }
-        @ast.BinaryOp::Mod =>
+        Mod =>
           if rhs == 0 {
             add_sem_error(ctx, loc, "division by zero in constant expression")
             (0, false)
           } else {
             (lhs % rhs, true)
           }
-        @ast.BinaryOp::Shl => (lhs << rhs.to_int(), true)
-        @ast.BinaryOp::Shr => (lhs >> rhs.to_int(), true)
-        @ast.BinaryOp::BitAnd => (lhs & rhs, true)
-        @ast.BinaryOp::BitOr => (lhs | rhs, true)
-        @ast.BinaryOp::BitXor => (lhs ^ rhs, true)
-        @ast.BinaryOp::Eq => (if lhs == rhs { 1 } else { 0 }, true)
-        @ast.BinaryOp::Ne => (if lhs != rhs { 1 } else { 0 }, true)
-        @ast.BinaryOp::Lt => (if lhs < rhs { 1 } else { 0 }, true)
-        @ast.BinaryOp::Le => (if lhs <= rhs { 1 } else { 0 }, true)
-        @ast.BinaryOp::Gt => (if lhs > rhs { 1 } else { 0 }, true)
-        @ast.BinaryOp::Ge => (if lhs >= rhs { 1 } else { 0 }, true)
-        @ast.BinaryOp::LogAnd =>
-          (if lhs != 0 && rhs != 0 { 1 } else { 0 }, true)
-        @ast.BinaryOp::LogOr => (if lhs != 0 || rhs != 0 { 1 } else { 0 }, true)
-        @ast.BinaryOp::Comma => (rhs, true)
+        Shl => (lhs << rhs.to_int(), true)
+        Shr => (lhs >> rhs.to_int(), true)
+        BitAnd => (lhs & rhs, true)
+        BitOr => (lhs | rhs, true)
+        BitXor => (lhs ^ rhs, true)
+        Eq => (if lhs == rhs { 1 } else { 0 }, true)
+        Ne => (if lhs != rhs { 1 } else { 0 }, true)
+        Lt => (if lhs < rhs { 1 } else { 0 }, true)
+        Le => (if lhs <= rhs { 1 } else { 0 }, true)
+        Gt => (if lhs > rhs { 1 } else { 0 }, true)
+        Ge => (if lhs >= rhs { 1 } else { 0 }, true)
+        LogAnd => (if lhs != 0 && rhs != 0 { 1 } else { 0 }, true)
+        LogOr => (if lhs != 0 || rhs != 0 { 1 } else { 0 }, true)
+        Comma => (rhs, true)
         _ => {
           add_sem_error(ctx, loc, "invalid constant expression")
           (0, false)
         }
       }
     }
-    @ast.Expr::Conditional(cond~, then_expr~, else_expr~, ..) => {
+    Conditional(cond~, then_expr~, else_expr~, ..) => {
       let (cond_val, ok) = eval_const_expr_value_i64(ctx, cond, loc)
       if !ok {
         return (0, false)
@@ -2756,17 +2687,17 @@ fn eval_const_expr_value_i64(
         eval_const_expr_value_i64(ctx, else_expr, loc)
       }
     }
-    @ast.Expr::Cast(ty~, expr~, ..) => {
+    Cast(ty~, expr~, ..) => {
       let (v, ok) = eval_const_expr_value_i64(ctx, expr, loc)
       if !ok {
         return (0, false)
       }
       cast_const_int64_value(ctx, v, ty, loc)
     }
-    @ast.Expr::SizeofExpr(expr~, loc~, ..) => {
+    SizeofExpr(expr~, loc~, ..) => {
       let ty = type_for_sizeof(ctx, expr)
       match strip_top_qualifiers(ty) {
-        @ast.CType::Array(size=None, size_expr=Some(_), ..) => (0, false)
+        Array(size=None, size_expr=Some(_), ..) => (0, false)
         _ =>
           match type_size_align(ctx, ty, loc) {
             None => (0, false)
@@ -2774,10 +2705,10 @@ fn eval_const_expr_value_i64(
           }
       }
     }
-    @ast.Expr::SizeofType(ty~, loc~, ..) => {
+    SizeofType(ty~, loc~, ..) => {
       register_type_defs(ctx, ty, loc)
       match strip_top_qualifiers(resolve_type(ctx, ty, loc)) {
-        @ast.CType::Array(size=None, size_expr=Some(_), ..) => (0, false)
+        Array(size=None, size_expr=Some(_), ..) => (0, false)
         _ =>
           match type_size_align(ctx, ty, loc) {
             None => (0, false)
@@ -2785,28 +2716,23 @@ fn eval_const_expr_value_i64(
           }
       }
     }
-    @ast.Expr::AlignofExpr(expr~, loc~, ..) => {
+    AlignofExpr(expr~, loc~, ..) => {
       let ty = type_for_sizeof(ctx, expr)
       match type_size_align(ctx, ty, loc) {
         None => (0, false)
         Some((_, align)) => (align.to_int64(), true)
       }
     }
-    @ast.Expr::AlignofType(ty~, loc~, ..) => {
+    AlignofType(ty~, loc~, ..) => {
       register_type_defs(ctx, ty, loc)
       match type_size_align(ctx, ty, loc) {
         None => (0, false)
         Some((_, align)) => (align.to_int64(), true)
       }
     }
-    @ast.Expr::Call(
-      callee=@ast.Expr::Ident(name~, id~, ..),
-      args~,
-      loc=call_loc,
-      ..
-    ) =>
+    Call(callee=Ident(name~, id~, ..), args~, loc=call_loc, ..) =>
       match builtin_call_kind(ctx, name, id) {
-        Some(BuiltinCallKind::ChooseExpr) if args.length() == 3 => {
+        Some(ChooseExpr) if args.length() == 3 => {
           let (cond_val, ok) = eval_const_expr_value_i64(ctx, args[0], call_loc)
           if !ok {
             return (0, false)
@@ -2817,9 +2743,9 @@ fn eval_const_expr_value_i64(
             eval_const_expr_value_i64(ctx, args[2], call_loc)
           }
         }
-        Some(BuiltinCallKind::Expect) if args.length() == 2 =>
+        Some(Expect) if args.length() == 2 =>
           eval_const_expr_value_i64(ctx, args[0], call_loc)
-        Some(BuiltinCallKind::ConstantP) if args.length() == 1 =>
+        Some(ConstantP) if args.length() == 1 =>
           (if is_constant_expr_for_builtin(ctx, args[0]) { 1 } else { 0 }, true)
         _ => {
           add_sem_error(ctx, loc, "invalid constant expression")
@@ -2872,7 +2798,7 @@ fn eval_builtin_offsetof_and_type(
   let mut offset = 0
   for name in path {
     match strip_top_qualifiers(current) {
-      @ast.CType::Struct(name=tag, id=tag_id, fields=field_list, attrs~) =>
+      Struct(name=tag, id=tag_id, fields=field_list, attrs~) =>
         match
           ensure_struct_fields(
             ctx,
@@ -2911,7 +2837,7 @@ fn eval_builtin_offsetof_and_type(
               }
             }
         }
-      @ast.CType::Union(name=tag, id=tag_id, fields=field_list, attrs~) =>
+      Union(name=tag, id=tag_id, fields=field_list, attrs~) =>
         match
           ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=true, loc) {
           None => return None
@@ -3035,7 +2961,7 @@ fn struct_field_offset_and_type(
         }
         let (field_size, field_align) = match
           strip_top_qualifiers_keep_attrs(field.ty) {
-          @ast.CType::Array(elem~, size=None, size_expr~) =>
+          Array(elem~, size=None, size_expr~) =>
             match size_expr {
               None => {
                 let (_elem_size, elem_align) = match
@@ -3074,7 +3000,7 @@ fn struct_field_offset_and_type(
         }
         if field.name == "" {
           match strip_top_qualifiers(field.ty) {
-            @ast.CType::Struct(..) | @ast.CType::Union(..) =>
+            Struct(..) | Union(..) =>
               if eval_builtin_offsetof_and_type(
                   ctx,
                   field.ty,
@@ -3114,7 +3040,7 @@ fn union_field_offset_and_type(
     }
     if field.name == "" {
       match strip_top_qualifiers(field.ty) {
-        @ast.CType::Struct(..) | @ast.CType::Union(..) =>
+        Struct(..) | Union(..) =>
           if eval_builtin_offsetof_and_type(ctx, field.ty, [name], loc, true)
             is Some((inner_off, inner_ty, _)) {
             return Some((inner_off, inner_ty, false))
@@ -3129,23 +3055,20 @@ fn union_field_offset_and_type(
 ///|
 fn is_constant_expr_for_builtin(ctx : SemContext, expr : @ast.Expr) -> Bool {
   match expr {
-    @ast.Expr::IntLit(..) | @ast.Expr::CharLit(..) => true
-    @ast.Expr::Ident(name~, id~, ..) => enum_const_exists(ctx, name, id)
-    @ast.Expr::Unary(op~, expr=inner, ..) =>
+    IntLit(..) | CharLit(..) => true
+    Ident(name~, id~, ..) => enum_const_exists(ctx, name, id)
+    Unary(op~, expr=inner, ..) =>
       match op {
-        @ast.UnaryOp::Plus
-        | @ast.UnaryOp::Minus
-        | @ast.UnaryOp::BitNot
-        | @ast.UnaryOp::Not => is_constant_expr_for_builtin(ctx, inner)
+        Plus | Minus | BitNot | Not => is_constant_expr_for_builtin(ctx, inner)
         _ => false
       }
-    @ast.Expr::Binary(op~, left~, right~, ..) => {
+    Binary(op~, left~, right~, ..) => {
       if !is_constant_expr_for_builtin(ctx, left) ||
         !is_constant_expr_for_builtin(ctx, right) {
         return false
       }
       match op {
-        @ast.BinaryOp::Div | @ast.BinaryOp::Mod =>
+        Div | Mod =>
           match try_eval_int_const(ctx, right) {
             Some(v) => v != 0
             None => false
@@ -3153,7 +3076,7 @@ fn is_constant_expr_for_builtin(ctx : SemContext, expr : @ast.Expr) -> Bool {
         _ => true
       }
     }
-    @ast.Expr::Conditional(cond~, then_expr~, else_expr~, ..) =>
+    Conditional(cond~, then_expr~, else_expr~, ..) =>
       match try_eval_int_const(ctx, cond) {
         Some(v) =>
           if v != 0 {
@@ -3163,26 +3086,25 @@ fn is_constant_expr_for_builtin(ctx : SemContext, expr : @ast.Expr) -> Bool {
           }
         None => false
       }
-    @ast.Expr::Cast(expr=inner, ..) => is_constant_expr_for_builtin(ctx, inner)
-    @ast.Expr::SizeofExpr(expr=inner, loc~, ..) =>
+    Cast(expr=inner, ..) => is_constant_expr_for_builtin(ctx, inner)
+    SizeofExpr(expr=inner, loc~, ..) =>
       match strip_top_qualifiers(type_for_sizeof(ctx, inner)) {
-        @ast.CType::Array(size=None, size_expr=Some(_), ..) => false
+        Array(size=None, size_expr=Some(_), ..) => false
         _ => type_size_align(ctx, type_for_sizeof(ctx, inner), loc) is Some(_)
       }
-    @ast.Expr::SizeofType(ty~, loc~, ..) =>
+    SizeofType(ty~, loc~, ..) =>
       match strip_top_qualifiers(resolve_type(ctx, ty, loc)) {
-        @ast.CType::Array(size=None, size_expr=Some(_), ..) => false
+        Array(size=None, size_expr=Some(_), ..) => false
         _ => type_size_align(ctx, ty, loc) is Some(_)
       }
-    @ast.Expr::AlignofExpr(expr=inner, loc~, ..) =>
+    AlignofExpr(expr=inner, loc~, ..) =>
       type_size_align(ctx, type_for_sizeof(ctx, inner), loc) is Some(_)
-    @ast.Expr::AlignofType(ty~, loc~, ..) =>
-      type_size_align(ctx, ty, loc) is Some(_)
-    @ast.Expr::BuiltinTypesCompatibleP(..) => true
-    @ast.Expr::BuiltinOffsetof(..) => true
-    @ast.Expr::Call(callee=@ast.Expr::Ident(name~, id~, ..), args~, ..) =>
+    AlignofType(ty~, loc~, ..) => type_size_align(ctx, ty, loc) is Some(_)
+    BuiltinTypesCompatibleP(..) => true
+    BuiltinOffsetof(..) => true
+    Call(callee=Ident(name~, id~, ..), args~, ..) =>
       match builtin_call_kind(ctx, name, id) {
-        Some(BuiltinCallKind::ChooseExpr) if args.length() == 3 =>
+        Some(ChooseExpr) if args.length() == 3 =>
           match try_eval_int_const(ctx, args[0]) {
             Some(v) =>
               if v != 0 {
@@ -3192,9 +3114,9 @@ fn is_constant_expr_for_builtin(ctx : SemContext, expr : @ast.Expr) -> Bool {
               }
             None => false
           }
-        Some(BuiltinCallKind::Expect) if args.length() == 2 =>
+        Some(Expect) if args.length() == 2 =>
           is_constant_expr_for_builtin(ctx, args[0])
-        Some(BuiltinCallKind::ConstantP) if args.length() == 1 => true
+        Some(ConstantP) if args.length() == 1 => true
         _ => false
       }
     _ => false
@@ -3204,24 +3126,24 @@ fn is_constant_expr_for_builtin(ctx : SemContext, expr : @ast.Expr) -> Bool {
 ///|
 pub fn try_eval_int_const(ctx : SemContext, expr : @ast.Expr) -> Int? {
   match expr {
-    @ast.Expr::IntLit(value~, ..) => Some(parse_int_value(value))
-    @ast.Expr::CharLit(value~, ..) => Some(value)
-    @ast.Expr::Ident(name~, id~, ..) => enum_const_value(ctx, name, id)
-    @ast.Expr::Unary(op~, expr~, ..) =>
+    IntLit(value~, ..) => Some(parse_int_value(value))
+    CharLit(value~, ..) => Some(value)
+    Ident(name~, id~, ..) => enum_const_value(ctx, name, id)
+    Unary(op~, expr~, ..) =>
       match op {
-        @ast.UnaryOp::Plus =>
+        Plus =>
           match try_eval_int_const(ctx, expr) {
             Some(v) => Some(v)
             None => None
           }
-        @ast.UnaryOp::Minus =>
+        Minus =>
           match try_eval_int_const(ctx, expr) {
             Some(v) => Some(0 - v)
             None => None
           }
         _ => None
       }
-    @ast.Expr::Cast(ty~, expr~, ..) =>
+    Cast(ty~, expr~, ..) =>
       if is_pointer_type(ty) || is_int_like(ty) {
         try_eval_int_const(ctx, expr)
       } else {
@@ -3458,14 +3380,13 @@ fn func_sig_eq(a : FuncSig, b : FuncSig) -> Bool {
 ///|
 pub fn apply_inferred_array_size(ty : @ast.CType, size : Int) -> @ast.CType {
   match ty {
-    @ast.CType::Qualified(qual~, base~) => {
+    Qualified(qual~, base~) => {
       let updated = apply_inferred_array_size(base, size)
-      @ast.CType::Qualified(qual~, base=updated)
+      Qualified(qual~, base=updated)
     }
-    @ast.CType::Array(elem~, size=arr_size, size_expr~) =>
+    Array(elem~, size=arr_size, size_expr~) =>
       match (arr_size, size_expr) {
-        (None, None) =>
-          @ast.CType::Array(elem~, size=Some(size), size_expr=None)
+        (None, None) => Array(elem~, size=Some(size), size_expr=None)
         _ => ty
       }
     _ => ty
@@ -3656,19 +3577,19 @@ fn require_complete_object_type(
   allow_incomplete_array? : Bool = false,
 ) -> Unit {
   match strip_top_qualifiers(ty) {
-    @ast.CType::Array(elem~, size~, size_expr~) => {
+    Array(elem~, size~, size_expr~) => {
       if size is None && size_expr is None && !allow_incomplete_array {
         add_sem_error(ctx, loc, "incomplete array type")
       }
       require_complete_object_type(ctx, elem, loc)
     }
-    @ast.CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) =>
+    Struct(name=tag, id=tag_id, fields=field_list, attrs=_) =>
       ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=false, loc)
       |> ignore
-    @ast.CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) =>
+    Union(name=tag, id=tag_id, fields=field_list, attrs=_) =>
       ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=true, loc)
       |> ignore
-    @ast.CType::Enum(name=tag, id=tag_id, items~) =>
+    Enum(name=tag, id=tag_id, items~) =>
       match items {
         Some(list) =>
           if list.length() == 0 {
@@ -3704,10 +3625,10 @@ fn check_var_decl(
 ) -> Unit {
   register_type_defs(ctx, decl.ty, decl.loc)
   let resolved = resolve_type(ctx, decl.ty, decl.loc)
-  let is_local = is_local && decl.storage != @ast.StorageClass::Extern
+  let is_local = is_local && decl.storage != Extern
   if is_local {
     record_local_decl(ctx)
-    if decl.storage == @ast.StorageClass::Static {
+    if decl.storage == Static {
       record_static_local(ctx)
     }
   }
@@ -3724,13 +3645,7 @@ fn check_var_decl(
   )
   let mut final_ty = resolved_with_sizes
   match strip_top_qualifiers(resolved) {
-    @ast.CType::Function(
-      return_type~,
-      params~,
-      varargs~,
-      is_old_style~,
-      call_conv~
-    ) => {
+    Function(return_type~, params~, varargs~, is_old_style~, call_conv~) => {
       check_storage_class(
         ctx,
         decl.storage,
@@ -3769,7 +3684,7 @@ fn check_var_decl(
       update_decl_type(ctx, decl.name, decl.id, updated, is_local~)
     }
   }
-  if decl.storage != @ast.StorageClass::Extern || decl.init is Some(_) {
+  if decl.storage != Extern || decl.init is Some(_) {
     let allow_incomplete_array = !is_local && decl.init is None
     require_complete_object_type(
       ctx,
@@ -3788,14 +3703,14 @@ fn check_initializer(
   loc : @source.SrcLoc,
 ) -> Int? {
   match init {
-    @ast.Initializer::Expr(expr~, ..) =>
+    Expr(expr~, ..) =>
       if is_zero_aggregate_init(ctx, ty, expr) {
         None
       } else {
         match expr {
-          @ast.Expr::StringLit(length~, ..) =>
+          StringLit(length~, ..) =>
             match strip_top_qualifiers(ty) {
-              @ast.CType::Array(elem~, size~, ..) => {
+              Array(elem~, size~, ..) => {
                 let elem_sz = match type_size_align(ctx, elem, loc) {
                   Some((sz, _)) => sz
                   None => -1
@@ -3852,8 +3767,7 @@ fn check_initializer(
           }
         }
       }
-    @ast.Initializer::List(items~, ..) =>
-      check_initializer_list(ctx, ty, items, loc)
+    List(items~, ..) => check_initializer_list(ctx, ty, items, loc)
   }
 }
 
@@ -3866,9 +3780,7 @@ fn is_zero_aggregate_init(
   match try_eval_int_const(ctx, expr) {
     Some(v) if v == 0 =>
       match strip_top_qualifiers(ty) {
-        @ast.CType::Struct(..)
-        | @ast.CType::Union(..)
-        | @ast.CType::Array(..) => true
+        Struct(..) | Union(..) | Array(..) => true
         _ => false
       }
     _ => false
@@ -3883,7 +3795,7 @@ fn check_initializer_list(
   loc : @source.SrcLoc,
 ) -> Int? {
   match strip_top_qualifiers(ty) {
-    @ast.CType::Array(elem~, size~, ..) => {
+    Array(elem~, size~, ..) => {
       let mut next_index = 0
       let mut max_index = -1
       for item in items {
@@ -3892,12 +3804,12 @@ fn check_initializer_list(
         let mut range_end : Int? = None
         let target = if item.designators.length() > 0 {
           match item.designators[0] {
-            @ast.InitDesignator::Index(expr~, loc=des_loc) =>
+            Index(expr~, loc=des_loc) =>
               if const_int_from_expr(ctx, expr, des_loc) is Some(v) {
                 index = v
                 has_index = true
               }
-            @ast.InitDesignator::IndexRange(start~, end~, loc=des_loc) => {
+            IndexRange(start~, end~, loc=des_loc) => {
               let start_val = const_int_from_expr(ctx, start, des_loc)
               let end_val = const_int_from_expr(ctx, end, des_loc)
               match (start_val, end_val) {
@@ -3956,7 +3868,7 @@ fn check_initializer_list(
         Some(_) => None
       }
     }
-    @ast.CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+    Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
       let fields = resolve_struct_fields(
         ctx,
         tag,
@@ -3971,7 +3883,7 @@ fn check_initializer_list(
       }
       None
     }
-    @ast.CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+    Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
       let fields = resolve_struct_fields(
         ctx,
         tag,
@@ -4009,7 +3921,7 @@ fn check_struct_initializer(
     let item = items[item_index]
     if item.designators.length() > 0 {
       match item.designators[0] {
-        @ast.InitDesignator::Field(name~, id~, ..) =>
+        Field(name~, id~, ..) =>
           if find_field_index_cached(ctx, ty, name, id, item.loc) is Some(idx) {
             index = idx + 1
           }
@@ -4036,9 +3948,9 @@ fn check_struct_initializer(
           let mut consumed = 1
           let mut used_elision = false
           match (strip_top_qualifiers(field.ty), item.value) {
-            (@ast.CType::Array(size~, ..), @ast.Initializer::Expr(expr~, ..)) =>
+            (Array(size~, ..), Expr(expr~, ..)) =>
               match expr {
-                @ast.Expr::StringLit(..) => ()
+                StringLit(..) => ()
                 _ => {
                   let (elided_items, count) = collect_elided_array_items(
                     items, item_index, size,
@@ -4052,11 +3964,7 @@ fn check_struct_initializer(
                   used_elision = true
                 }
               }
-            (
-              @ast.CType::Struct(..)
-              | @ast.CType::Union(..),
-              @ast.Initializer::Expr(..),
-            ) =>
+            (Struct(..) | Union(..), Expr(..)) =>
               if has_single_init_field(ctx, field.ty) {
                 let init = @ast.Initializer::List(
                   items=[{ designators: [], value: item.value, loc: item.loc }],
@@ -4113,7 +4021,7 @@ fn collect_elided_array_items(
 ///|
 fn has_single_init_field(ctx : SemContext, ty : @ast.CType) -> Bool {
   match strip_top_qualifiers(ty) {
-    @ast.CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+    Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
       let fields = resolve_struct_fields(
         ctx,
         tag,
@@ -4130,7 +4038,7 @@ fn has_single_init_field(ctx : SemContext, ty : @ast.CType) -> Bool {
           }
       }
     }
-    @ast.CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+    Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
       let fields = resolve_struct_fields(
         ctx,
         tag,
@@ -4206,9 +4114,9 @@ fn resolve_designator_type(
   let mut current = strip_top_qualifiers(ty)
   for des in designators {
     match des {
-      @ast.InitDesignator::Index(expr~, loc=des_loc) =>
+      Index(expr~, loc=des_loc) =>
         match strip_top_qualifiers(current) {
-          @ast.CType::Array(elem~, size~, ..) => {
+          Array(elem~, size~, ..) => {
             if size is Some(n) {
               if const_int_from_expr(ctx, expr, des_loc) is Some(v) {
                 if v < 0 || v >= n {
@@ -4223,9 +4131,9 @@ fn resolve_designator_type(
             return None
           }
         }
-      @ast.InitDesignator::IndexRange(start~, end~, loc=des_loc) =>
+      IndexRange(start~, end~, loc=des_loc) =>
         match strip_top_qualifiers(current) {
-          @ast.CType::Array(elem~, size~, ..) => {
+          Array(elem~, size~, ..) => {
             let start_val = const_int_from_expr(ctx, start, des_loc)
             let end_val = const_int_from_expr(ctx, end, des_loc)
             match (start_val, end_val) {
@@ -4254,9 +4162,9 @@ fn resolve_designator_type(
             return None
           }
         }
-      @ast.InitDesignator::Field(name~, id~, ..) =>
+      Field(name~, id~, ..) =>
         match strip_top_qualifiers(current) {
-          @ast.CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+          Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
             let fields = resolve_struct_fields(
               ctx,
               tag,
@@ -4279,7 +4187,7 @@ fn resolve_designator_type(
                 }
             }
           }
-          @ast.CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+          Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
             let fields = resolve_struct_fields(
               ctx,
               tag,
@@ -4319,12 +4227,12 @@ fn check_stmt(
   return_type : @ast.CType,
 ) -> Unit {
   match stmt {
-    @ast.Stmt::Compound(stmts~, ..) => {
+    Compound(stmts~, ..) => {
       let mut scope_open = false
       for item in stmts {
         if !scope_open {
           match item {
-            @ast.Stmt::DeclStmt(..) => {
+            DeclStmt(..) => {
               push_scope(ctx)
               scope_open = true
             }
@@ -4337,23 +4245,23 @@ fn check_stmt(
         pop_scope(ctx)
       }
     }
-    @ast.Stmt::If(cond~, then_branch~, else_branch~, ..) => {
+    If(cond~, then_branch~, else_branch~, ..) => {
       check_cond_expr(ctx, cond)
       check_stmt(ctx, then_branch, return_type)
       if else_branch is Some(stmt) {
         check_stmt(ctx, stmt, return_type)
       }
     }
-    @ast.Stmt::While(cond~, body~, ..) => {
+    While(cond~, body~, ..) => {
       check_cond_expr(ctx, cond)
       with_loop(ctx, () => check_stmt(ctx, body, return_type))
     }
-    @ast.Stmt::DoWhile(cond~, body~, ..) => {
+    DoWhile(cond~, body~, ..) => {
       with_loop(ctx, () => check_stmt(ctx, body, return_type))
       check_cond_expr(ctx, cond)
     }
-    @ast.Stmt::For(init~, cond~, step~, body~, ..) => {
-      let needs_scope = init is Some(@ast.Stmt::DeclStmt(..))
+    For(init~, cond~, step~, body~, ..) => {
+      let needs_scope = init is Some(DeclStmt(..))
       if needs_scope {
         push_scope(ctx)
       }
@@ -4371,14 +4279,14 @@ fn check_stmt(
         pop_scope(ctx)
       }
     }
-    @ast.Stmt::Switch(cond~, body~, loc~) => {
+    Switch(cond~, body~, loc~) => {
       let cond_ty = type_of_expr(ctx, cond)
       if !is_int_like(cond_ty) {
         add_sem_error(ctx, loc, "switch expression must have integer type")
       }
       with_switch(ctx, () => check_stmt(ctx, body, return_type))
     }
-    @ast.Stmt::Case(expr~, end_expr~, body~, ..) => {
+    Case(expr~, end_expr~, body~, ..) => {
       if ctx.switch_depth == 0 {
         add_sem_error(ctx, @ast.expr_loc(expr), "case outside of switch")
       }
@@ -4411,7 +4319,7 @@ fn check_stmt(
       }
       check_stmt(ctx, body, return_type)
     }
-    @ast.Stmt::Default(body~, loc~) => {
+    Default(body~, loc~) => {
       if ctx.switch_depth == 0 {
         add_sem_error(ctx, loc, "default outside of switch")
       }
@@ -4427,7 +4335,7 @@ fn check_stmt(
       }
       check_stmt(ctx, body, return_type)
     }
-    @ast.Stmt::Label(name~, body~, loc~) => {
+    Label(name~, body~, loc~) => {
       if ctx.labels_defined.contains(name) {
         add_sem_error(ctx, loc, "duplicate label '\{name}'")
       } else {
@@ -4435,22 +4343,22 @@ fn check_stmt(
       }
       check_stmt(ctx, body, return_type)
     }
-    @ast.Stmt::Goto(name~, loc~) => ctx.labels_used.push((name, loc))
-    @ast.Stmt::GotoExpr(expr~, loc~) => {
+    Goto(name~, loc~) => ctx.labels_used.push((name, loc))
+    GotoExpr(expr~, loc~) => {
       let expr_ty = type_of_expr(ctx, expr)
       if !is_pointer_type(expr_ty) {
         add_sem_error(ctx, loc, "computed goto expects pointer")
       }
     }
-    @ast.Stmt::Break(loc~) =>
+    Break(loc~) =>
       if ctx.loop_depth == 0 && ctx.switch_depth == 0 {
         add_sem_error(ctx, loc, "cannot break outside of loop or switch")
       }
-    @ast.Stmt::Continue(loc~) =>
+    Continue(loc~) =>
       if ctx.loop_depth == 0 {
         add_sem_error(ctx, loc, "cannot continue outside of loop")
       }
-    @ast.Stmt::Return(value~, loc~) =>
+    Return(value~, loc~) =>
       match value {
         None =>
           if !is_void_type(return_type) {
@@ -4470,16 +4378,15 @@ fn check_stmt(
           }
         }
       }
-    @ast.Stmt::Asm(asm_stmt) => check_asm_stmt(ctx, asm_stmt)
-    @ast.Stmt::ExprStmt(expr~, ..) => type_of_expr(ctx, expr) |> ignore
-    @ast.Stmt::DeclStmt(decls~, ..) =>
+    Asm(asm_stmt) => check_asm_stmt(ctx, asm_stmt)
+    ExprStmt(expr~, ..) => type_of_expr(ctx, expr) |> ignore
+    DeclStmt(decls~, ..) =>
       for decl in decls {
         check_var_decl(ctx, decl, is_local=true)
       }
-    @ast.Stmt::TagDef(ty~, loc~) => register_type_defs(ctx, ty, loc)
-    @ast.Stmt::StaticAssert(static_assert) =>
-      check_static_assert(ctx, static_assert)
-    @ast.Stmt::Empty(..) => ()
+    TagDef(ty~, loc~) => register_type_defs(ctx, ty, loc)
+    StaticAssert(static_assert) => check_static_assert(ctx, static_assert)
+    Empty(..) => ()
   }
 }
 
@@ -4594,37 +4501,32 @@ fn check_asm_stmt(ctx : SemContext, asm_stmt : @ast.AsmStmt) -> Unit {
 ///|
 fn type_eq(a : @ast.CType, b : @ast.CType) -> Bool {
   match (a, b) {
-    (@ast.CType::Qualified(base~, ..), _) => type_eq(base, b)
-    (@ast.CType::Attributed(base~, ..), _) => type_eq(base, b)
-    (_, @ast.CType::Qualified(base~, ..)) => type_eq(a, base)
-    (_, @ast.CType::Attributed(base~, ..)) => type_eq(a, base)
-    (@ast.CType::Void, @ast.CType::Void) => true
-    (@ast.CType::Bool, @ast.CType::Bool) => true
+    (Qualified(base~, ..), _) => type_eq(base, b)
+    (Attributed(base~, ..), _) => type_eq(base, b)
+    (_, Qualified(base~, ..)) => type_eq(a, base)
+    (_, Attributed(base~, ..)) => type_eq(a, base)
+    (Void, Void) => true
+    (Bool, Bool) => true
     (
-      @ast.CType::Int(kind=a_kind, unsigned=a_unsigned),
-      @ast.CType::Int(kind=b_kind, unsigned=b_unsigned),
+      Int(kind=a_kind, unsigned=a_unsigned),
+      Int(kind=b_kind, unsigned=b_unsigned),
     ) => a_kind == b_kind && a_unsigned == b_unsigned
-    (@ast.CType::Float(kind=a_kind), @ast.CType::Float(kind=b_kind)) =>
-      a_kind == b_kind
-    (@ast.CType::Pointer(inner_a), @ast.CType::Pointer(inner_b)) =>
-      type_eq(inner_a, inner_b)
-    (
-      @ast.CType::Array(elem=elem_a, size=size_a, ..),
-      @ast.CType::Array(elem=elem_b, size=size_b, ..),
-    ) =>
+    (Float(kind=a_kind), Float(kind=b_kind)) => a_kind == b_kind
+    (Pointer(inner_a), Pointer(inner_b)) => type_eq(inner_a, inner_b)
+    (Array(elem=elem_a, size=size_a, ..), Array(elem=elem_b, size=size_b, ..)) =>
       match (size_a, size_b) {
         (Some(sa), Some(sb)) => sa == sb && type_eq(elem_a, elem_b)
         _ => type_eq(elem_a, elem_b)
       }
     (
-      @ast.CType::Function(
+      Function(
         return_type=a_ret,
         params=a_params,
         varargs=a_varargs,
         is_old_style=a_old,
         call_conv=a_call
       ),
-      @ast.CType::Function(
+      Function(
         return_type=b_ret,
         params=b_params,
         varargs=b_varargs,
@@ -4654,18 +4556,24 @@ fn type_eq(a : @ast.CType, b : @ast.CType) -> Bool {
       }
       true
     }
-    (
-      @ast.CType::Struct(name=a_name, id=a_id, ..),
-      @ast.CType::Struct(name=b_name, id=b_id, ..),
-    ) => if a_id != 0 && b_id != 0 { a_id == b_id } else { a_name == b_name }
-    (
-      @ast.CType::Union(name=a_name, id=a_id, ..),
-      @ast.CType::Union(name=b_name, id=b_id, ..),
-    ) => if a_id != 0 && b_id != 0 { a_id == b_id } else { a_name == b_name }
-    (
-      @ast.CType::Enum(name=a_name, id=a_id, ..),
-      @ast.CType::Enum(name=b_name, id=b_id, ..),
-    ) => if a_id != 0 && b_id != 0 { a_id == b_id } else { a_name == b_name }
+    (Struct(name=a_name, id=a_id, ..), Struct(name=b_name, id=b_id, ..)) =>
+      if a_id != 0 && b_id != 0 {
+        a_id == b_id
+      } else {
+        a_name == b_name
+      }
+    (Union(name=a_name, id=a_id, ..), Union(name=b_name, id=b_id, ..)) =>
+      if a_id != 0 && b_id != 0 {
+        a_id == b_id
+      } else {
+        a_name == b_name
+      }
+    (Enum(name=a_name, id=a_id, ..), Enum(name=b_name, id=b_id, ..)) =>
+      if a_id != 0 && b_id != 0 {
+        a_id == b_id
+      } else {
+        a_name == b_name
+      }
     _ => false
   }
 }
@@ -4673,30 +4581,27 @@ fn type_eq(a : @ast.CType, b : @ast.CType) -> Bool {
 ///|
 fn types_compatible_for_decl(a : @ast.CType, b : @ast.CType) -> Bool {
   match (a, b) {
-    (@ast.CType::Qualified(base~, ..), _) => types_compatible_for_decl(base, b)
-    (@ast.CType::Attributed(base~, ..), _) => types_compatible_for_decl(base, b)
-    (_, @ast.CType::Qualified(base~, ..)) => types_compatible_for_decl(a, base)
-    (_, @ast.CType::Attributed(base~, ..)) => types_compatible_for_decl(a, base)
-    (
-      @ast.CType::Array(elem=elem_a, size=size_a, ..),
-      @ast.CType::Array(elem=elem_b, size=size_b, ..),
-    ) =>
+    (Qualified(base~, ..), _) => types_compatible_for_decl(base, b)
+    (Attributed(base~, ..), _) => types_compatible_for_decl(base, b)
+    (_, Qualified(base~, ..)) => types_compatible_for_decl(a, base)
+    (_, Attributed(base~, ..)) => types_compatible_for_decl(a, base)
+    (Array(elem=elem_a, size=size_a, ..), Array(elem=elem_b, size=size_b, ..)) =>
       match (size_a, size_b) {
         (Some(sa), Some(sb)) =>
           sa == sb && types_compatible_for_decl(elem_a, elem_b)
         _ => types_compatible_for_decl(elem_a, elem_b)
       }
-    (@ast.CType::Pointer(inner_a), @ast.CType::Pointer(inner_b)) =>
+    (Pointer(inner_a), Pointer(inner_b)) =>
       types_compatible_for_decl(inner_a, inner_b)
     (
-      @ast.CType::Function(
+      Function(
         return_type=a_ret,
         params=a_params,
         varargs=a_varargs,
         is_old_style=a_old,
         call_conv=a_call
       ),
-      @ast.CType::Function(
+      Function(
         return_type=b_ret,
         params=b_params,
         varargs=b_varargs,
@@ -4733,9 +4638,9 @@ fn types_compatible_for_decl(a : @ast.CType, b : @ast.CType) -> Bool {
 ///|
 pub fn is_int_like(ty : @ast.CType) -> Bool {
   match strip_top_qualifiers(ty) {
-    @ast.CType::Int(..) => true
-    @ast.CType::Bool => true
-    @ast.CType::Enum(..) => true
+    Int(..) => true
+    Bool => true
+    Enum(..) => true
     _ => false
   }
 }
@@ -4743,7 +4648,7 @@ pub fn is_int_like(ty : @ast.CType) -> Bool {
 ///|
 pub fn is_char_type(ty : @ast.CType) -> Bool {
   match strip_top_qualifiers(ty) {
-    @ast.CType::Int(kind=@ast.CIntKind::Char, ..) => true
+    Int(kind=Char, ..) => true
     _ => false
   }
 }
@@ -4754,7 +4659,7 @@ fn is_scalar(ty : @ast.CType) -> Bool {
     return true
   }
   match strip_top_qualifiers(ty) {
-    @ast.CType::Pointer(_) => true
+    Pointer(_) => true
     _ => false
   }
 }
@@ -4762,7 +4667,7 @@ fn is_scalar(ty : @ast.CType) -> Bool {
 ///|
 fn is_pointer_type(ty : @ast.CType) -> Bool {
   match strip_top_qualifiers(ty) {
-    @ast.CType::Pointer(_) => true
+    Pointer(_) => true
     _ => false
   }
 }
@@ -4770,7 +4675,7 @@ fn is_pointer_type(ty : @ast.CType) -> Bool {
 ///|
 fn is_void_pointer_type(ty : @ast.CType) -> Bool {
   match strip_top_qualifiers(ty) {
-    @ast.CType::Pointer(inner) => is_void_type(inner)
+    Pointer(inner) => is_void_type(inner)
     _ => false
   }
 }
@@ -4778,8 +4683,8 @@ fn is_void_pointer_type(ty : @ast.CType) -> Bool {
 ///|
 pub fn decay_type(ty : @ast.CType) -> @ast.CType {
   match strip_top_qualifiers(ty) {
-    @ast.CType::Array(elem~, ..) => @ast.CType::Pointer(elem)
-    @ast.CType::Function(..) => @ast.CType::Pointer(ty)
+    Array(elem~, ..) => Pointer(elem)
+    Function(..) => Pointer(ty)
     _ => ty
   }
 }
@@ -4787,14 +4692,14 @@ pub fn decay_type(ty : @ast.CType) -> @ast.CType {
 ///|
 pub fn adjust_param_type_for_local(ty : @ast.CType) -> @ast.CType {
   match ty {
-    @ast.CType::Qualified(qual~, base~) => {
+    Qualified(qual~, base~) => {
       let adjusted = adjust_param_type_for_local(base)
-      @ast.CType::Qualified(qual~, base=adjusted)
+      Qualified(qual~, base=adjusted)
     }
-    @ast.CType::Attributed(attrs~, base~) =>
-      @ast.CType::Attributed(attrs~, base=adjust_param_type_for_local(base))
-    @ast.CType::Array(elem~, ..) => @ast.CType::Pointer(elem)
-    @ast.CType::Function(..) => @ast.CType::Pointer(ty)
+    Attributed(attrs~, base~) =>
+      Attributed(attrs~, base=adjust_param_type_for_local(base))
+    Array(elem~, ..) => Pointer(elem)
+    Function(..) => Pointer(ty)
     _ => ty
   }
 }
@@ -4808,14 +4713,13 @@ fn adjust_param_type_for_sig(ty : @ast.CType) -> @ast.CType {
 ///|
 fn promote_old_style_param_type(ty : @ast.CType) -> @ast.CType {
   match ty {
-    @ast.CType::Qualified(qual~, base~) => {
+    Qualified(qual~, base~) => {
       let updated = promote_old_style_param_type(base)
-      @ast.CType::Qualified(qual~, base=updated)
+      Qualified(qual~, base=updated)
     }
-    @ast.CType::Attributed(attrs~, base~) =>
-      @ast.CType::Attributed(attrs~, base=promote_old_style_param_type(base))
-    @ast.CType::Float(kind=@ast.CFloatKind::Float) =>
-      @ast.CType::Float(kind=@ast.CFloatKind::Double)
+    Attributed(attrs~, base~) =>
+      Attributed(attrs~, base=promote_old_style_param_type(base))
+    Float(kind=Float) => Float(kind=Double)
     _ => ty
   }
 }
@@ -4901,7 +4805,7 @@ fn find_field(
     }
     if field.name == "" {
       match strip_top_qualifiers(field.ty) {
-        @ast.CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+        Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
           let nested = resolve_struct_fields(
             ctx,
             tag,
@@ -4915,7 +4819,7 @@ fn find_field(
             }
           }
         }
-        @ast.CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+        Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
           let nested = resolve_struct_fields(
             ctx,
             tag,
@@ -4949,7 +4853,7 @@ fn find_field_index(
     }
     if fields[i].name == "" {
       match strip_top_qualifiers(fields[i].ty) {
-        @ast.CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+        Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
           let nested = resolve_struct_fields(
             ctx,
             tag,
@@ -4963,7 +4867,7 @@ fn find_field_index(
             }
           }
         }
-        @ast.CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+        Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
           let nested = resolve_struct_fields(
             ctx,
             tag,
@@ -5003,7 +4907,7 @@ fn collect_field_index_cache_from_field(
     return
   }
   match strip_top_qualifiers(field.ty) {
-    @ast.CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+    Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
       let nested = ensure_struct_fields(
         ctx,
         tag,
@@ -5020,7 +4924,7 @@ fn collect_field_index_cache_from_field(
         }
       }
     }
-    @ast.CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+    Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
       let nested = ensure_struct_fields(
         ctx,
         tag,
@@ -5072,7 +4976,7 @@ pub fn find_field_index_cached(
 ) -> Int? {
   let resolved = resolve_type(ctx, record_ty, loc) |> strip_top_qualifiers
   match resolved {
-    @ast.CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) =>
+    Struct(name=tag, id=tag_id, fields=field_list, attrs=_) =>
       match
         ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=false, loc) {
         None => None
@@ -5140,7 +5044,7 @@ pub fn find_field_index_cached(
             find_field_index(ctx, def.fields, name, id)
           }
       }
-    @ast.CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) =>
+    Union(name=tag, id=tag_id, fields=field_list, attrs=_) =>
       match
         ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=true, loc) {
         None => None
@@ -5234,7 +5138,7 @@ fn collect_member_cache_from_fields(
       continue
     }
     match strip_top_qualifiers(field.ty) {
-      @ast.CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+      Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
         let def = ensure_struct_fields(
           ctx,
           tag,
@@ -5254,7 +5158,7 @@ fn collect_member_cache_from_fields(
           )
         }
       }
-      @ast.CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+      Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
         let def = ensure_struct_fields(
           ctx,
           tag,
@@ -5308,7 +5212,7 @@ fn member_access_search(
   loc : @source.SrcLoc,
 ) -> @ast.CType? {
   match strip_top_qualifiers(ty) {
-    @ast.CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+    Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
       let def = ensure_struct_fields(
         ctx,
         tag,
@@ -5337,7 +5241,7 @@ fn member_access_search(
         }
       }
     }
-    @ast.CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+    Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
       let def = ensure_struct_fields(
         ctx,
         tag,
@@ -5381,7 +5285,7 @@ fn member_access_type(
 ) -> @ast.CType? {
   let obj_ty = if is_arrow {
     match strip_top_qualifiers(base_ty) {
-      @ast.CType::Pointer(inner) => inner
+      Pointer(inner) => inner
       _ => {
         add_sem_error(ctx, loc, "arrow operator requires pointer")
         return None
@@ -5392,7 +5296,7 @@ fn member_access_type(
   }
   let (obj_qual, obj_base) = split_top_qual(obj_ty)
   match strip_top_qualifiers(obj_base) {
-    @ast.CType::Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+    Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
       let def = ensure_struct_fields(
         ctx,
         tag,
@@ -5469,7 +5373,7 @@ fn member_access_type(
           }
       }
     }
-    @ast.CType::Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+    Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
       let def = ensure_struct_fields(
         ctx,
         tag,
@@ -5562,8 +5466,8 @@ fn index_access_type(
 ) -> @ast.CType? {
   if is_int_like(index_ty) {
     match strip_top_qualifiers(base_ty) {
-      @ast.CType::Pointer(elem) => Some(elem)
-      @ast.CType::Array(elem~, ..) => Some(elem)
+      Pointer(elem) => Some(elem)
+      Array(elem~, ..) => Some(elem)
       _ => {
         add_sem_error(ctx, loc, "subscripted value is not an array")
         None
@@ -5571,8 +5475,8 @@ fn index_access_type(
     }
   } else if is_int_like(base_ty) {
     match strip_top_qualifiers(index_ty) {
-      @ast.CType::Pointer(elem) => Some(elem)
-      @ast.CType::Array(elem~, ..) => Some(elem)
+      Pointer(elem) => Some(elem)
+      Array(elem~, ..) => Some(elem)
       _ => {
         add_sem_error(ctx, loc, "array index must be int")
         None
@@ -5587,7 +5491,7 @@ fn index_access_type(
 ///|
 pub fn type_of_lvalue(ctx : SemContext, expr : @ast.Expr) -> @ast.CType? {
   match expr {
-    @ast.Expr::Ident(name~, id~, loc~, ..) =>
+    Ident(name~, id~, loc~, ..) =>
       if enum_const_exists(ctx, name, id) {
         add_sem_error(ctx, loc, "expression is not assignable")
         None
@@ -5600,7 +5504,7 @@ pub fn type_of_lvalue(ctx : SemContext, expr : @ast.Expr) -> @ast.CType? {
           }
         }
       }
-    @ast.Expr::Index(base~, index~, loc~, ..) =>
+    Index(base~, index~, loc~, ..) =>
       match
         index_access_type(
           ctx,
@@ -5611,25 +5515,24 @@ pub fn type_of_lvalue(ctx : SemContext, expr : @ast.Expr) -> @ast.CType? {
         Some(ty) => Some(ty)
         None => None
       }
-    @ast.Expr::Member(base~, name~, id~, is_arrow~, loc~, ..) =>
+    Member(base~, name~, id~, is_arrow~, loc~, ..) =>
       member_access_type(ctx, type_of_expr(ctx, base), name, id, is_arrow~, loc)
-    @ast.Expr::Unary(op=@ast.UnaryOp::Deref, expr=inner, loc~, ..) => {
+    Unary(op=Deref, expr=inner, loc~, ..) => {
       let inner_ty = type_of_expr(ctx, inner)
       match strip_top_qualifiers(inner_ty) {
-        @ast.CType::Pointer(pointee) => Some(pointee)
+        Pointer(pointee) => Some(pointee)
         _ => {
           add_sem_error(ctx, loc, "cannot dereference non-pointer")
           None
         }
       }
     }
-    @ast.Expr::CompoundLiteral(ty~, init~, node_id~, loc~) => {
+    CompoundLiteral(ty~, init~, node_id~, loc~) => {
       let resolved = compound_literal_type(ctx, ty, init, loc, node_id)
       record_compound_literal(ctx, loc, node_id, resolved)
       Some(resolved)
     }
-    @ast.Expr::StmtExpr(stmts~, loc~, ..) =>
-      stmt_expr_lvalue_type(ctx, stmts, loc)
+    StmtExpr(stmts~, loc~, ..) => stmt_expr_lvalue_type(ctx, stmts, loc)
     _ => {
       add_sem_error(ctx, @ast.expr_loc(expr), "expression is not assignable")
       None
@@ -5640,7 +5543,7 @@ pub fn type_of_lvalue(ctx : SemContext, expr : @ast.Expr) -> @ast.CType? {
 ///|
 fn type_of_lvalue_optional(ctx : SemContext, expr : @ast.Expr) -> @ast.CType? {
   match expr {
-    @ast.Expr::Ident(name~, id~, ..) =>
+    Ident(name~, id~, ..) =>
       if enum_const_exists(ctx, name, id) {
         None
       } else {
@@ -5649,7 +5552,7 @@ fn type_of_lvalue_optional(ctx : SemContext, expr : @ast.Expr) -> @ast.CType? {
           None => None
         }
       }
-    @ast.Expr::Index(base~, index~, loc~, ..) =>
+    Index(base~, index~, loc~, ..) =>
       match
         index_access_type(
           ctx,
@@ -5660,7 +5563,7 @@ fn type_of_lvalue_optional(ctx : SemContext, expr : @ast.Expr) -> @ast.CType? {
         Some(ty) => Some(ty)
         None => None
       }
-    @ast.Expr::Member(base~, name~, id~, is_arrow~, loc~, ..) =>
+    Member(base~, name~, id~, is_arrow~, loc~, ..) =>
       member_access_type(
         ctx,
         type_of_expr_impl(ctx, base),
@@ -5669,23 +5572,22 @@ fn type_of_lvalue_optional(ctx : SemContext, expr : @ast.Expr) -> @ast.CType? {
         is_arrow~,
         loc,
       )
-    @ast.Expr::Unary(op=@ast.UnaryOp::Deref, expr=inner, loc~, ..) => {
+    Unary(op=Deref, expr=inner, loc~, ..) => {
       let inner_ty = type_of_expr_impl(ctx, inner)
       match strip_top_qualifiers(inner_ty) {
-        @ast.CType::Pointer(pointee) => Some(pointee)
+        Pointer(pointee) => Some(pointee)
         _ => {
           add_sem_error(ctx, loc, "cannot dereference non-pointer")
           None
         }
       }
     }
-    @ast.Expr::CompoundLiteral(ty~, init~, node_id~, loc~) => {
+    CompoundLiteral(ty~, init~, node_id~, loc~) => {
       let resolved = compound_literal_type(ctx, ty, init, loc, node_id)
       record_compound_literal(ctx, loc, node_id, resolved)
       Some(resolved)
     }
-    @ast.Expr::StmtExpr(stmts~, loc~, ..) =>
-      stmt_expr_lvalue_type(ctx, stmts, loc)
+    StmtExpr(stmts~, loc~, ..) => stmt_expr_lvalue_type(ctx, stmts, loc)
     _ => None
   }
 }
@@ -5693,11 +5595,11 @@ fn type_of_lvalue_optional(ctx : SemContext, expr : @ast.Expr) -> @ast.CType? {
 ///|
 fn current_return_type(ctx : SemContext) -> @ast.CType {
   match ctx.current_func_name {
-    None => @ast.CType::Void
+    None => Void
     Some(name) =>
       match ctx.functions.get(name) {
         Some(sig) => sig.return_type
-        None => @ast.CType::Void
+        None => Void
       }
   }
 }
@@ -5721,10 +5623,10 @@ fn stmt_expr_result_type(
     let stmt = stmts[i]
     if i + 1 == len {
       match stmt {
-        @ast.Stmt::ExprStmt(expr~, ..) => result = type_of_expr(ctx, expr)
+        ExprStmt(expr~, ..) => result = type_of_expr(ctx, expr)
         _ => {
           check_stmt(ctx, stmt, return_type)
-          result = @ast.CType::Void
+          result = Void
         }
       }
     } else {
@@ -5755,7 +5657,7 @@ fn stmt_expr_lvalue_type(
     let stmt = stmts[i]
     if i + 1 == len {
       match stmt {
-        @ast.Stmt::ExprStmt(expr~, ..) => result = type_of_lvalue(ctx, expr)
+        ExprStmt(expr~, ..) => result = type_of_lvalue(ctx, expr)
         _ => {
           check_stmt(ctx, stmt, return_type)
           add_sem_error(ctx, loc, "statement expression is not assignable")
@@ -5823,11 +5725,11 @@ pub fn type_of_expr(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
 ///|
 fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
   match expr {
-    @ast.Expr::IntLit(value~, ..) => int_literal_type(value)
-    @ast.Expr::FloatLit(value~, ..) => float_type_from_literal(value)
-    @ast.Expr::CharLit(..) => default_int_type()
-    @ast.Expr::StringLit(..) => @ast.CType::Pointer(char_type())
-    @ast.Expr::Ident(name~, id~, loc~, ..) =>
+    IntLit(value~, ..) => int_literal_type(value)
+    FloatLit(value~, ..) => float_type_from_literal(value)
+    CharLit(..) => default_int_type()
+    StringLit(..) => Pointer(char_type())
+    Ident(name~, id~, loc~, ..) =>
       match lookup_value(ctx, name, id) {
         Some(ty) => decay_type(ty)
         None => {
@@ -5835,60 +5737,59 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
           default_int_type()
         }
       }
-    @ast.Expr::LabelAddr(name~, loc~, ..) => {
+    LabelAddr(name~, loc~, ..) => {
       if ctx.current_func_name is None {
         add_sem_error(ctx, loc, "label address used outside of function")
       }
       ctx.labels_used.push((name, loc))
       void_pointer_type()
     }
-    @ast.Expr::BuiltinTypesCompatibleP(a~, b~, loc~, ..) => {
+    BuiltinTypesCompatibleP(a~, b~, loc~, ..) => {
       register_type_defs(ctx, a, loc)
       register_type_defs(ctx, b, loc)
       default_int_type()
     }
-    @ast.Expr::BuiltinOffsetof(ty~, path~, loc~, ..) => {
+    BuiltinOffsetof(ty~, path~, loc~, ..) => {
       register_type_defs(ctx, ty, loc)
       ignore(eval_builtin_offsetof(ctx, ty, path, loc))
       size_t_type()
     }
-    @ast.Expr::BuiltinVaArg(list~, ty~, loc~, ..) => {
+    BuiltinVaArg(list~, ty~, loc~, ..) => {
       ignore(type_of_expr(ctx, list))
       register_type_defs(ctx, ty, loc)
       resolve_type(ctx, ty, loc)
     }
-    @ast.Expr::CompoundLiteral(ty~, init~, node_id~, loc~) => {
+    CompoundLiteral(ty~, init~, node_id~, loc~) => {
       let resolved = compound_literal_type(ctx, ty, init, loc, node_id)
       record_compound_literal(ctx, loc, node_id, resolved)
       decay_type(resolved)
     }
-    @ast.Expr::StmtExpr(stmts~, loc~, ..) =>
-      stmt_expr_result_type(ctx, stmts, loc)
-    @ast.Expr::Unary(op~, expr~, loc~, ..) =>
+    StmtExpr(stmts~, loc~, ..) => stmt_expr_result_type(ctx, stmts, loc)
+    Unary(op~, expr~, loc~, ..) =>
       match op {
-        @ast.UnaryOp::Addr =>
+        Addr =>
           match type_of_lvalue(ctx, expr) {
-            Some(ty) => @ast.CType::Pointer(ty)
+            Some(ty) => Pointer(ty)
             None => default_int_type()
           }
-        @ast.UnaryOp::Deref => {
+        Deref => {
           let inner = type_of_expr(ctx, expr)
           match strip_top_qualifiers(inner) {
-            @ast.CType::Pointer(pointee) => pointee
+            Pointer(pointee) => pointee
             _ => {
               add_sem_error(ctx, loc, "cannot dereference non-pointer")
               default_int_type()
             }
           }
         }
-        @ast.UnaryOp::Not => {
+        Not => {
           let inner = type_of_expr(ctx, expr)
           if !is_scalar(inner) {
             add_sem_error(ctx, loc, "unary operator expects scalar")
           }
           default_int_type()
         }
-        @ast.UnaryOp::Plus | @ast.UnaryOp::Minus => {
+        Plus | Minus => {
           let inner = type_of_expr(ctx, expr)
           if !is_arithmetic(inner) {
             add_sem_error(ctx, loc, "unary operator expects arithmetic")
@@ -5899,17 +5800,14 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
             common_int_type(ctx, inner, inner)
           }
         }
-        @ast.UnaryOp::BitNot => {
+        BitNot => {
           let inner = type_of_expr(ctx, expr)
           if !is_int_like(inner) {
             add_sem_error(ctx, loc, "unary operator expects int")
           }
           common_int_type(ctx, inner, inner)
         }
-        @ast.UnaryOp::PreInc
-        | @ast.UnaryOp::PreDec
-        | @ast.UnaryOp::PostInc
-        | @ast.UnaryOp::PostDec =>
+        PreInc | PreDec | PostInc | PostDec =>
           match type_of_lvalue(ctx, expr) {
             None => default_int_type()
             Some(ty) => {
@@ -5918,7 +5816,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
                 return default_int_type()
               }
               match strip_top_qualifiers(ty) {
-                @ast.CType::Array(..) | @ast.CType::Function(..) => {
+                Array(..) | Function(..) => {
                   add_sem_error(ctx, loc, "invalid operand to increment")
                   return default_int_type()
                 }
@@ -5926,7 +5824,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
               }
               if !is_arithmetic(ty) {
                 match strip_top_qualifiers(ty) {
-                  @ast.CType::Pointer(_) => ()
+                  Pointer(_) => ()
                   _ => add_sem_error(ctx, loc, "invalid operand to increment")
                 }
               }
@@ -5934,43 +5832,43 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
             }
           }
       }
-    @ast.Expr::Cast(ty~, expr~, loc~, ..) => {
+    Cast(ty~, expr~, loc~, ..) => {
       register_type_defs(ctx, ty, loc)
       let resolved = resolve_type(ctx, ty, loc)
       type_of_expr(ctx, expr) |> ignore
       resolved
     }
-    @ast.Expr::SizeofExpr(expr~, ..) => {
+    SizeofExpr(expr~, ..) => {
       let ty = type_for_sizeof(ctx, expr)
       match strip_top_qualifiers(ty) {
-        @ast.CType::Array(size=None, size_expr=Some(_), ..) => ()
+        Array(size=None, size_expr=Some(_), ..) => ()
         _ => type_size_align(ctx, ty, @ast.expr_loc(expr)) |> ignore
       }
       default_int_type()
     }
-    @ast.Expr::SizeofType(ty~, loc~, ..) => {
+    SizeofType(ty~, loc~, ..) => {
       register_type_defs(ctx, ty, loc)
       let resolved = resolve_type(ctx, ty, loc)
       match strip_top_qualifiers(resolved) {
-        @ast.CType::Array(size=None, size_expr=Some(_), ..) => ()
+        Array(size=None, size_expr=Some(_), ..) => ()
         _ => type_size_align(ctx, resolved, loc) |> ignore
       }
       default_int_type()
     }
-    @ast.Expr::AlignofExpr(expr~, loc~, ..) => {
+    AlignofExpr(expr~, loc~, ..) => {
       let ty = type_for_sizeof(ctx, expr)
       type_size_align(ctx, ty, loc) |> ignore
       default_int_type()
     }
-    @ast.Expr::AlignofType(ty~, loc~, ..) => {
+    AlignofType(ty~, loc~, ..) => {
       register_type_defs(ctx, ty, loc)
       let resolved = resolve_type(ctx, ty, loc)
       type_size_align(ctx, resolved, loc) |> ignore
       default_int_type()
     }
-    @ast.Expr::Binary(op~, left~, right~, loc~, ..) =>
+    Binary(op~, left~, right~, loc~, ..) =>
       match op {
-        @ast.BinaryOp::Assign =>
+        Assign =>
           match type_of_lvalue(ctx, left) {
             Some(lhs_ty) => {
               if is_const_qualified(lhs_ty) {
@@ -5978,7 +5876,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
                 return default_int_type()
               }
               match strip_top_qualifiers(lhs_ty) {
-                @ast.CType::Array(..) | @ast.CType::Function(..) => {
+                Array(..) | Function(..) => {
                   add_sem_error(ctx, loc, "assignment to non-modifiable lvalue")
                   return default_int_type()
                 }
@@ -5997,28 +5895,27 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
             }
             None => default_int_type()
           }
-        @ast.BinaryOp::AddAssign
-        | @ast.BinaryOp::SubAssign
-        | @ast.BinaryOp::MulAssign
-        | @ast.BinaryOp::DivAssign
-        | @ast.BinaryOp::ModAssign
-        | @ast.BinaryOp::ShlAssign
-        | @ast.BinaryOp::ShrAssign
-        | @ast.BinaryOp::BitAndAssign
-        | @ast.BinaryOp::BitXorAssign
-        | @ast.BinaryOp::BitOrAssign =>
-          type_of_compound_assign(ctx, op, left, right, loc)
-        @ast.BinaryOp::Comma => {
+        AddAssign
+        | SubAssign
+        | MulAssign
+        | DivAssign
+        | ModAssign
+        | ShlAssign
+        | ShrAssign
+        | BitAndAssign
+        | BitXorAssign
+        | BitOrAssign => type_of_compound_assign(ctx, op, left, right, loc)
+        Comma => {
           type_of_expr(ctx, left) |> ignore
           type_of_expr(ctx, right)
         }
-        @ast.BinaryOp::Add => {
+        Add => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
           match strip_top_qualifiers(lhs_ty) {
-            @ast.CType::Pointer(pointee) =>
+            Pointer(pointee) =>
               if is_int_like(rhs_ty) {
-                return @ast.CType::Pointer(pointee)
+                return Pointer(pointee)
               } else {
                 add_sem_error(ctx, loc, "invalid operands to '+'")
                 return default_int_type()
@@ -6026,9 +5923,9 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
             _ => ()
           }
           match strip_top_qualifiers(rhs_ty) {
-            @ast.CType::Pointer(pointee) =>
+            Pointer(pointee) =>
               if is_int_like(lhs_ty) {
-                return @ast.CType::Pointer(pointee)
+                return Pointer(pointee)
               } else {
                 add_sem_error(ctx, loc, "invalid operands to '+'")
                 return default_int_type()
@@ -6042,13 +5939,13 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
           }
           arithmetic_result_type(ctx, lhs_ty, rhs_ty)
         }
-        @ast.BinaryOp::Sub => {
+        Sub => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
           match strip_top_qualifiers(lhs_ty) {
-            @ast.CType::Pointer(pointee) =>
+            Pointer(pointee) =>
               match strip_top_qualifiers(rhs_ty) {
-                @ast.CType::Pointer(other) => {
+                Pointer(other) => {
                   if !pointer_compatible(pointee, other) {
                     add_sem_error(ctx, loc, "pointer subtraction type mismatch")
                   }
@@ -6056,7 +5953,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
                 }
                 _ =>
                   if is_int_like(rhs_ty) {
-                    return @ast.CType::Pointer(pointee)
+                    return Pointer(pointee)
                   } else {
                     add_sem_error(ctx, loc, "invalid operands to '-'")
                     return default_int_type()
@@ -6071,18 +5968,13 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
           }
           arithmetic_result_type(ctx, lhs_ty, rhs_ty)
         }
-        @ast.BinaryOp::Eq
-        | @ast.BinaryOp::Ne
-        | @ast.BinaryOp::Lt
-        | @ast.BinaryOp::Le
-        | @ast.BinaryOp::Gt
-        | @ast.BinaryOp::Ge => {
+        Eq | Ne | Lt | Le | Gt | Ge => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
           match strip_top_qualifiers(lhs_ty) {
-            @ast.CType::Pointer(pointee) =>
+            Pointer(pointee) =>
               match strip_top_qualifiers(rhs_ty) {
-                @ast.CType::Pointer(other) => {
+                Pointer(other) => {
                   if !pointer_compatible(pointee, other) {
                     add_sem_error(ctx, loc, "pointer comparison type mismatch")
                   }
@@ -6096,7 +5988,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
             _ => ()
           }
           match strip_top_qualifiers(rhs_ty) {
-            @ast.CType::Pointer(_) =>
+            Pointer(_) =>
               if is_int_like(lhs_ty) && is_null_pointer_expr(ctx, left) {
                 return default_int_type()
               }
@@ -6109,7 +6001,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
           }
           default_int_type()
         }
-        @ast.BinaryOp::LogAnd | @ast.BinaryOp::LogOr => {
+        LogAnd | LogOr => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
           if !is_scalar(lhs_ty) || !is_scalar(rhs_ty) {
@@ -6117,7 +6009,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
           }
           default_int_type()
         }
-        @ast.BinaryOp::Mul | @ast.BinaryOp::Div => {
+        Mul | Div => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
           if !is_arithmetic(lhs_ty) || !is_arithmetic(rhs_ty) {
@@ -6127,7 +6019,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
           }
           arithmetic_result_type(ctx, lhs_ty, rhs_ty)
         }
-        @ast.BinaryOp::Shl | @ast.BinaryOp::Shr => {
+        Shl | Shr => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
           if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
@@ -6135,10 +6027,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
           }
           promote_int_type(ctx, lhs_ty)
         }
-        @ast.BinaryOp::Mod
-        | @ast.BinaryOp::BitAnd
-        | @ast.BinaryOp::BitXor
-        | @ast.BinaryOp::BitOr => {
+        Mod | BitAnd | BitXor | BitOr => {
           let lhs_ty = type_of_expr(ctx, left)
           let rhs_ty = type_of_expr(ctx, right)
           if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
@@ -6147,12 +6036,12 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
           common_int_type(ctx, lhs_ty, rhs_ty)
         }
       }
-    @ast.Expr::Conditional(cond~, then_expr~, else_expr~, loc~, ..) => {
+    Conditional(cond~, then_expr~, else_expr~, loc~, ..) => {
       check_cond_expr(ctx, cond)
       let then_ty = type_of_expr(ctx, then_expr)
       let else_ty = type_of_expr(ctx, else_expr)
       match (strip_top_qualifiers(then_ty), strip_top_qualifiers(else_ty)) {
-        (@ast.CType::Pointer(a), @ast.CType::Pointer(b)) => {
+        (Pointer(a), Pointer(b)) => {
           if !pointer_compatible(a, b) {
             add_sem_error(ctx, loc, "conditional operator type mismatch")
           }
@@ -6164,11 +6053,11 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
           }
           return then_ty
         }
-        (@ast.CType::Pointer(_), _) =>
+        (Pointer(_), _) =>
           if is_int_like(else_ty) && is_null_pointer_expr(ctx, else_expr) {
             return then_ty
           }
-        (_, @ast.CType::Pointer(_)) =>
+        (_, Pointer(_)) =>
           if is_int_like(then_ty) && is_null_pointer_expr(ctx, then_expr) {
             return else_ty
           }
@@ -6182,7 +6071,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
       }
       then_ty
     }
-    @ast.Expr::Index(base~, index~, loc~, ..) =>
+    Index(base~, index~, loc~, ..) =>
       match
         index_access_type(
           ctx,
@@ -6193,7 +6082,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
         Some(ty) => decay_type(ty)
         None => default_int_type()
       }
-    @ast.Expr::Member(base~, name~, id~, is_arrow~, loc~, ..) => {
+    Member(base~, name~, id~, is_arrow~, loc~, ..) => {
       let base_ty = type_of_expr(ctx, base)
       if !is_arrow && !@ast.expr_is_lvalue_simple(base) {
         record_agg_temp_for_type(ctx, base_ty, loc)
@@ -6203,10 +6092,10 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
         None => default_int_type()
       }
     }
-    @ast.Expr::Call(callee~, args~, loc~, ..) => {
-      if callee is @ast.Expr::Ident(name~, id~, ..) {
+    Call(callee~, args~, loc~, ..) => {
+      if callee is Ident(name~, id~, ..) {
         match builtin_call_kind(ctx, name, id) {
-          Some(BuiltinCallKind::ChooseExpr) => {
+          Some(ChooseExpr) => {
             if args.length() != 3 {
               add_sem_error(
                 ctx, loc, "__builtin_choose_expr expects 3 arguments",
@@ -6219,7 +6108,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
             }
             return type_of_expr(ctx, args[2])
           }
-          Some(BuiltinCallKind::Expect) => {
+          Some(Expect) => {
             if args.length() != 2 {
               add_sem_error(ctx, loc, "__builtin_expect expects 2 arguments")
               return default_int_type()
@@ -6227,7 +6116,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
             ignore(type_of_expr(ctx, args[1]))
             return type_of_expr(ctx, args[0])
           }
-          Some(BuiltinCallKind::ConstantP) => {
+          Some(ConstantP) => {
             if args.length() != 1 {
               add_sem_error(ctx, loc, "__builtin_constant_p expects 1 argument")
               return default_int_type()
@@ -6235,25 +6124,25 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
             ignore(type_of_expr(ctx, args[0]))
             return default_int_type()
           }
-          Some(BuiltinCallKind::Unreachable) => {
+          Some(Unreachable) => {
             if args.length() != 0 {
               add_sem_error(ctx, loc, "__builtin_unreachable expects no args")
             }
-            return @ast.CType::Void
+            return Void
           }
-          Some(BuiltinCallKind::SyncSynchronize) => {
+          Some(SyncSynchronize) => {
             if args.length() != 0 {
               add_sem_error(ctx, loc, "__sync_synchronize expects no args")
             }
-            return @ast.CType::Void
+            return Void
           }
-          Some(BuiltinCallKind::VaStart) => {
+          Some(VaStart) => {
             if args.length() != 2 {
               add_sem_error(ctx, loc, "__builtin_va_start expects 2 arguments")
             }
             if args.length() >= 1 {
               match args[0] {
-                @ast.Expr::Ident(name=_, id=ap_id, loc=ap_loc, ..) =>
+                Ident(name=_, id=ap_id, loc=ap_loc, ..) =>
                   match lookup_local_only(ctx, ap_id) {
                     None =>
                       add_sem_error(
@@ -6272,10 +6161,9 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
             for arg in args {
               ignore(type_of_expr(ctx, arg))
             }
-            return @ast.CType::Void
+            return Void
           }
-          Some(BuiltinCallKind::FrameAddress)
-          | Some(BuiltinCallKind::ReturnAddress) => {
+          Some(FrameAddress) | Some(ReturnAddress) => {
             if args.length() != 1 {
               add_sem_error(ctx, loc, "\{name} expects 1 argument")
             } else {
@@ -6297,14 +6185,14 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
         }
       }
       let callee_ty = match callee {
-        @ast.Expr::Ident(name~, id~, loc=ident_loc, ..) =>
+        Ident(name~, id~, loc=ident_loc, ..) =>
           match lookup_value(ctx, name, id) {
             Some(ty) => ty
             None =>
               match builtin_func_sig_from_ident(ctx, name, id) {
                 Some(sig) => {
                   add_function_sig(ctx, name, id, sig, ident_loc, is_def=false)
-                  @ast.CType::Function(
+                  Function(
                     return_type=sig.return_type,
                     params=sig.params,
                     varargs=sig.varargs,
@@ -6318,10 +6206,10 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
                     params: [],
                     varargs: false,
                     is_old_style: true,
-                    call_conv: @ast.CallConv::Default,
+                    call_conv: Default,
                   }
                   add_function_sig(ctx, name, id, sig, ident_loc, is_def=false)
-                  @ast.CType::Function(
+                  Function(
                     return_type=sig.return_type,
                     params=sig.params,
                     varargs=sig.varargs,
@@ -6335,24 +6223,16 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
       }
       let callee_unqual = strip_top_qualifiers(callee_ty)
       let fn_ty = match callee_unqual {
-        @ast.CType::Function(..) => Some(callee_unqual)
-        @ast.CType::Pointer(inner) =>
+        Function(..) => Some(callee_unqual)
+        Pointer(inner) =>
           match strip_top_qualifiers(inner) {
-            @ast.CType::Function(..) => Some(strip_top_qualifiers(inner))
+            Function(..) => Some(strip_top_qualifiers(inner))
             _ => None
           }
         _ => None
       }
       match fn_ty {
-        Some(
-          @ast.CType::Function(
-            return_type~,
-            params~,
-            varargs~,
-            is_old_style~,
-            ..
-          )
-        ) => {
+        Some(Function(return_type~, params~, varargs~, is_old_style~, ..)) => {
           if !is_old_style {
             if varargs {
               if args.length() < params.length() {
@@ -6369,7 +6249,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
                 !(is_pointer_type(params[i]) &&
                 is_null_pointer_expr(ctx, args[i])) {
                 let call_name = match callee {
-                  @ast.Expr::Ident(name~, ..) => name
+                  Ident(name~, ..) => name
                   _ => "<call>"
                 }
                 add_sem_error(
@@ -6419,15 +6299,15 @@ pub fn builtin_call_kind(
     None
   } else {
     match name {
-      "__builtin_choose_expr" => Some(BuiltinCallKind::ChooseExpr)
-      "__builtin_expect" => Some(BuiltinCallKind::Expect)
-      "__builtin_constant_p" => Some(BuiltinCallKind::ConstantP)
-      "__builtin_unreachable" => Some(BuiltinCallKind::Unreachable)
-      "__builtin_va_start" => Some(BuiltinCallKind::VaStart)
-      "__builtin_va_copy" => Some(BuiltinCallKind::VaCopy)
-      "__builtin_va_end" => Some(BuiltinCallKind::VaEnd)
-      "__builtin_frame_address" => Some(BuiltinCallKind::FrameAddress)
-      "__builtin_return_address" => Some(BuiltinCallKind::ReturnAddress)
+      "__builtin_choose_expr" => Some(ChooseExpr)
+      "__builtin_expect" => Some(Expect)
+      "__builtin_constant_p" => Some(ConstantP)
+      "__builtin_unreachable" => Some(Unreachable)
+      "__builtin_va_start" => Some(VaStart)
+      "__builtin_va_copy" => Some(VaCopy)
+      "__builtin_va_end" => Some(VaEnd)
+      "__builtin_frame_address" => Some(FrameAddress)
+      "__builtin_return_address" => Some(ReturnAddress)
       _ => None
     }
   }
@@ -6503,19 +6383,19 @@ fn builtin_func_sig_by_name(name : String) -> FuncSig? {
   let sig = match name {
     "__builtin_abort" =>
       Some({
-        return_type: @ast.CType::Void,
+        return_type: Void,
         params: [],
         varargs: false,
         is_old_style: false,
-        call_conv: @ast.CallConv::Default,
+        call_conv: Default,
       })
     "__builtin_free" =>
       Some({
-        return_type: @ast.CType::Void,
+        return_type: Void,
         params: [voidp],
         varargs: false,
         is_old_style: false,
-        call_conv: @ast.CallConv::Default,
+        call_conv: Default,
       })
     "__builtin_malloc" =>
       Some({
@@ -6523,7 +6403,7 @@ fn builtin_func_sig_by_name(name : String) -> FuncSig? {
         params: [size_t],
         varargs: false,
         is_old_style: false,
-        call_conv: @ast.CallConv::Default,
+        call_conv: Default,
       })
     "__builtin_calloc" =>
       Some({
@@ -6531,7 +6411,7 @@ fn builtin_func_sig_by_name(name : String) -> FuncSig? {
         params: [size_t, size_t],
         varargs: false,
         is_old_style: false,
-        call_conv: @ast.CallConv::Default,
+        call_conv: Default,
       })
     "__builtin_realloc" =>
       Some({
@@ -6539,7 +6419,7 @@ fn builtin_func_sig_by_name(name : String) -> FuncSig? {
         params: [voidp, size_t],
         varargs: false,
         is_old_style: false,
-        call_conv: @ast.CallConv::Default,
+        call_conv: Default,
       })
     "__builtin_alloca" =>
       Some({
@@ -6547,7 +6427,7 @@ fn builtin_func_sig_by_name(name : String) -> FuncSig? {
         params: [size_t],
         varargs: false,
         is_old_style: false,
-        call_conv: @ast.CallConv::Default,
+        call_conv: Default,
       })
     "__builtin_memcpy" | "__builtin_memmove" =>
       Some({
@@ -6555,7 +6435,7 @@ fn builtin_func_sig_by_name(name : String) -> FuncSig? {
         params: [voidp, voidp, size_t],
         varargs: false,
         is_old_style: false,
-        call_conv: @ast.CallConv::Default,
+        call_conv: Default,
       })
     "__builtin_memset" =>
       Some({
@@ -6563,7 +6443,7 @@ fn builtin_func_sig_by_name(name : String) -> FuncSig? {
         params: [voidp, int_ty, size_t],
         varargs: false,
         is_old_style: false,
-        call_conv: @ast.CallConv::Default,
+        call_conv: Default,
       })
     "__builtin_memcmp" =>
       Some({
@@ -6571,31 +6451,31 @@ fn builtin_func_sig_by_name(name : String) -> FuncSig? {
         params: [voidp, voidp, size_t],
         varargs: false,
         is_old_style: false,
-        call_conv: @ast.CallConv::Default,
+        call_conv: Default,
       })
     "__builtin_va_start" =>
       Some({
-        return_type: @ast.CType::Void,
+        return_type: Void,
         params: [voidp, int_ty],
         varargs: false,
         is_old_style: false,
-        call_conv: @ast.CallConv::Default,
+        call_conv: Default,
       })
     "__builtin_va_copy" =>
       Some({
-        return_type: @ast.CType::Void,
+        return_type: Void,
         params: [voidp, voidp],
         varargs: false,
         is_old_style: false,
-        call_conv: @ast.CallConv::Default,
+        call_conv: Default,
       })
     "__builtin_va_end" =>
       Some({
-        return_type: @ast.CType::Void,
+        return_type: Void,
         params: [voidp],
         varargs: false,
         is_old_style: false,
-        call_conv: @ast.CallConv::Default,
+        call_conv: Default,
       })
     "__builtin_strlen" =>
       Some({
@@ -6603,7 +6483,7 @@ fn builtin_func_sig_by_name(name : String) -> FuncSig? {
         params: [charp],
         varargs: false,
         is_old_style: false,
-        call_conv: @ast.CallConv::Default,
+        call_conv: Default,
       })
     "__builtin_strcpy"
     | "__builtin_strncpy"
@@ -6618,7 +6498,7 @@ fn builtin_func_sig_by_name(name : String) -> FuncSig? {
         },
         varargs: false,
         is_old_style: false,
-        call_conv: @ast.CallConv::Default,
+        call_conv: Default,
       })
     "__builtin_strcmp" =>
       Some({
@@ -6626,7 +6506,7 @@ fn builtin_func_sig_by_name(name : String) -> FuncSig? {
         params: [charp, charp],
         varargs: false,
         is_old_style: false,
-        call_conv: @ast.CallConv::Default,
+        call_conv: Default,
       })
     "__builtin_strncmp" =>
       Some({
@@ -6634,7 +6514,7 @@ fn builtin_func_sig_by_name(name : String) -> FuncSig? {
         params: [charp, charp, size_t],
         varargs: false,
         is_old_style: false,
-        call_conv: @ast.CallConv::Default,
+        call_conv: Default,
       })
     "__builtin_strchr" | "__builtin_strrchr" =>
       Some({
@@ -6642,7 +6522,7 @@ fn builtin_func_sig_by_name(name : String) -> FuncSig? {
         params: [charp, int_ty],
         varargs: false,
         is_old_style: false,
-        call_conv: @ast.CallConv::Default,
+        call_conv: Default,
       })
     "__builtin_strdup" =>
       Some({
@@ -6650,7 +6530,7 @@ fn builtin_func_sig_by_name(name : String) -> FuncSig? {
         params: [charp],
         varargs: false,
         is_old_style: false,
-        call_conv: @ast.CallConv::Default,
+        call_conv: Default,
       })
     _ => None
   }
@@ -6720,7 +6600,7 @@ pub fn atomic_builtin_return_type(
       'a' | 'A' => {
         let ptr_ty = type_of_expr(ctx, args[i])
         match strip_top_qualifiers(ptr_ty) {
-          @ast.CType::Pointer(pointee) => {
+          Pointer(pointee) => {
             atom_type = Some(pointee)
             match type_size_align(ctx, pointee, loc) {
               None => atom_size = 0
@@ -6737,7 +6617,7 @@ pub fn atomic_builtin_return_type(
             }
             if !allow_pointer_target {
               match strip_top_qualifiers(pointee) {
-                @ast.CType::Pointer(_) =>
+                Pointer(_) =>
                   add_sem_error(
                     ctx,
                     loc,
@@ -6760,7 +6640,7 @@ pub fn atomic_builtin_return_type(
       'p' | 'l' | 's' => {
         let ptr_ty = type_of_expr(ctx, args[i])
         match strip_top_qualifiers(ptr_ty) {
-          @ast.CType::Pointer(pointee) => {
+          Pointer(pointee) => {
             if atom_size > 0 {
               if type_size_align(ctx, pointee, loc) is Some((size, _)) {
                 if size != atom_size {
@@ -6817,8 +6697,8 @@ pub fn atomic_builtin_return_type(
   }
   let ret = template[dot_index + 1]
   match ret {
-    '?' => Some(@ast.CType::Void)
-    'b' => Some(@ast.CType::Bool)
+    '?' => Some(Void)
+    'b' => Some(Bool)
     'v' =>
       match atom_type {
         None => Some(default_int_type())
@@ -6841,7 +6721,7 @@ fn type_of_compound_assign(
     Some(ty) => ty
   }
   match strip_top_qualifiers(lhs_ty) {
-    @ast.CType::Array(..) | @ast.CType::Function(..) => {
+    Array(..) | Function(..) => {
       add_sem_error(ctx, loc, "assignment to non-modifiable lvalue")
       return default_int_type()
     }
@@ -6849,9 +6729,9 @@ fn type_of_compound_assign(
   }
   let rhs_ty = type_of_expr(ctx, right)
   let result_ty = match op {
-    @ast.BinaryOp::AddAssign =>
+    AddAssign =>
       match strip_top_qualifiers(lhs_ty) {
-        @ast.CType::Pointer(pointee) =>
+        Pointer(pointee) =>
           if is_int_like(rhs_ty) {
             @ast.CType::Pointer(pointee)
           } else {
@@ -6866,11 +6746,11 @@ fn type_of_compound_assign(
             default_int_type()
           }
       }
-    @ast.BinaryOp::SubAssign =>
+    SubAssign =>
       match strip_top_qualifiers(lhs_ty) {
-        @ast.CType::Pointer(pointee) =>
+        Pointer(pointee) =>
           if is_int_like(rhs_ty) {
-            @ast.CType::Pointer(pointee)
+            Pointer(pointee)
           } else {
             add_sem_error(ctx, loc, "invalid operands to '-='")
             default_int_type()
@@ -6883,49 +6763,49 @@ fn type_of_compound_assign(
             default_int_type()
           }
       }
-    @ast.BinaryOp::MulAssign => {
+    MulAssign => {
       if !is_arithmetic(lhs_ty) || !is_arithmetic(rhs_ty) {
         add_sem_error(ctx, loc, "invalid operands to '*='")
       }
       arithmetic_result_type(ctx, lhs_ty, rhs_ty)
     }
-    @ast.BinaryOp::DivAssign => {
+    DivAssign => {
       if !is_arithmetic(lhs_ty) || !is_arithmetic(rhs_ty) {
         add_sem_error(ctx, loc, "invalid operands to '/='")
       }
       arithmetic_result_type(ctx, lhs_ty, rhs_ty)
     }
-    @ast.BinaryOp::ModAssign => {
+    ModAssign => {
       if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
         add_sem_error(ctx, loc, "invalid operands to '%='")
       }
       common_int_type(ctx, lhs_ty, rhs_ty)
     }
-    @ast.BinaryOp::ShlAssign => {
+    ShlAssign => {
       if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
         add_sem_error(ctx, loc, "invalid operands to '<<='")
       }
       common_int_type(ctx, lhs_ty, rhs_ty)
     }
-    @ast.BinaryOp::ShrAssign => {
+    ShrAssign => {
       if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
         add_sem_error(ctx, loc, "invalid operands to '>>='")
       }
       common_int_type(ctx, lhs_ty, rhs_ty)
     }
-    @ast.BinaryOp::BitAndAssign => {
+    BitAndAssign => {
       if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
         add_sem_error(ctx, loc, "invalid operands to '&='")
       }
       common_int_type(ctx, lhs_ty, rhs_ty)
     }
-    @ast.BinaryOp::BitXorAssign => {
+    BitXorAssign => {
       if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
         add_sem_error(ctx, loc, "invalid operands to '^='")
       }
       common_int_type(ctx, lhs_ty, rhs_ty)
     }
-    @ast.BinaryOp::BitOrAssign => {
+    BitOrAssign => {
       if !is_int_like(lhs_ty) || !is_int_like(rhs_ty) {
         add_sem_error(ctx, loc, "invalid operands to '|='")
       }
@@ -7015,35 +6895,32 @@ fn merge_global_decl_type(
   incoming : @ast.CType,
 ) -> @ast.CType {
   match (existing, incoming) {
-    (@ast.CType::Qualified(qual~, base~), _) => {
+    (Qualified(qual~, base~), _) => {
       let merged = merge_global_decl_type(base, incoming)
-      @ast.CType::Qualified(qual~, base=merged)
+      Qualified(qual~, base=merged)
     }
-    (_, @ast.CType::Qualified(qual~, base~)) => {
+    (_, Qualified(qual~, base~)) => {
       let merged = merge_global_decl_type(existing, base)
-      @ast.CType::Qualified(qual~, base=merged)
+      Qualified(qual~, base=merged)
     }
     (
-      @ast.CType::Attributed(attrs=attrs_a, base=base_a),
-      @ast.CType::Attributed(attrs=attrs_b, base=base_b),
+      Attributed(attrs=attrs_a, base=base_a),
+      Attributed(attrs=attrs_b, base=base_b),
     ) => {
       let merged_base = merge_global_decl_type(base_a, base_b)
-      @ast.CType::Attributed(
-        attrs=@ast.merge_attrs(attrs_a, attrs_b),
-        base=merged_base,
-      )
+      Attributed(attrs=@ast.merge_attrs(attrs_a, attrs_b), base=merged_base)
     }
-    (@ast.CType::Attributed(attrs=attrs_a, base=base_a), _) => {
+    (Attributed(attrs=attrs_a, base=base_a), _) => {
       let merged = merge_global_decl_type(base_a, incoming)
-      @ast.CType::Attributed(attrs=attrs_a, base=merged)
+      Attributed(attrs=attrs_a, base=merged)
     }
-    (_, @ast.CType::Attributed(attrs=attrs_b, base=base_b)) => {
+    (_, Attributed(attrs=attrs_b, base=base_b)) => {
       let merged = merge_global_decl_type(existing, base_b)
-      @ast.CType::Attributed(attrs=attrs_b, base=merged)
+      Attributed(attrs=attrs_b, base=merged)
     }
     (
-      @ast.CType::Array(elem=elem_a, size=size_a, size_expr=size_expr_a),
-      @ast.CType::Array(elem=elem_b, size=size_b, size_expr=size_expr_b),
+      Array(elem=elem_a, size=size_a, size_expr=size_expr_a),
+      Array(elem=elem_b, size=size_b, size_expr=size_expr_b),
     ) => {
       let merged_elem = merge_global_decl_type(elem_a, elem_b)
       let merged_size = match size_a {
@@ -7054,14 +6931,10 @@ fn merge_global_decl_type(
         Some(_) => size_expr_a
         None => size_expr_b
       }
-      @ast.CType::Array(
-        elem=merged_elem,
-        size=merged_size,
-        size_expr=merged_size_expr,
-      )
+      Array(elem=merged_elem, size=merged_size, size_expr=merged_size_expr)
     }
-    (@ast.CType::Pointer(inner_a), @ast.CType::Pointer(inner_b)) =>
-      @ast.CType::Pointer(merge_global_decl_type(inner_a, inner_b))
+    (Pointer(inner_a), Pointer(inner_b)) =>
+      Pointer(merge_global_decl_type(inner_a, inner_b))
     _ => existing
   }
 }
@@ -7088,7 +6961,7 @@ fn lookup_value(ctx : SemContext, name : String, id : Int) -> @ast.CType? {
     }
     if sig is Some(value) {
       found = Some(
-        @ast.CType::Function(
+        Function(
           return_type=value.return_type,
           params=value.params,
           varargs=value.varargs,
@@ -7110,7 +6983,7 @@ fn lookup_value(ctx : SemContext, name : String, id : Int) -> @ast.CType? {
         None => 1
         Some(func) => func.length() + 1
       }
-      found = Some(@ast.CType::Array(elem~, size=Some(len), size_expr=None))
+      found = Some(Array(elem~, size=Some(len), size_expr=None))
     } else if name == "__FUNCTION__" || name == "__PRETTY_FUNCTION__" {
       let elem = @ast.apply_qualifiers(
         char_type(),
@@ -7120,7 +6993,7 @@ fn lookup_value(ctx : SemContext, name : String, id : Int) -> @ast.CType? {
         None => 1
         Some(func) => func.length() + 1
       }
-      found = Some(@ast.CType::Array(elem~, size=Some(len), size_expr=None))
+      found = Some(Array(elem~, size=Some(len), size_expr=None))
     }
   }
   found
@@ -7170,20 +7043,20 @@ pub fn add_sem_error(
 ///|
 fn int_kind_to_string(kind : @ast.CIntKind) -> String {
   match kind {
-    @ast.CIntKind::Char => "char"
-    @ast.CIntKind::Short => "short"
-    @ast.CIntKind::Int => "int"
-    @ast.CIntKind::Long => "long"
-    @ast.CIntKind::LongLong => "long long"
+    Char => "char"
+    Short => "short"
+    Int => "int"
+    Long => "long"
+    LongLong => "long long"
   }
 }
 
 ///|
 fn float_kind_to_string(kind : @ast.CFloatKind) -> String {
   match kind {
-    @ast.CFloatKind::Float => "float"
-    @ast.CFloatKind::Double => "double"
-    @ast.CFloatKind::LongDouble => "long double"
+    Float => "float"
+    Double => "double"
+    LongDouble => "long double"
   }
 }
 
@@ -7212,12 +7085,11 @@ fn qual_to_string(qual : @ast.TypeQual) -> String {
 ///|
 fn type_to_string(ty : @ast.CType) -> String {
   match ty {
-    @ast.CType::Qualified(qual~, base~) =>
-      qual_to_string(qual) + type_to_string(base)
-    @ast.CType::Attributed(base~, ..) => type_to_string(base)
-    @ast.CType::Void => "void"
-    @ast.CType::Bool => "_Bool"
-    @ast.CType::Int(kind~, unsigned~) => {
+    Qualified(qual~, base~) => qual_to_string(qual) + type_to_string(base)
+    Attributed(base~, ..) => type_to_string(base)
+    Void => "void"
+    Bool => "_Bool"
+    Int(kind~, unsigned~) => {
       let base = int_kind_to_string(kind)
       if unsigned {
         "unsigned " + base
@@ -7225,18 +7097,18 @@ fn type_to_string(ty : @ast.CType) -> String {
         base
       }
     }
-    @ast.CType::Float(kind~) => float_kind_to_string(kind)
-    @ast.CType::Pointer(inner) => type_to_string(inner) + "*"
-    @ast.CType::Array(elem~, size~, ..) =>
+    Float(kind~) => float_kind_to_string(kind)
+    Pointer(inner) => type_to_string(inner) + "*"
+    Array(elem~, size~, ..) =>
       match size {
         None => type_to_string(elem) + "[]"
         Some(n) => type_to_string(elem) + "[\{n}]"
       }
-    @ast.CType::Struct(name~, ..) => "struct " + name
-    @ast.CType::Union(name~, ..) => "union " + name
-    @ast.CType::Enum(name~, ..) => "enum " + name
-    @ast.CType::TypeofExpr(..) => "typeof"
-    @ast.CType::Function(return_type~, params~, varargs~, is_old_style~, ..) => {
+    Struct(name~, ..) => "struct " + name
+    Union(name~, ..) => "union " + name
+    Enum(name~, ..) => "enum " + name
+    TypeofExpr(..) => "typeof"
+    Function(return_type~, params~, varargs~, is_old_style~, ..) => {
       let args = params.map(type_to_string).join(", ")
       let rendered = if is_old_style {
         ""

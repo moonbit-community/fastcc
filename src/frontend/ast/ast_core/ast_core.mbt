@@ -33,22 +33,17 @@ pub(all) enum CallConv {
 ///|
 pub fn normalize_call_conv(call_conv : CallConv?) -> CallConv {
   match call_conv {
-    None => CallConv::Default
-    Some(CallConv::Default) => CallConv::Default
-    Some(CallConv::Cdecl) => CallConv::Default
-    Some(CallConv::Regparm(count~)) =>
-      if count <= 0 {
-        CallConv::Default
-      } else {
-        CallConv::Regparm(count~)
-      }
+    None => Default
+    Some(Default) => Default
+    Some(Cdecl) => Default
+    Some(Regparm(count~)) => if count <= 0 { Default } else { Regparm(count~) }
     Some(conv) => conv
   }
 }
 
 ///|
 pub fn merge_call_conv(existing : CallConv, incoming : CallConv) -> CallConv {
-  if existing == CallConv::Default {
+  if existing == Default {
     incoming
   } else {
     existing
@@ -252,42 +247,31 @@ pub fn apply_type_attrs(ty : CType, attrs : Attributes) -> CType {
     return ty
   }
   match ty {
-    CType::Struct(name~, id~, fields~, attrs=existing) =>
-      CType::Struct(name~, id~, fields~, attrs=merge_attrs(existing, attrs))
-    CType::Union(name~, id~, fields~, attrs=existing) =>
-      CType::Union(name~, id~, fields~, attrs=merge_attrs(existing, attrs))
-    CType::Attributed(attrs=existing, base~) =>
-      CType::Attributed(attrs=merge_attrs(existing, attrs), base~)
-    _ => CType::Attributed(attrs~, base=ty)
+    Struct(name~, id~, fields~, attrs=existing) =>
+      Struct(name~, id~, fields~, attrs=merge_attrs(existing, attrs))
+    Union(name~, id~, fields~, attrs=existing) =>
+      Union(name~, id~, fields~, attrs=merge_attrs(existing, attrs))
+    Attributed(attrs=existing, base~) =>
+      Attributed(attrs=merge_attrs(existing, attrs), base~)
+    _ => Attributed(attrs~, base=ty)
   }
 }
 
 ///|
 pub fn apply_call_conv_to_type(ty : CType, call_conv : CallConv) -> CType {
-  if call_conv == CallConv::Default {
+  if call_conv == Default {
     return ty
   }
   match ty {
-    CType::Qualified(qual~, base~) =>
-      CType::Qualified(qual~, base=apply_call_conv_to_type(base, call_conv))
-    CType::Attributed(attrs~, base~) =>
-      CType::Attributed(attrs~, base=apply_call_conv_to_type(base, call_conv))
-    CType::Pointer(inner) =>
-      CType::Pointer(apply_call_conv_to_type(inner, call_conv))
-    CType::Array(elem~, size~, size_expr~) =>
-      CType::Array(
-        elem=apply_call_conv_to_type(elem, call_conv),
-        size~,
-        size_expr~,
-      )
-    CType::Function(
-      return_type~,
-      params~,
-      varargs~,
-      is_old_style~,
-      call_conv=existing
-    ) =>
-      CType::Function(
+    Qualified(qual~, base~) =>
+      Qualified(qual~, base=apply_call_conv_to_type(base, call_conv))
+    Attributed(attrs~, base~) =>
+      Attributed(attrs~, base=apply_call_conv_to_type(base, call_conv))
+    Pointer(inner) => Pointer(apply_call_conv_to_type(inner, call_conv))
+    Array(elem~, size~, size_expr~) =>
+      Array(elem=apply_call_conv_to_type(elem, call_conv), size~, size_expr~)
+    Function(return_type~, params~, varargs~, is_old_style~, call_conv=existing) =>
+      Function(
         return_type~,
         params~,
         varargs~,
@@ -651,10 +635,7 @@ pub(all) enum Stmt {
 } derive(Show, Eq, ToJson)
 
 ///|
-let default_int_type_value : CType = CType::Int(
-  kind=CIntKind::Int,
-  unsigned=false,
-)
+let default_int_type_value : CType = Int(kind=Int, unsigned=false)
 
 ///|
 pub fn default_int_type() -> CType {

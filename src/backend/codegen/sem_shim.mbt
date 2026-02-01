@@ -8,9 +8,6 @@ type FieldAccessInfo = @sem.FieldAccessInfo
 type RecordDef = @sem.RecordDef
 
 ///|
-type BuiltinCallKind = @sem.BuiltinCallKind
-
-///|
 let add_sem_error = @sem.add_sem_error
 
 ///|

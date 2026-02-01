@@ -15,19 +15,19 @@ fn tok_kind(kind : @tokens.TokenKind) -> @tokens.Token {
 ///|
 fn tok_int(pp : @preproc.Preprocessor, text : String) -> @tokens.Token {
   let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, text)
-  @preproc.make_builtin_token(@tokens.TokenKind::IntLit, lexeme_id~)
+  @preproc.make_builtin_token(IntLit, lexeme_id~)
 }
 
 ///|
 fn tok_char(pp : @preproc.Preprocessor, text : String) -> @tokens.Token {
   let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, text)
-  @preproc.make_builtin_token(@tokens.TokenKind::CharLit, lexeme_id~)
+  @preproc.make_builtin_token(CharLit, lexeme_id~)
 }
 
 ///|
 fn tok_ident(pp : @preproc.Preprocessor, name : String) -> @tokens.Token {
   let (_, id) = pp.interner.intern_view_with_id(name[:])
-  @preproc.make_builtin_token(@tokens.TokenKind::Ident, id~)
+  @preproc.make_builtin_token(Ident, id~)
 }
 
 ///|
@@ -35,43 +35,43 @@ test "preproc if expr unsigned ops" {
   let (pp, bag) = new_pp()
   let tokens : Array[@tokens.Token] = [
     tok_int(pp, "6U"),
-    tok_kind(@tokens.TokenKind::Slash),
+    tok_kind(Slash),
     tok_int(pp, "3U"),
-    tok_kind(@tokens.TokenKind::Eq),
+    tok_kind(Eq),
     tok_int(pp, "2"),
-    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_kind(AmpAmp),
     tok_int(pp, "7U"),
-    tok_kind(@tokens.TokenKind::Percent),
+    tok_kind(Percent),
     tok_int(pp, "3U"),
-    tok_kind(@tokens.TokenKind::Eq),
+    tok_kind(Eq),
     tok_int(pp, "1"),
-    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_kind(AmpAmp),
     tok_int(pp, "8U"),
-    tok_kind(@tokens.TokenKind::ShiftRight),
+    tok_kind(ShiftRight),
     tok_int(pp, "2"),
-    tok_kind(@tokens.TokenKind::Eq),
+    tok_kind(Eq),
     tok_int(pp, "2"),
-    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_kind(AmpAmp),
     tok_int(pp, "3U"),
-    tok_kind(@tokens.TokenKind::Lt),
+    tok_kind(Lt),
     tok_int(pp, "4U"),
-    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_kind(AmpAmp),
     tok_int(pp, "4U"),
-    tok_kind(@tokens.TokenKind::Le),
+    tok_kind(Le),
     tok_int(pp, "4U"),
-    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_kind(AmpAmp),
     tok_int(pp, "5U"),
-    tok_kind(@tokens.TokenKind::Gt),
+    tok_kind(Gt),
     tok_int(pp, "4U"),
-    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_kind(AmpAmp),
     tok_int(pp, "5U"),
-    tok_kind(@tokens.TokenKind::Ge),
+    tok_kind(Ge),
     tok_int(pp, "5U"),
-    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_kind(AmpAmp),
     tok_int(pp, "5"),
-    tok_kind(@tokens.TokenKind::Minus),
+    tok_kind(Minus),
     tok_int(pp, "3"),
-    tok_kind(@tokens.TokenKind::Eq),
+    tok_kind(Eq),
     tok_int(pp, "2"),
   ]
   let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
@@ -84,35 +84,35 @@ test "preproc if expr char escapes" {
   let (pp, bag) = new_pp()
   let tokens : Array[@tokens.Token] = [
     tok_char(pp, "'\\a'"),
-    tok_kind(@tokens.TokenKind::Eq),
+    tok_kind(Eq),
     tok_int(pp, "7"),
-    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_kind(AmpAmp),
     tok_char(pp, "'\\b'"),
-    tok_kind(@tokens.TokenKind::Eq),
+    tok_kind(Eq),
     tok_int(pp, "8"),
-    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_kind(AmpAmp),
     tok_char(pp, "'\\f'"),
-    tok_kind(@tokens.TokenKind::Eq),
+    tok_kind(Eq),
     tok_int(pp, "12"),
-    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_kind(AmpAmp),
     tok_char(pp, "'\\r'"),
-    tok_kind(@tokens.TokenKind::Eq),
+    tok_kind(Eq),
     tok_int(pp, "13"),
-    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_kind(AmpAmp),
     tok_char(pp, "'\\v'"),
-    tok_kind(@tokens.TokenKind::Eq),
+    tok_kind(Eq),
     tok_int(pp, "11"),
-    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_kind(AmpAmp),
     tok_char(pp, "'\\q'"),
-    tok_kind(@tokens.TokenKind::Eq),
+    tok_kind(Eq),
     tok_int(pp, "113"),
-    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_kind(AmpAmp),
     tok_char(pp, "'\\\\'"),
-    tok_kind(@tokens.TokenKind::Eq),
+    tok_kind(Eq),
     tok_int(pp, "92"),
-    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_kind(AmpAmp),
     tok_char(pp, "'\\xAf'"),
-    tok_kind(@tokens.TokenKind::Eq),
+    tok_kind(Eq),
     tok_int(pp, "175"),
   ]
   let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
@@ -143,9 +143,7 @@ test "preproc if expr macro non-int" {
 ///|
 test "preproc if expr macro invalid id" {
   let (pp, bag) = new_pp()
-  let tokens : Array[@tokens.Token] = [
-    @preproc.make_builtin_token(@tokens.TokenKind::Ident),
-  ]
+  let tokens : Array[@tokens.Token] = [@preproc.make_builtin_token(Ident)]
   let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
   assert_true(!ok)
   assert_true(!@diag.has_errors(bag))
@@ -165,7 +163,7 @@ test "preproc if expr defined missing rparen" {
   let (pp, bag) = new_pp()
   let tokens : Array[@tokens.Token] = [
     tok_ident(pp, "defined"),
-    tok_kind(@tokens.TokenKind::LParen),
+    tok_kind(LParen),
     tok_ident(pp, "FOO"),
   ]
   let _ = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
@@ -177,8 +175,8 @@ test "preproc if expr defined empty" {
   let (pp, bag) = new_pp()
   let tokens : Array[@tokens.Token] = [
     tok_ident(pp, "defined"),
-    tok_kind(@tokens.TokenKind::LParen),
-    tok_kind(@tokens.TokenKind::RParen),
+    tok_kind(LParen),
+    tok_kind(RParen),
   ]
   let _ = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
   assert_true(@diag.has_errors(bag))
@@ -187,7 +185,7 @@ test "preproc if expr defined empty" {
 ///|
 test "preproc if expr rparen token" {
   let (pp, bag) = new_pp()
-  let tokens : Array[@tokens.Token] = [tok_kind(@tokens.TokenKind::RParen)]
+  let tokens : Array[@tokens.Token] = [tok_kind(RParen)]
   let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
   assert_true(!ok)
   assert_true(!@diag.has_errors(bag))
@@ -198,7 +196,7 @@ test "preproc if expr skip paren expr" {
   let (pp, bag) = new_pp()
   let tokens : Array[@tokens.Token] = [
     tok_ident(pp, "FOO"),
-    tok_kind(@tokens.TokenKind::LParen),
+    tok_kind(LParen),
     tok_int(pp, "1"),
   ]
   let _ = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
@@ -208,7 +206,7 @@ test "preproc if expr skip paren expr" {
 ///|
 test "preproc if expr unexpected token" {
   let (pp, bag) = new_pp()
-  let tokens : Array[@tokens.Token] = [tok_kind(@tokens.TokenKind::Comma)]
+  let tokens : Array[@tokens.Token] = [tok_kind(Comma)]
   let _ = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
   assert_true(@diag.has_errors(bag))
 }
@@ -216,7 +214,7 @@ test "preproc if expr unexpected token" {
 ///|
 test "preproc if expr missing operand" {
   let (pp, bag) = new_pp()
-  let tokens : Array[@tokens.Token] = [tok_kind(@tokens.TokenKind::Plus)]
+  let tokens : Array[@tokens.Token] = [tok_kind(Plus)]
   let _ = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
   assert_true(@diag.has_errors(bag))
 }
@@ -225,9 +223,9 @@ test "preproc if expr missing operand" {
 test "preproc if expr paren resync" {
   let (pp, bag) = new_pp()
   let tokens : Array[@tokens.Token] = [
-    tok_kind(@tokens.TokenKind::LParen),
+    tok_kind(LParen),
     tok_int(pp, "1"),
-    tok_kind(@tokens.TokenKind::Plus),
+    tok_kind(Plus),
     tok_int(pp, "2"),
   ]
   let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
@@ -239,10 +237,10 @@ test "preproc if expr paren resync" {
 test "preproc if expr paren resync trailing rparen" {
   let (pp, bag) = new_pp()
   let tokens : Array[@tokens.Token] = [
-    tok_kind(@tokens.TokenKind::LParen),
+    tok_kind(LParen),
     tok_int(pp, "1"),
-    tok_kind(@tokens.TokenKind::Comma),
-    tok_kind(@tokens.TokenKind::RParen),
+    tok_kind(Comma),
+    tok_kind(RParen),
   ]
   let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
   assert_true(ok)
@@ -254,11 +252,11 @@ test "preproc if expr skip paren nesting" {
   let (pp, bag) = new_pp()
   let tokens : Array[@tokens.Token] = [
     tok_ident(pp, "FOO"),
-    tok_kind(@tokens.TokenKind::LParen),
-    tok_kind(@tokens.TokenKind::LParen),
+    tok_kind(LParen),
+    tok_kind(LParen),
     tok_int(pp, "1"),
-    tok_kind(@tokens.TokenKind::RParen),
-    tok_kind(@tokens.TokenKind::RParen),
+    tok_kind(RParen),
+    tok_kind(RParen),
   ]
   let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
   assert_true(!ok)
@@ -270,7 +268,7 @@ test "preproc if expr subtraction" {
   let (pp, bag) = new_pp()
   let tokens : Array[@tokens.Token] = [
     tok_int(pp, "5"),
-    tok_kind(@tokens.TokenKind::Minus),
+    tok_kind(Minus),
     tok_int(pp, "3"),
   ]
   let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
@@ -283,11 +281,11 @@ test "preproc if expr division and modulo" {
   let (pp, bag) = new_pp()
   let tokens : Array[@tokens.Token] = [
     tok_int(pp, "6U"),
-    tok_kind(@tokens.TokenKind::Slash),
+    tok_kind(Slash),
     tok_int(pp, "3U"),
-    tok_kind(@tokens.TokenKind::AmpAmp),
+    tok_kind(AmpAmp),
     tok_int(pp, "7U"),
-    tok_kind(@tokens.TokenKind::Percent),
+    tok_kind(Percent),
     tok_int(pp, "3U"),
   ]
   let ok = @preproc.eval_if_expr(pp, tokens, @source.dummy_loc(0))
@@ -300,8 +298,8 @@ test "preproc if expr break on rparen" {
   let (pp_and, bag_and) = new_pp()
   let tokens_and : Array[@tokens.Token] = [
     tok_int(pp_and, "1"),
-    tok_kind(@tokens.TokenKind::Amp),
-    tok_kind(@tokens.TokenKind::RParen),
+    tok_kind(Amp),
+    tok_kind(RParen),
   ]
   let ok_and = @preproc.eval_if_expr(pp_and, tokens_and, @source.dummy_loc(0))
   assert_true(ok_and)
@@ -309,8 +307,8 @@ test "preproc if expr break on rparen" {
   let (pp_xor, bag_xor) = new_pp()
   let tokens_xor : Array[@tokens.Token] = [
     tok_int(pp_xor, "1"),
-    tok_kind(@tokens.TokenKind::Caret),
-    tok_kind(@tokens.TokenKind::RParen),
+    tok_kind(Caret),
+    tok_kind(RParen),
   ]
   let ok_xor = @preproc.eval_if_expr(pp_xor, tokens_xor, @source.dummy_loc(0))
   assert_true(ok_xor)
@@ -318,8 +316,8 @@ test "preproc if expr break on rparen" {
   let (pp_or, bag_or) = new_pp()
   let tokens_or : Array[@tokens.Token] = [
     tok_int(pp_or, "1"),
-    tok_kind(@tokens.TokenKind::Pipe),
-    tok_kind(@tokens.TokenKind::RParen),
+    tok_kind(Pipe),
+    tok_kind(RParen),
   ]
   let ok_or = @preproc.eval_if_expr(pp_or, tokens_or, @source.dummy_loc(0))
   assert_true(ok_or)

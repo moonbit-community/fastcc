@@ -64,8 +64,8 @@ pub fn apply_qualifiers(ty : CType, qual : TypeQual) -> CType {
     return ty
   }
   match ty {
-    CType::Qualified(qual=existing, base~) =>
-      CType::Qualified(qual=merge_qual(existing, qual), base~)
-    _ => CType::Qualified(qual~, base=ty)
+    Qualified(qual=existing, base~) =>
+      Qualified(qual=merge_qual(existing, qual), base~)
+    _ => Qualified(qual~, base=ty)
   }
 }

@@ -16,7 +16,7 @@ fn run_pp_collect(
   let kinds : Array[@tokens.TokenKind] = []
   while true {
     let tok = @preproc.next_pp_token(pp)
-    if tok.kind == @tokens.TokenKind::Eof {
+    if tok.kind == Eof {
       break
     }
     kinds.push(tok.kind)
@@ -36,7 +36,7 @@ test "preproc directive hash newline" {
   let (bag, kinds) = run_pp_collect("#\nint x;", [])
   assert_true(!@diag.has_errors(bag))
   assert_true(kinds.length() > 0)
-  assert_eq(kinds[0], @tokens.TokenKind::KwInt)
+  assert_eq(kinds[0], KwInt)
 }
 
 ///|

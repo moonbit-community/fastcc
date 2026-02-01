@@ -3,9 +3,9 @@ test "ast attrs and call conv helpers" {
   let empty = @ast.empty_attrs()
   assert_true(@ast.attrs_is_empty(empty))
   let attrs = @ast.attrs_with(
-    aligned=Some(@ast.AlignSpec::Default),
+    aligned=Some(Default),
     packed=true,
-    visibility=Some(@ast.Visibility::Hidden),
+    visibility=Some(Hidden),
     section=Some("sec"),
   )
   assert_true(!@ast.attrs_is_empty(attrs))
@@ -13,10 +13,10 @@ test "ast attrs and call conv helpers" {
   let base_int = @ast.default_int_type()
   let applied = @ast.apply_type_attrs(base_int, attrs)
   match applied {
-    @ast.CType::Attributed(..) => ()
+    Attributed(..) => ()
     _ => fail("expected attributed type")
   }
-  let base_struct : @ast.CType = @ast.CType::Struct(
+  let base_struct : @ast.CType = Struct(
     name="S",
     id=1,
     fields=None,
@@ -24,10 +24,10 @@ test "ast attrs and call conv helpers" {
   )
   let merged_struct = @ast.apply_type_attrs(base_struct, attrs)
   match merged_struct {
-    @ast.CType::Struct(attrs=merged, ..) => assert_true(merged.packed)
+    Struct(attrs=merged, ..) => assert_true(merged.packed)
     _ => fail("expected struct attrs")
   }
-  let base_union : @ast.CType = @ast.CType::Union(
+  let base_union : @ast.CType = Union(
     name="U",
     id=2,
     fields=None,
@@ -35,49 +35,37 @@ test "ast attrs and call conv helpers" {
   )
   let merged_union = @ast.apply_type_attrs(base_union, attrs)
   match merged_union {
-    @ast.CType::Union(attrs=merged, ..) => assert_true(merged.packed)
+    Union(attrs=merged, ..) => assert_true(merged.packed)
     _ => fail("expected union attrs")
   }
-  let fn_ty : @ast.CType = @ast.CType::Function(
+  let fn_ty : @ast.CType = Function(
     return_type=base_int,
     params=[],
     varargs=false,
     is_old_style=false,
-    call_conv=@ast.CallConv::Default,
+    call_conv=Default,
   )
-  let updated = @ast.apply_call_conv_to_type(fn_ty, @ast.CallConv::Cdecl)
+  let updated = @ast.apply_call_conv_to_type(fn_ty, Cdecl)
   match updated {
-    @ast.CType::Function(call_conv=@ast.CallConv::Cdecl, ..) => ()
+    Function(call_conv=Cdecl, ..) => ()
     _ => fail("expected cdecl call conv")
   }
-  assert_eq(@ast.normalize_call_conv(None), @ast.CallConv::Default)
-  assert_eq(
-    @ast.normalize_call_conv(Some(@ast.CallConv::Default)),
-    @ast.CallConv::Default,
-  )
-  assert_eq(
-    @ast.normalize_call_conv(Some(@ast.CallConv::Regparm(count=2))),
-    @ast.CallConv::Regparm(count=2),
-  )
-  assert_eq(
-    @ast.normalize_call_conv(Some(@ast.CallConv::Regparm(count=0))),
-    @ast.CallConv::Default,
-  )
-  assert_eq(
-    @ast.merge_call_conv(@ast.CallConv::Cdecl, @ast.CallConv::Stdcall),
-    @ast.CallConv::Cdecl,
-  )
+  assert_eq(@ast.normalize_call_conv(None), Default)
+  assert_eq(@ast.normalize_call_conv(Some(Default)), Default)
+  assert_eq(@ast.normalize_call_conv(Some(Regparm(count=2))), Regparm(count=2))
+  assert_eq(@ast.normalize_call_conv(Some(Regparm(count=0))), Default)
+  assert_eq(@ast.merge_call_conv(Cdecl, Stdcall), Cdecl)
   let base_attrs = @ast.attrs_with(
-    visibility=Some(@ast.Visibility::Hidden),
-    call_conv=Some(@ast.CallConv::Cdecl),
+    visibility=Some(Hidden),
+    call_conv=Some(Cdecl),
   )
   let incoming_attrs = @ast.attrs_with(
-    aligned=Some(@ast.AlignSpec::Default),
+    aligned=Some(Default),
     section=Some("sec"),
     alias_name=Some("alias"),
     asm_label=Some("asm"),
     cleanup=Some("cleanup"),
-    call_conv=Some(@ast.CallConv::Stdcall),
+    call_conv=Some(Stdcall),
   )
   let merged = @ast.merge_attrs(base_attrs, incoming_attrs)
   assert_eq(merged.visibility, base_attrs.visibility)
@@ -88,44 +76,28 @@ test "ast attrs and call conv helpers" {
   assert_eq(merged.call_conv, base_attrs.call_conv)
   assert_eq(merged.aligned, incoming_attrs.aligned)
   let qual = @ast.with_const(@ast.empty_qual())
-  let qualified_ty : @ast.CType = @ast.CType::Qualified(qual~, base=base_int)
-  let updated_qual = @ast.apply_call_conv_to_type(
-    qualified_ty,
-    @ast.CallConv::Cdecl,
-  )
+  let qualified_ty : @ast.CType = Qualified(qual~, base=base_int)
+  let updated_qual = @ast.apply_call_conv_to_type(qualified_ty, Cdecl)
   match updated_qual {
-    @ast.CType::Qualified(..) => ()
+    Qualified(..) => ()
     _ => fail("expected qualified call conv")
   }
-  let attributed_ty : @ast.CType = @ast.CType::Attributed(
+  let attributed_ty : @ast.CType = Attributed(
     attrs=@ast.empty_attrs(),
     base=base_int,
   )
-  let updated_attr = @ast.apply_call_conv_to_type(
-    attributed_ty,
-    @ast.CallConv::Cdecl,
-  )
+  let updated_attr = @ast.apply_call_conv_to_type(attributed_ty, Cdecl)
   match updated_attr {
-    @ast.CType::Attributed(..) => ()
+    Attributed(..) => ()
     _ => fail("expected attributed call conv")
   }
-  let array_ty : @ast.CType = @ast.CType::Array(
-    elem=base_int,
-    size=Some(2),
-    size_expr=None,
-  )
-  let updated_array = @ast.apply_call_conv_to_type(
-    array_ty,
-    @ast.CallConv::Cdecl,
-  )
+  let array_ty : @ast.CType = Array(elem=base_int, size=Some(2), size_expr=None)
+  let updated_array = @ast.apply_call_conv_to_type(array_ty, Cdecl)
   match updated_array {
-    @ast.CType::Array(..) => ()
+    Array(..) => ()
     _ => fail("expected array call conv")
   }
-  assert_eq(
-    @ast.apply_call_conv_to_type(base_int, @ast.CallConv::Default),
-    base_int,
-  )
+  assert_eq(@ast.apply_call_conv_to_type(base_int, Default), base_int)
 }
 
 ///|
@@ -144,7 +116,7 @@ test "ast expr utils" {
   )
   assert_true(@ast.expr_is_lvalue_simple(member_expr))
   let stmt_expr = @ast.Expr::StmtExpr(
-    stmts=[@ast.Stmt::ExprStmt(expr=id_expr, loc~)],
+    stmts=[ExprStmt(expr=id_expr, loc~)],
     node_id=13,
     loc~,
   )
@@ -155,7 +127,7 @@ test "ast expr utils" {
   let sizeof_expr = @ast.Expr::SizeofExpr(expr=id_expr, node_id=15, loc~)
   assert_true(!@ast.expr_may_call(sizeof_expr))
   let binary_expr = @ast.Expr::Binary(
-    op=@ast.BinaryOp::Add,
+    op=Add,
     left=call_expr,
     right=sizeof_expr,
     node_id=16,
@@ -184,12 +156,7 @@ test "ast expr utils" {
     loc~,
   )
   assert_true(@ast.expr_may_call(builtin_va))
-  let deref_expr = @ast.Expr::Unary(
-    op=@ast.UnaryOp::Deref,
-    expr=id_expr,
-    node_id=20,
-    loc~,
-  )
+  let deref_expr = @ast.Expr::Unary(op=Deref, expr=id_expr, node_id=20, loc~)
   assert_true(@ast.expr_is_lvalue_simple(deref_expr))
   let empty_stmt_expr = @ast.Expr::StmtExpr(stmts=[], node_id=21, loc~)
   assert_true(!@ast.expr_is_lvalue_simple(empty_stmt_expr))
@@ -239,20 +206,20 @@ test "ast literal helpers and qualifiers" {
   assert_eq(@ast.parse_int64_literal("0x__"), None)
   let loc = @source.dummy_loc(1)
   let lit = @ast.Expr::IntLit(value="7", node_id=1, loc~)
-  let plus = @ast.Expr::Unary(op=@ast.UnaryOp::Plus, expr=lit, node_id=3, loc~)
-  let neg = @ast.Expr::Unary(op=@ast.UnaryOp::Minus, expr=lit, node_id=2, loc~)
+  let plus = @ast.Expr::Unary(op=Plus, expr=lit, node_id=3, loc~)
+  let neg = @ast.Expr::Unary(op=Minus, expr=lit, node_id=2, loc~)
   assert_eq(@ast.const_i64_from_expr(lit), Some(7))
   assert_eq(@ast.const_i64_from_expr(plus), Some(7))
   assert_eq(@ast.const_i64_from_expr(neg), Some(-7))
   let neg_ident = @ast.Expr::Unary(
-    op=@ast.UnaryOp::Minus,
-    expr=@ast.Expr::Ident(name="y", id=2, node_id=4, loc~),
+    op=Minus,
+    expr=Ident(name="y", id=2, node_id=4, loc~),
     node_id=5,
     loc~,
   )
   assert_eq(@ast.const_i64_from_expr(neg_ident), None)
   assert_eq(
-    @ast.const_i64_from_expr(@ast.Expr::Ident(name="z", id=3, node_id=6, loc~)),
+    @ast.const_i64_from_expr(Ident(name="z", id=3, node_id=6, loc~)),
     None,
   )
   let empty_qual = @ast.empty_qual()
@@ -266,7 +233,7 @@ test "ast literal helpers and qualifiers" {
   let base_int = @ast.default_int_type()
   let qualified = @ast.apply_qualifiers(base_int, merged)
   match qualified {
-    @ast.CType::Qualified(..) => ()
+    Qualified(..) => ()
     _ => fail("expected qualified type")
   }
   let merged_again = @ast.apply_qualifiers(
@@ -274,7 +241,7 @@ test "ast literal helpers and qualifiers" {
     @ast.with_atomic(@ast.empty_qual()),
   )
   match merged_again {
-    @ast.CType::Qualified(..) => ()
+    Qualified(..) => ()
     _ => fail("expected merged qualified type")
   }
 }

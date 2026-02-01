@@ -17,39 +17,6 @@ pub fn touch_unused_symbols() -> Unit
 // Errors
 
 // Types and methods
-type Arm64PcsAuxInfo
-
-type Arm64PcsLayout
-
-type CstringPool
-
-type FramePlan
-
-type LabelAddrContext
-
-type LabelCtx
-
-type LocalAlloc
-
-type LocalSlot
-
-type LoopChains
-
-type RegPool
-
-type SRetAddr
-
-type StaticLocalInfo
-
-type StringEntry
-
-type SwitchCaseInfo
-
-type SwitchChains
-
-type SymTable
-
-type VlaScopeInfo
 
 // Type aliases
 
