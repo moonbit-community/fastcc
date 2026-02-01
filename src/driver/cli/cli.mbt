@@ -112,7 +112,7 @@ fn is_c_source_path(path : String) -> Bool {
 ///|
 pub fn parse_cli_args(args : Array[String]) -> CliParse {
   let expanded = match expand_cli_args(args) {
-    None => return CliParse::Error
+    None => return Error
     Some(v) => v
   }
   let include_paths : Array[String] = []
