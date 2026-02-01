@@ -3,7 +3,9 @@
     "hackwaly/tinycc/backend/arm64",
     "hackwaly/tinycc/backend/object",
     "hackwaly/tinycc/support/util",
-    "moonbitlang/x/fs"
+    "moonbitlang/x/fs",
+    "moonbitlang/core/buffer",
+    { "path": "moonbitlang/core/encoding/utf8", "alias": "encoding/utf8" }
   ],
   "test-import": [
     "hackwaly/tinycc/testutil"

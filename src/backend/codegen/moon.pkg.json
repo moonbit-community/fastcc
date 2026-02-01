@@ -7,7 +7,11 @@
     "hackwaly/tinycc/sem",
     "hackwaly/tinycc/support/diag",
     "hackwaly/tinycc/support/source",
-    "hackwaly/tinycc/support/util"
+    "hackwaly/tinycc/support/util",
+    "moonbitlang/core/strconv",
+    "moonbitlang/core/math",
+    { "path": "moonbitlang/core/encoding/utf8", "alias": "encoding/utf8" },
+    "moonbitlang/core/buffer"
   ],
   "test-import": [
     "hackwaly/tinycc/frontend/parser",

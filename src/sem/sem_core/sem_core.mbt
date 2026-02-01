@@ -1243,7 +1243,7 @@ pub fn struct_size_align(
           bit_pos = 0
         }
         let (field_size, field_align) = match strip_top_qualifiers_keep_attrs(field.ty) {
-          @ast.CType::Array(elem~, size=None, size_expr=size_expr, ..) =>
+          @ast.CType::Array(elem~, size=None, size_expr=size_expr) =>
             match size_expr {
               None => {
                 if i != fields.length() - 1 {
@@ -1325,7 +1325,7 @@ pub fn union_size_align(
       }
       None =>
         match strip_top_qualifiers_keep_attrs(field.ty) {
-          @ast.CType::Array(elem~, size=None, size_expr=size_expr, ..) =>
+          @ast.CType::Array(elem=_, size=None, size_expr=size_expr) =>
             match size_expr {
               None =>
                 match type_size_align(ctx, field.ty, loc) {
@@ -1669,7 +1669,7 @@ fn check_decl(ctx : SemContext, decl : @ast.Decl) -> Unit {
       }
       check_func_def(ctx, func_def)
     }
-    @ast.Decl::Typedef(name~, ty~, attrs~, loc~, ..) => {
+    @ast.Decl::Typedef(name~, ty~, attrs~, loc~) => {
       register_type_defs(ctx, ty, loc)
       let resolved = resolve_type(ctx, ty, loc)
       let resolved_with_attrs = @ast.apply_type_attrs(resolved, @ast.type_attrs_from(attrs))
@@ -1682,7 +1682,7 @@ fn check_decl(ctx : SemContext, decl : @ast.Decl) -> Unit {
       )
       ctx.type_aliases.set(name, final_ty)
     }
-    @ast.Decl::TagDef(ty~, loc~, ..) => register_type_defs(ctx, ty, loc)
+    @ast.Decl::TagDef(ty~, loc~) => register_type_defs(ctx, ty, loc)
     @ast.Decl::StaticAssert(static_assert) => check_static_assert(ctx, static_assert)
     @ast.Decl::Asm(asm_stmt) => check_asm_stmt(ctx, asm_stmt)
   }
@@ -2094,7 +2094,7 @@ fn is_hex_digit_code(code : UInt16) -> Bool {
 }
 
 ///|
-fn parse_uint64_literal(text : String, base : Int) -> UInt64 {
+fn _parse_uint64_literal(text : String, base : Int) -> UInt64 {
   let mut value : UInt64 = 0
   let mut i = 0
   if base == 16 &&
@@ -2167,7 +2167,7 @@ fn digit_value(code : UInt16) -> Int? {
 }
 
 ///|
-fn int_literal_base(text : String) -> Int {
+fn _int_literal_base(text : String) -> Int {
   let trimmed = trim_int_literal(text)
   if trimmed.length() >= 2 && trimmed[0] == 48 {
     let next = trimmed[1]
@@ -2198,7 +2198,7 @@ fn int_literal_base_from(text : String, end : Int) -> Int {
 }
 
 ///|
-fn parse_int_suffix(suffix : String) -> (Int, Bool) {
+fn _parse_int_suffix(suffix : String) -> (Int, Bool) {
   let mut long_count = 0
   let mut unsigned = false
   for code in suffix.to_lower() {
@@ -2881,7 +2881,7 @@ fn struct_field_offset_and_type(
           bit_pos = 0
         }
         let (field_size, field_align) = match strip_top_qualifiers_keep_attrs(field.ty) {
-          @ast.CType::Array(elem~, size=None, size_expr=size_expr, ..) =>
+          @ast.CType::Array(elem~, size=None, size_expr=size_expr) =>
             match size_expr {
               None => {
                 let (_elem_size, elem_align) = match
@@ -5340,7 +5340,7 @@ pub fn type_of_lvalue(ctx : SemContext, expr : @ast.Expr) -> @ast.CType? {
         }
       }
     }
-    @ast.Expr::CompoundLiteral(ty~, init~, node_id~, loc~, ..) => {
+    @ast.Expr::CompoundLiteral(ty~, init~, node_id~, loc~) => {
       let resolved = compound_literal_type(ctx, ty, init, loc, node_id)
       record_compound_literal(ctx, loc, node_id, resolved)
       Some(resolved)
@@ -5389,7 +5389,7 @@ fn type_of_lvalue_optional(ctx : SemContext, expr : @ast.Expr) -> @ast.CType? {
         }
       }
     }
-    @ast.Expr::CompoundLiteral(ty~, init~, node_id~, loc~, ..) => {
+    @ast.Expr::CompoundLiteral(ty~, init~, node_id~, loc~) => {
       let resolved = compound_literal_type(ctx, ty, init, loc, node_id)
       record_compound_literal(ctx, loc, node_id, resolved)
       Some(resolved)
@@ -5563,7 +5563,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
       register_type_defs(ctx, ty, loc)
       resolve_type(ctx, ty, loc)
     }
-    @ast.Expr::CompoundLiteral(ty~, init~, node_id~, loc~, ..) => {
+    @ast.Expr::CompoundLiteral(ty~, init~, node_id~, loc~) => {
       let resolved = compound_literal_type(ctx, ty, init, loc, node_id)
       record_compound_literal(ctx, loc, node_id, resolved)
       decay_type(resolved)

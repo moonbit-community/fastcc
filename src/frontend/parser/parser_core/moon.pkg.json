@@ -5,6 +5,8 @@
     "hackwaly/tinycc/frontend/tokens",
     "hackwaly/tinycc/support/diag",
     "hackwaly/tinycc/support/source",
-    "hackwaly/tinycc/support/util"
+    "hackwaly/tinycc/support/util",
+    "moonbitlang/core/buffer",
+    "moonbitlang/core/strconv"
   ]
 }

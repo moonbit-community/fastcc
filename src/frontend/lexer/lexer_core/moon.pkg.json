@@ -4,5 +4,8 @@
     "hackwaly/tinycc/support/diag",
     "hackwaly/tinycc/support/intern",
     "hackwaly/tinycc/support/source"
+  ],
+  "wbtest-import": [
+    "moonbitlang/core/json"
   ]
 }

@@ -106,7 +106,7 @@ pub(all) struct ObjSymbol {
 }
 
 ///|
-struct MachoSectionInfo {
+priv struct MachoSectionInfo {
   sectname : String
   segname : String
   flags : UInt
@@ -115,7 +115,7 @@ struct MachoSectionInfo {
 }
 
 ///|
-struct MachoSectionLayout {
+priv struct MachoSectionLayout {
   section : Section
   info : MachoSectionInfo
   align_log2 : Int
@@ -124,16 +124,6 @@ struct MachoSectionLayout {
   reloff : Int
   nreloc : Int
   index : Int
-}
-
-///|
-struct MachoSegmentLayout {
-  name : String
-  section_indices : Array[Int]
-  fileoff : Int
-  filesize : Int
-  maxprot : Int
-  initprot : Int
 }
 
 ///|
@@ -638,5 +628,3 @@ pub fn write_macho_object(
   @fs.write_bytes_to_file(path, bytes)
 }
 
-///| keep unused definitions referenced to silence warnings
-let _macho_layout_sentinel : MachoSegmentLayout? = None

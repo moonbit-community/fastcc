@@ -13,7 +13,7 @@ pub fn parse_cli_args(args : Array[String]) -> CliParse {
 }
 
 ///|
-struct BenchStats {
+priv struct BenchStats {
   mut parse_ns : UInt64
   mut sem_ns : UInt64
   mut codegen_ns : UInt64

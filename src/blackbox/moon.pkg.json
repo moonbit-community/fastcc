@@ -10,6 +10,7 @@
     "hackwaly/tinycc/support/source",
     "hackwaly/tinycc/testutil",
     "moonbitlang/core/buffer",
-    "moonbitlang/x/fs"
+    "moonbitlang/x/fs",
+    { "path": "moonbitlang/core/encoding/utf8", "alias": "encoding/utf8" }
   ]
 }

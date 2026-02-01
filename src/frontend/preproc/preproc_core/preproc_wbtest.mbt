@@ -42,7 +42,7 @@ test "preprocess define expansion" {
     pp_tokens("#define X 1\nint a = X;")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=[
+  json_inspect(items, content=[
     "KwInt:int", "Ident:a", "Assign:=", "IntLit:1", "Semicolon:;",
   ])
 }
@@ -54,7 +54,7 @@ test "preprocess ifdef and else" {
   )
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["KwInt:int", "Ident:x", "Semicolon:;"])
+  json_inspect(items, content=["KwInt:int", "Ident:x", "Semicolon:;"])
 }
 
 ///|
@@ -63,7 +63,7 @@ test "preprocess if 0 skip" {
     pp_tokens("#if 0\nint x;\n#endif\nint y;")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["KwInt:int", "Ident:y", "Semicolon:;"])
+  json_inspect(items, content=["KwInt:int", "Ident:y", "Semicolon:;"])
 }
 
 ///|
@@ -72,7 +72,7 @@ test "preprocess defined operator" {
     pp_tokens("#define A 1\n#if defined(A)\nint x;\n#endif")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["KwInt:int", "Ident:x", "Semicolon:;"])
+  json_inspect(items, content=["KwInt:int", "Ident:x", "Semicolon:;"])
 }
 
 ///|
@@ -85,7 +85,7 @@ test "preprocess include" {
     pp_tokens("#include \"\{path}\"")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["KwInt:int", "Ident:inc", "Semicolon:;"])
+  json_inspect(items, content=["KwInt:int", "Ident:inc", "Semicolon:;"])
 }
 
 ///|
@@ -98,7 +98,7 @@ test "preprocess include with macro" {
     pp_tokens("#define HDR \"\{path}\"\n#include HDR")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["KwInt:int", "Ident:inc2", "Semicolon:;"])
+  json_inspect(items, content=["KwInt:int", "Ident:inc2", "Semicolon:;"])
 }
 
 ///|
@@ -117,7 +117,7 @@ test "preprocess include search path" {
     pp_tokens_with_paths("#include <inc.h>", [dir])
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["KwInt:int", "Ident:inc3", "Semicolon:;"])
+  json_inspect(items, content=["KwInt:int", "Ident:inc3", "Semicolon:;"])
 }
 
 ///|
@@ -126,11 +126,11 @@ test "preprocess empty function-like macro expansion" {
     pp_tokens("#define DEF(x)\nDEF(1)\nint ok;")
   if @diag.has_errors(bag) {
     let messages = bag.diags.map(d => d.message)
-    @json.inspect(messages)
+    json_inspect(messages)
   }
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
+  json_inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
 }
 
 ///|
@@ -140,11 +140,11 @@ test "preprocess quickjs opcode header with empty DEF" {
     pp_tokens_with_paths(text, ["refs/quickjs"])
   if @diag.has_errors(bag) {
     let messages = bag.diags.map(d => d.message)
-    @json.inspect(messages)
+    json_inspect(messages)
   }
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
+  json_inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
 }
 
 ///|
@@ -152,7 +152,7 @@ test "preprocess _Float16 builtin macro" {
   let (toks, bag, interner, lexeme_pool) = pp_tokens("_Float16 x;")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=[
+  json_inspect(items, content=[
     "KwShort:short", "KwUnsigned:unsigned", "KwInt:int", "Ident:x", "Semicolon:;",
   ])
 }
@@ -163,7 +163,7 @@ test "preprocess _Float16 prototype tokens" {
     pp_tokens("extern _Float16 foo(_Float16);")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=[
+  json_inspect(items, content=[
     "KwExtern:extern",
     "KwShort:short",
     "KwUnsigned:unsigned",
@@ -184,7 +184,7 @@ test "preprocess function-like macro" {
     pp_tokens("#define ADD(a,b) a + b\nint x = ADD(1, 2);")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=[
+  json_inspect(items, content=[
     "KwInt:int", "Ident:x", "Assign:=", "IntLit:1", "Plus:+", "IntLit:2", "Semicolon:;",
   ])
 }
@@ -196,7 +196,7 @@ test "preprocess stringize and paste" {
   )
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=[
+  json_inspect(items, content=[
     "KwChar:char", "Star:*", "Ident:s", "Assign:=", "StrLit:\"hi\"", "Semicolon:;",
     "KwInt:int", "Ident:xy", "Assign:=", "Ident:xy", "Semicolon:;",
   ])
@@ -208,7 +208,7 @@ test "preprocess stringize keeps adjacency" {
     pp_tokens("#define STR(x) #x\nchar* s = STR(->>);")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=[
+  json_inspect(items, content=[
     "KwChar:char", "Star:*", "Ident:s", "Assign:=", "StrLit:\"->>\"", "Semicolon:;",
   ])
 }
@@ -220,7 +220,7 @@ test "preprocess if expression" {
   )
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
+  json_inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
 }
 
 ///|
@@ -229,7 +229,7 @@ test "preprocess if char literal" {
     pp_tokens("#if 'A' == '\\101'\nint ok;\n#endif")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
+  json_inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
 }
 
 ///|
@@ -238,7 +238,7 @@ test "preprocess if macro expression" {
     pp_tokens("#define A 1 + 2\n#if A == 3\nint ok;\n#endif")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
+  json_inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
 }
 
 ///|
@@ -248,7 +248,7 @@ test "preprocess if defined and numeric macro" {
   let (toks, bag, interner, lexeme_pool) = pp_tokens(text)
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
+  json_inspect(items, content=["KwInt:int", "Ident:ok", "Semicolon:;"])
 }
 
 ///|
@@ -293,7 +293,7 @@ test "preprocess whitespace before paren" {
     pp_tokens("#define F(x) x\nint y = F (1);")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=[
+  json_inspect(items, content=[
     "KwInt:int", "Ident:y", "Assign:=", "IntLit:1", "Semicolon:;",
   ])
 }
@@ -304,7 +304,7 @@ test "preprocess recursion guard" {
     pp_tokens("#define A A\nint z = A;")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=[
+  json_inspect(items, content=[
     "KwInt:int", "Ident:z", "Assign:=", "Ident:A", "Semicolon:;",
   ])
 }
@@ -315,7 +315,7 @@ test "preprocess builtin line and file" {
     pp_tokens("int x = __LINE__;\nconst char *f = __FILE__;")
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=[
+  json_inspect(items, content=[
     "KwInt:int", "Ident:x", "Assign:=", "IntLit:1", "Semicolon:;", "KwConst:const",
     "KwChar:char", "Star:*", "Ident:f", "Assign:=", "StrLit:\"<test>\"", "Semicolon:;",
   ])
@@ -328,7 +328,7 @@ test "preprocess line directive" {
   )
   assert_true(!@diag.has_errors(bag))
   let items = pp_items(toks, interner, lexeme_pool)
-  @json.inspect(items, content=[
+  json_inspect(items, content=[
     "KwInt:int", "Ident:x", "Assign:=", "IntLit:200", "Semicolon:;", "KwConst:const",
     "KwChar:char", "Star:*", "Ident:f", "Assign:=", "StrLit:\"foo.c\"", "Semicolon:;",
   ])

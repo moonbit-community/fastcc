@@ -1,5 +1,5 @@
 ///|
-struct Parser {
+priv struct Parser {
   pp : @preproc.Preprocessor
   mut current : @tokens.Token
   mut lookahead : @tokens.Token
@@ -19,7 +19,7 @@ struct Parser {
 }
 
 ///|
-struct BuiltinIds {
+priv struct BuiltinIds {
   types_compatible_p : Int
   offsetof : Int
   va_arg : Int
@@ -509,7 +509,7 @@ fn parse_type_qualifiers(p : Parser) -> @ast.TypeQual {
 }
 
 ///|
-struct DeclSpecs {
+priv struct DeclSpecs {
   ty : @ast.CType
   loc : @source.SrcLoc
   is_typedef : Bool
@@ -1429,7 +1429,7 @@ fn parse_type_name(p : Parser) -> @ast.CType? {
 }
 
 ///|
-struct Declarator {
+priv struct Declarator {
   name : String
   id : Int
   ty : @ast.CType
@@ -1668,14 +1668,14 @@ fn is_paren_pointer_declarator(p : Parser) -> Bool {
 }
 
 ///|
-enum DeclWrapper {
+priv enum DeclWrapper {
   Pointer(@ast.TypeQual)
   Array(Int?, @ast.Expr?)
   Function(Array[@ast.Param], Bool, Bool)
 }
 
 ///|
-struct ParenDeclParts {
+priv struct ParenDeclParts {
   name : String
   id : Int
   loc : @source.SrcLoc
