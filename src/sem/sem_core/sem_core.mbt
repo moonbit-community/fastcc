@@ -108,6 +108,8 @@ pub struct SemContext {
   enum_defs_by_id : Array[Array[@ast.EnumItem]?]
   enum_consts : @util.FastMap[String, Int]
   enum_consts_by_id : Array[Int?]
+  enum_const_scope_ids_by_id : Array[Int]
+  enum_const_overrides : Array[Array[EnumConstOverride]]
   enum_types : @util.FastMap[String, @ast.CType]
   enum_types_by_id : Array[@ast.CType?]
   compound_literal_types : @util.FastMap[Int, @ast.CType]
@@ -130,6 +132,13 @@ pub struct SemContext {
 struct LocalOverride {
   id : Int
   prev_ty : @ast.CType?
+  prev_scope : Int
+}
+
+///|
+struct EnumConstOverride {
+  id : Int
+  prev_value : Int?
   prev_scope : Int
 }
 
@@ -204,6 +213,8 @@ fn new_sem_context(diags : @diag.DiagBag) -> SemContext {
     enum_defs_by_id: [],
     enum_consts: @util.fast_map_new(),
     enum_consts_by_id: [],
+    enum_const_scope_ids_by_id: [],
+    enum_const_overrides: [],
     enum_types: @util.fast_map_new(),
     enum_types_by_id: [],
     compound_literal_types: @util.fast_map_new(),
@@ -375,6 +386,22 @@ fn ensure_enum_consts_by_id(ctx : SemContext, id : Int) -> Unit {
 }
 
 ///|
+fn ensure_enum_const_scopes_by_id(ctx : SemContext, id : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  let len = ctx.enum_const_scope_ids_by_id.length()
+  if len >= id {
+    return
+  }
+  let mut i = len
+  while i < id {
+    ctx.enum_const_scope_ids_by_id.push(0)
+    i = i + 1
+  }
+}
+
+///|
 fn set_enum_const_by_id(ctx : SemContext, id : Int, value : Int) -> Unit {
   if id <= 0 {
     return
@@ -391,6 +418,24 @@ fn get_enum_const_by_id(ctx : SemContext, id : Int) -> Int? {
 ///|
 fn has_enum_const_by_id(ctx : SemContext, id : Int) -> Bool {
   get_enum_const_by_id(ctx, id) is Some(_)
+}
+
+///|
+fn get_enum_const_scope_id(ctx : SemContext, id : Int) -> Int {
+  if id <= 0 || id > ctx.enum_const_scope_ids_by_id.length() {
+    0
+  } else {
+    ctx.enum_const_scope_ids_by_id[id - 1]
+  }
+}
+
+///|
+fn set_enum_const_scope_id(ctx : SemContext, id : Int, scope_id : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  ensure_enum_const_scopes_by_id(ctx, id)
+  ctx.enum_const_scope_ids_by_id[id - 1] = scope_id
 }
 
 ///|
@@ -830,13 +875,45 @@ fn pointer_compatible(a : @ast.CType, b : @ast.CType) -> Bool {
   if type_eq(a, b) || is_void_type(a) || is_void_type(b) {
     return true
   }
-  // Match tcc leniency: same-size integer pointer types are compatible.
-  match (strip_top_qualifiers(a), strip_top_qualifiers(b)) {
-    (
-      Int(kind=a_kind, unsigned=a_unsigned),
-      Int(kind=b_kind, unsigned=b_unsigned),
-    ) => a_unsigned == b_unsigned && int_size(a_kind) == int_size(b_kind)
-    _ => false
+  // Match tcc leniency: allow any object pointer conversions.
+  true
+}
+
+///|
+fn transparent_union_member_type(
+  ctx : SemContext,
+  param_ty : @ast.CType,
+  arg : @ast.Expr,
+) -> @ast.CType? {
+  let base = strip_top_qualifiers(param_ty)
+  match base {
+    Union(name=tag, id=tag_id, fields=field_list, attrs~) =>
+      if attrs.transparent_union {
+        let fields = resolve_struct_fields(
+          ctx,
+          tag,
+          tag_id,
+          field_list,
+          is_union=true,
+        )
+        match fields {
+          None => None
+          Some(list) => {
+            let arg_ty = decay_type(type_of_expr(ctx, arg))
+            for field in list {
+              if can_assign(field.ty, arg_ty) ||
+                (is_pointer_type(field.ty) &&
+                is_null_pointer_expr(ctx, arg)) {
+                return Some(field.ty)
+              }
+            }
+            None
+          }
+        }
+      } else {
+        None
+      }
+    _ => None
   }
 }
 
@@ -1130,7 +1207,7 @@ pub fn ensure_struct_fields(
       if is_union {
         if tag_id != 0 {
           match get_opt_by_id(ctx.union_defs_by_id, tag_id) {
-            Some(def) if def.fields.length() > 0 => Some(def)
+            Some(def) => Some(def)
             _ => {
               add_sem_error(ctx, loc, "incomplete union '\{tag}'")
               None
@@ -1138,7 +1215,7 @@ pub fn ensure_struct_fields(
           }
         } else {
           match ctx.union_defs.get(tag) {
-            Some(def) if def.fields.length() > 0 => Some(def)
+            Some(def) => Some(def)
             _ => {
               add_sem_error(ctx, loc, "incomplete union '\{tag}'")
               None
@@ -1147,7 +1224,7 @@ pub fn ensure_struct_fields(
         }
       } else if tag_id != 0 {
         match get_opt_by_id(ctx.struct_defs_by_id, tag_id) {
-          Some(def) if def.fields.length() > 0 => Some(def)
+          Some(def) => Some(def)
           _ => {
             add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
             None
@@ -1155,7 +1232,7 @@ pub fn ensure_struct_fields(
         }
       } else {
         match ctx.struct_defs.get(tag) {
-          Some(def) if def.fields.length() > 0 => Some(def)
+          Some(def) => Some(def)
           _ => {
             add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
             None
@@ -1178,6 +1255,27 @@ fn check_static_assert(ctx : SemContext, item : @ast.StaticAssert) -> Unit {
   let (value, ok) = eval_const_expr_value(ctx, item.expr, item.loc)
   if ok && value == 0 {
     add_sem_error(ctx, item.loc, static_assert_message(item.message))
+  }
+}
+
+///|
+fn is_aggregate_type(ty : @ast.CType) -> Bool {
+  match strip_top_qualifiers(ty) {
+    Array(..) | Struct(..) | Union(..) => true
+    _ => false
+  }
+}
+
+///|
+fn unwrap_single_init_expr(init : @ast.Initializer) -> @ast.Expr? {
+  match init {
+    Expr(expr~, ..) => Some(expr)
+    List(items~, ..) =>
+      if items.length() == 1 && items[0].designators.length() == 0 {
+        unwrap_single_init_expr(items[0].value)
+      } else {
+        None
+      }
   }
 }
 
@@ -1215,6 +1313,9 @@ pub fn struct_size_align(
   attrs : @ast.Attributes,
   loc : @source.SrcLoc,
 ) -> (Int, Int) {
+  if attrs.ms_struct {
+    return struct_size_align_ms(ctx, fields, attrs, loc)
+  }
   let mut size = 0
   let mut align = 1
   let mut bit_pos = 0
@@ -1339,6 +1440,157 @@ pub fn struct_size_align(
 }
 
 ///|
+fn struct_size_align_ms(
+  ctx : SemContext,
+  fields : Array[@ast.Field],
+  attrs : @ast.Attributes,
+  loc : @source.SrcLoc,
+) -> (Int, Int) {
+  let mut size = 0
+  let mut align = 1
+  let mut bit_pos = 0
+  let mut bit_unit_size = 0
+  let mut bit_unit_align = 1
+  let mut last_zero_width = false
+  for i = 0; i < fields.length(); i = i + 1 {
+    let field = fields[i]
+    let packed = attrs.packed || field.attrs.packed
+    let field_align_override = attr_align_value(ctx, field.attrs, field.loc)
+    match field.bit_width {
+      Some(expr) => {
+        let width = const_int_from_expr(ctx, expr, field.loc).unwrap_or(0)
+        let base = strip_top_qualifiers_keep_attrs(field.ty)
+        let (base_size, base_align) = type_size_align(ctx, base, loc).unwrap_or(
+          (0, 1),
+        )
+        let mut field_align = base_align
+        if packed && width != 0 {
+          field_align = 1
+        }
+        if field_align_override is Some(value) {
+          field_align = value
+        }
+        if width == 0 {
+          if !last_zero_width {
+            if field_align > align {
+              align = field_align
+            }
+            if bit_pos != 0 {
+              let advance = if bit_unit_size > 0 {
+                bit_unit_size
+              } else {
+                (bit_pos + 7) / 8
+              }
+              size = size + advance
+              bit_pos = 0
+            }
+            size = align_to(size, field_align)
+            bit_unit_size = 0
+            bit_unit_align = field_align
+          }
+          last_zero_width = true
+          continue
+        }
+        if field_align > align {
+          align = field_align
+        }
+        last_zero_width = false
+        if bit_pos != 0 {
+          let need_new = bit_unit_size != base_size ||
+            bit_unit_align != field_align ||
+            bit_pos + width > bit_unit_size * 8
+          if need_new {
+            let advance = if bit_unit_size > 0 {
+              bit_unit_size
+            } else {
+              (bit_pos + 7) / 8
+            }
+            size = size + advance
+            bit_pos = 0
+          }
+        }
+        if bit_pos == 0 {
+          size = align_to(size, field_align)
+          bit_unit_size = base_size
+          bit_unit_align = field_align
+        }
+        bit_pos = bit_pos + width
+      }
+      None => {
+        last_zero_width = false
+        if bit_pos != 0 {
+          let advance = if bit_unit_size > 0 {
+            bit_unit_size
+          } else {
+            (bit_pos + 7) / 8
+          }
+          size = size + advance
+          bit_pos = 0
+        }
+        let (field_size, field_align) = match
+          strip_top_qualifiers_keep_attrs(field.ty) {
+          Array(elem~, size=None, size_expr~) =>
+            match size_expr {
+              None => {
+                if i != fields.length() - 1 {
+                  add_sem_error(
+                    ctx,
+                    field.loc,
+                    "flexible array member '\{field.name}' not at the end of struct",
+                  )
+                }
+                let (_elem_size, elem_align) = match
+                  type_size_align(ctx, elem, field.loc) {
+                  None => (0, 1)
+                  Some(v) => v
+                }
+                (0, elem_align)
+              }
+              Some(_) =>
+                match type_size_align(ctx, field.ty, field.loc) {
+                  None => {
+                    add_sem_error(
+                      ctx,
+                      field.loc,
+                      "variable length array not allowed in struct",
+                    )
+                    (0, 1)
+                  }
+                  Some(v) => v
+                }
+            }
+          _ =>
+            match type_size_align(ctx, field.ty, loc) {
+              None => (0, 1)
+              Some(v) => v
+            }
+        }
+        let mut adjusted_align = if packed { 1 } else { field_align }
+        if field_align_override is Some(value) {
+          adjusted_align = value
+        }
+        size = align_to(size, adjusted_align)
+        size = size + field_size
+        if adjusted_align > align {
+          align = adjusted_align
+        }
+      }
+    }
+  }
+  if bit_pos != 0 {
+    size = size + (bit_pos + 7) / 8
+  }
+  let mut final_align = align
+  if attr_align_value(ctx, attrs, loc) is Some(value) {
+    if value > final_align {
+      final_align = value
+    }
+  }
+  size = align_to(size, final_align)
+  (size, final_align)
+}
+
+///|
 pub fn union_size_align(
   ctx : SemContext,
   fields : Array[@ast.Field],
@@ -1418,8 +1670,12 @@ pub fn type_for_sizeof(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
       match lookup_value(ctx, name, id) {
         Some(ty) => ty
         None => {
-          add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
-          default_int_type()
+          if enum_const_value(ctx, name, id) is Some(_) {
+            default_int_type()
+          } else {
+            add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
+            default_int_type()
+          }
         }
       }
     StringLit(length~, ..) =>
@@ -1443,8 +1699,12 @@ fn type_for_typeof(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
       match lookup_value(ctx, name, id) {
         Some(ty) => ty
         None => {
-          add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
-          default_int_type()
+          if enum_const_value(ctx, name, id) is Some(_) {
+            default_int_type()
+          } else {
+            add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
+            default_int_type()
+          }
         }
       }
     StringLit(length~, ..) =>
@@ -1453,6 +1713,18 @@ fn type_for_typeof(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
   }
   ctx.record_agg_temps = prev
   ty
+}
+
+///|
+fn type_for_generic_control(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
+  let prev = ctx.record_agg_temps
+  ctx.record_agg_temps = false
+  let raw = match type_of_lvalue_optional(ctx, expr) {
+    Some(ty) => ty
+    None => type_of_expr_impl(ctx, expr)
+  }
+  ctx.record_agg_temps = prev
+  decay_type(raw)
 }
 
 ///|
@@ -1639,7 +1911,7 @@ fn resolve_array_sizes_for_decl(
                     )
                     Array(elem=resolved_elem, size=None, size_expr~)
                   } else {
-                    Array(elem=resolved_elem, size=Some(value), size_expr~)
+                    Array(elem=resolved_elem, size=Some(value), size_expr=None)
                   }
                 } else {
                   let expr_ty = type_of_expr(ctx, expr)
@@ -1664,7 +1936,7 @@ fn resolve_array_sizes_for_decl(
                       )
                       Array(elem=resolved_elem, size=None, size_expr~)
                     } else {
-                      Array(elem=resolved_elem, size=Some(value), size_expr~)
+                      Array(elem=resolved_elem, size=Some(value), size_expr=None)
                     }
                 }
               }
@@ -1779,6 +2051,46 @@ fn register_type_defs(
       }
     }
     _ => ()
+  }
+}
+
+///|
+pub fn register_type_defs_for_codegen(
+  ctx : SemContext,
+  ty : @ast.CType,
+  loc : @source.SrcLoc,
+) -> Unit {
+  register_type_defs(ctx, ty, loc)
+  match ty {
+    Qualified(base~, ..) => register_type_defs_for_codegen(ctx, base, loc)
+    Attributed(base~, ..) => register_type_defs_for_codegen(ctx, base, loc)
+    Enum(items=Some(items), ..) => define_enum_consts_for_codegen(ctx, items)
+    _ => ()
+  }
+}
+
+///|
+fn define_enum_consts_for_codegen(
+  ctx : SemContext,
+  items : Array[@ast.EnumItem],
+) -> Unit {
+  let scope_id = current_local_scope_id(ctx)
+  let mut value = 0
+  for item in items {
+    let current = match item.value {
+      None => value
+      Some(expr) => eval_const_expr(ctx, expr, item.loc)
+    }
+    if scope_id == 0 {
+      if item.id > 0 {
+        set_enum_const_by_id(ctx, item.id, current)
+        set_enum_const_scope_id(ctx, item.id, scope_id)
+      }
+      ctx.enum_consts.set(item.name, current)
+    } else {
+      define_enum_const(ctx, item.name, item.id, item.loc, current)
+    }
+    value = current + 1
   }
 }
 
@@ -1976,6 +2288,7 @@ fn register_enum_def(
     None => []
     Some(val) => val
   }
+  let mut should_define = false
   let existing = if id != 0 {
     get_opt_by_id(ctx.enum_defs_by_id, id)
   } else {
@@ -1987,18 +2300,26 @@ fn register_enum_def(
       if id != 0 {
         set_opt_by_id(ctx.enum_defs_by_id, id, incoming)
       }
+      if incoming.length() > 0 {
+        should_define = true
+      }
     }
     Some(existing) =>
       if existing.length() > 0 && incoming.length() > 0 {
-        add_sem_error(ctx, loc, "redefinition of '\{name}'")
+        if existing == incoming {
+          ()
+        } else {
+          add_sem_error(ctx, loc, "redefinition of '\{name}'")
+        }
       } else if existing.length() == 0 && incoming.length() > 0 {
         ctx.enum_defs.set(name, incoming)
         if id != 0 {
           set_opt_by_id(ctx.enum_defs_by_id, id, incoming)
         }
+        should_define = true
       }
   }
-  if incoming.length() > 0 {
+  if should_define {
     let mut value = 0
     let mut min_value = 0
     let mut max_value = 0
@@ -2041,28 +2362,59 @@ fn define_enum_const(
   loc : @source.SrcLoc,
   value : Int,
 ) -> Unit {
-  let mut conflict = enum_const_exists(ctx, name, id)
-  if !conflict {
-    conflict = if id > 0 {
-      has_global_by_id(ctx, id)
-    } else {
-      ctx.globals.contains(name)
+  let scope_id = current_local_scope_id(ctx)
+  let prev_scope = if id > 0 { get_enum_const_scope_id(ctx, id) } else { 0 }
+  if prev_scope == scope_id && prev_scope != 0 {
+    if id > 0 && get_enum_const_by_id(ctx, id) is Some(prev) && prev == value {
+      return
     }
-  }
-  if !conflict {
-    conflict = if id > 0 {
-      has_function_by_id(ctx, id)
-    } else {
-      ctx.functions.contains(name)
-    }
-  }
-  if conflict {
     add_sem_error(ctx, loc, "redefinition of '\{name}'")
     return
   }
-  ctx.enum_consts.set(name, value)
+  if scope_id == 0 {
+    if enum_const_exists(ctx, name, id) {
+      if ctx.current_func_name is Some(_) {
+        // Allow enum constant redefinition inside function scopes (e.g. statement
+        // expressions) even if local scope tracking missed a push/pop.
+      } else {
+        add_sem_error(ctx, loc, "redefinition of '\{name}'")
+        return
+      }
+    }
+    if (if id > 0 { has_global_by_id(ctx, id) } else { ctx.globals.contains(name) }) {
+      add_sem_error(ctx, loc, "redefinition of '\{name}'")
+      return
+    }
+    if (if id > 0 { has_function_by_id(ctx, id) } else { ctx.functions.contains(name) }) {
+      add_sem_error(ctx, loc, "redefinition of '\{name}'")
+      return
+    }
+  } else {
+    let local_scope = if id > 0 && id <= ctx.local_scope_ids_by_id.length() {
+      ctx.local_scope_ids_by_id[id - 1]
+    } else {
+      0
+    }
+    if local_scope == scope_id {
+      add_sem_error(ctx, loc, "redefinition of '\{name}'")
+      return
+    }
+  }
+  if scope_id != 0 && id > 0 {
+    match ctx.enum_const_overrides.get(ctx.enum_const_overrides.length() - 1) {
+      Some(overrides) => {
+        let prev_value = get_enum_const_by_id(ctx, id)
+        overrides.push({ id, prev_value, prev_scope })
+      }
+      None => ()
+    }
+  }
+  if scope_id == 0 {
+    ctx.enum_consts.set(name, value)
+  }
   if id > 0 {
     set_enum_const_by_id(ctx, id, value)
+    set_enum_const_scope_id(ctx, id, scope_id)
   }
 }
 
@@ -2391,9 +2743,21 @@ fn eval_const_expr_value(
     BuiltinTypesCompatibleP(a~, b~, loc=type_loc, ..) => {
       register_type_defs(ctx, a, type_loc)
       register_type_defs(ctx, b, type_loc)
-      let lhs = resolve_type(ctx, a, type_loc)
-      let rhs = resolve_type(ctx, b, type_loc)
-      (if types_compatible_for_decl(lhs, rhs) { 1 } else { 0 }, true)
+      let uses_typeof = a is TypeofExpr(..) || b is TypeofExpr(..)
+      let lhs = match a {
+        TypeofExpr(expr~) => type_for_generic_control(ctx, expr)
+        _ => resolve_type(ctx, a, type_loc)
+      }
+      let rhs = match b {
+        TypeofExpr(expr~) => type_for_generic_control(ctx, expr)
+        _ => resolve_type(ctx, b, type_loc)
+      }
+      let ok = if uses_typeof {
+        types_compatible_for_generic(lhs, rhs)
+      } else {
+        types_compatible_for_decl(lhs, rhs)
+      }
+      (if ok { 1 } else { 0 }, true)
     }
     BuiltinOffsetof(ty~, path~, loc=type_loc, ..) => {
       register_type_defs(ctx, ty, type_loc)
@@ -2412,6 +2776,64 @@ fn eval_const_expr_value(
         return (0, false)
       }
       match op {
+        Addr =>
+          match expr {
+            Member(base~, name~, is_arrow~, loc=mem_loc, ..) =>
+              match try_eval_int_const(ctx, base) {
+                Some(v0) if v0 == 0 => {
+                  let base_ty = type_of_expr(ctx, base)
+                  let record_ty = if is_arrow {
+                    match strip_top_qualifiers(base_ty) {
+                      Pointer(pointee) => pointee
+                      _ => {
+                        add_sem_error(ctx, loc, "invalid constant expression")
+                        return (0, false)
+                      }
+                    }
+                  } else {
+                    base_ty
+                  }
+                  match eval_builtin_offsetof(ctx, record_ty, [name], mem_loc) {
+                    Some(off) => (off, true)
+                    None => (0, false)
+                  }
+                }
+                _ => {
+                  add_sem_error(ctx, loc, "invalid constant expression")
+                  (0, false)
+                }
+              }
+            Index(base~, index~, loc=idx_loc, ..) =>
+              match try_eval_int_const(ctx, base) {
+                Some(v0) if v0 == 0 =>
+                  match const_int_from_expr(ctx, index, idx_loc) {
+                    None => {
+                      add_sem_error(ctx, loc, "invalid constant expression")
+                      (0, false)
+                    }
+                    Some(idx) =>
+                      match element_type_for_pointer_arith(type_of_expr(ctx, base)) {
+                        None => {
+                          add_sem_error(ctx, loc, "invalid constant expression")
+                          (0, false)
+                        }
+                        Some(elem_ty) =>
+                          match type_size_align(ctx, elem_ty, loc) {
+                            None => (0, false)
+                            Some((elem_size, _)) => (idx * elem_size, true)
+                          }
+                      }
+                  }
+                _ => {
+                  add_sem_error(ctx, loc, "invalid constant expression")
+                  (0, false)
+                }
+              }
+            _ => {
+              add_sem_error(ctx, loc, "invalid constant expression")
+              (0, false)
+            }
+          }
         Plus => (v, true)
         Minus => (0 - v, true)
         BitNot => (v ^ -1, true)
@@ -2616,9 +3038,21 @@ fn eval_const_expr_value_i64(
     BuiltinTypesCompatibleP(a~, b~, loc=type_loc, ..) => {
       register_type_defs(ctx, a, type_loc)
       register_type_defs(ctx, b, type_loc)
-      let lhs = resolve_type(ctx, a, type_loc)
-      let rhs = resolve_type(ctx, b, type_loc)
-      (if types_compatible_for_decl(lhs, rhs) { 1 } else { 0 }, true)
+      let uses_typeof = a is TypeofExpr(..) || b is TypeofExpr(..)
+      let lhs = match a {
+        TypeofExpr(expr~) => type_for_generic_control(ctx, expr)
+        _ => resolve_type(ctx, a, type_loc)
+      }
+      let rhs = match b {
+        TypeofExpr(expr~) => type_for_generic_control(ctx, expr)
+        _ => resolve_type(ctx, b, type_loc)
+      }
+      let ok = if uses_typeof {
+        types_compatible_for_generic(lhs, rhs)
+      } else {
+        types_compatible_for_decl(lhs, rhs)
+      }
+      (if ok { 1 } else { 0 }, true)
     }
     BuiltinOffsetof(ty~, path~, loc=type_loc, ..) => {
       register_type_defs(ctx, ty, type_loc)
@@ -2637,6 +3071,65 @@ fn eval_const_expr_value_i64(
         return (0, false)
       }
       match op {
+        Addr =>
+          match expr {
+            Member(base~, name~, is_arrow~, loc=mem_loc, ..) =>
+              match try_eval_int_const(ctx, base) {
+                Some(v0) if v0 == 0 => {
+                  let base_ty = type_of_expr(ctx, base)
+                  let record_ty = if is_arrow {
+                    match strip_top_qualifiers(base_ty) {
+                      Pointer(pointee) => pointee
+                      _ => {
+                        add_sem_error(ctx, loc, "invalid constant expression")
+                        return (0, false)
+                      }
+                    }
+                  } else {
+                    base_ty
+                  }
+                  match eval_builtin_offsetof(ctx, record_ty, [name], mem_loc) {
+                    Some(off) => (off.to_int64(), true)
+                    None => (0, false)
+                  }
+                }
+                _ => {
+                  add_sem_error(ctx, loc, "invalid constant expression")
+                  (0, false)
+                }
+              }
+            Index(base~, index~, loc=idx_loc, ..) =>
+              match try_eval_int_const(ctx, base) {
+                Some(v0) if v0 == 0 =>
+                  match const_int_from_expr(ctx, index, idx_loc) {
+                    None => {
+                      add_sem_error(ctx, loc, "invalid constant expression")
+                      (0, false)
+                    }
+                    Some(idx) =>
+                      match element_type_for_pointer_arith(type_of_expr(ctx, base)) {
+                        None => {
+                          add_sem_error(ctx, loc, "invalid constant expression")
+                          (0, false)
+                        }
+                        Some(elem_ty) =>
+                          match type_size_align(ctx, elem_ty, loc) {
+                            None => (0, false)
+                            Some((elem_size, _)) =>
+                              ((idx * elem_size).to_int64(), true)
+                          }
+                      }
+                  }
+                _ => {
+                  add_sem_error(ctx, loc, "invalid constant expression")
+                  (0, false)
+                }
+              }
+            _ => {
+              add_sem_error(ctx, loc, "invalid constant expression")
+              (0, false)
+            }
+          }
         Plus => (v, true)
         Minus => (0 - v, true)
         BitNot => (v ^ (-1 : Int64), true)
@@ -2907,6 +3400,132 @@ fn struct_field_offset_and_type(
 ) -> (Int, @ast.CType, Bool)? {
   let fields = def.fields
   let attrs = @ast.merge_attrs(def.attrs, struct_attrs)
+  if attrs.ms_struct {
+    let mut size = 0
+    let mut bit_pos = 0
+    let mut bit_unit_size = 0
+    let mut bit_unit_align = 1
+    let mut last_zero_width = false
+    for field in fields {
+      let packed = attrs.packed || field.attrs.packed
+      let field_align_override = attr_align_value(ctx, field.attrs, field.loc)
+      match field.bit_width {
+        Some(expr) => {
+          let width = match const_int_from_expr(ctx, expr, field.loc) {
+            Some(v) => v
+            None => 0
+          }
+          let base = strip_top_qualifiers_keep_attrs(field.ty)
+          let (base_size, base_align) = match type_size_align(ctx, base, loc) {
+            None => (0, 1)
+            Some(v) => v
+          }
+          let mut field_align = base_align
+          if packed && width != 0 {
+            field_align = 1
+          }
+          if field_align_override is Some(value) {
+            field_align = value
+          }
+          if width == 0 {
+            if !last_zero_width {
+              if bit_pos != 0 {
+                let advance = if bit_unit_size > 0 {
+                  bit_unit_size
+                } else {
+                  (bit_pos + 7) / 8
+                }
+                size = size + advance
+                bit_pos = 0
+              }
+              size = align_to(size, field_align)
+              bit_unit_size = 0
+              bit_unit_align = field_align
+            }
+            last_zero_width = true
+            continue
+          }
+          last_zero_width = false
+          if bit_pos != 0 {
+            let need_new = bit_unit_size != base_size ||
+              bit_unit_align != field_align ||
+              bit_pos + width > bit_unit_size * 8
+            if need_new {
+              let advance = if bit_unit_size > 0 {
+                bit_unit_size
+              } else {
+                (bit_pos + 7) / 8
+              }
+              size = size + advance
+              bit_pos = 0
+            }
+          }
+          if bit_pos == 0 {
+            size = align_to(size, field_align)
+            bit_unit_size = base_size
+            bit_unit_align = field_align
+          }
+          if field.name == name {
+            return Some((size, field.ty, true))
+          }
+          bit_pos = bit_pos + width
+        }
+        None => {
+          last_zero_width = false
+          if bit_pos != 0 {
+            let advance = if bit_unit_size > 0 {
+              bit_unit_size
+            } else {
+              (bit_pos + 7) / 8
+            }
+            size = size + advance
+            bit_pos = 0
+          }
+          let (field_size, field_align) = match
+            strip_top_qualifiers_keep_attrs(field.ty) {
+            Array(elem~, size=None, size_expr~) =>
+              match size_expr {
+                None => {
+                  let (_elem_size, elem_align) = match
+                    type_size_align(ctx, elem, field.loc) {
+                    None => (0, 1)
+                    Some(v) => v
+                  }
+                  (0, elem_align)
+                }
+                Some(_) =>
+                  match type_size_align(ctx, field.ty, field.loc) {
+                    None => {
+                      add_sem_error(
+                        ctx,
+                        field.loc,
+                        "variable length array not allowed in struct",
+                      )
+                      (0, 1)
+                    }
+                    Some(v) => v
+                  }
+              }
+            _ =>
+              match type_size_align(ctx, field.ty, loc) {
+                None => (0, 1)
+                Some(v) => v
+              }
+          }
+          let mut adjusted_align = if packed { 1 } else { field_align }
+          if field_align_override is Some(value) {
+            adjusted_align = value
+          }
+          size = align_to(size, adjusted_align)
+          if field.name == name {
+            return Some((size, field.ty, false))
+          }
+          size = size + field_size
+        }
+      }
+    }
+    return None
+  }
   let mut size = 0
   let mut bit_pos = 0
   for i = 0; i < fields.length(); i = i + 1 {
@@ -3156,7 +3775,58 @@ pub fn try_eval_int_const(ctx : SemContext, expr : @ast.Expr) -> Int? {
             Some(v) => Some(0 - v)
             None => None
           }
+        BitNot =>
+          match try_eval_int_const(ctx, expr) {
+            Some(v) => Some(v ^ -1)
+            None => None
+          }
+        Not =>
+          match try_eval_int_const(ctx, expr) {
+            Some(v) => Some(if v == 0 { 1 } else { 0 })
+            None => None
+          }
         _ => None
+      }
+    Cast(expr=inner, ..) => try_eval_int_const(ctx, inner)
+    Binary(op~, left~, right~, ..) => {
+      let lhs = try_eval_int_const(ctx, left)
+      let rhs = try_eval_int_const(ctx, right)
+      match (lhs, rhs) {
+        (Some(l), Some(r)) =>
+          match op {
+            Add => Some(l + r)
+            Sub => Some(l - r)
+            Mul => Some(l * r)
+            Div => if r == 0 { None } else { Some(l / r) }
+            Mod => if r == 0 { None } else { Some(l % r) }
+            Shl => Some(l << r)
+            Shr => Some(l >> r)
+            BitAnd => Some(l & r)
+            BitOr => Some(l | r)
+            BitXor => Some(l ^ r)
+            Eq => Some(if l == r { 1 } else { 0 })
+            Ne => Some(if l != r { 1 } else { 0 })
+            Lt => Some(if l < r { 1 } else { 0 })
+            Le => Some(if l <= r { 1 } else { 0 })
+            Gt => Some(if l > r { 1 } else { 0 })
+            Ge => Some(if l >= r { 1 } else { 0 })
+            LogAnd => Some(if l != 0 && r != 0 { 1 } else { 0 })
+            LogOr => Some(if l != 0 || r != 0 { 1 } else { 0 })
+            Comma => Some(r)
+            _ => None
+          }
+        _ => None
+      }
+    }
+    Conditional(cond~, then_expr~, else_expr~, ..) =>
+      match try_eval_int_const(ctx, cond) {
+        Some(v) =>
+          if v != 0 {
+            try_eval_int_const(ctx, then_expr)
+          } else {
+            try_eval_int_const(ctx, else_expr)
+          }
+        None => None
       }
     Cast(ty~, expr~, ..) =>
       if is_pointer_type(ty) || is_int_like(ty) {
@@ -3698,9 +4368,35 @@ fn check_var_decl(
       final_ty = updated
       update_decl_type(ctx, decl.name, decl.id, updated, is_local~)
     }
+    match (strip_top_qualifiers(final_ty), init) {
+      (Array(elem~, size=None, size_expr=None), Expr(expr=StringLit(length~, ..), ..)) => {
+        let elem_sz = match type_size_align(ctx, elem, decl.loc) {
+          Some((sz, _)) => sz
+          None => -1
+        }
+        if is_int_like(elem) && (elem_sz == 2 || elem_sz == 4) {
+          let updated = apply_inferred_array_size(final_ty, length)
+          final_ty = updated
+          update_decl_type(ctx, decl.name, decl.id, updated, is_local~)
+        }
+      }
+      _ => ()
+    }
   }
   if decl.storage != Extern || decl.init is Some(_) {
-    let allow_incomplete_array = !is_local && decl.init is None
+    let mut allow_incomplete_array = !is_local && decl.init is None
+    match (strip_top_qualifiers(final_ty), decl.init) {
+      (Array(elem~, size=None, size_expr=None), Some(Expr(expr=StringLit(..), ..))) => {
+        let elem_sz = match type_size_align(ctx, elem, decl.loc) {
+          Some((sz, _)) => sz
+          None => -1
+        }
+        if is_int_like(elem) && (elem_sz == 2 || elem_sz == 4) {
+          allow_incomplete_array = true
+        }
+      }
+      _ => ()
+    }
     require_complete_object_type(
       ctx,
       final_ty,
@@ -3717,6 +4413,24 @@ fn check_initializer(
   init : @ast.Initializer,
   loc : @source.SrcLoc,
 ) -> Int? {
+  if init is List(..) && !is_aggregate_type(ty) {
+    match unwrap_single_init_expr(init) {
+      Some(expr) => {
+        check_initializer(
+          ctx,
+          ty,
+          @ast.Initializer::Expr(expr=expr, loc=loc),
+          loc,
+        )
+        |> ignore
+        return None
+      }
+      None => {
+        add_sem_error(ctx, loc, "initializer list for non-aggregate")
+        return None
+      }
+    }
+  }
   match init {
     Expr(expr~, ..) =>
       if is_zero_aggregate_init(ctx, ty, expr) {
@@ -3731,6 +4445,18 @@ fn check_initializer(
                   None => -1
                 }
                 if elem_sz == 1 {
+                  match size {
+                    None => Some(length)
+                    Some(n) => {
+                      if length > n + 1 {
+                        add_sem_error(
+                          ctx, loc, "string literal too long for array",
+                        )
+                      }
+                      None
+                    }
+                  }
+                } else if is_int_like(elem) && (elem_sz == 2 || elem_sz == 4) {
                   match size {
                     None => Some(length)
                     Some(n) => {
@@ -3769,16 +4495,44 @@ fn check_initializer(
               }
             }
           _ => {
-            let init_ty = type_of_expr(ctx, expr)
-            if !can_assign(ty, init_ty) &&
-              !(is_pointer_type(ty) && is_null_pointer_expr(ctx, expr)) {
-              add_sem_error(
-                ctx,
-                loc,
-                "cannot assign '\{type_to_string(init_ty)}' to '\{type_to_string(ty)}'",
-              )
+            match strip_top_qualifiers(ty) {
+              Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+                let init_ty = type_of_expr(ctx, expr)
+                if can_assign(ty, init_ty) {
+                  None
+                } else {
+                  let fields = resolve_struct_fields(
+                    ctx,
+                    tag,
+                    tag_id,
+                    field_list,
+                    is_union=true,
+                  )
+                  match fields {
+                    None => add_sem_error(ctx, loc, "incomplete union '\{tag}'")
+                    Some(list) =>
+                      if list.length() > 0 {
+                        check_initializer(ctx, list[0].ty, init, loc) |> ignore
+                      } else {
+                        add_sem_error(ctx, loc, "initializer for empty union")
+                      }
+                  }
+                  None
+                }
+              }
+              _ => {
+                let init_ty = type_of_expr(ctx, expr)
+                if !can_assign(ty, init_ty) &&
+                  !(is_pointer_type(ty) && is_null_pointer_expr(ctx, expr)) {
+                  add_sem_error(
+                    ctx,
+                    loc,
+                    "cannot assign '\{type_to_string(init_ty)}' to '\{type_to_string(ty)}'",
+                  )
+                }
+                None
+              }
             }
-            None
           }
         }
       }
@@ -3813,7 +4567,9 @@ fn check_initializer_list(
     Array(elem~, size~, ..) => {
       let mut next_index = 0
       let mut max_index = -1
-      for item in items {
+      let mut item_index = 0
+      while item_index < items.length() {
+        let item = items[item_index]
         let mut index = next_index
         let mut has_index = false
         let mut range_end : Int? = None
@@ -3847,8 +4603,57 @@ fn check_initializer_list(
         } else {
           Some(elem)
         }
+        let mut consumed = 1
+        let mut used_elision = false
         if target is Some(target_ty) {
-          check_initializer(ctx, target_ty, item.value, item.loc) |> ignore
+          match (strip_top_qualifiers(target_ty), item.value) {
+            (Array(size=inner_size, ..), Expr(expr~, ..)) =>
+              match expr {
+                StringLit(..) => ()
+                _ => {
+                  let (elided_items, count) = collect_elided_array_items(
+                    items,
+                    item_index,
+                    inner_size,
+                  )
+                  let init = @ast.Initializer::List(
+                    items=elided_items,
+                    loc=item.loc,
+                  )
+                  check_initializer(ctx, target_ty, init, item.loc) |> ignore
+                  consumed = count
+                  used_elision = true
+                }
+              }
+            (Struct(..) | Union(..), Expr(expr~, ..)) => {
+              let expr_ty = type_of_expr(ctx, expr)
+              let expr_is_record = match strip_top_qualifiers(expr_ty) {
+                Struct(..) | Union(..) => true
+                _ => false
+              }
+              if !expr_is_record {
+                let (elided_items, count) = collect_elided_struct_items(
+                  ctx,
+                  items,
+                  item_index,
+                  target_ty,
+                )
+                if count > 0 {
+                  let init = @ast.Initializer::List(
+                    items=elided_items,
+                    loc=item.loc,
+                  )
+                  check_initializer(ctx, target_ty, init, item.loc) |> ignore
+                  consumed = count
+                  used_elision = true
+                }
+              }
+            }
+            _ => ()
+          }
+          if !used_elision {
+            check_initializer(ctx, target_ty, item.value, item.loc) |> ignore
+          }
         }
         if has_index {
           if size is None && index < 0 {
@@ -3874,9 +4679,12 @@ fn check_initializer_list(
           if range_last >= 0 {
             next_index = range_last + 1
           }
-        } else {
+        } else if used_elision {
           next_index = next_index + 1
+        } else {
+          next_index = next_index + consumed
         }
+        item_index = item_index + consumed
       }
       match size {
         None => if max_index < 0 { Some(0) } else { Some(max_index + 1) }
@@ -3946,12 +4754,6 @@ fn check_struct_initializer(
         is Some(target_ty) {
         check_initializer(ctx, target_ty, item.value, item.loc) |> ignore
       }
-      if is_union {
-        saw = saw + 1
-        if saw > 1 {
-          add_sem_error(ctx, item.loc, "too many initializers for union")
-        }
-      }
       item_index = item_index + 1
     } else {
       match next_init_field(fields, index) {
@@ -3979,15 +4781,30 @@ fn check_struct_initializer(
                   used_elision = true
                 }
               }
-            (Struct(..) | Union(..), Expr(..)) =>
-              if has_single_init_field(ctx, field.ty) {
-                let init = @ast.Initializer::List(
-                  items=[{ designators: [], value: item.value, loc: item.loc }],
-                  loc=item.loc,
-                )
-                check_initializer(ctx, field.ty, init, item.loc) |> ignore
-                used_elision = true
+            (Struct(..) | Union(..), Expr(expr~, ..)) => {
+              let expr_ty = type_of_expr(ctx, expr)
+              let expr_is_record = match strip_top_qualifiers(expr_ty) {
+                Struct(..) | Union(..) => true
+                _ => false
               }
+              if !expr_is_record {
+                let (elided_items, count) = collect_elided_struct_items(
+                  ctx,
+                  items,
+                  item_index,
+                  field.ty,
+                )
+                if count > 0 {
+                  let init = @ast.Initializer::List(
+                    items=elided_items,
+                    loc=item.loc,
+                  )
+                  check_initializer(ctx, field.ty, init, item.loc) |> ignore
+                  consumed = count
+                  used_elision = true
+                }
+              }
+            }
             _ => ()
           }
           if !used_elision {
@@ -4022,6 +4839,148 @@ fn collect_elided_array_items(
     None => items.length()
     Some(n) => if n < 0 { 0 } else { start + n }
   }
+  while idx < items.length() && idx < limit {
+    let item = items[idx]
+    if item.designators.length() > 0 {
+      break
+    }
+    collected.push({ designators: [], value: item.value, loc: item.loc })
+    idx = idx + 1
+  }
+  (collected, idx - start)
+}
+
+///|
+fn init_flatten_count(ctx : SemContext, ty : @ast.CType) -> Int? {
+  match strip_top_qualifiers(ty) {
+    Array(elem~, size=Some(n), ..) =>
+      if n <= 0 {
+        Some(0)
+      } else {
+        match init_flatten_count(ctx, elem) {
+          None => Some(n)
+          Some(v) => Some(n * v)
+        }
+      }
+    Array(size=None, ..) => None
+    Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+      let fields = resolve_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=false,
+      )
+      match fields {
+        None => None
+        Some(list) => {
+          let mut total = 0
+          for field in list {
+            match init_flatten_count(ctx, field.ty) {
+              None => return None
+              Some(v) => total = total + v
+            }
+          }
+          Some(total)
+        }
+      }
+    }
+    Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+      let fields = resolve_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=true,
+      )
+      match fields {
+        None => None
+        Some(list) =>
+          if list.length() == 0 {
+            Some(0)
+          } else {
+            init_flatten_count(ctx, list[0].ty)
+          }
+      }
+    }
+    _ => Some(1)
+  }
+}
+
+///|
+fn init_flatten_count_from_fields(
+  ctx : SemContext,
+  fields : Array[@ast.Field],
+  start : Int,
+) -> Int? {
+  let mut total = 0
+  let mut idx = start
+  while idx < fields.length() {
+    match init_flatten_count(ctx, fields[idx].ty) {
+      None => return None
+      Some(v) => total = total + v
+    }
+    idx = idx + 1
+  }
+  Some(total)
+}
+
+///|
+fn collect_elided_struct_items(
+  ctx : SemContext,
+  items : Array[@ast.InitItem],
+  start : Int,
+  ty : @ast.CType,
+  max_count? : Int? = None,
+) -> (Array[@ast.InitItem], Int) {
+  let count = match init_flatten_count(ctx, ty) {
+    None => return ([], 0)
+    Some(v) => v
+  }
+  let adjusted_count = match strip_top_qualifiers(ty) {
+    Struct(name=tag, id=tag_id, fields=field_list, attrs=_) =>
+      if start < items.length() &&
+        items[start].designators.length() == 0 &&
+        items[start].value is Expr(expr~, ..) &&
+        expr is StringLit(..) {
+        let fields = resolve_struct_fields(
+          ctx,
+          tag,
+          tag_id,
+          field_list,
+          is_union=false,
+        )
+        match fields {
+          Some(list) =>
+            if list.length() > 0 {
+              match strip_top_qualifiers(list[0].ty) {
+                Array(elem~, ..) if is_char_type(elem) =>
+                  match init_flatten_count_from_fields(ctx, list, 1) {
+                    Some(rest) => 1 + rest
+                    None => count
+                  }
+                _ => count
+              }
+            } else {
+              count
+            }
+          None => count
+        }
+      } else {
+        count
+      }
+    _ => count
+  }
+  let limit_count = match max_count {
+    Some(v) if v >= 0 && v < adjusted_count => v
+    _ => adjusted_count
+  }
+  if limit_count <= 0 {
+    return ([], 0)
+  }
+  let mut idx = start
+  let limit = start + limit_count
+  let collected : Array[@ast.InitItem] = []
   while idx < items.length() && idx < limit {
     let item = items[idx]
     if item.designators.length() > 0 {
@@ -4089,6 +5048,22 @@ pub fn next_init_field(
     return Some((field, i + 1))
   }
   None
+}
+
+///|
+fn count_remaining_init_fields(fields : Array[@ast.Field], start : Int) -> Int {
+  let mut count = 0
+  let mut idx = start
+  while true {
+    match next_init_field(fields, idx) {
+      None => break
+      Some((_, next_idx)) => {
+        count = count + 1
+        idx = next_idx
+      }
+    }
+  }
+  count
 }
 
 ///|
@@ -4636,11 +5611,13 @@ fn types_compatible_for_decl(a : @ast.CType, b : @ast.CType) -> Bool {
       if a_varargs != b_varargs {
         return false
       }
-      if a_params.length() != b_params.length() {
+      let a_adj = a_params.map(p => adjust_param_type_for_sig(p))
+      let b_adj = b_params.map(p => adjust_param_type_for_sig(p))
+      if a_adj.length() != b_adj.length() {
         return false
       }
-      for i = 0; i < a_params.length(); i = i + 1 {
-        if !types_compatible_for_decl(a_params[i], b_params[i]) {
+      for i = 0; i < a_adj.length(); i = i + 1 {
+        if !types_compatible_for_decl(a_adj[i], b_adj[i]) {
           return false
         }
       }
@@ -4656,6 +5633,90 @@ pub fn is_int_like(ty : @ast.CType) -> Bool {
     Int(..) => true
     Bool => true
     Enum(..) => true
+    _ => false
+  }
+}
+
+///|
+fn types_compatible_for_generic(a : @ast.CType, b : @ast.CType) -> Bool {
+  match (a, b) {
+    (Attributed(base~, ..), _) => types_compatible_for_generic(base, b)
+    (_, Attributed(base~, ..)) => types_compatible_for_generic(a, base)
+    (Qualified(qual=qa, base=ba), Qualified(qual=qb, base=bb)) =>
+      qa == qb && types_compatible_for_generic(ba, bb)
+    (Qualified(..), _) => false
+    (_, Qualified(..)) => false
+    (Array(elem=elem_a, size=size_a, ..), Array(elem=elem_b, size=size_b, ..)) =>
+      match (size_a, size_b) {
+        (Some(sa), Some(sb)) =>
+          sa == sb && types_compatible_for_generic(elem_a, elem_b)
+        _ => types_compatible_for_generic(elem_a, elem_b)
+      }
+    (Pointer(inner_a), Pointer(inner_b)) =>
+      types_compatible_for_generic(inner_a, inner_b)
+    (
+      Function(
+        return_type=a_ret,
+        params=a_params,
+        varargs=a_varargs,
+        is_old_style=a_old,
+        call_conv=a_call
+      ),
+      Function(
+        return_type=b_ret,
+        params=b_params,
+        varargs=b_varargs,
+        is_old_style=b_old,
+        call_conv=b_call
+      ),
+    ) => {
+      if !types_compatible_for_generic(a_ret, b_ret) {
+        return false
+      }
+      if a_call != b_call {
+        return false
+      }
+      if a_old || b_old {
+        return true
+      }
+      if a_varargs != b_varargs {
+        return false
+      }
+      if a_params.length() != b_params.length() {
+        return false
+      }
+      for i = 0; i < a_params.length(); i = i + 1 {
+        if !types_compatible_for_generic(a_params[i], b_params[i]) {
+          return false
+        }
+      }
+      true
+    }
+    (Void, Void) => true
+    (Bool, Bool) => true
+    (
+      Int(kind=a_kind, unsigned=a_unsigned),
+      Int(kind=b_kind, unsigned=b_unsigned),
+    ) => a_kind == b_kind && a_unsigned == b_unsigned
+    (Float(kind=a_kind), Float(kind=b_kind)) => a_kind == b_kind
+    (Struct(name=a_name, id=a_id, ..), Struct(name=b_name, id=b_id, ..)) =>
+      if a_id != 0 && b_id != 0 {
+        a_id == b_id
+      } else {
+        a_name == b_name
+      }
+    (Union(name=a_name, id=a_id, ..), Union(name=b_name, id=b_id, ..)) =>
+      if a_id != 0 && b_id != 0 {
+        a_id == b_id
+      } else {
+        a_name == b_name
+      }
+    (Enum(name=a_name, id=a_id, ..), Enum(name=b_name, id=b_id, ..)) =>
+      if a_id != 0 && b_id != 0 {
+        a_id == b_id
+      } else {
+        a_name == b_name
+      }
     _ => false
   }
 }
@@ -4688,6 +5749,15 @@ fn is_pointer_type(ty : @ast.CType) -> Bool {
 }
 
 ///|
+fn element_type_for_pointer_arith(ty : @ast.CType) -> @ast.CType? {
+  match strip_top_qualifiers_keep_attrs(ty) {
+    Pointer(inner) => Some(inner)
+    Array(elem~, ..) => Some(elem)
+    _ => None
+  }
+}
+
+///|
 fn is_void_pointer_type(ty : @ast.CType) -> Bool {
   match strip_top_qualifiers(ty) {
     Pointer(inner) => is_void_type(inner)
@@ -4697,10 +5767,11 @@ fn is_void_pointer_type(ty : @ast.CType) -> Bool {
 
 ///|
 pub fn decay_type(ty : @ast.CType) -> @ast.CType {
-  match strip_top_qualifiers(ty) {
+  let stripped = strip_top_qualifiers(ty)
+  match stripped {
     Array(elem~, ..) => Pointer(elem)
-    Function(..) => Pointer(ty)
-    _ => ty
+    Function(..) => Pointer(stripped)
+    _ => stripped
   }
 }
 
@@ -4777,13 +5848,13 @@ fn lookup_struct_def(
     }
     match def {
       None => None
-      Some(def) => if def.fields.length() == 0 { None } else { Some(def) }
+      Some(def) => Some(def)
     }
   } else {
     let defs = if is_union { ctx.union_defs } else { ctx.struct_defs }
     match defs.get(name) {
       None => None
-      Some(def) => if def.fields.length() == 0 { None } else { Some(def) }
+      Some(def) => Some(def)
     }
   }
 }
@@ -5748,8 +6819,12 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
       match lookup_value(ctx, name, id) {
         Some(ty) => decay_type(ty)
         None => {
-          add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
-          default_int_type()
+          if enum_const_value(ctx, name, id) is Some(_) {
+            default_int_type()
+          } else {
+            add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
+            default_int_type()
+          }
         }
       }
     LabelAddr(name~, loc~, ..) => {
@@ -6050,9 +7125,18 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
           }
           common_int_type(ctx, lhs_ty, rhs_ty)
         }
-      }
+    }
     Conditional(cond~, then_expr~, else_expr~, loc~, ..) => {
       check_cond_expr(ctx, cond)
+      match try_eval_int_const(ctx, cond) {
+        Some(v) =>
+          if v != 0 {
+            return type_of_expr(ctx, then_expr)
+          } else {
+            return type_of_expr(ctx, else_expr)
+          }
+        None => ()
+      }
       let then_ty = type_of_expr(ctx, then_expr)
       let else_ty = type_of_expr(ctx, else_expr)
       match (strip_top_qualifiers(then_ty), strip_top_qualifiers(else_ty)) {
@@ -6261,6 +7345,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
             let arg_ty = decay_type(type_of_expr(ctx, args[i]))
             if !is_old_style && i < params.length() {
               if !can_assign(params[i], arg_ty) &&
+                transparent_union_member_type(ctx, params[i], args[i]) is None &&
                 !(is_pointer_type(params[i]) &&
                 is_null_pointer_expr(ctx, args[i])) {
                 let call_name = match callee {
@@ -7019,6 +8104,7 @@ pub fn push_scope(ctx : SemContext) -> Unit {
   ctx.next_local_scope_id = ctx.next_local_scope_id + 1
   ctx.local_scope_stack.push(ctx.next_local_scope_id)
   ctx.local_overrides.push([])
+  ctx.enum_const_overrides.push([])
 }
 
 ///|
@@ -7041,6 +8127,26 @@ pub fn pop_scope(ctx : SemContext) -> Unit {
       }
       ensure_int_array_capacity(ctx.local_scope_ids_by_id, id)
       ctx.local_scope_ids_by_id[id - 1] = entry.prev_scope
+    }
+  }
+  if ctx.enum_const_overrides.pop() is Some(overrides) {
+    let mut i = overrides.length()
+    while i > 0 {
+      i = i - 1
+      let entry = overrides[i]
+      let id = entry.id
+      if id <= 0 {
+        continue
+      }
+      match entry.prev_value {
+        Some(v) => set_enum_const_by_id(ctx, id, v)
+        None =>
+          if id <= ctx.enum_consts_by_id.length() {
+            ctx.enum_consts_by_id[id - 1] = None
+          }
+      }
+      ensure_int_array_capacity(ctx.enum_const_scope_ids_by_id, id)
+      ctx.enum_const_scope_ids_by_id[id - 1] = entry.prev_scope
     }
   }
   ignore(ctx.local_scope_stack.pop())

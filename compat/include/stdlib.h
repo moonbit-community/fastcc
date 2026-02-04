@@ -17,6 +17,7 @@ int atexit(void (*fn)(void));
 int atoi(const char *s);
 long atol(const char *s);
 long long atoll(const char *s);
+double atof(const char *s);
 
 long strtol(const char *s, char **endp, int base);
 long long strtoll(const char *s, char **endp, int base);

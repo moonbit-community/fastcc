@@ -69,6 +69,8 @@ pub fn merge_call_conv(existing : CallConv, incoming : CallConv) -> CallConv {
 pub(all) struct Attributes {
   aligned : AlignSpec?
   packed : Bool
+  ms_struct : Bool
+  transparent_union : Bool
   weak : Bool
   visibility : Visibility?
   section : String?
@@ -91,6 +93,8 @@ pub fn empty_attrs() -> Attributes {
   {
     aligned: None,
     packed: false,
+    ms_struct: false,
+    transparent_union: false,
     weak: false,
     visibility: None,
     section: None,
@@ -113,6 +117,8 @@ pub fn empty_attrs() -> Attributes {
 pub fn attrs_with(
   aligned? : AlignSpec? = None,
   packed? : Bool = false,
+  ms_struct? : Bool = false,
+  transparent_union? : Bool = false,
   weak? : Bool = false,
   visibility? : Visibility? = None,
   section? : String? = None,
@@ -132,6 +138,8 @@ pub fn attrs_with(
   {
     aligned,
     packed,
+    ms_struct,
+    transparent_union,
     weak,
     visibility,
     section,
@@ -189,6 +197,8 @@ pub fn merge_attrs(base : Attributes, incoming : Attributes) -> Attributes {
       incoming.aligned
     },
     packed: base.packed || incoming.packed,
+    ms_struct: base.ms_struct || incoming.ms_struct,
+    transparent_union: base.transparent_union || incoming.transparent_union,
     weak: base.weak || incoming.weak,
     visibility,
     section,
@@ -211,6 +221,8 @@ pub fn merge_attrs(base : Attributes, incoming : Attributes) -> Attributes {
 pub fn attrs_is_empty(attrs : Attributes) -> Bool {
   attrs.aligned is None &&
   !attrs.packed &&
+  !attrs.ms_struct &&
+  !attrs.transparent_union &&
   !attrs.weak &&
   attrs.visibility is None &&
   attrs.section is None &&
@@ -233,6 +245,8 @@ pub fn type_attrs_from(attrs : Attributes) -> Attributes {
   {
     aligned: attrs.aligned,
     packed: attrs.packed,
+    ms_struct: attrs.ms_struct,
+    transparent_union: attrs.transparent_union,
     weak: false,
     visibility: None,
     section: None,
@@ -253,7 +267,10 @@ pub fn type_attrs_from(attrs : Attributes) -> Attributes {
 
 ///|
 pub fn has_type_attrs(attrs : Attributes) -> Bool {
-  attrs.aligned is Some(_) || attrs.packed
+  attrs.aligned is Some(_) ||
+  attrs.packed ||
+  attrs.ms_struct ||
+  attrs.transparent_union
 }
 
 ///|

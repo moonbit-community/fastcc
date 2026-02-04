@@ -13,6 +13,11 @@ typedef struct {
 #define PRId32 "d"
 #define PRId64 "lld"
 
+#define PRIi8  "i"
+#define PRIi16 "i"
+#define PRIi32 "i"
+#define PRIi64 "lli"
+
 #define PRIu8  "u"
 #define PRIu16 "u"
 #define PRIu32 "u"

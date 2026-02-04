@@ -446,6 +446,7 @@ pub fn arm64_movimm(emitter : Arm64Emitter, reg : UInt, value : UInt64) -> Unit 
     x1 = value.lnot()
     mov1 = 0x92800000
   }
+  let use_movn = mov1 == 0x92800000
   i = 0
   while i < 64 {
     let chunk = (x1 >> i) & mask16
@@ -463,7 +464,7 @@ pub fn arm64_movimm(emitter : Arm64Emitter, reg : UInt, value : UInt64) -> Unit 
   }
   while i < 64 {
     let chunk = (value >> i) & mask16
-    if chunk != 0 {
+    if (use_movn && chunk != mask16) || (!use_movn && chunk != 0) {
       let insn1 = (0xf2800000 : UInt64)
         .lor(reg.to_uint64())
         .lor(chunk << 5)
@@ -1135,94 +1136,165 @@ pub fn arm64_ldrs(emitter : Arm64Emitter, reg : UInt, size : Int) -> Unit {
     1 => arm64_ldrx(emitter, false, 0, reg, reg, 0)
     2 => arm64_ldrx(emitter, false, 1, reg, reg, 0)
     3 => {
-      arm64_ldrx(emitter, false, 1, 30, reg, 0)
-      arm64_ldrx(emitter, false, 0, reg, reg, 2)
-      let insn = (0x2a0043c0 : UInt64)
-        .lor(reg.to_uint64())
-        .lor(reg.to_uint64() << 16)
-        .to_uint()
-      emit32(emitter, insn)
+      arm64_ldrx(emitter, false, 2, reg, reg, 0)
+      arm64_gen_opic(
+        emitter,
+        TOK_AND,
+        0,
+        false,
+        (0x00ffffff : UInt64),
+        reg.reinterpret_as_int(),
+        reg.reinterpret_as_int(),
+      )
+      |> ignore
     }
     4 => arm64_ldrx(emitter, false, 2, reg, reg, 0)
     5 => {
-      arm64_ldrx(emitter, false, 2, 30, reg, 0)
-      arm64_ldrx(emitter, false, 0, reg, reg, 4)
-      let insn = (0xaa0083c0 : UInt64)
-        .lor(reg.to_uint64())
-        .lor(reg.to_uint64() << 16)
-        .to_uint()
-      emit32(emitter, insn)
+      arm64_ldrx(emitter, false, 3, reg, reg, 0)
+      let mask : UInt64 = ((1 : UInt64) << (5 * 8)) - 1
+      arm64_gen_opic(
+        emitter,
+        TOK_AND,
+        1,
+        false,
+        mask,
+        reg.reinterpret_as_int(),
+        reg.reinterpret_as_int(),
+      )
+      |> ignore
     }
     6 => {
-      arm64_ldrx(emitter, false, 2, 30, reg, 0)
-      arm64_ldrx(emitter, false, 1, reg, reg, 4)
-      let insn = (0xaa0083c0 : UInt64)
-        .lor(reg.to_uint64())
-        .lor(reg.to_uint64() << 16)
-        .to_uint()
-      emit32(emitter, insn)
+      arm64_ldrx(emitter, false, 3, reg, reg, 0)
+      let mask : UInt64 = ((1 : UInt64) << (6 * 8)) - 1
+      arm64_gen_opic(
+        emitter,
+        TOK_AND,
+        1,
+        false,
+        mask,
+        reg.reinterpret_as_int(),
+        reg.reinterpret_as_int(),
+      )
+      |> ignore
     }
     7 => {
-      arm64_ldrx(emitter, false, 2, 30, reg, 0)
-      arm64_ldrx(emitter, false, 2, reg, reg, 3)
-      let insn1 = (0x53087c00 : UInt64)
-        .lor(reg.to_uint64())
-        .lor(reg.to_uint64() << 5)
-        .to_uint()
-      emit32(emitter, insn1)
-      let insn2 = (0xaa0083c0 : UInt64)
-        .lor(reg.to_uint64())
-        .lor(reg.to_uint64() << 16)
-        .to_uint()
-      emit32(emitter, insn2)
+      arm64_ldrx(emitter, false, 3, reg, reg, 0)
+      let mask : UInt64 = ((1 : UInt64) << (7 * 8)) - 1
+      arm64_gen_opic(
+        emitter,
+        TOK_AND,
+        1,
+        false,
+        mask,
+        reg.reinterpret_as_int(),
+        reg.reinterpret_as_int(),
+      )
+      |> ignore
     }
     8 => arm64_ldrx(emitter, false, 3, reg, reg, 0)
     9 => {
-      arm64_ldrx(emitter, false, 0, reg + 1, reg, 8)
+      arm64_ldrx(emitter, false, 3, reg + 1, reg, 8)
+      let mask : UInt64 = ((1 : UInt64) << (1 * 8)) - 1
+      arm64_gen_opic(
+        emitter,
+        TOK_AND,
+        1,
+        false,
+        mask,
+        (reg + 1).reinterpret_as_int(),
+        (reg + 1).reinterpret_as_int(),
+      )
+      |> ignore
       arm64_ldrx(emitter, false, 3, reg, reg, 0)
     }
     10 => {
-      arm64_ldrx(emitter, false, 1, reg + 1, reg, 8)
+      arm64_ldrx(emitter, false, 3, reg + 1, reg, 8)
+      let mask : UInt64 = ((1 : UInt64) << (2 * 8)) - 1
+      arm64_gen_opic(
+        emitter,
+        TOK_AND,
+        1,
+        false,
+        mask,
+        (reg + 1).reinterpret_as_int(),
+        (reg + 1).reinterpret_as_int(),
+      )
+      |> ignore
       arm64_ldrx(emitter, false, 3, reg, reg, 0)
     }
     11 => {
-      arm64_ldrx(emitter, false, 2, reg + 1, reg, 7)
-      let insn = (0x53087c00 : UInt64)
-        .lor((reg + 1).to_uint64())
-        .lor((reg + 1).to_uint64() << 5)
-        .to_uint()
-      emit32(emitter, insn)
+      arm64_ldrx(emitter, false, 3, reg + 1, reg, 8)
+      let mask : UInt64 = ((1 : UInt64) << (3 * 8)) - 1
+      arm64_gen_opic(
+        emitter,
+        TOK_AND,
+        1,
+        false,
+        mask,
+        (reg + 1).reinterpret_as_int(),
+        (reg + 1).reinterpret_as_int(),
+      )
+      |> ignore
       arm64_ldrx(emitter, false, 3, reg, reg, 0)
     }
     12 => {
-      arm64_ldrx(emitter, false, 2, reg + 1, reg, 8)
+      arm64_ldrx(emitter, false, 3, reg + 1, reg, 8)
+      let mask : UInt64 = ((1 : UInt64) << (4 * 8)) - 1
+      arm64_gen_opic(
+        emitter,
+        TOK_AND,
+        1,
+        false,
+        mask,
+        (reg + 1).reinterpret_as_int(),
+        (reg + 1).reinterpret_as_int(),
+      )
+      |> ignore
       arm64_ldrx(emitter, false, 3, reg, reg, 0)
     }
     13 => {
-      arm64_ldrx(emitter, false, 3, reg + 1, reg, 5)
-      let insn = (0xd358fc00 : UInt64)
-        .lor((reg + 1).to_uint64())
-        .lor((reg + 1).to_uint64() << 5)
-        .to_uint()
-      emit32(emitter, insn)
+      arm64_ldrx(emitter, false, 3, reg + 1, reg, 8)
+      let mask : UInt64 = ((1 : UInt64) << (5 * 8)) - 1
+      arm64_gen_opic(
+        emitter,
+        TOK_AND,
+        1,
+        false,
+        mask,
+        (reg + 1).reinterpret_as_int(),
+        (reg + 1).reinterpret_as_int(),
+      )
+      |> ignore
       arm64_ldrx(emitter, false, 3, reg, reg, 0)
     }
     14 => {
-      arm64_ldrx(emitter, false, 3, reg + 1, reg, 6)
-      let insn = (0xd350fc00 : UInt64)
-        .lor((reg + 1).to_uint64())
-        .lor((reg + 1).to_uint64() << 5)
-        .to_uint()
-      emit32(emitter, insn)
+      arm64_ldrx(emitter, false, 3, reg + 1, reg, 8)
+      let mask : UInt64 = ((1 : UInt64) << (6 * 8)) - 1
+      arm64_gen_opic(
+        emitter,
+        TOK_AND,
+        1,
+        false,
+        mask,
+        (reg + 1).reinterpret_as_int(),
+        (reg + 1).reinterpret_as_int(),
+      )
+      |> ignore
       arm64_ldrx(emitter, false, 3, reg, reg, 0)
     }
     15 => {
-      arm64_ldrx(emitter, false, 3, reg + 1, reg, 7)
-      let insn = (0xd348fc00 : UInt64)
-        .lor((reg + 1).to_uint64())
-        .lor((reg + 1).to_uint64() << 5)
-        .to_uint()
-      emit32(emitter, insn)
+      arm64_ldrx(emitter, false, 3, reg + 1, reg, 8)
+      let mask : UInt64 = ((1 : UInt64) << (7 * 8)) - 1
+      arm64_gen_opic(
+        emitter,
+        TOK_AND,
+        1,
+        false,
+        mask,
+        (reg + 1).reinterpret_as_int(),
+        (reg + 1).reinterpret_as_int(),
+      )
+      |> ignore
       arm64_ldrx(emitter, false, 3, reg, reg, 0)
     }
     16 => {

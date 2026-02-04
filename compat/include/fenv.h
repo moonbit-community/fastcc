@@ -12,4 +12,6 @@ typedef struct {
 #define FE_TOWARDZERO 0
 #define FE_ALL_EXCEPT 0
 
+int fesetround(int);
+
 #endif /* _TCC_COMPAT_FENV_H */

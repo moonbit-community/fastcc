@@ -32,6 +32,12 @@ pub(all) struct Macro {
 }
 
 ///|
+pub(all) struct MacroPushStack {
+  name_id : Int
+  mut stack : Array[Macro?]
+}
+
+///|
 pub(all) struct IncludeSpec {
   path : String
   is_angle : Bool
@@ -91,11 +97,13 @@ pub(all) struct Preprocessor {
   diags : @diag.DiagBag
   map : @source.SourceMap
   macros : Array[Macro?]
+  macro_push_stacks : Array[MacroPushStack]
   mut macro_epoch : Int
   pending : Array[@tokens.Token]
   mut held : @tokens.Token?
   cond_stack : Array[CondState]
   mut active : Bool
+  mut ms_struct_mode : Bool
   expanding : Array[Int]
   expanding_guards : Array[ExpandingGuard]
   date_literal : String
@@ -406,11 +414,13 @@ pub fn new_preprocessor(
     diags,
     map,
     macros: [],
+    macro_push_stacks: [],
     macro_epoch: 0,
     pending: Array::new(capacity=pending_capacity),
     held: None,
     cond_stack: Array::new(capacity=cond_capacity),
     active: true,
+    ms_struct_mode: false,
     expanding: Array::new(capacity=cond_capacity),
     expanding_guards: Array::new(capacity=cond_capacity),
     date_literal,
@@ -582,6 +592,60 @@ pub fn remove_macro(pp : Preprocessor, id : Int) -> Unit {
 }
 
 ///|
+fn macro_push_stack_index(pp : Preprocessor, id : Int) -> Int? {
+  let mut i = 0
+  while i < pp.macro_push_stacks.length() {
+    if pp.macro_push_stacks[i].name_id == id {
+      return Some(i)
+    }
+    i = i + 1
+  }
+  None
+}
+
+///|
+fn push_macro_state(pp : Preprocessor, id : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  let saved = get_macro(pp, id)
+  match macro_push_stack_index(pp, id) {
+    Some(idx) => {
+      let entry = pp.macro_push_stacks[idx]
+      entry.stack.push(saved)
+      pp.macro_push_stacks[idx] = entry
+    }
+    None =>
+      pp.macro_push_stacks.push({
+        name_id: id,
+        stack: [saved],
+      })
+  }
+}
+
+///|
+fn pop_macro_state(pp : Preprocessor, id : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  match macro_push_stack_index(pp, id) {
+    None => ()
+    Some(idx) => {
+      let entry = pp.macro_push_stacks[idx]
+      match entry.stack.pop() {
+        None => ()
+        Some(saved) =>
+          match saved {
+            Some(def) => set_macro(pp, id, def)
+            None => remove_macro(pp, id)
+          }
+      }
+      pp.macro_push_stacks[idx] = entry
+    }
+  }
+}
+
+///|
 pub fn next_input_token(pp : Preprocessor) -> @tokens.Token {
   while true {
     match pp.held {
@@ -665,6 +729,47 @@ pub fn read_directive_head_token(pp : Preprocessor) -> @tokens.Token? {
       } else {
         Some(tok)
       }
+  }
+}
+
+///|
+fn handle_pragma_tokens(
+  pp : Preprocessor,
+  tokens : Array[@tokens.Token],
+) -> Unit {
+  if tokens.length() >= 2 && tokens[0].kind is Ident &&
+    tokens[1].kind is Ident {
+    let name = pp_token_lexeme(pp, tokens[0])
+    if name == "ms_struct" {
+      let mode = pp_token_lexeme(pp, tokens[1])
+      if mode == "on" {
+        pp.ms_struct_mode = true
+      } else if mode == "off" {
+        pp.ms_struct_mode = false
+      }
+      return
+    }
+  }
+  if tokens.length() < 4 {
+    return
+  }
+  if !(tokens[0].kind is Ident) {
+    return
+  }
+  let action = pp_token_lexeme(pp, tokens[0])
+  if action != "push_macro" && action != "pop_macro" {
+    return
+  }
+  if !(tokens[1].kind is LParen) || !(tokens[2].kind is StrLit) ||
+    !(tokens[3].kind is RParen) {
+    return
+  }
+  let name = strip_quotes(pp_token_lexeme(pp, tokens[2]))
+  let name_id = macro_id_from_name(pp, name)
+  if action == "push_macro" {
+    push_macro_state(pp, name_id)
+  } else {
+    pop_macro_state(pp, name_id)
   }
 }
 
@@ -2374,8 +2479,8 @@ pub fn eval_if_expr(
     add_pp_error(pp, loc, "empty #if expression")
     return false
   }
-  let parser = { tokens, index: 0, pp }
-  let value = parse_logical_or(parser, loc)
+  let parser = { tokens, index: 0, pp, suppress_errors: false }
+  let value = parse_conditional(parser, loc)
   !pp_is_zero(value)
 }
 
@@ -2384,6 +2489,7 @@ pub(all) struct IfParser {
   tokens : Array[@tokens.Token]
   mut index : Int
   pp : Preprocessor
+  mut suppress_errors : Bool
 }
 
 ///|
@@ -2691,7 +2797,7 @@ pub fn parse_primary(p : IfParser, loc : @source.SrcLoc) -> PpValue {
         }
       }
       if tok.kind == LParen {
-        let value = parse_logical_or(p, loc)
+        let value = parse_conditional(p, loc)
         if !match_kind(p, RParen) {
           // try to resync to a later ')', but don't hard-fail
           let mut idx = p.index
@@ -2803,7 +2909,9 @@ pub fn parse_mul(p : IfParser, loc : @source.SrcLoc) -> PpValue {
     if match_kind(p, Slash) {
       let rhs = parse_unary(p, loc)
       if pp_is_zero(rhs) {
-        add_pp_error(p.pp, loc, "division by zero in #if")
+        if !p.suppress_errors {
+          add_pp_error(p.pp, loc, "division by zero in #if")
+        }
         value = { value: 0, is_unsigned: false }
       } else {
         let unsigned = pp_unsigned_result(value, rhs)
@@ -2821,7 +2929,9 @@ pub fn parse_mul(p : IfParser, loc : @source.SrcLoc) -> PpValue {
     if match_kind(p, Percent) {
       let rhs = parse_unary(p, loc)
       if pp_is_zero(rhs) {
-        add_pp_error(p.pp, loc, "modulo by zero in #if")
+        if !p.suppress_errors {
+          add_pp_error(p.pp, loc, "modulo by zero in #if")
+        }
         value = { value: 0, is_unsigned: false }
       } else {
         let unsigned = pp_unsigned_result(value, rhs)
@@ -3015,7 +3125,15 @@ pub fn parse_bit_or(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 pub fn parse_logical_and(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_bit_or(p, loc)
   while match_kind(p, AmpAmp) {
-    let rhs = parse_bit_or(p, loc)
+    let mut rhs = pp_bool_value(false)
+    if pp_is_zero(value) {
+      let prev = p.suppress_errors
+      p.suppress_errors = true
+      rhs = parse_bit_or(p, loc)
+      p.suppress_errors = prev
+    } else {
+      rhs = parse_bit_or(p, loc)
+    }
     value = pp_bool_value(!pp_is_zero(value) && !pp_is_zero(rhs))
   }
   value
@@ -3025,10 +3143,48 @@ pub fn parse_logical_and(p : IfParser, loc : @source.SrcLoc) -> PpValue {
 pub fn parse_logical_or(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   let mut value = parse_logical_and(p, loc)
   while match_kind(p, PipePipe) {
-    let rhs = parse_logical_and(p, loc)
+    let mut rhs = pp_bool_value(false)
+    if !pp_is_zero(value) {
+      let prev = p.suppress_errors
+      p.suppress_errors = true
+      rhs = parse_logical_and(p, loc)
+      p.suppress_errors = prev
+    } else {
+      rhs = parse_logical_and(p, loc)
+    }
     value = pp_bool_value(!pp_is_zero(value) || !pp_is_zero(rhs))
   }
   value
+}
+
+///|
+pub fn parse_conditional(p : IfParser, loc : @source.SrcLoc) -> PpValue {
+  let cond = parse_logical_or(p, loc)
+  if match_kind(p, Question) {
+    let then_val = if match_kind(p, Colon) {
+      cond
+    } else {
+      let prev = p.suppress_errors
+      if pp_is_zero(cond) {
+        p.suppress_errors = true
+      }
+      let val = parse_logical_or(p, loc)
+      p.suppress_errors = prev
+      if !match_kind(p, Colon) {
+        add_pp_error(p.pp, loc, "expected ':' in #if conditional")
+      }
+      val
+    }
+    let prev = p.suppress_errors
+    if !pp_is_zero(cond) {
+      p.suppress_errors = true
+    }
+    let else_val = parse_conditional(p, loc)
+    p.suppress_errors = prev
+    if !pp_is_zero(cond) { then_val } else { else_val }
+  } else {
+    cond
+  }
 }
 
 ///|
@@ -3214,7 +3370,10 @@ pub fn handle_directive(pp : Preprocessor, _hash_tok : @tokens.Token) -> Unit {
     return
   }
   if name_id == ids.dir_pragma {
-    skip_directive_line(pp)
+    let args = read_directive_tokens(pp)
+    if current_active(pp) {
+      handle_pragma_tokens(pp, args)
+    }
     return
   }
   if current_active(pp) {

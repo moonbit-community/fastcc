@@ -13,8 +13,16 @@ priv struct Parser {
   mut next_typedef_scope_id : Int
   typedef_overrides : Array[Array[(Int, @ast.CType?, Int)]]
   pending_typedef_scopes : Array[Bool]
+  tag_values : Array[Int]
+  tag_scope_levels : Array[Int]
+  tag_scope_stack : Array[Int]
+  mut next_tag_scope_id : Int
+  tag_overrides : Array[Array[(Int, Int, Int)]]
+  pending_tag_scopes : Array[Bool]
+  mut next_tag_id : Int
   mut anon_tag_id : Int
   mut next_expr_id : Int
+  mut next_temp_id : Int
   builtin_ids : BuiltinIds
 }
 
@@ -47,8 +55,18 @@ fn new_parser(pp : @preproc.Preprocessor) -> Parser {
   )
   typedef_overrides.push([])
   let pending_typedef_scopes : Array[Bool] = Array::new(capacity=scope_capacity)
+  let tag_values : Array[Int] = Array::new(capacity=id_capacity)
+  let tag_scope_levels : Array[Int] = Array::new(capacity=id_capacity)
+  let tag_scope_stack : Array[Int] = Array::new(capacity=scope_capacity)
+  tag_scope_stack.push(1)
+  let tag_overrides : Array[Array[(Int, Int, Int)]] = Array::new(
+    capacity=override_capacity,
+  )
+  tag_overrides.push([])
+  let pending_tag_scopes : Array[Bool] = Array::new(capacity=scope_capacity)
   let buffer : Array[@tokens.Token] = Array::new(capacity=buffer_capacity)
   let next_typedef_scope_id = 2
+  let next_tag_scope_id = 2
   let builtin_defs = [
     ("__builtin_va_list", @ast.CType::Pointer(Void)),
     ("_Float16", Int(kind=Short, unsigned=true)),
@@ -88,8 +106,16 @@ fn new_parser(pp : @preproc.Preprocessor) -> Parser {
     next_typedef_scope_id,
     typedef_overrides,
     pending_typedef_scopes,
+    tag_values,
+    tag_scope_levels,
+    tag_scope_stack,
+    next_tag_scope_id,
+    tag_overrides,
+    pending_tag_scopes,
+    next_tag_id: 1,
     anon_tag_id: 0,
     next_expr_id: 0,
+    next_temp_id: 0,
     builtin_ids: {
       types_compatible_p: builtin_types_compatible_p,
       offsetof: builtin_offsetof,
@@ -224,6 +250,14 @@ fn parse_decl(p : Parser) -> Array[@ast.Decl]? {
                 decl.ty,
                 @ast.normalize_call_conv(combined_attrs.call_conv),
               )
+              let final_ty = match adjusted_ty {
+                Function(..) => adjusted_ty
+                _ =>
+                  @ast.apply_type_attrs(
+                    adjusted_ty,
+                    @ast.type_attrs_from(combined_attrs),
+                  )
+              }
               if is_typedef {
                 if init is Some(_) {
                   add_parse_error(
@@ -335,7 +369,7 @@ fn parse_decl(p : Parser) -> Array[@ast.Decl]? {
                           Var({
                             name: decl.name,
                             id: decl.id,
-                            ty: adjusted_ty,
+                            ty: final_ty,
                             init,
                             storage,
                             attrs: combined_attrs,
@@ -356,7 +390,7 @@ fn parse_decl(p : Parser) -> Array[@ast.Decl]? {
                       Var({
                         name: decl.name,
                         id: decl.id,
-                        ty: adjusted_ty,
+                        ty: final_ty,
                         init,
                         storage,
                         attrs: combined_attrs,
@@ -1199,6 +1233,21 @@ fn parse_attribute_clause(p : Parser, loc : @source.SrcLoc) -> @ast.Attributes {
           skip_paren_group(p)
         }
       }
+      "ms_struct" => {
+        attrs = @ast.merge_attrs(attrs, @ast.attrs_with(ms_struct=true))
+        if has_args {
+          skip_paren_group(p)
+        }
+      }
+      "transparent_union" => {
+        attrs = @ast.merge_attrs(
+          attrs,
+          @ast.attrs_with(transparent_union=true),
+        )
+        if has_args {
+          skip_paren_group(p)
+        }
+      }
       "weak" => {
         attrs = @ast.merge_attrs(attrs, @ast.attrs_with(weak=true))
         if has_args {
@@ -1599,6 +1648,7 @@ fn parse_designator_list(
 ) -> (Array[@ast.InitDesignator], @source.SrcLoc) {
   let designators : Array[@ast.InitDesignator] = Array::new(capacity=2)
   let mut start_loc = peek_token(p).loc
+  let mut saw_old_style = false
   while true {
     if p.current.kind is Dot {
       let dot_tok = advance_token(p)
@@ -1631,6 +1681,7 @@ fn parse_designator_list(
       let name_tok = advance_token(p)
       start_loc = name_tok.loc
       expect(p, Colon, "expected ':' after designator") |> ignore
+      saw_old_style = true
       designators.push(
         Field(
           name=token_lexeme(p, name_tok),
@@ -1643,7 +1694,7 @@ fn parse_designator_list(
     break
   }
   if designators.length() > 0 {
-    if match_token(p, Assign) is None {
+    if match_token(p, Assign) is None && !saw_old_style {
       add_parse_error(p, peek_token(p).loc, "expected '=' after designator")
     }
   }
@@ -1967,6 +2018,16 @@ fn parse_array_size(p : Parser) -> (Int?, @ast.Expr?) {
   if peek_token(p).kind is KwStatic {
     ignore(advance_token(p))
   }
+  while true {
+    match peek_token(p).kind {
+      KwConst | KwVolatile | KwRestrict => ignore(advance_token(p))
+      _ => break
+    }
+  }
+  if peek_token(p).kind is Star {
+    ignore(advance_token(p))
+    return (None, None)
+  }
   let loc = peek_token(p).loc
   if peek_token(p).kind is IntLit && peek_kind(p, 1) is RBracket {
     let tok = advance_token(p)
@@ -2012,6 +2073,15 @@ fn parse_array_size(p : Parser) -> (Int?, @ast.Expr?) {
 fn next_anon_tag(p : Parser) -> (String, Int) {
   p.anon_tag_id = p.anon_tag_id + 1
   let name = "__anon_tag_\{p.anon_tag_id}"
+  let id = p.next_tag_id
+  p.next_tag_id = id + 1
+  (name, id)
+}
+
+///|
+fn next_temp_ident(p : Parser) -> (String, Int) {
+  p.next_temp_id = p.next_temp_id + 1
+  let name = "__mbt_cond_tmp_\{p.next_temp_id}"
   let (_, id) = p.pp.interner.intern_view_with_id(name[:])
   (name, id)
 }
@@ -2024,11 +2094,13 @@ fn parse_struct_type(
   let kw = advance_token(p)
   let mut attrs = parse_attributes(p)
   let mut name = ""
+  let mut name_id = 0
   let mut id = 0
   if peek_token(p).kind is Ident {
     let tok = advance_token(p)
     name = token_lexeme(p, tok)
-    id = @tokens.token_id(tok)
+    name_id = @tokens.token_id(tok)
+    id = resolve_tag_id(p, name_id)
   } else {
     ()
   }
@@ -2037,10 +2109,15 @@ fn parse_struct_type(
     let fields = parse_struct_fields(p)
     expect(p, RBrace, "expected '}' after fields") |> ignore
     attrs = @ast.merge_attrs(attrs, parse_attributes(p))
+    if p.pp.ms_struct_mode {
+      attrs = @ast.merge_attrs(attrs, @ast.attrs_with(ms_struct=true))
+    }
     if name == "" {
       let (anon_name, anon_id) = next_anon_tag(p)
       name = anon_name
       id = anon_id
+    } else {
+      id = define_tag_id(p, name_id)
     }
     let ty = if is_union {
       @ast.CType::Union(name~, id~, fields=Some(fields), attrs~)
@@ -2052,6 +2129,13 @@ fn parse_struct_type(
   if name == "" {
     add_parse_error(p, kw.loc, "expected tag name or '{'")
     return None
+  }
+  if id == 0 && name != "" {
+    let (_, name_id) = p.pp.interner.intern_view_with_id(name[:])
+    id = resolve_tag_id(p, name_id)
+  }
+  if p.pp.ms_struct_mode {
+    attrs = @ast.merge_attrs(attrs, @ast.attrs_with(ms_struct=true))
   }
   let ty = if is_union {
     @ast.CType::Union(name~, id~, fields=None, attrs~)
@@ -2155,11 +2239,13 @@ fn parse_struct_fields(p : Parser) -> Array[@ast.RecordItem] {
 fn parse_enum_type(p : Parser) -> (@ast.CType, @source.SrcLoc)? {
   let kw = advance_token(p)
   let mut name = ""
+  let mut name_id = 0
   let mut id = 0
   if peek_token(p).kind is Ident {
     let tok = advance_token(p)
     name = token_lexeme(p, tok)
-    id = @tokens.token_id(tok)
+    name_id = @tokens.token_id(tok)
+    id = resolve_tag_id(p, name_id)
   } else {
     ()
   }
@@ -2170,12 +2256,18 @@ fn parse_enum_type(p : Parser) -> (@ast.CType, @source.SrcLoc)? {
       let (anon_name, anon_id) = next_anon_tag(p)
       name = anon_name
       id = anon_id
+    } else {
+      id = define_tag_id(p, name_id)
     }
     return Some((Enum(name~, id~, items=Some(items)), kw.loc))
   }
   if name == "" {
     add_parse_error(p, kw.loc, "expected enum name or '{'")
     return None
+  }
+  if id == 0 && name != "" {
+    let (_, name_id) = p.pp.interner.intern_view_with_id(name[:])
+    id = resolve_tag_id(p, name_id)
   }
   Some((Enum(name~, id~, items=None), kw.loc))
 }
@@ -2321,6 +2413,30 @@ fn parse_param_declarator(
   //   void *(*transform)(void*)
   let (ty0, pointer_attrs) = parse_pointer_chain(p, base)
   let mut attrs = @ast.merge_attrs(pointer_attrs, parse_attributes(p))
+  if peek_kind(p, 0) is LParen && peek_kind(p, 1) is LBracket {
+    let lparen = advance_token(p)
+    let (inner_wrappers, _params, _varargs, _old_style) = parse_inner_suffix_wrappers(
+      p,
+    )
+    attrs = @ast.merge_attrs(attrs, parse_attributes(p))
+    expect(p, RParen, "expected ')' in declarator") |> ignore
+    let (
+      outer_wrappers,
+      _outer_params,
+      _outer_varargs,
+      _outer_old_style,
+      suffix_attrs,
+    ) = parse_suffix_wrappers(p)
+    attrs = @ast.merge_attrs(attrs, suffix_attrs)
+    let wrappers = inner_wrappers
+    for wrap in outer_wrappers {
+      wrappers.push(wrap)
+    }
+    let mut ty = apply_decl_wrappers(ty0, wrappers)
+    let call_conv = @ast.normalize_call_conv(attrs.call_conv)
+    ty = @ast.apply_call_conv_to_type(ty, call_conv)
+    return Some({ name: "", id: 0, ty, loc: lparen.loc })
+  }
   if is_paren_pointer_declarator(p) {
     let parts = parse_paren_pointer_parts(p, true, fallback_loc)
     let parts = match parts {
@@ -2374,6 +2490,7 @@ fn parse_param_declarator(
 ///|
 fn parse_compound_stmt(p : Parser, loc : @source.SrcLoc) -> @ast.Stmt {
   p.pending_typedef_scopes.push(false)
+  p.pending_tag_scopes.push(false)
   let stmts : Array[@ast.Stmt] = Array::new(capacity=8)
   while true {
     match p.current.kind {
@@ -2385,6 +2502,10 @@ fn parse_compound_stmt(p : Parser, loc : @source.SrcLoc) -> @ast.Stmt {
   let did_scope = p.pending_typedef_scopes.pop().unwrap_or(false)
   if did_scope {
     pop_typedef_scope(p)
+  }
+  let did_tag_scope = p.pending_tag_scopes.pop().unwrap_or(false)
+  if did_tag_scope {
+    pop_tag_scope(p)
   }
   Compound(stmts~, loc~)
 }
@@ -2497,6 +2618,7 @@ fn parse_stmt(p : Parser) -> @ast.Stmt {
   }
   if is_type_start(p, tok) {
     ensure_typedef_scope(p)
+    ensure_tag_scope(p)
     match parse_decl_specs(p) {
       Some(specs) => {
         let base = specs.ty
@@ -2530,6 +2652,14 @@ fn parse_stmt(p : Parser) -> @ast.Stmt {
                   decl.ty,
                   @ast.normalize_call_conv(combined_attrs.call_conv),
                 )
+                let final_ty = match adjusted_ty {
+                  Function(..) => adjusted_ty
+                  _ =>
+                    @ast.apply_type_attrs(
+                      adjusted_ty,
+                      @ast.type_attrs_from(combined_attrs),
+                    )
+                }
                 if is_typedef {
                   if init is Some(_) {
                     add_parse_error(
@@ -2563,7 +2693,7 @@ fn parse_stmt(p : Parser) -> @ast.Stmt {
                   decls.push({
                     name: decl.name,
                     id: decl.id,
-                    ty: adjusted_ty,
+                    ty: final_ty,
                     init: actual_init,
                     storage,
                     attrs: combined_attrs,
@@ -2579,7 +2709,7 @@ fn parse_stmt(p : Parser) -> @ast.Stmt {
           }
           expect(p, Semicolon, "expected ';' after declaration") |> ignore
           if is_typedef {
-            return Empty(loc=decl_loc)
+            return TagDef(ty=base, loc=decl_loc)
           }
           if saw_decl {
             return DeclStmt(decls~, loc=decl_loc)
@@ -2638,6 +2768,7 @@ fn parse_do_while_stmt(p : Parser, loc : @source.SrcLoc) -> @ast.Stmt {
 fn parse_for_stmt(p : Parser, loc : @source.SrcLoc) -> @ast.Stmt {
   expect(p, LParen, "expected '(' after for") |> ignore
   p.pending_typedef_scopes.push(false)
+  p.pending_tag_scopes.push(false)
   let init = parse_for_init(p)
   let mut did_scope = false
   let scope_idx = p.pending_typedef_scopes.length() - 1
@@ -2645,6 +2776,13 @@ fn parse_for_stmt(p : Parser, loc : @source.SrcLoc) -> @ast.Stmt {
     did_scope = true
   } else {
     p.pending_typedef_scopes.pop() |> ignore
+  }
+  let mut did_tag_scope = false
+  let tag_scope_idx = p.pending_tag_scopes.length() - 1
+  if p.pending_tag_scopes[tag_scope_idx] {
+    did_tag_scope = true
+  } else {
+    p.pending_tag_scopes.pop() |> ignore
   }
   let cond = if match_token(p, Semicolon) is Some(_) {
     None
@@ -2667,6 +2805,12 @@ fn parse_for_stmt(p : Parser, loc : @source.SrcLoc) -> @ast.Stmt {
       pop_typedef_scope(p)
     }
   }
+  if did_tag_scope {
+    let opened = p.pending_tag_scopes.pop().unwrap_or(false)
+    if opened {
+      pop_tag_scope(p)
+    }
+  }
   For(init~, cond~, step~, body~, loc~)
 }
 
@@ -2686,6 +2830,7 @@ fn parse_for_init(p : Parser) -> @ast.Stmt? {
   }
   if is_type_start(p, peek_token(p)) {
     ensure_typedef_scope(p)
+    ensure_tag_scope(p)
     match parse_decl_specs(p) {
       Some(specs) => {
         let base = specs.ty
@@ -2844,16 +2989,58 @@ fn parse_expr_cond(p : Parser) -> @ast.Expr {
   match p.current.kind {
     Question => {
       let tok = advance_token(p)
-      let then_expr = parse_expr(p)
-      expect(p, Colon, "expected ':' in conditional expression") |> ignore
-      let else_expr = parse_expr_cond(p)
-      Conditional(
-        cond~,
-        then_expr~,
-        else_expr~,
-        node_id=new_expr_id(p),
-        loc=tok.loc,
-      )
+      if match_token(p, Colon) is Some(_) {
+        let else_expr = parse_expr_cond(p)
+        let (tmp_name, tmp_id) = next_temp_ident(p)
+        let tmp_ident = @ast.Expr::Ident(
+          name=tmp_name,
+          id=tmp_id,
+          node_id=new_expr_id(p),
+          loc=tok.loc,
+        )
+        let tmp_ident_value = @ast.Expr::Ident(
+          name=tmp_name,
+          id=tmp_id,
+          node_id=new_expr_id(p),
+          loc=tok.loc,
+        )
+        let tmp_init = @ast.Initializer::Expr(expr=cond, loc=tok.loc)
+        let decl = @ast.VarDecl::{
+          name: tmp_name,
+          id: tmp_id,
+          ty: @ast.CType::TypeofExpr(expr=cond),
+          init: Some(tmp_init),
+          storage: Default,
+          attrs: @ast.empty_attrs(),
+          loc: tok.loc,
+        }
+        let cond_expr = @ast.Expr::Conditional(
+          cond=tmp_ident,
+          then_expr=tmp_ident_value,
+          else_expr=else_expr,
+          node_id=new_expr_id(p),
+          loc=tok.loc,
+        )
+        StmtExpr(
+          stmts=[
+            DeclStmt(decls=[decl], loc=tok.loc),
+            ExprStmt(expr=cond_expr, loc=tok.loc),
+          ],
+          node_id=new_expr_id(p),
+          loc=tok.loc,
+        )
+      } else {
+        let then_expr = parse_expr(p)
+        expect(p, Colon, "expected ':' in conditional expression") |> ignore
+        let else_expr = parse_expr_cond(p)
+        Conditional(
+          cond~,
+          then_expr~,
+          else_expr~,
+          node_id=new_expr_id(p),
+          loc=tok.loc,
+        )
+      }
     }
     _ => cond
   }
@@ -3189,97 +3376,170 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
       )
     StrLit => parse_string_literal_expr(p, tok)
     Ident =>
-      match p.current.kind {
-        LParen => {
-          let id = @tokens.token_id(tok)
-          if id == p.builtin_ids.types_compatible_p {
-            expect(p, LParen, "expected '(' after __builtin_types_compatible_p")
-            |> ignore
-            let a = match parse_type_name(p) {
-              None => {
-                add_parse_error(p, tok.loc, "expected type name in builtin")
-                @ast.default_int_type()
-              }
-              Some(ty) => ty
-            }
-            expect(p, Comma, "expected ',' in __builtin_types_compatible_p")
-            |> ignore
-            let b = match parse_type_name(p) {
-              None => {
-                add_parse_error(p, tok.loc, "expected type name in builtin")
-                @ast.default_int_type()
-              }
-              Some(ty) => ty
-            }
-            expect(p, RParen, "expected ')' after __builtin_types_compatible_p")
-            |> ignore
-            BuiltinTypesCompatibleP(a~, b~, node_id=new_expr_id(p), loc=tok.loc)
-          } else if id == p.builtin_ids.offsetof {
-            expect(p, LParen, "expected '(' after __builtin_offsetof") |> ignore
-            let ty = match parse_type_name(p) {
-              None => {
-                add_parse_error(
-                  p,
-                  tok.loc,
-                  "expected type name in __builtin_offsetof",
-                )
-                @ast.default_int_type()
-              }
-              Some(v) => v
-            }
-            expect(p, Comma, "expected ',' in __builtin_offsetof") |> ignore
-            let path : Array[String] = []
-            if expect_ident(p, "expected member name in __builtin_offsetof")
-              is Some(id) {
-              path.push(token_lexeme(p, id))
-            }
-            while true {
-              match p.current.kind {
-                Dot => {
-                  advance_token(p) |> ignore
-                  if expect_ident(
-                      p, "expected member name in __builtin_offsetof",
-                    )
-                    is Some(id) {
-                    path.push(token_lexeme(p, id))
-                  } else {
-                    break
-                  }
-                }
-                _ => break
-              }
-            }
-            expect(p, RParen, "expected ')' after __builtin_offsetof") |> ignore
-            BuiltinOffsetof(ty~, path~, node_id=new_expr_id(p), loc=tok.loc)
-          } else if id == p.builtin_ids.va_arg {
-            expect(p, LParen, "expected '(' after __builtin_va_arg") |> ignore
-            let list = parse_expr_eq(p)
-            expect(p, Comma, "expected ',' in __builtin_va_arg") |> ignore
-            let ty = match parse_type_name(p) {
-              None => {
-                add_parse_error(p, tok.loc, "expected type name in builtin")
-                @ast.default_int_type()
-              }
-              Some(v) => v
-            }
-            expect(p, RParen, "expected ')' after __builtin_va_arg") |> ignore
-            BuiltinVaArg(list~, ty~, node_id=new_expr_id(p), loc=tok.loc)
+      if token_lexeme(p, tok) == "_Generic" && p.current.kind is LParen {
+        let lparen = advance_token(p)
+        let control = parse_expr_cond(p)
+        expect(p, Comma, "expected ',' after _Generic control expression")
+        |> ignore
+        let associations : Array[(@ast.CType, @ast.Expr)] = []
+        let mut default_expr : @ast.Expr? = None
+        while true {
+          if p.current.kind is KwDefault {
+            let def_tok = advance_token(p)
+            expect(p, Colon, "expected ':' after default") |> ignore
+            default_expr = Some(parse_expr_cond(p))
           } else {
+            match parse_type_name(p) {
+              None => {
+                add_parse_error(p, lparen.loc, "expected type in _Generic")
+                break
+              }
+              Some(ty) => {
+                expect(p, Colon, "expected ':' in _Generic association") |> ignore
+                let assoc_expr = parse_expr_cond(p)
+                associations.push((ty, assoc_expr))
+              }
+            }
+          }
+          if match_token(p, Comma) is Some(_) {
+            if p.current.kind is RParen {
+              break
+            }
+            continue
+          }
+          break
+        }
+        expect(p, RParen, "expected ')' after _Generic") |> ignore
+        let base_expr = match default_expr {
+          Some(expr) => expr
+          None => IntLit(value="0", node_id=new_expr_id(p), loc=lparen.loc)
+        }
+        let (_, builtin_choose_id) = p.pp.interner.intern_view_with_id(
+          "__builtin_choose_expr"[:],
+        )
+        let mut current = base_expr
+        let mut idx = 0
+        while idx < associations.length() {
+          let (assoc_ty, assoc_expr) = associations[idx]
+          let cond = @ast.Expr::BuiltinTypesCompatibleP(
+            a=@ast.CType::TypeofExpr(expr=control),
+            b=assoc_ty,
+            node_id=new_expr_id(p),
+            loc=lparen.loc,
+          )
+          let callee = @ast.Expr::Ident(
+            name="__builtin_choose_expr",
+            id=builtin_choose_id,
+            node_id=new_expr_id(p),
+            loc=lparen.loc,
+          )
+          current = Call(
+            callee~,
+            args=[cond, assoc_expr, current],
+            node_id=new_expr_id(p),
+            loc=lparen.loc,
+          )
+          idx = idx + 1
+        }
+        return current
+      } else {
+        match p.current.kind {
+          LParen => {
+            let id = @tokens.token_id(tok)
+            if id == p.builtin_ids.types_compatible_p {
+              expect(p, LParen, "expected '(' after __builtin_types_compatible_p")
+              |> ignore
+              let a = match parse_type_name(p) {
+                None => {
+                  add_parse_error(p, tok.loc, "expected type name in builtin")
+                  @ast.default_int_type()
+                }
+                Some(ty) => ty
+              }
+              expect(p, Comma, "expected ',' in __builtin_types_compatible_p")
+              |> ignore
+              let b = match parse_type_name(p) {
+                None => {
+                  add_parse_error(p, tok.loc, "expected type name in builtin")
+                  @ast.default_int_type()
+                }
+                Some(ty) => ty
+              }
+              expect(p, RParen, "expected ')' after __builtin_types_compatible_p")
+              |> ignore
+              BuiltinTypesCompatibleP(
+                a~,
+                b~,
+                node_id=new_expr_id(p),
+                loc=tok.loc,
+              )
+            } else if id == p.builtin_ids.offsetof {
+              expect(p, LParen, "expected '(' after __builtin_offsetof") |> ignore
+              let ty = match parse_type_name(p) {
+                None => {
+                  add_parse_error(
+                    p,
+                    tok.loc,
+                    "expected type name in __builtin_offsetof",
+                  )
+                  @ast.default_int_type()
+                }
+                Some(v) => v
+              }
+              expect(p, Comma, "expected ',' in __builtin_offsetof") |> ignore
+              let path : Array[String] = []
+              if expect_ident(p, "expected member name in __builtin_offsetof")
+                is Some(id) {
+                path.push(token_lexeme(p, id))
+              }
+              while true {
+                match p.current.kind {
+                  Dot => {
+                    advance_token(p) |> ignore
+                    if expect_ident(
+                        p, "expected member name in __builtin_offsetof",
+                      )
+                      is Some(id) {
+                      path.push(token_lexeme(p, id))
+                    } else {
+                      break
+                    }
+                  }
+                  _ => break
+                }
+              }
+              expect(p, RParen, "expected ')' after __builtin_offsetof") |> ignore
+              BuiltinOffsetof(ty~, path~, node_id=new_expr_id(p), loc=tok.loc)
+            } else if id == p.builtin_ids.va_arg {
+              expect(p, LParen, "expected '(' after __builtin_va_arg") |> ignore
+              let list = parse_expr_eq(p)
+              expect(p, Comma, "expected ',' in __builtin_va_arg") |> ignore
+              let ty = match parse_type_name(p) {
+                None => {
+                  add_parse_error(p, tok.loc, "expected type name in builtin")
+                  @ast.default_int_type()
+                }
+                Some(v) => v
+              }
+              expect(p, RParen, "expected ')' after __builtin_va_arg") |> ignore
+              BuiltinVaArg(list~, ty~, node_id=new_expr_id(p), loc=tok.loc)
+            } else {
+              Ident(
+                name=token_lexeme(p, tok),
+                id=@tokens.token_id(tok),
+                node_id=new_expr_id(p),
+                loc=tok.loc,
+              )
+            }
+          }
+          _ =>
             Ident(
               name=token_lexeme(p, tok),
               id=@tokens.token_id(tok),
               node_id=new_expr_id(p),
               loc=tok.loc,
             )
-          }
         }
-        _ =>
-          Ident(
-            name=token_lexeme(p, tok),
-            id=@tokens.token_id(tok),
-            node_id=new_expr_id(p),
-            loc=tok.loc,
-          )
       }
     LParen =>
       match p.current.kind {
@@ -3347,9 +3607,13 @@ fn decode_string_literal(
   loc : @source.SrcLoc,
 ) -> (String, Int) {
   let len = lexeme.length()
-  let size_hint = if len > 2 { len - 2 } else { 0 }
+  let mut start = 1
+  if len >= 3 && lexeme[0] == ('L' : UInt16) {
+    start = 2
+  }
+  let size_hint = if len > start + 1 { len - (start + 1) } else { 0 }
   let sb = StringBuilder::new(size_hint~)
-  let mut i = 1
+  let mut i = start
   let mut count = 0
   while i + 1 < len {
     let code = lexeme[i]
@@ -3386,8 +3650,12 @@ fn parse_char_literal_value(p : Parser, tok : @tokens.Token) -> Int {
     return 0
   }
   let len = lexeme.length()
+  let mut start = 0
+  if len >= 4 && lexeme[0] == ('L' : UInt16) {
+    start = 1
+  }
   let mut value = 0
-  let mut i = 1
+  let mut i = start + 1
   if i + 1 >= len {
     add_parse_error(p, tok.loc, "invalid character literal")
     return 0
@@ -3513,6 +3781,7 @@ fn is_type_start(p : Parser, tok : @tokens.Token) -> Bool {
     KwAuto => true
     KwRegister => true
     KwInline => true
+    KwAttribute => true
     KwStruct => true
     KwUnion => true
     KwEnum => true
@@ -3604,6 +3873,133 @@ fn set_typedef_scope_level(p : Parser, id : Int, level : Int) -> Unit {
   }
   ensure_typedef_capacity(p, id)
   p.typedef_scope_levels[id - 1] = level
+}
+
+///|
+fn ensure_tag_capacity(p : Parser, id : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  let len = p.tag_values.length()
+  if len >= id {
+    return
+  }
+  let mut i = len
+  while i < id {
+    p.tag_values.push(0)
+    p.tag_scope_levels.push(0)
+    i = i + 1
+  }
+}
+
+///|
+fn get_tag_scope_level(p : Parser, id : Int) -> Int {
+  if id <= 0 || id > p.tag_scope_levels.length() {
+    0
+  } else {
+    p.tag_scope_levels[id - 1]
+  }
+}
+
+///|
+fn set_tag_scope_level(p : Parser, id : Int, level : Int) -> Unit {
+  if id <= 0 {
+    return
+  }
+  ensure_tag_capacity(p, id)
+  p.tag_scope_levels[id - 1] = level
+}
+
+///|
+fn current_tag_scope_id(p : Parser) -> Int {
+  let len = p.tag_scope_stack.length()
+  if len == 0 {
+    0
+  } else {
+    p.tag_scope_stack[len - 1]
+  }
+}
+
+///|
+fn push_tag_scope(p : Parser) -> Unit {
+  let scope_id = p.next_tag_scope_id
+  p.next_tag_scope_id = scope_id + 1
+  p.tag_scope_stack.push(scope_id)
+  p.tag_overrides.push([])
+}
+
+///|
+fn pop_tag_scope(p : Parser) -> Unit {
+  if p.tag_overrides.pop() is Some(overrides) {
+    let mut i = overrides.length()
+    while i > 0 {
+      i = i - 1
+      let (id, prev_value, prev_scope) = overrides[i]
+      ensure_tag_capacity(p, id)
+      p.tag_values[id - 1] = prev_value
+      p.tag_scope_levels[id - 1] = prev_scope
+    }
+  }
+  p.tag_scope_stack.pop() |> ignore
+}
+
+///|
+fn ensure_tag_scope(p : Parser) -> Unit {
+  let len = p.pending_tag_scopes.length()
+  if len == 0 {
+    return
+  }
+  let idx = len - 1
+  if !p.pending_tag_scopes[idx] {
+    push_tag_scope(p)
+    p.pending_tag_scopes[idx] = true
+  }
+}
+
+///|
+fn resolve_tag_id(p : Parser, name_id : Int) -> Int {
+  if name_id <= 0 {
+    return 0
+  }
+  ensure_tag_capacity(p, name_id)
+  let scope_id = current_tag_scope_id(p)
+  let prev_scope = get_tag_scope_level(p, name_id)
+  let prev_value = p.tag_values[name_id - 1]
+  if prev_value != 0 {
+    return prev_value
+  }
+  let tag_id = p.next_tag_id
+  p.next_tag_id = tag_id + 1
+  match p.tag_overrides.get(p.tag_overrides.length() - 1) {
+    Some(overrides) => overrides.push((name_id, prev_value, prev_scope))
+    None => ()
+  }
+  p.tag_values[name_id - 1] = tag_id
+  p.tag_scope_levels[name_id - 1] = scope_id
+  tag_id
+}
+
+///|
+fn define_tag_id(p : Parser, name_id : Int) -> Int {
+  if name_id <= 0 {
+    return 0
+  }
+  ensure_tag_capacity(p, name_id)
+  let scope_id = current_tag_scope_id(p)
+  let prev_scope = get_tag_scope_level(p, name_id)
+  let prev_value = p.tag_values[name_id - 1]
+  if prev_scope == scope_id && prev_value != 0 {
+    return prev_value
+  }
+  let tag_id = p.next_tag_id
+  p.next_tag_id = tag_id + 1
+  match p.tag_overrides.get(p.tag_overrides.length() - 1) {
+    Some(overrides) => overrides.push((name_id, prev_value, prev_scope))
+    None => ()
+  }
+  p.tag_values[name_id - 1] = tag_id
+  p.tag_scope_levels[name_id - 1] = scope_id
+  tag_id
 }
 
 ///|

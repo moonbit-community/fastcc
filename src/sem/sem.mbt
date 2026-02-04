@@ -129,6 +129,15 @@ pub fn compound_literal_type(
 }
 
 ///|
+pub fn register_type_defs_for_codegen(
+  ctx : SemContext,
+  ty : @ast.CType,
+  loc : @source.SrcLoc,
+) -> Unit {
+  @sem_core.register_type_defs_for_codegen(ctx, ty, loc)
+}
+
+///|
 pub fn const_int64_from_expr(
   ctx : SemContext,
   expr : @ast.Expr,

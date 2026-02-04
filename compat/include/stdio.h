@@ -38,6 +38,7 @@ int fgetc(FILE *stream);
 int getc(FILE *stream);
 int getchar(void);
 int ungetc(int c, FILE *stream);
+char *fgets(char *s, int n, FILE *stream);
 int fputc(int c, FILE *stream);
 int putc(int c, FILE *stream);
 int putchar(int c);
@@ -46,6 +47,7 @@ int puts(const char *s);
 
 int fprintf(FILE *stream, const char *fmt, ...);
 int printf(const char *fmt, ...);
+int scanf(const char *fmt, ...);
 int snprintf(char *buf, size_t size, const char *fmt, ...);
 int sprintf(char *buf, const char *fmt, ...);
 int vfprintf(FILE *stream, const char *fmt, va_list ap);

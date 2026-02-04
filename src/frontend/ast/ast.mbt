@@ -116,6 +116,8 @@ pub fn empty_attrs() -> Attributes {
 pub fn attrs_with(
   aligned? : AlignSpec? = None,
   packed? : Bool = false,
+  ms_struct? : Bool = false,
+  transparent_union? : Bool = false,
   weak? : Bool = false,
   visibility? : Visibility? = None,
   section? : String? = None,
@@ -135,6 +137,8 @@ pub fn attrs_with(
   @ast_core.attrs_with(
     aligned~,
     packed~,
+    ms_struct~,
+    transparent_union~,
     weak~,
     visibility~,
     section~,
