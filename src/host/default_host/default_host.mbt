@@ -12,6 +12,11 @@ pub impl @host.Host for DefaultHost with read_file_to_string(_self, path) {
 }
 
 ///|
+pub impl @host.Host for DefaultHost with read_file_to_bytes(_self, path) {
+  @fs.read_file_to_bytes(path)
+}
+
+///|
 pub impl @host.Host for DefaultHost with write_bytes_to_file(_self, path, bytes) {
   @fs.write_bytes_to_file(path, bytes)
 }
