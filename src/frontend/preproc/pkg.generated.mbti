@@ -4,6 +4,7 @@ package "hackwaly/tinycc/frontend/preproc"
 import {
   "hackwaly/tinycc/frontend/preproc/preproc_core",
   "hackwaly/tinycc/frontend/tokens/tokens_core",
+  "hackwaly/tinycc/host",
   "hackwaly/tinycc/support/diag/diag_core",
   "hackwaly/tinycc/support/source/source_core",
   "moonbitlang/x/time",
@@ -124,7 +125,7 @@ pub fn month_name(Int) -> String
 
 pub fn new_hidden_pool() -> @preproc_core.HiddenPool
 
-pub fn new_preprocessor(@source_core.SourceMap, @source_core.SourceFile, @diag_core.DiagBag) -> @preproc_core.Preprocessor
+pub fn new_preprocessor(@source_core.SourceMap, @source_core.SourceFile, @diag_core.DiagBag, host~ : &@host.Host) -> @preproc_core.Preprocessor
 
 pub fn next_input_token(@preproc_core.Preprocessor) -> @tokens_core.Token
 

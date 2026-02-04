@@ -11,6 +11,7 @@
   ],
   "wbtest-import": [
     "hackwaly/tinycc/frontend/parser",
-    "hackwaly/tinycc/frontend/preproc"
+    "hackwaly/tinycc/frontend/preproc",
+    "hackwaly/tinycc/host/default_host"
   ]
 }

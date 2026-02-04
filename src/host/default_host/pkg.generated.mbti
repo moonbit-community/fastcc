@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/host/default_host"
+
+import {
+  "hackwaly/tinycc/host",
+}
+
+// Values
+pub fn new() -> DefaultHost
+
+// Errors
+
+// Types and methods
+type DefaultHost
+pub impl @host.Host for DefaultHost
+
+// Type aliases
+
+// Traits
+

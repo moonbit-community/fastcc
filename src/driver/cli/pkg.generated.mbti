@@ -1,8 +1,12 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "hackwaly/tinycc/driver/cli"
 
+import {
+  "hackwaly/tinycc/host",
+}
+
 // Values
-pub fn parse_cli_args(Array[String]) -> CliParse
+pub fn parse_cli_args(host~ : &@host.Host, Array[String]) -> CliParse
 
 // Errors
 

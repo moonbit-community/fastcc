@@ -23,8 +23,8 @@ pub type CliMacroAction = @cli.CliMacroAction
 pub type CliParse = @cli.CliParse
 
 ///|
-pub fn parse_cli_args(args : Array[String]) -> CliParse {
-  @cli.parse_cli_args(args)
+pub fn parse_cli_args(host~ : &@host.Host, args : Array[String]) -> CliParse {
+  @cli.parse_cli_args(host~, args)
 }
 
 ///|
@@ -62,8 +62,8 @@ pub fn bench_now_ns() -> UInt64 {
 }
 
 ///|
-pub fn run_args(args : Array[String]) -> Int {
-  run_with_args(args)
+pub fn run_args(host~ : &@host.Host, args : Array[String]) -> Int {
+  run_with_args(host~, args)
 }
 
 ///|
@@ -114,8 +114,8 @@ fn bench_summary_line(stats : BenchStats) -> String {
 }
 
 ///|
-fn load_input(path : String) -> (String, String)? {
-  try @fs.read_file_to_string(path) catch {
+fn load_input(host~ : &@host.Host, path : String) -> (String, String)? {
+  try host.read_file_to_string(path) catch {
     err => {
       println("failed to read input: \{err.to_string()}")
       None
@@ -260,18 +260,19 @@ fn run_temp_base() -> String {
 
 ///|
 fn compile_to_object_path(
+  host~ : &@host.Host,
   cfg : CliConfig,
   input_path : String,
   output_path : String,
   bench_stats : BenchStats?,
 ) -> Bool {
-  match load_input(input_path) {
+  match load_input(host~, input_path) {
     None => false
     Some((path, text)) => {
       let bag = @diag.new_diag_bag()
       let map = @source.new_source_map()
       let file = @source.add_file(map, path, text)
-      let pp = @preproc.new_preprocessor(map, file, bag)
+      let pp = @preproc.new_preprocessor(map, file, bag, host~)
       @preproc.add_include_path(pp, "compat/include")
       for p in cfg.include_paths {
         @preproc.add_include_path(pp, p)
@@ -310,7 +311,7 @@ fn compile_to_object_path(
         if sem_ctx is Some(ctx) {
           if @codegen.codegen_arm64_object_bytes_with_sem(unit, ctx, bag)
             is Some(bytes) {
-            @fs.write_bytes_to_file(output_path, bytes) catch {
+            host.write_bytes_to_file(output_path, bytes) catch {
               err => @diag.add_error(bag, @source.dummy_loc(0), err.to_string())
             }
           }
@@ -365,14 +366,14 @@ fn build_clang_link_args(
 }
 
 ///|
-pub fn run_main() -> Unit {
-  @sys.exit(run_with_args(@env.args()))
+pub fn run_main(host : &@host.Host) -> Unit {
+  @sys.exit(run_with_args(host~, @env.args()))
 }
 
 ///|
-fn run_with_args(args : Array[String]) -> Int {
+fn run_with_args(host~ : &@host.Host, args : Array[String]) -> Int {
   @codegen.touch_unused_symbols()
-  match parse_cli_args(args) {
+  match parse_cli_args(host~, args) {
     Help => 0
     Error => 1
     Run(cfg) =>
@@ -388,7 +389,7 @@ fn run_with_args(args : Array[String]) -> Int {
         let base = run_temp_base()
         let obj_path = base + ".o"
         let exe_path = base + ".out"
-        if !compile_to_object_path(cfg, cfg.inputs[0], obj_path, None) {
+        if !compile_to_object_path(host~, cfg, cfg.inputs[0], obj_path, None) {
           return 1
         }
         let link_status = run_shell_command(
@@ -404,10 +405,10 @@ fn run_with_args(args : Array[String]) -> Int {
           run_args.push(arg)
         }
         let run_status = run_shell_command(run_args)
-        @fs.remove_file(obj_path) catch {
+        host.remove_file(obj_path) catch {
           _ => ()
         }
-        @fs.remove_file(exe_path) catch {
+        host.remove_file(exe_path) catch {
           _ => ()
         }
         if run_status != 0 {
@@ -420,7 +421,7 @@ fn run_with_args(args : Array[String]) -> Int {
         let bench_stats = bench_stats_new()
         for input_path in cfg.inputs {
           if !cfg.compile_only {
-            match load_input(input_path) {
+            match load_input(host~, input_path) {
               None => {
                 any_errors = true
                 continue
@@ -429,7 +430,7 @@ fn run_with_args(args : Array[String]) -> Int {
                 let bag = @diag.new_diag_bag()
                 let map = @source.new_source_map()
                 let file = @source.add_file(map, path, text)
-                let pp = @preproc.new_preprocessor(map, file, bag)
+                let pp = @preproc.new_preprocessor(map, file, bag, host~)
                 @preproc.add_include_path(pp, "compat/include")
                 for p in cfg.include_paths {
                   @preproc.add_include_path(pp, p)
@@ -455,6 +456,7 @@ fn run_with_args(args : Array[String]) -> Int {
               Some(v) => v
             }
             if !compile_to_object_path(
+                host~,
                 cfg,
                 input_path,
                 out_path,

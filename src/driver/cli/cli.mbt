@@ -93,14 +93,14 @@ fn split_listfile_args(contents : String) -> Array[String] {
 }
 
 ///|
-fn expand_cli_args(args : Array[String]) -> Array[String]? {
+fn expand_cli_args(host : &@host.Host, args : Array[String]) -> Array[String]? {
   let expanded : Array[String] = []
   let mut i = 0
   while i < args.length() {
     let arg = args[i]
     if arg.has_prefix("@") && arg.length() > 1 {
       let path = @util.slice_string(arg, 1, arg.length())
-      let contents = @fs.read_file_to_string(path) catch {
+      let contents = host.read_file_to_string(path) catch {
         err => {
           println(
             "error: failed to read argument file '\{path}': \{err.to_string()}",
@@ -125,8 +125,8 @@ fn is_c_source_path(path : String) -> Bool {
 }
 
 ///|
-pub fn parse_cli_args(args : Array[String]) -> CliParse {
-  let expanded = match expand_cli_args(args) {
+pub fn parse_cli_args(host~ : &@host.Host, args : Array[String]) -> CliParse {
+  let expanded = match expand_cli_args(host, args) {
     None => return Error
     Some(v) => v
   }

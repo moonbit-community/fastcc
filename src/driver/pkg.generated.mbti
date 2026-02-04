@@ -3,16 +3,17 @@ package "hackwaly/tinycc/driver"
 
 import {
   "hackwaly/tinycc/driver/cli",
+  "hackwaly/tinycc/host",
 }
 
 // Values
 pub fn bench_now_ns() -> UInt64
 
-pub fn parse_cli_args(Array[String]) -> @cli.CliParse
+pub fn parse_cli_args(host~ : &@host.Host, Array[String]) -> @cli.CliParse
 
-pub fn run_args(Array[String]) -> Int
+pub fn run_args(host~ : &@host.Host, Array[String]) -> Int
 
-pub fn run_main() -> Unit
+pub fn run_main(&@host.Host) -> Unit
 
 // Errors
 

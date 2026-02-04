@@ -1,6 +1,6 @@
 ///|
 fn expect_cli_error(args : Array[String]) -> Unit raise {
-  match @cli.parse_cli_args(args) {
+  match @cli.parse_cli_args(host=@default_host.new(), args) {
     Error => ()
     _ => fail("expected CliParse::Error")
   }
@@ -8,7 +8,7 @@ fn expect_cli_error(args : Array[String]) -> Unit raise {
 
 ///|
 fn expect_cli_help(args : Array[String]) -> Unit raise {
-  match @cli.parse_cli_args(args) {
+  match @cli.parse_cli_args(host=@default_host.new(), args) {
     Help => ()
     _ => fail("expected CliParse::Help")
   }
@@ -16,7 +16,7 @@ fn expect_cli_help(args : Array[String]) -> Unit raise {
 
 ///|
 fn must_run(args : Array[String]) -> @cli.CliConfig raise {
-  match @cli.parse_cli_args(args) {
+  match @cli.parse_cli_args(host=@default_host.new(), args) {
     Run(cfg) => cfg
     Help => fail("unexpected help")
     Error => fail("unexpected error")
@@ -40,7 +40,7 @@ test "cli parse listfile expansion" {
     #| -UUNDEF
     #| foo.c
     #| bar.o
-    #|   
+    #|
   @testutil.write_string(args_path, contents)
   let cfg = must_run(["tinycc.mbt", "@" + args_path])
   assert_eq(cfg.include_paths, ["inc"])

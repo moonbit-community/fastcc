@@ -5,7 +5,9 @@
   ],
   "targets": {
     "bench_timer_native.mbt": ["native"],
-    "bench_timer_stub.mbt": ["not", "native"]
+    "bench_timer_stub.mbt": ["not", "native"],
+    "run_command_native.mbt": ["native"],
+    "run_command_stub.mbt": ["not", "native"],
   },
   "test-import": [
     "moonbitlang/core/env",

@@ -1,9 +1,10 @@
 {
   "import": [
     "hackwaly/tinycc/support/util",
-    "moonbitlang/x/fs"
+    "hackwaly/tinycc/host"
   ],
   "test-import": [
-    "hackwaly/tinycc/testutil"
+    "hackwaly/tinycc/testutil",
+    "hackwaly/tinycc/host/default_host"
   ]
 }
