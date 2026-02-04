@@ -15,7 +15,8 @@
 
 ///|
 test "cli parses -c" {
-  let cfg = match @cli.parse_cli_args(["prog", "-c", "main.c"]) {
+  let cfg = match
+    @cli.parse_cli_args(host=@default_host.new(), ["prog", "-c", "main.c"]) {
     Run(v) => v
     _ => fail("expected run")
   }

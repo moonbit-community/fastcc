@@ -5,7 +5,7 @@ fn new_pp_with_source(
   let bag = @diag.new_diag_bag()
   let map = @source.new_source_map()
   let file = @source.add_file(map, "<pp-api>", source)
-  let pp = @preproc.new_preprocessor(map, file, bag)
+  let pp = @preproc.new_preprocessor(map, file, bag, host=@default_host.new())
   (pp, bag)
 }
 
@@ -766,7 +766,7 @@ test "preproc api large source capacities" {
   let bag = @diag.new_diag_bag()
   let map = @source.new_source_map()
   let file = @source.add_file(map, "<pp-big>", big)
-  let pp = @preproc.new_preprocessor(map, file, bag)
+  let pp = @preproc.new_preprocessor(map, file, bag, host=@default_host.new())
   @preproc.finalize_preprocessor(pp)
   assert_true(!@diag.has_errors(bag))
 }

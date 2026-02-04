@@ -1,0 +1,6 @@
+{
+  "import": [
+    "moonbitlang/x/fs",
+    "hackwaly/tinycc/host"
+  ]
+}

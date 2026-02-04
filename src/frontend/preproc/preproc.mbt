@@ -145,8 +145,9 @@ pub fn new_preprocessor(
   map : @source.SourceMap,
   file : @source.SourceFile,
   diags : @diag.DiagBag,
+  host~ : &@host.Host,
 ) -> Preprocessor {
-  @preproc_core.new_preprocessor(map, file, diags)
+  @preproc_core.new_preprocessor(map, file, diags, host~)
 }
 
 ///|

@@ -76,6 +76,7 @@ pub(all) struct HiddenPool {
 
 ///|
 pub(all) struct Preprocessor {
+  host : &@host.Host
   mut lexer : @lexer.Lexer
   lexer_stack : Array[@lexer.Lexer]
   held_stack : Array[@tokens.Token?]
@@ -344,6 +345,7 @@ pub fn new_preprocessor(
   map : @source.SourceMap,
   file : @source.SourceFile,
   diags : @diag.DiagBag,
+  host~ : &@host.Host,
 ) -> Preprocessor {
   let (date_literal, time_literal) = init_datetime_literals()
   let text_len = file.text.length()
@@ -391,6 +393,7 @@ pub fn new_preprocessor(
   let (_, dir_pragma_id) = interner.intern_view_with_id("pragma"[:])
   let lexeme_pool = @tokens.new_lexeme_pool(capacity=lexeme_capacity)
   let pp = {
+    host,
     lexer: @lexer.new_lexer(file, diags, interner, keyword_ids, lexeme_pool),
     lexer_stack: Array::new(capacity=include_stack_capacity),
     held_stack: Array::new(capacity=include_stack_capacity),
@@ -970,7 +973,7 @@ pub fn resolve_include_path(
       skip_first = false
     } else {
       let candidate = join_path(pp.current_dir, path)
-      if @fs.path_exists(candidate) {
+      if pp.host.path_exists(candidate) {
         return Some(candidate)
       }
     }
@@ -981,7 +984,7 @@ pub fn resolve_include_path(
       continue
     }
     let candidate = join_path(p, path)
-    if @fs.path_exists(candidate) {
+    if pp.host.path_exists(candidate) {
       return Some(candidate)
     }
   }
@@ -998,7 +1001,7 @@ pub fn include_file(
   match resolve_include_path(pp, spec.path, spec.is_angle, include_next~) {
     None => add_pp_error(pp, loc, "include not found: \{spec.path}")
     Some(resolved) =>
-      try @fs.read_file_to_string(resolved) catch {
+      try pp.host.read_file_to_string(resolved) catch {
         err =>
           add_pp_error(pp, loc, "failed to read include: \{err.to_string()}")
       } noraise {

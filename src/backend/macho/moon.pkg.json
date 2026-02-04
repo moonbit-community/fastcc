@@ -3,12 +3,17 @@
     "hackwaly/tinycc/backend/arm64",
     "hackwaly/tinycc/backend/object",
     "hackwaly/tinycc/support/util",
-    "moonbitlang/x/fs",
     "moonbitlang/core/buffer",
-    { "path": "moonbitlang/core/encoding/utf8", "alias": "encoding/utf8" }
+    {
+      "path": "moonbitlang/core/encoding/utf8",
+      "alias": "encoding/utf8"
+    },
+    "hackwaly/tinycc/host"
   ],
   "test-import": [
-    "hackwaly/tinycc/testutil"
+    "hackwaly/tinycc/testutil",
+    "hackwaly/tinycc/host/default_host",
+    "moonbitlang/x/fs"
   ],
   "wbtest-import": [
     "hackwaly/tinycc/backend/arm64"

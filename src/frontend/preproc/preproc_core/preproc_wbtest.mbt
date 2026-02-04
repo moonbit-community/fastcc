@@ -10,7 +10,7 @@ fn pp_tokens(
   let bag = @diag.new_diag_bag()
   let map = @source.new_source_map()
   let file = @source.add_file(map, "<test>", text)
-  let pp = new_preprocessor(map, file, bag)
+  let pp = new_preprocessor(map, file, bag, host=@default_host.new())
   let out = dump_tokens(pp, 512)
   (out.filter(tok => tok.kind != Eof), bag, pp.interner, pp.lexeme_pool)
 }
@@ -28,7 +28,7 @@ fn pp_tokens_with_paths(
   let bag = @diag.new_diag_bag()
   let map = @source.new_source_map()
   let file = @source.add_file(map, "<test>", text)
-  let pp = new_preprocessor(map, file, bag)
+  let pp = new_preprocessor(map, file, bag, host=@default_host.new())
   for path in paths {
     add_include_path(pp, path)
   }
@@ -267,7 +267,7 @@ test "preprocess gcc style version check" {
   let bag = @diag.new_diag_bag()
   let map = @source.new_source_map()
   let file = @source.add_file(map, "<test>", text)
-  let pp = new_preprocessor(map, file, bag)
+  let pp = new_preprocessor(map, file, bag, host=@default_host.new())
   ignore(next_input_token(pp)) // consume '#'
   let directive_tokens = read_directive_tokens(pp)
   let args = slice_tokens(directive_tokens, 1)
@@ -278,7 +278,12 @@ test "preprocess gcc style version check" {
   let simple_file = @source.add_file(
     map, "<simple>", "#if 1 && (0 && 0 || 1)\n",
   )
-  let simple_pp = new_preprocessor(map, simple_file, @diag.new_diag_bag())
+  let simple_pp = new_preprocessor(
+    map,
+    simple_file,
+    @diag.new_diag_bag(),
+    host=@default_host.new(),
+  )
   ignore(next_input_token(simple_pp))
   let simple_toks = read_directive_tokens(simple_pp)
   let simple_cond = eval_if_expr(

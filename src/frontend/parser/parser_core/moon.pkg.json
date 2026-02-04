@@ -8,5 +8,12 @@
     "hackwaly/tinycc/support/util",
     "moonbitlang/core/buffer",
     "moonbitlang/core/strconv"
+  ],
+  "test-import": [
+    "hackwaly/tinycc/host",
+    "hackwaly/tinycc/host/default_host"
+  ],
+  "wbtest-import": [
+    "hackwaly/tinycc/host/default_host"
   ]
 }

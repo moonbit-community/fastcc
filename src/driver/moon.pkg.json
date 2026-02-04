@@ -11,10 +11,17 @@
     "hackwaly/tinycc/support/diag",
     "hackwaly/tinycc/support/source",
     "hackwaly/tinycc/support/util",
-    "moonbitlang/x/fs",
     "moonbitlang/x/sys",
     "moonbitlang/core/buffer",
-    { "path": "moonbitlang/core/encoding/utf8", "alias": "encoding/utf8" },
-    "moonbitlang/core/env"
+    {
+      "path": "moonbitlang/core/encoding/utf8",
+      "alias": "encoding/utf8"
+    },
+    "moonbitlang/core/env",
+    "hackwaly/tinycc/host"
+  ],
+  "test-import": [
+    "hackwaly/tinycc/host/default_host",
+    "moonbitlang/x/fs"
   ]
 }

@@ -4,11 +4,13 @@
     "hackwaly/tinycc/frontend/tokens",
     "hackwaly/tinycc/support/diag",
     "hackwaly/tinycc/support/source",
-    "moonbitlang/x/time"
+    "moonbitlang/x/time",
+    "hackwaly/tinycc/host"
   ],
   "test-import": [
     "hackwaly/tinycc/support/diag",
     "hackwaly/tinycc/support/source",
-    "hackwaly/tinycc/testutil"
+    "hackwaly/tinycc/testutil",
+    "hackwaly/tinycc/host/default_host"
   ]
 }

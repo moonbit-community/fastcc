@@ -4,6 +4,7 @@ package "hackwaly/tinycc/frontend/preproc/preproc_core"
 import {
   "hackwaly/tinycc/frontend/lexer/lexer_core",
   "hackwaly/tinycc/frontend/tokens/tokens_core",
+  "hackwaly/tinycc/host",
   "hackwaly/tinycc/support/diag/diag_core",
   "hackwaly/tinycc/support/intern/intern_core",
   "hackwaly/tinycc/support/source/source_core",
@@ -125,7 +126,7 @@ pub fn month_name(Int) -> String
 
 pub fn new_hidden_pool() -> HiddenPool
 
-pub fn new_preprocessor(@source_core.SourceMap, @source_core.SourceFile, @diag_core.DiagBag) -> Preprocessor
+pub fn new_preprocessor(@source_core.SourceMap, @source_core.SourceFile, @diag_core.DiagBag, host~ : &@host.Host) -> Preprocessor
 
 pub fn next_input_token(Preprocessor) -> @tokens_core.Token
 
@@ -335,6 +336,7 @@ pub(all) struct PreprocBuiltinIds {
 }
 
 pub(all) struct Preprocessor {
+  host : &@host.Host
   mut lexer : @lexer_core.Lexer
   lexer_stack : Array[@lexer_core.Lexer]
   held_stack : Array[@tokens_core.Token?]

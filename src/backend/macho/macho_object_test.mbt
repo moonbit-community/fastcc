@@ -42,7 +42,12 @@ test "macho encode and write" {
   assert_true(bytes.length() > 0)
   let case_dir = @testutil.make_case_dir("macho")
   let path = @testutil.join_path(case_dir, "tinycc.o")
-  @macho.write_macho_object(path, [sec_text, sec_custom], symbols)
+  @macho.write_macho_object(
+    host=@default_host.new(),
+    path,
+    [sec_text, sec_custom],
+    symbols,
+  )
   assert_true(@fs.path_exists(path))
 }
 
@@ -74,7 +79,7 @@ test "macho bss section encode and write" {
   assert_true(bytes.length() > 0)
   let case_dir = @testutil.make_case_dir("macho-bss")
   let path = @testutil.join_path(case_dir, "bss.o")
-  @macho.write_macho_object(path, [sec_bss], [])
+  @macho.write_macho_object(host=@default_host.new(), path, [sec_bss], [])
   assert_true(@fs.path_exists(path))
 }
 
@@ -125,6 +130,11 @@ test "macho reloc variants" {
   assert_true(bytes.length() > 0)
   let case_dir = @testutil.make_case_dir("macho-reloc")
   let path = @testutil.join_path(case_dir, "reloc.o")
-  @macho.write_macho_object(path, [sec_text, sec_data], symbols)
+  @macho.write_macho_object(
+    host=@default_host.new(),
+    path,
+    [sec_text, sec_data],
+    symbols,
+  )
   assert_true(@fs.path_exists(path))
 }

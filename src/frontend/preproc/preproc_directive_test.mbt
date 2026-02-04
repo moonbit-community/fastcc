@@ -9,7 +9,7 @@ fn run_pp_collect(
   let bag = @diag.new_diag_bag()
   let map = @source.new_source_map()
   let file = @source.add_file(map, path, source)
-  let pp = @preproc.new_preprocessor(map, file, bag)
+  let pp = @preproc.new_preprocessor(map, file, bag, host=@default_host.new())
   for dir in include_dirs {
     @preproc.add_include_path(pp, dir)
   }

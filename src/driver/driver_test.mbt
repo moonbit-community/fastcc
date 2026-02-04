@@ -16,7 +16,7 @@
 ///|
 test "cli parses -I/-c/-o and input" {
   let cfg = match
-    @driver.parse_cli_args([
+    @driver.parse_cli_args(host=@default_host.new(), [
       "prog", "-Iinc1", "-I", "inc2", "-c", "-oout.o", "in.c",
     ]) {
     Run(v) => v
@@ -31,7 +31,10 @@ test "cli parses -I/-c/-o and input" {
 
 ///|
 test "cli rejects unknown flags" {
-  match @driver.parse_cli_args(["prog", "-bogus", "-c", "in.c"]) {
+  match
+    @driver.parse_cli_args(host=@default_host.new(), [
+      "prog", "-bogus", "-c", "in.c",
+    ]) {
     Error => ()
     _ => fail("expected parse error")
   }
@@ -39,7 +42,10 @@ test "cli rejects unknown flags" {
 
 ///|
 test "cli ignores -Z flags" {
-  let cfg = match @driver.parse_cli_args(["prog", "-Zunknown", "-c", "in.c"]) {
+  let cfg = match
+    @driver.parse_cli_args(host=@default_host.new(), [
+      "prog", "-Zunknown", "-c", "in.c",
+    ]) {
     Run(v) => v
     _ => fail("expected args")
   }
@@ -50,7 +56,7 @@ test "cli ignores -Z flags" {
 ///|
 test "cli ignores common warning/debug flags" {
   let cfg = match
-    @driver.parse_cli_args([
+    @driver.parse_cli_args(host=@default_host.new(), [
       "prog", "-Wall", "-Winvalid", "-O2", "-g", "-c", "in.c",
     ]) {
     Run(v) => v
@@ -63,7 +69,10 @@ test "cli ignores common warning/debug flags" {
 
 ///|
 test "cli supports multiple input files" {
-  let cfg = match @driver.parse_cli_args(["prog", "-c", "a.c", "b.c"]) {
+  let cfg = match
+    @driver.parse_cli_args(host=@default_host.new(), [
+      "prog", "-c", "a.c", "b.c",
+    ]) {
     Run(v) => v
     _ => fail("expected args")
   }
@@ -74,7 +83,9 @@ test "cli supports multiple input files" {
 ///|
 test "cli parses -isystem" {
   let cfg = match
-    @driver.parse_cli_args(["prog", "-isystem", "sysinc", "-c", "in.c"]) {
+    @driver.parse_cli_args(host=@default_host.new(), [
+      "prog", "-isystem", "sysinc", "-c", "in.c",
+    ]) {
     Run(v) => v
     _ => fail("expected args")
   }
@@ -85,7 +96,7 @@ test "cli parses -isystem" {
 ///|
 test "cli parses -D and -U" {
   let cfg = match
-    @driver.parse_cli_args([
+    @driver.parse_cli_args(host=@default_host.new(), [
       "prog", "-D", "FOO", "-DBAR=2", "-DBAZ=", "-U", "FOO", "-UQUX", "-c", "in.c",
     ]) {
     Run(v) => v
@@ -112,7 +123,8 @@ test "cli expands @listfile" {
   @fs.write_string_to_file(path, "-I inc -DTEST=1 in.c") catch {
     err => fail("failed to write listfile: \{err.to_string()}")
   }
-  let cfg = match @driver.parse_cli_args(["prog", "@" + path]) {
+  let cfg = match
+    @driver.parse_cli_args(host=@default_host.new(), ["prog", "@" + path]) {
     Run(v) => v
     _ => fail("expected args")
   }
@@ -127,7 +139,7 @@ test "cli expands @listfile" {
 ///|
 test "cli parses -run" {
   let cfg = match
-    @driver.parse_cli_args([
+    @driver.parse_cli_args(host=@default_host.new(), [
       "prog", "-L", "libdir", "-lfoo", "libbar.dylib", "-run", "main.c", "arg1",
     ]) {
     Run(v) => v

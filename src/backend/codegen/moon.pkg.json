@@ -17,12 +17,14 @@
     "hackwaly/tinycc/frontend/parser",
     "hackwaly/tinycc/frontend/preproc",
     "hackwaly/tinycc/support/source",
-    "hackwaly/tinycc/support/diag"
+    "hackwaly/tinycc/support/diag",
+    "hackwaly/tinycc/host/default_host"
   ],
   "wbtest-import": [
     "hackwaly/tinycc/frontend/parser",
     "hackwaly/tinycc/frontend/preproc",
     "hackwaly/tinycc/support/source",
-    "hackwaly/tinycc/support/diag"
+    "hackwaly/tinycc/support/diag",
+    "hackwaly/tinycc/host/default_host"
   ]
 }

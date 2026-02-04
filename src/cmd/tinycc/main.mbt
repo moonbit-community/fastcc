@@ -15,7 +15,7 @@
 
 ///|
 pub fn run_main() -> Unit {
-  @driver.run_main()
+  @driver.run_main(@default_host.new())
 }
 
 ///|

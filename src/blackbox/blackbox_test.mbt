@@ -72,7 +72,7 @@ fn compile_tinycc(
   let map = @source.new_source_map()
   let text = read_string(c_path)
   let file = @source.add_file(map, c_path, text)
-  let pp = @preproc.new_preprocessor(map, file, bag)
+  let pp = @preproc.new_preprocessor(map, file, bag, host=@default_host.new())
   let root = @testutil.project_root()
   @preproc.add_include_path(pp, @testutil.join_path(root, "compat/include"))
   for dir in include_dirs {
@@ -944,9 +944,12 @@ test "driver run args" {
   @testutil.ensure_dir(case_dir)
   let run_path = @testutil.join_path(case_dir, "run.c")
   @testutil.write_string(run_path, "int main() { return 3; }\n")
-  assert_eq(@driver.run_args(["tinycc", "-run", run_path]), 3)
+  assert_eq(
+    @driver.run_args(host=@default_host.new(), ["tinycc", "-run", run_path]),
+    3,
+  )
   let obj_path = @testutil.join_path(case_dir, "run.o")
-  let compile_status = @driver.run_args([
+  let compile_status = @driver.run_args(host=@default_host.new(), [
     "tinycc", "-c", run_path, "-o", obj_path,
   ])
   assert_eq(compile_status, 0)

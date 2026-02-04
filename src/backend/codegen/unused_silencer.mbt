@@ -30,7 +30,6 @@ pub fn touch_unused_symbols() -> Unit {
 
   // diag helper
   let format_diag_ref = @diag.format_diag
-  let write_macho_object_ref = @macho.write_macho_object
 
   // object helpers
   let new_section_ref = @object.new_section
@@ -48,8 +47,8 @@ pub fn touch_unused_symbols() -> Unit {
     arm64_vset_VT_CMP_ref, gjmp_cond_ref, arm64_ldrs_ref, arm64_strv_ref, emit_fcmp_ref,
     emit_cset_from_fp_tok_ref, emit_load_local_int32_ref, emit_store_local_int32_ref,
     codegen_arm64_object_bytes_ref, tok_land_ref, tok_lor_ref, rc_iret_ref, rc_fret_ref,
-    vdup_ref, format_diag_ref, write_macho_object_ref, new_section_ref, section_from_emitter_ref,
-    reloc_addend_ref, type_contains_vla_ref, strip_qualifiers_ref, strip_qual_attrs_ref,
+    vdup_ref, format_diag_ref, new_section_ref, section_from_emitter_ref, reloc_addend_ref,
+    type_contains_vla_ref, strip_qualifiers_ref, strip_qual_attrs_ref,
   )
 
 }

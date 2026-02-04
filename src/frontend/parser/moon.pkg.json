@@ -6,6 +6,7 @@
   ],
   "test-import": [
     "hackwaly/tinycc/support/diag",
-    "hackwaly/tinycc/support/source"
+    "hackwaly/tinycc/support/source",
+    "hackwaly/tinycc/host/default_host"
   ]
 }

@@ -620,10 +620,11 @@ fn segment_prot(name : String) -> (Int, Int) {
 
 ///|
 pub fn write_macho_object(
+  host~ : &@host.Host,
   path : String,
   sections : Array[Section],
   symbols : Array[ObjSymbol],
-) -> Unit raise @fs.IOError {
+) -> Unit raise {
   let bytes = encode_macho_object(sections, symbols)
-  @fs.write_bytes_to_file(path, bytes)
+  host.write_bytes_to_file(path, bytes)
 }

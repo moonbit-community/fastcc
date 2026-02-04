@@ -18,7 +18,7 @@ fn parse_text(text : String) -> (@ast.TranslationUnit, @diag.DiagBag) {
   let bag = @diag.new_diag_bag()
   let map = @source.new_source_map()
   let file = @source.add_file(map, "<test>", text)
-  let pp = @preproc.new_preprocessor(map, file, bag)
+  let pp = @preproc.new_preprocessor(map, file, bag, host=@default_host.new())
   let unit = @parser.parse_translation_unit(pp)
   (unit, bag)
 }
@@ -38,7 +38,7 @@ fn check_text_with_paths(
   let bag = @diag.new_diag_bag()
   let map = @source.new_source_map()
   let file = @source.add_file(map, "<test>", text)
-  let pp = @preproc.new_preprocessor(map, file, bag)
+  let pp = @preproc.new_preprocessor(map, file, bag, host=@default_host.new())
   for path in paths {
     @preproc.add_include_path(pp, path)
   }
