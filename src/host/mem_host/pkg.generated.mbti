@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/tinycc/host/mem_host"
+
+import {
+  "hackwaly/tinycc/host",
+}
+
+// Values
+pub fn new() -> InMemoryHost
+
+// Errors
+
+// Types and methods
+type InMemoryHost
+pub impl @host.Host for InMemoryHost
+
+// Type aliases
+
+// Traits
+

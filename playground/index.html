@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FastCC Playground</title>
+    <style>
+      body {
+        margin: 0;
+        display: flex;
+        flex-direction: row;
+        height: 100vh;
+      }
+      #c {
+        flex: 1;
+        height: 100%;
+        position: relative;
+      }
+      #obj-dump {
+        flex: 1;
+        height: 100%;
+        position: relative;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="c"></div>
+    <div id="obj-dump"></div>
+    <script src="https://unpkg.com/codeflask/build/codeflask.min.js"></script>
+    <script type="module">
+      import * as FastCC from "./js/fastcc.js";
+      import * as Objdump from "./objdump/index.js";
+      const cEditor = new CodeFlask("#c", {
+        language: "clike",
+        lineNumbers: true,
+        tabSize: 4,
+      });
+      const objDumpEditor = new CodeFlask("#obj-dump", {
+        readonly: true,
+      });
+      function raw(x) {
+        return x.raw[0];
+      }
+      cEditor.updateCode(raw`// N-queens problem
+#include <stdio.h>
+#include <stdlib.h>
+
+int count = 0;
+void solve(int n, int col, int *hist)
+{
+    if (col == n) {
+        printf("\nNo. %d\n-----\n", ++count);
+        for (int i = 0; i < n; i++, putchar('\n'))
+            for (int j = 0; j < n; j++)
+                putchar(j == hist[i] ? 'Q' : ((i + j) & 1) ? ' ' : '.');
+
+        return;
+    }
+
+#   define attack(i, j) (hist[j] == i || abs(hist[j] - i) == col - j)
+    for (int i = 0, j = 0; i < n; i++) {
+        for (j = 0; j < col && !attack(i, j); j++);
+        if (j < col) continue;
+
+        hist[col] = i;
+        solve(n, col + 1, hist);
+    }
+}
+
+int main(int n, char **argv)
+{
+    if (n <= 1 || (n = atoi(argv[1])) <= 0) n = 8;
+    int hist[n];
+    solve(n, 0, hist);
+}
+`);
+      const host = FastCC.new_in_memory_host_with_includes();
+      let updateObjDumpAborter;
+      cEditor.onUpdate((code) => {
+        FastCC.host_write_string_to_file(host, "input.c", code);
+        const stamp = performance.now();
+        const exitCode = FastCC.run_args(host, [
+          "fastcc",
+          "-I",
+          "/include",
+          "-c",
+          "input.c",
+          "-o",
+          "output.o",
+        ]);
+        const elapsed = performance.now() - stamp;
+        const statusLine = `// Compilation finished in ${elapsed.toFixed(
+          2,
+        )} ms with exit code ${exitCode}.\n`;
+        objDumpEditor.updateCode(statusLine + "\n");
+        if (exitCode !== 0) {
+          return;
+        }
+        const obj = FastCC.host_read_file(host, "output.o");
+        updateObjDumpAborter?.abort();
+        const aborter = new AbortController();
+        Objdump.dump(obj, { signal: aborter.signal }).then((dump) => {
+          if (aborter.signal.aborted) return;
+          objDumpEditor.updateCode(statusLine + "\n" + dump);
+        });
+      });
+    </script>
+  </body>
+</html>
