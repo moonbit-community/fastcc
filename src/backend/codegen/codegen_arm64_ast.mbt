@@ -3517,6 +3517,8 @@ fn gen_initializer_to_addr(
   init : @ast.Initializer,
   bag : @diag.DiagBag,
 ) -> Unit {
+  ignore(count_remaining_init_fields_codegen)
+  ignore(has_single_init_field_codegen)
   let init_loc = match init {
     Expr(loc~, ..) => loc
     List(loc~, ..) => loc
@@ -5546,7 +5548,7 @@ fn store_call_arg_to_slot(
     None =>
       match strip_top_qualifiers(ty) {
         Struct(..) | Union(..) =>
-          if type_size_align_or_error(alloc.sem, ty, loc) is Some((size, _)) {
+          if type_size_align_or_error(alloc.sem, ty, loc) is Some((_, _)) {
             gen_agg_expr_to_addr(
               emitter,
               alloc,
@@ -14919,17 +14921,19 @@ fn gen_func_def(
     0,
   )
   cg_pop_scope(alloc)
+  if func.name == "main" {
+    @arm64.arm64_movimm(emitter, (0 : UInt), 0)
+  }
   @arm64.gsym(emitter, return_chain) catch {
     err => @diag.add_error(bag, func.loc, err.to_string())
   }
-  if func.name == "main" {
-    if alloc.dtor_funcs.length() > 0 {
-      for dtor in alloc.dtor_funcs {
-        let sym = sym_for_name(syms, link_name(dtor))
-        emit_call(emitter, sym)
-      }
+  if func.name == "main" && alloc.dtor_funcs.length() > 0 {
+    emit_mov(emitter, true, 19, 0)
+    for dtor in alloc.dtor_funcs {
+      let sym = sym_for_name(syms, link_name(dtor))
+      emit_call(emitter, sym)
     }
-    @arm64.arm64_movimm(emitter, (0 : UInt), 0)
+    emit_mov(emitter, true, 0, 19)
   }
   emit_restore_sp_to_frame_base(emitter, frame_size)
   emit_epilogue(emitter, frame_size)
@@ -15323,7 +15327,7 @@ fn const_null_pointer_offset_expr(
   expr : @ast.Expr,
 ) -> Int? {
   match expr {
-    Unary(op=Addr, expr=Member(base~, name~, id~, is_arrow~, loc~, ..)) =>
+    Unary(op=Addr, expr=Member(base~, name~, id~, is_arrow~, loc~, ..), ..) =>
       if is_arrow {
         match try_eval_int_const(sem, base) {
           Some(v) if v == 0 =>
@@ -15340,7 +15344,7 @@ fn const_null_pointer_offset_expr(
       } else {
         None
       }
-    Unary(op=Addr, expr=Index(base~, index~, loc~, ..)) =>
+    Unary(op=Addr, expr=Index(base~, index~, loc~, ..), ..) =>
       match try_eval_int_const(sem, base) {
         Some(v) if v == 0 =>
           match const_int_from_expr(sem, index, @ast.expr_loc(index)) {

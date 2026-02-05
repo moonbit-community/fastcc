@@ -446,7 +446,6 @@ pub fn arm64_movimm(emitter : Arm64Emitter, reg : UInt, value : UInt64) -> Unit 
     x1 = value.lnot()
     mov1 = 0x92800000
   }
-  let use_movn = mov1 == 0x92800000
   i = 0
   while i < 64 {
     let chunk = (x1 >> i) & mask16
@@ -463,8 +462,8 @@ pub fn arm64_movimm(emitter : Arm64Emitter, reg : UInt, value : UInt64) -> Unit 
     i = i + 16
   }
   while i < 64 {
-    let chunk = (value >> i) & mask16
-    if (use_movn && chunk != mask16) || (!use_movn && chunk != 0) {
+    if ((x1 >> i) & mask16) != 0 {
+      let chunk = (value >> i) & mask16
       let insn1 = (0xf2800000 : UInt64)
         .lor(reg.to_uint64())
         .lor(chunk << 5)

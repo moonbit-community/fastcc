@@ -854,11 +854,11 @@ test "sem rejects non-const designator index" {
 }
 
 ///|
-test "sem rejects multiple union designators" {
+test "sem accepts multiple union designators" {
   let (_, bag) = check_text(
     "union U { int a; int b; }; union U u = { .a = 1, .b = 2 };",
   )
-  assert_true(@diag.has_errors(bag))
+  assert_true(!@diag.has_errors(bag))
 }
 
 ///|

@@ -3828,12 +3828,6 @@ pub fn try_eval_int_const(ctx : SemContext, expr : @ast.Expr) -> Int? {
           }
         None => None
       }
-    Cast(ty~, expr~, ..) =>
-      if is_pointer_type(ty) || is_int_like(ty) {
-        try_eval_int_const(ctx, expr)
-      } else {
-        None
-      }
     _ => None
   }
 }
@@ -4268,12 +4262,34 @@ fn require_complete_object_type(
       }
       require_complete_object_type(ctx, elem, loc)
     }
-    Struct(name=tag, id=tag_id, fields=field_list, attrs=_) =>
-      ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=false, loc)
-      |> ignore
-    Union(name=tag, id=tag_id, fields=field_list, attrs=_) =>
-      ensure_struct_fields(ctx, tag, tag_id, field_list, is_union=true, loc)
-      |> ignore
+    Struct(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+      let def = ensure_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=false,
+        loc,
+      )
+      if field_list is None && def is Some(val) && val.fields.length() == 0 &&
+        !tag.has_prefix("__anon_tag_") {
+        add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
+      }
+    }
+    Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
+      let def = ensure_struct_fields(
+        ctx,
+        tag,
+        tag_id,
+        field_list,
+        is_union=true,
+        loc,
+      )
+      if field_list is None && def is Some(val) && val.fields.length() == 0 &&
+        !tag.has_prefix("__anon_tag_") {
+        add_sem_error(ctx, loc, "incomplete union '\{tag}'")
+      }
+    }
     Enum(name=tag, id=tag_id, items~) =>
       match items {
         Some(list) =>
@@ -4737,6 +4753,8 @@ fn check_struct_initializer(
   is_union~ : Bool,
   loc : @source.SrcLoc,
 ) -> Unit {
+  ignore(has_single_init_field)
+  ignore(count_remaining_init_fields)
   let mut index = 0
   let mut saw = 0
   let mut item_index = 0
@@ -6590,19 +6608,28 @@ pub fn type_of_lvalue(ctx : SemContext, expr : @ast.Expr) -> @ast.CType? {
           }
         }
       }
-    Index(base~, index~, loc~, ..) =>
+    Index(base~, index~, loc~, ..) => {
+      let base_ty = match type_of_lvalue_optional(ctx, base) {
+        Some(ty) => ty
+        None => type_of_expr(ctx, base)
+      }
       match
-        index_access_type(
-          ctx,
-          type_of_expr(ctx, base),
-          type_of_expr(ctx, index),
-          loc,
-        ) {
+        index_access_type(ctx, base_ty, type_of_expr(ctx, index), loc) {
         Some(ty) => Some(ty)
         None => None
       }
-    Member(base~, name~, id~, is_arrow~, loc~, ..) =>
-      member_access_type(ctx, type_of_expr(ctx, base), name, id, is_arrow~, loc)
+    }
+    Member(base~, name~, id~, is_arrow~, loc~, ..) => {
+      let base_ty = if is_arrow {
+        type_of_expr(ctx, base)
+      } else {
+        match type_of_lvalue_optional(ctx, base) {
+          Some(ty) => ty
+          None => type_of_expr(ctx, base)
+        }
+      }
+      member_access_type(ctx, base_ty, name, id, is_arrow~, loc)
+    }
     Unary(op=Deref, expr=inner, loc~, ..) => {
       let inner_ty = type_of_expr(ctx, inner)
       match strip_top_qualifiers(inner_ty) {

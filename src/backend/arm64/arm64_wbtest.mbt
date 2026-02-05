@@ -63,11 +63,9 @@ test "arm64 movimm uses movn when beneficial" {
   let emitter = new_arm64_emitter()
   let v0 : UInt64 = 0xffff1234ffff5678
   arm64_movimm(emitter, 0, v0)
-  assert_eq(emitter.code_len, 4)
+  assert_eq(emitter.code_len, 2)
   assert_eq(emitter.code[0], (0x929530e0 : UInt))
-  assert_eq(emitter.code[1], (0xf2bfffe0 : UInt))
-  assert_eq(emitter.code[2], (0xf2c24680 : UInt))
-  assert_eq(emitter.code[3], (0xf2ffffe0 : UInt))
+  assert_eq(emitter.code[1], (0xf2c24680 : UInt))
 }
 
 ///|

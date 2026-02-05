@@ -3385,7 +3385,7 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
         let mut default_expr : @ast.Expr? = None
         while true {
           if p.current.kind is KwDefault {
-            let def_tok = advance_token(p)
+            let _ = advance_token(p)
             expect(p, Colon, "expected ':' after default") |> ignore
             default_expr = Some(parse_expr_cond(p))
           } else {
@@ -3975,7 +3975,7 @@ fn resolve_tag_id(p : Parser, name_id : Int) -> Int {
     None => ()
   }
   p.tag_values[name_id - 1] = tag_id
-  p.tag_scope_levels[name_id - 1] = scope_id
+  set_tag_scope_level(p, name_id, scope_id)
   tag_id
 }
 
@@ -3998,7 +3998,7 @@ fn define_tag_id(p : Parser, name_id : Int) -> Int {
     None => ()
   }
   p.tag_values[name_id - 1] = tag_id
-  p.tag_scope_levels[name_id - 1] = scope_id
+  set_tag_scope_level(p, name_id, scope_id)
   tag_id
 }
 
