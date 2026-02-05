@@ -1,0 +1,20 @@
+{
+  "link": {
+    "js": {
+      "format": "esm",
+      "exports": [
+        "run_args",
+        "new_in_memory_host",
+        "new_in_memory_host_with_includes",
+        "host_write_string_to_file",
+        "host_read_file"
+      ]
+    }
+  },
+  "import": [
+    "hackwaly/tinycc/host",
+    "hackwaly/tinycc/driver",
+    "hackwaly/tinycc/host/mem_host",
+    { "path": "moonbitlang/core/encoding/utf8", "alias": "encoding/utf8" }
+  ]
+}
