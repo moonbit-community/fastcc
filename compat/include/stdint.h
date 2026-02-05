@@ -115,4 +115,72 @@ typedef unsigned long long uintmax_t;
 #define INTMAX_MAX INT64_MAX
 #define UINTMAX_MAX UINT64_MAX
 
+#ifndef _TCC_COMPAT_BUILTIN_BITS
+#define _TCC_COMPAT_BUILTIN_BITS
+static inline int tcc_builtin_clz32(unsigned int x) {
+  int n = 0;
+  unsigned int mask = 1u << ((sizeof(unsigned int) * 8) - 1);
+  while (mask && (x & mask) == 0) {
+    n++;
+    mask >>= 1;
+  }
+  return n;
+}
+
+static inline int tcc_builtin_clz64(unsigned long long x) {
+  int n = 0;
+  unsigned long long mask = 1ull << 63;
+  while (mask && (x & mask) == 0) {
+    n++;
+    mask >>= 1;
+  }
+  return n;
+}
+
+static inline int tcc_builtin_ctz32(unsigned int x) {
+  int n = 0;
+  unsigned int mask = 1u;
+  while (mask && (x & mask) == 0) {
+    n++;
+    mask <<= 1;
+  }
+  return n;
+}
+
+static inline int tcc_builtin_ctz64(unsigned long long x) {
+  int n = 0;
+  unsigned long long mask = 1ull;
+  while (mask && (x & mask) == 0) {
+    n++;
+    mask <<= 1;
+  }
+  return n;
+}
+
+static inline int tcc_builtin_popcount32(unsigned int x) {
+  int n = 0;
+  while (x) {
+    n += (x & 1u);
+    x >>= 1;
+  }
+  return n;
+}
+
+static inline int tcc_builtin_popcount64(unsigned long long x) {
+  int n = 0;
+  while (x) {
+    n += (x & 1ull);
+    x >>= 1;
+  }
+  return n;
+}
+
+#define __builtin_clz(x) tcc_builtin_clz32((unsigned int)(x))
+#define __builtin_clzll(x) tcc_builtin_clz64((unsigned long long)(x))
+#define __builtin_ctz(x) tcc_builtin_ctz32((unsigned int)(x))
+#define __builtin_ctzll(x) tcc_builtin_ctz64((unsigned long long)(x))
+#define __builtin_popcount(x) tcc_builtin_popcount32((unsigned int)(x))
+#define __builtin_popcountll(x) tcc_builtin_popcount64((unsigned long long)(x))
+#endif
+
 #endif /* _TCC_COMPAT_STDINT_H */

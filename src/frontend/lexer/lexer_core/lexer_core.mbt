@@ -64,6 +64,30 @@ pub fn next_token(lex : Lexer) -> @tokens.Token {
   match peek_char(lex) {
     None => make_token(Eof, loc, line_start)
     Some(code) => {
+      if code == 76 {
+        match peek_char_offset(lex, 1) {
+          Some(next) if next == 34 || next == 39 => {
+            let start = lex.index
+            advance(lex) |> ignore
+            let quote = match peek_char(lex) {
+              None => return make_token(Eof, loc, line_start)
+              Some(v) => v
+            }
+            skip_string_literal(lex, loc, quote)
+            let kind = if quote == 34 { @tokens.TokenKind::StrLit } else {
+              CharLit
+            }
+            let lexeme_id = @tokens.lexeme_pool_intern_slice(
+              lex.lexeme_pool,
+              lex.text,
+              start,
+              lex.index,
+            )
+            return make_token(kind, loc, line_start, lexeme_id~)
+          }
+          _ => ()
+        }
+      }
       if is_ident_start(code) {
         return lex_ident(lex, loc, line_start)
       }

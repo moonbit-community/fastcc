@@ -868,45 +868,47 @@ test "preproc api if parser wrappers" {
   )
   let tok1 = @preproc.make_int_literal_token(pp, 1, loc)
   let tok2 = @preproc.make_int_literal_token(pp, 2, loc)
-  let parser0 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp }
+  let parser0 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp, suppress_errors: false }
   ignore(@preproc.parse_primary(parser0, loc))
-  let parser1 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp }
+  let parser1 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp, suppress_errors: false }
   ignore(@preproc.parse_unary(parser1, loc))
-  let parser2 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp }
+  let parser2 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp, suppress_errors: false }
   ignore(@preproc.parse_mul(parser2, loc))
-  let parser3 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp }
+  let parser3 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp, suppress_errors: false }
   ignore(@preproc.parse_add(parser3, loc))
-  let parser4 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp }
+  let parser4 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp, suppress_errors: false }
   ignore(@preproc.parse_shift(parser4, loc))
-  let parser5 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp }
+  let parser5 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp, suppress_errors: false }
   ignore(@preproc.parse_rel(parser5, loc))
-  let parser6 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp }
+  let parser6 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp, suppress_errors: false }
   ignore(@preproc.parse_eq(parser6, loc))
-  let parser7 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp }
+  let parser7 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp, suppress_errors: false }
   ignore(@preproc.parse_bit_and(parser7, loc))
-  let parser8 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp }
+  let parser8 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp, suppress_errors: false }
   ignore(@preproc.parse_bit_xor(parser8, loc))
-  let parser9 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp }
+  let parser9 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp, suppress_errors: false }
   ignore(@preproc.parse_bit_or(parser9, loc))
-  let parser10 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp }
+  let parser10 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp, suppress_errors: false }
   ignore(@preproc.parse_logical_and(parser10, loc))
-  let parser11 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp }
+  let parser11 = @preproc.IfParser::{ tokens: [tok1], index: 0, pp, suppress_errors: false }
   ignore(@preproc.parse_logical_or(parser11, loc))
-  let parser12 = @preproc.IfParser::{ tokens: [num_tok], index: 0, pp }
+  let parser12 = @preproc.IfParser::{ tokens: [num_tok], index: 0, pp, suppress_errors: false }
   ignore(@preproc.parse_defined(parser12, loc))
   let parser13 = @preproc.IfParser::{
     tokens: [@preproc.make_builtin_token(RParen)],
     index: 0,
     pp,
+    suppress_errors: false,
   }
   assert_true(@preproc.peek_is_rparen(parser13))
   let parser14 = @preproc.IfParser::{
     tokens: [tok2, @preproc.make_builtin_token(RParen)],
     index: 0,
     pp,
+    suppress_errors: false,
   }
   @preproc.skip_paren_expr(parser14, loc)
-  let parser15 = @preproc.IfParser::{ tokens: [tok1, tok2], index: 0, pp }
+  let parser15 = @preproc.IfParser::{ tokens: [tok1, tok2], index: 0, pp, suppress_errors: false }
   assert_true(@preproc.peek_if(parser15) is Some(_))
   assert_true(@preproc.advance_if(parser15) is Some(_))
   assert_true(@preproc.match_kind(parser15, IntLit))
