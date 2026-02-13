@@ -1,0 +1,9 @@
+{
+  "pre-build": [
+    {
+      "input": [],
+      "command": "moon -C $mod_dir/scripts/embed_headers run . -- $mod_dir/compat/include -o $output",
+      "output": "headers.mbt"
+    }
+  ]
+}

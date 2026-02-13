@@ -1,0 +1,8 @@
+{
+  "name": "embed_headers",
+  "deps": {
+    "moonbitlang/async": "0.16.6",
+    "moonbitlang/x": "0.4.40"
+  },
+  "preferred-target": "native"
+}

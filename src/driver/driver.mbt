@@ -273,7 +273,7 @@ fn compile_to_object_path(
       let map = @source.new_source_map()
       let file = @source.add_file(map, path, text)
       let pp = @preproc.new_preprocessor(map, file, bag, host~)
-      @preproc.add_include_path(pp, "compat/include")
+      @preproc.add_include_path(pp, host.include_dir())
       for p in cfg.include_paths {
         @preproc.add_include_path(pp, p)
       }
@@ -431,7 +431,7 @@ fn run_with_args(host~ : &@host.Host, args : Array[String]) -> Int {
                 let map = @source.new_source_map()
                 let file = @source.add_file(map, path, text)
                 let pp = @preproc.new_preprocessor(map, file, bag, host~)
-                @preproc.add_include_path(pp, "compat/include")
+                @preproc.add_include_path(pp, host.include_dir())
                 for p in cfg.include_paths {
                   @preproc.add_include_path(pp, p)
                 }
