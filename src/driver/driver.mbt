@@ -436,12 +436,6 @@ fn run_with_args(host~ : &@host.Host, args : Array[String]) -> Int {
                   @preproc.add_include_path(pp, p)
                 }
                 apply_cli_macros(pp, cfg.macro_actions)
-                let toks = @preproc.dump_tokens(pp, 32)
-                for t in toks {
-                  println(
-                    @tokens.token_text_with(pp.interner, pp.lexeme_pool, t),
-                  )
-                }
                 if @diag.has_errors(bag) {
                   any_errors = true
                   for d in bag.diags {
