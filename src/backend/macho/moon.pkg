@@ -1,0 +1,18 @@
+import {
+  "hackwaly/fastcc/backend/arm64",
+  "hackwaly/fastcc/backend/object",
+  "hackwaly/fastcc/support/util",
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/encoding/utf8" @encoding/utf8,
+  "hackwaly/fastcc/host",
+}
+
+import {
+  "hackwaly/fastcc/testutil",
+  "hackwaly/fastcc/host/default_host",
+  "moonbitlang/x/fs",
+} for "test"
+
+import {
+  "hackwaly/fastcc/backend/arm64",
+} for "wbtest"

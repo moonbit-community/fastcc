@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/testutil"
+package "hackwaly/fastcc/testutil"
 
 // Values
 pub fn ensure_dir(String) -> Unit raise

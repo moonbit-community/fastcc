@@ -1,8 +1,0 @@
-{
-  "import": [
-    "hackwaly/tinycc/support/util/fast_map",
-    "hackwaly/tinycc/support/util/int_literals",
-    "hackwaly/tinycc/support/util/string_utils",
-    "hackwaly/tinycc/support/util/target_config"
-  ]
-}

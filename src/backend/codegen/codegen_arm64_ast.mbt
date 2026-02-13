@@ -2542,7 +2542,11 @@ fn emit_store_gp_regs_to_addr(
         @arm64.arm64_gen_opic(
           emitter,
           TOK_SHR,
-          if is64 { 1 } else { 0 },
+          if is64 {
+            1
+          } else {
+            0
+          },
           false,
           8,
           reg,
@@ -2594,7 +2598,8 @@ fn gen_agg_expr_to_addr(
   }
   match expr {
     BuiltinVaArg(list~, ty=va_ty, loc=va_loc, ..) => {
-      let (va_size, _) = match type_size_align_or_error(alloc.sem, va_ty, va_loc) {
+      let (va_size, _) = match
+        type_size_align_or_error(alloc.sem, va_ty, va_loc) {
         None => return
         Some(v) => v
       }
@@ -2642,29 +2647,13 @@ fn gen_agg_expr_to_addr(
           0,
         )
         emit_copy_bytes(
-          emitter,
-          pool,
-          src,
-          0,
-          dst_reg,
-          dst_off,
-          va_size,
-          va_loc,
-          bag,
+          emitter, pool, src, 0, dst_reg, dst_off, va_size, va_loc, bag,
         )
         arm64_add_imm(emitter, cur, cur, 8)
         give_reg(pool, src)
       } else {
         emit_copy_bytes(
-          emitter,
-          pool,
-          cur,
-          0,
-          dst_reg,
-          dst_off,
-          va_size,
-          va_loc,
-          bag,
+          emitter, pool, cur, 0, dst_reg, dst_off, va_size, va_loc, bag,
         )
         let bump = align_up(va_size, 8)
         arm64_add_imm(emitter, cur, cur, bump)
@@ -2820,10 +2809,12 @@ fn gen_agg_expr_to_addr(
         true,
         loc,
         bag,
-        (expr, _) => gen_agg_expr_to_addr(
-          emitter, alloc, syms, pool, cstrings, expr, dst_reg, dst_off, ty, loc,
-          bag,
-        ),
+        (expr, _) => {
+          gen_agg_expr_to_addr(
+            emitter, alloc, syms, pool, cstrings, expr, dst_reg, dst_off, ty, loc,
+            bag,
+          )
+        },
       )
     _ => {
       let src_addr = take_reg(pool) catch {
@@ -3535,13 +3526,15 @@ fn gen_initializer_to_addr(
           base_reg,
           base_off,
           ty,
-          @ast.Initializer::Expr(expr=expr, loc=init_loc),
+          @ast.Initializer::Expr(expr~, loc=init_loc),
           bag,
         )
         return
       }
       None => {
-        @diag.add_error(bag, init_loc, "codegen: initializer list for non-aggregate")
+        @diag.add_error(
+          bag, init_loc, "codegen: initializer list for non-aggregate",
+        )
         return
       }
     }
@@ -3577,7 +3570,10 @@ fn gen_initializer_to_addr(
                     Some(n0) => {
                       let mut n = n0
                       match strip_top_qualifiers(ty) {
-                        Array(size=None, size_expr=None, ..) => if n <= 0 { n = length }
+                        Array(size=None, size_expr=None, ..) =>
+                          if n <= 0 {
+                            n = length
+                          }
                         _ => ()
                       }
                       let copy_len = if length > n { n } else { length }
@@ -3588,11 +3584,8 @@ fn gen_initializer_to_addr(
                     }
                   }
                 } else {
-                  let elem_size = match scalar_size_signed_or_error(
-                    alloc.sem,
-                    elem,
-                    loc,
-                  ) {
+                  let elem_size = match
+                    scalar_size_signed_or_error(alloc.sem, elem, loc) {
                     None => 0
                     Some((sz, _)) => sz
                   }
@@ -3605,7 +3598,10 @@ fn gen_initializer_to_addr(
                       Some(n0) => {
                         let mut n = n0
                         match strip_top_qualifiers(ty) {
-                          Array(size=None, size_expr=None, ..) => if n <= 0 { n = length }
+                          Array(size=None, size_expr=None, ..) =>
+                            if n <= 0 {
+                              n = length
+                            }
                           _ => ()
                         }
                         let cps = utf8_codepoints(value)
@@ -3676,7 +3672,7 @@ fn gen_initializer_to_addr(
           if !is_aggregate_type_codegen(expr_ty) {
             let item : @ast.InitItem = {
               designators: [],
-              value: @ast.Initializer::Expr(expr=expr, loc=loc),
+              value: @ast.Initializer::Expr(expr~, loc~),
               loc,
             }
             gen_initializer_to_addr(
@@ -3688,7 +3684,7 @@ fn gen_initializer_to_addr(
               base_reg,
               base_off,
               ty,
-              @ast.Initializer::List(items=[item], loc=loc),
+              @ast.Initializer::List(items=[item], loc~),
               bag,
             )
             return
@@ -3964,9 +3960,7 @@ fn gen_initializer_to_addr(
                             item.loc,
                           )
                           let (elided_items, count) = collect_elided_array_items_codegen(
-                            items,
-                            item_idx,
-                            n,
+                            items, item_idx, n,
                           )
                           let init = @ast.Initializer::List(
                             items=elided_items,
@@ -4475,9 +4469,7 @@ fn gen_initializer_to_addr(
                             first.loc,
                           )
                           let (elided_items, count) = collect_elided_array_items_codegen(
-                            items,
-                            0,
-                            n,
+                            items, 0, n,
                           )
                           if count > 0 {
                             let init = @ast.Initializer::List(
@@ -5576,15 +5568,7 @@ fn store_call_arg_to_slot(
             let from_ty = type_of_expr(alloc.sem, arg)
             if float_kind_of_type(from_ty) is Some(_) {
               gen_expr_any_with_type(
-                emitter,
-                alloc,
-                syms,
-                pool,
-                cstrings,
-                arg,
-                from_ty,
-                tmp,
-                bag,
+                emitter, alloc, syms, pool, cstrings, arg, from_ty, tmp, bag,
               )
               emit_cast_value(emitter, alloc.sem, from_ty, ty, tmp, loc, bag)
             } else {
@@ -5673,7 +5657,8 @@ fn gen_call_direct(
         while i < args.length() {
           let arg = args[i]
           let param_ty = s.params[i]
-          let store_ty = match transparent_union_arg_type(alloc.sem, param_ty, arg) {
+          let store_ty = match
+            transparent_union_arg_type(alloc.sem, param_ty, arg) {
             Some(t) => {
               needs_custom = true
               t
@@ -5699,7 +5684,8 @@ fn gen_call_direct(
           } else {
             type_of_expr(alloc.sem, arg)
           }
-          let mut store_ty = match transparent_union_arg_type(alloc.sem, param_ty, arg) {
+          let mut store_ty = match
+            transparent_union_arg_type(alloc.sem, param_ty, arg) {
             Some(t) => t
             None => param_ty
           }
@@ -6360,8 +6346,7 @@ fn gen_sync_builtin_call(
   if !(is_fetch_add || is_add_fetch || is_fetch_sub || is_cas || is_lock) {
     return false
   }
-  if (is_cas && args.length() != 3) ||
-    (!is_cas && args.length() != 2) {
+  if (is_cas && args.length() != 3) || (!is_cas && args.length() != 2) {
     @diag.add_error(bag, loc, "codegen: __sync builtin expects 2 or 3 args")
     return true
   }
@@ -6495,21 +6480,13 @@ fn gen_sync_builtin_call(
     let base : Int = if is64 { 0xcb000000 } else { 0x4b000000 }
     @arm64.emit32(
       emitter,
-      (base : Int)
-      .lor(newv)
-      .lor(newv << 5)
-      .lor(val << 16)
-      .reinterpret_as_uint(),
+      (base : Int).lor(newv).lor(newv << 5).lor(val << 16).reinterpret_as_uint(),
     )
   } else if is_fetch_add || is_add_fetch {
     let base : Int = if is64 { 0x8b000000 } else { 0x0b000000 }
     @arm64.emit32(
       emitter,
-      (base : Int)
-      .lor(newv)
-      .lor(newv << 5)
-      .lor(val << 16)
-      .reinterpret_as_uint(),
+      (base : Int).lor(newv).lor(newv << 5).lor(val << 16).reinterpret_as_uint(),
     )
   } else if is_lock {
     emit_mov(emitter, is64, newv, val)
@@ -6559,9 +6536,7 @@ fn gen_call_expr_impl(
     match builtin_call_kind(alloc.sem, name, id) {
       Some(ChooseExpr) => {
         if args.length() != 3 {
-          @diag.add_error(
-            bag, loc, "__builtin_choose_expr expects 3 arguments",
-          )
+          @diag.add_error(bag, loc, "__builtin_choose_expr expects 3 arguments")
           return
         }
         let cond = match const_int_from_expr(alloc.sem, args[0], loc) {
@@ -6596,16 +6571,7 @@ fn gen_call_expr_impl(
         }
         if float_kind_of_type(chosen_ty) is Some(k) {
           gen_expr_to_float_kind_bits_with_type(
-            emitter,
-            alloc,
-            syms,
-            pool,
-            cstrings,
-            chosen,
-            chosen_ty,
-            k,
-            0,
-            bag,
+            emitter, alloc, syms, pool, cstrings, chosen, chosen_ty, k, 0, bag,
           )
           return
         }
@@ -7202,9 +7168,9 @@ fn gen_lvalue_addr(
         true,
         loc,
         bag,
-        (expr, dst) => gen_lvalue_addr(
-          emitter, alloc, syms, pool, cstrings, expr, dst, bag,
-        ),
+        (expr, dst) => {
+          gen_lvalue_addr(emitter, alloc, syms, pool, cstrings, expr, dst, bag)
+        },
       )
       if !last_is_expr {
         @diag.add_error(
@@ -7396,7 +7362,9 @@ fn struct_field_access_info(
               bit_width: Some(width),
               bit_unit_size: None,
             }
-            return Some(adjust_bitfield_access_info(ctx, struct_size, info, loc))
+            return Some(
+              adjust_bitfield_access_info(ctx, struct_size, info, loc),
+            )
           }
           bit_pos = bit_pos + width
         }
@@ -9463,9 +9431,11 @@ fn gen_expr_floatbits(
         true,
         loc,
         bag,
-        (expr, dst) => gen_expr_floatbits(
-          emitter, alloc, syms, pool, cstrings, expr, kind_raw, dst, bag,
-        ),
+        (expr, dst) => {
+          gen_expr_floatbits(
+            emitter, alloc, syms, pool, cstrings, expr, kind_raw, dst, bag,
+          )
+        },
       )
     BuiltinVaArg(list~, ty~, loc~, ..) =>
       match float_kind_of_type(strip_top_qualifiers(ty)) {
@@ -9651,7 +9621,8 @@ fn gen_expr_floatbits(
           }
           let op_kind = match rhs_kind {
             Some(rk) =>
-              if lhs_kind == @ast.CFloatKind::Float && rk == @ast.CFloatKind::Float {
+              if lhs_kind == @ast.CFloatKind::Float &&
+                rk == @ast.CFloatKind::Float {
                 @ast.CFloatKind::Float
               } else {
                 @ast.CFloatKind::Double
@@ -9818,9 +9789,9 @@ fn gen_expr_int32(
         false,
         loc,
         bag,
-        (expr, dst) => gen_expr_int32(
-          emitter, alloc, syms, pool, cstrings, expr, dst, bag,
-        ),
+        (expr, dst) => {
+          gen_expr_int32(emitter, alloc, syms, pool, cstrings, expr, dst, bag)
+        },
       )
     Ident(name~, id~, loc~, ..) => {
       if enum_const_value(alloc.sem, name, id) is Some(v) {
@@ -11610,7 +11581,6 @@ fn gen_expr_int32(
                     dst,
                     tmp,
                   )
-
                 }
               }
             }
@@ -11835,20 +11805,13 @@ fn gen_expr_int32(
           match float_kind_of_type(from_ty) {
             Some(k) =>
               gen_expr_to_float_kind_bits_with_type(
-                emitter,
-                alloc,
-                syms,
-                pool,
-                cstrings,
-                inner,
-                from_ty,
-                k,
-                dst,
-                bag,
+                emitter, alloc, syms, pool, cstrings, inner, from_ty, k, dst, bag,
               )
             None =>
               if type_is_pointer_like(from_ty) {
-                gen_expr_ptr(emitter, alloc, syms, pool, cstrings, inner, dst, bag)
+                gen_expr_ptr(
+                  emitter, alloc, syms, pool, cstrings, inner, dst, bag,
+                )
               } else {
                 gen_expr_int32(
                   emitter,
@@ -11863,7 +11826,15 @@ fn gen_expr_int32(
                 )
               }
           }
-          emit_cast_value(emitter, alloc.sem, from_ty, to_ty, dst, cast_loc, bag)
+          emit_cast_value(
+            emitter,
+            alloc.sem,
+            from_ty,
+            to_ty,
+            dst,
+            cast_loc,
+            bag,
+          )
         }
         (Int(kind=to_kind, unsigned=to_unsigned), Float(kind=from_kind)) => {
           if !float_kind_supported(from_kind) {
@@ -12067,9 +12038,9 @@ fn gen_expr_ptr(
         true,
         loc,
         bag,
-        (expr, dst) => gen_expr_ptr(
-          emitter, alloc, syms, pool, cstrings, expr, dst, bag,
-        ),
+        (expr, dst) => {
+          gen_expr_ptr(emitter, alloc, syms, pool, cstrings, expr, dst, bag)
+        },
       )
     StringLit(value~, ..) => {
       let sym = cstring_sym_or_add(cstrings, syms, value)
@@ -12906,13 +12877,13 @@ fn gen_expr_side_effects(
     Cast(expr=inner, ..) =>
       gen_expr_side_effects(emitter, alloc, syms, pool, cstrings, inner, bag)
     Call(callee~, args~, loc~, ..) =>
-      gen_call_expr(emitter, alloc, syms, pool, cstrings, callee, args, loc, bag)
+      gen_call_expr(
+        emitter, alloc, syms, pool, cstrings, callee, args, loc, bag,
+      )
     Binary(op=Assign, left~, right~, ..) => {
       let lhs_ty = type_of_expr(alloc.sem, left)
       if type_is_aggregate(lhs_ty) {
-        gen_expr_side_effects(
-          emitter, alloc, syms, pool, cstrings, right, bag,
-        )
+        gen_expr_side_effects(emitter, alloc, syms, pool, cstrings, right, bag)
       } else {
         gen_expr_any(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
       }
@@ -12952,9 +12923,9 @@ fn gen_expr_side_effects(
         true,
         loc,
         bag,
-        (expr, _) => gen_expr_side_effects(
-          emitter, alloc, syms, pool, cstrings, expr, bag,
-        ),
+        (expr, _) => {
+          gen_expr_side_effects(emitter, alloc, syms, pool, cstrings, expr, bag)
+        },
       )
     Unary(op=PreInc | PreDec | PostInc | PostDec, ..) =>
       gen_expr_any(emitter, alloc, syms, pool, cstrings, expr, 0, bag)
@@ -12978,7 +12949,13 @@ fn gen_initializer_side_effects(
     List(items~, ..) =>
       for item in items {
         gen_initializer_side_effects(
-          emitter, alloc, syms, pool, cstrings, item.value, bag,
+          emitter,
+          alloc,
+          syms,
+          pool,
+          cstrings,
+          item.value,
+          bag,
         )
       }
   }
@@ -13057,9 +13034,9 @@ fn gen_expr_discard(
             true,
             loc,
             bag,
-            (expr, _) => gen_expr_discard(
-              emitter, alloc, syms, pool, cstrings, expr, bag,
-            ),
+            (expr, _) => {
+              gen_expr_discard(emitter, alloc, syms, pool, cstrings, expr, bag)
+            },
           )
         _ =>
           gen_expr_any_with_type(
@@ -13074,9 +13051,7 @@ fn gen_expr_discard(
           Some(v) => v
         }
         if size <= 0 {
-          gen_expr_side_effects(
-            emitter, alloc, syms, pool, cstrings, expr, bag,
-          )
+          gen_expr_side_effects(emitter, alloc, syms, pool, cstrings, expr, bag)
           return
         }
         match alloc.agg_temp_offset {
@@ -13453,21 +13428,8 @@ fn gen_switch_body(
       gen_cond_expr_cmp_zero(emitter, alloc, syms, pool, cstrings, cond, bag)
       let br_false = emit_b_cond_placeholder(emitter, ARM64_COND_EQ)
       let (chain_then, def_then, next_then) = gen_switch_body(
-        emitter,
-        alloc,
-        syms,
-        pool,
-        loops,
-        switches,
-        breakables,
-        labels,
-        cstrings,
-        then_branch,
-        bag,
-        return_chain,
-        case_addrs,
-        default_addr0,
-        next_case0,
+        emitter, alloc, syms, pool, loops, switches, breakables, labels, cstrings,
+        then_branch, bag, return_chain, case_addrs, default_addr0, next_case0,
       )
       match else_branch {
         None => {
@@ -13484,21 +13446,8 @@ fn gen_switch_body(
             err => @diag.add_error(bag, loc, err.to_string())
           }
           let (chain_else, def_else, next_else) = gen_switch_body(
-            emitter,
-            alloc,
-            syms,
-            pool,
-            loops,
-            switches,
-            breakables,
-            labels,
-            cstrings,
-            else_stmt,
-            bag,
-            chain_then,
-            case_addrs,
-            def_then,
-            next_then,
+            emitter, alloc, syms, pool, loops, switches, breakables, labels, cstrings,
+            else_stmt, bag, chain_then, case_addrs, def_then, next_then,
           )
           let end_pc = @arm64.emitter_pc(emitter)
           @arm64.gsym_addr(emitter, after_then, end_pc) catch {
@@ -13521,21 +13470,8 @@ fn gen_switch_body(
       })
       breakables.push(BREAKABLE_LOOP)
       let (chain1, def1, next1) = gen_switch_body(
-        emitter,
-        alloc,
-        syms,
-        pool,
-        loops,
-        switches,
-        breakables,
-        labels,
-        cstrings,
-        body,
-        bag,
-        return_chain,
-        case_addrs,
-        default_addr0,
-        next_case0,
+        emitter, alloc, syms, pool, loops, switches, breakables, labels, cstrings,
+        body, bag, return_chain, case_addrs, default_addr0, next_case0,
       )
       breakables.pop() |> ignore
       let loop_info = loops
@@ -13572,21 +13508,8 @@ fn gen_switch_body(
       })
       breakables.push(BREAKABLE_LOOP)
       let (chain1, def1, next1) = gen_switch_body(
-        emitter,
-        alloc,
-        syms,
-        pool,
-        loops,
-        switches,
-        breakables,
-        labels,
-        cstrings,
-        body,
-        bag,
-        return_chain,
-        case_addrs,
-        default_addr0,
-        next_case0,
+        emitter, alloc, syms, pool, loops, switches, breakables, labels, cstrings,
+        body, bag, return_chain, case_addrs, default_addr0, next_case0,
       )
       breakables.pop() |> ignore
       let cond_pc = @arm64.emitter_pc(emitter)
@@ -13621,21 +13544,8 @@ fn gen_switch_body(
       let mut next0 = next_case0
       if init is Some(s) {
         let (new_chain, new_def, new_next) = gen_switch_body(
-          emitter,
-          alloc,
-          syms,
-          pool,
-          loops,
-          switches,
-          breakables,
-          labels,
-          cstrings,
-          s,
-          bag,
-          chain0,
-          case_addrs,
-          def0,
-          next0,
+          emitter, alloc, syms, pool, loops, switches, breakables, labels, cstrings,
+          s, bag, chain0, case_addrs, def0, next0,
         )
         chain0 = new_chain
         def0 = new_def
@@ -13652,21 +13562,8 @@ fn gen_switch_body(
       loops.push({ break_chain: 0, cont_chain: 0, break_depth, cont_depth })
       breakables.push(BREAKABLE_LOOP)
       let (chain1, def1, next1) = gen_switch_body(
-        emitter,
-        alloc,
-        syms,
-        pool,
-        loops,
-        switches,
-        breakables,
-        labels,
-        cstrings,
-        body,
-        bag,
-        chain0,
-        case_addrs,
-        def0,
-        next0,
+        emitter, alloc, syms, pool, loops, switches, breakables, labels, cstrings,
+        body, bag, chain0, case_addrs, def0, next0,
       )
       let step_pc = @arm64.emitter_pc(emitter)
       breakables.pop() |> ignore
@@ -14984,7 +14881,7 @@ fn string_has_nul(value : String) -> Bool {
       return true
     }
     continue i + 1
-  } else {
+  } nobreak {
     false
   }
 }
@@ -15322,10 +15219,7 @@ fn const_pointer_from_expr(
 }
 
 ///|
-fn const_null_pointer_offset_expr(
-  sem : SemContext,
-  expr : @ast.Expr,
-) -> Int? {
+fn const_null_pointer_offset_expr(sem : SemContext, expr : @ast.Expr) -> Int? {
   match expr {
     Unary(op=Addr, expr=Member(base~, name~, id~, is_arrow~, loc~, ..), ..) =>
       if is_arrow {
@@ -15386,17 +15280,11 @@ fn ensure_global_compound_literal(
         None => None
       }
     None => {
-      let (bytes, relocs) = match build_global_initializer_bytes(
-        sem,
-        syms,
-        cstrings,
-        static_locals,
-        compound_literal_entries,
-        compound_literal_index_by_id,
-        ty,
-        init,
-        bag,
-      ) {
+      let (bytes, relocs) = match
+        build_global_initializer_bytes(
+          sem, syms, cstrings, static_locals, compound_literal_entries, compound_literal_index_by_id,
+          ty, init, bag,
+        ) {
         None => return None
         Some(v) => v
       }
@@ -15464,7 +15352,7 @@ fn fill_global_initializer_bytes(
           compound_literal_entries,
           compound_literal_index_by_id,
           ty,
-          @ast.Initializer::Expr(expr=expr, loc=init_loc),
+          @ast.Initializer::Expr(expr~, loc=init_loc),
           bytes,
           relocs,
           base_off,
@@ -15474,7 +15362,9 @@ fn fill_global_initializer_bytes(
         return
       }
       None => {
-        @diag.add_error(bag, init_loc, "codegen: initializer list for non-aggregate")
+        @diag.add_error(
+          bag, init_loc, "codegen: initializer list for non-aggregate",
+        )
         return
       }
     }
@@ -15489,10 +15379,7 @@ fn fill_global_initializer_bytes(
               if try_eval_int_const(sem, expr) is Some(0) {
                 let mut n = n0
                 match strip_top_qualifiers(ty) {
-                  Array(size=None, size_expr=None, ..) =>
-                    if n <= 0 {
-                      n = 0
-                    }
+                  Array(size=None, size_expr=None, ..) => if n <= 0 { n = 0 }
                   _ => ()
                 }
                 let (elem_sz, _) = match
@@ -15520,7 +15407,10 @@ fn fill_global_initializer_bytes(
                       }
                       let mut n = n0
                       match strip_top_qualifiers(ty) {
-                        Array(size=None, size_expr=None, ..) => if n <= 0 { n = length }
+                        Array(size=None, size_expr=None, ..) =>
+                          if n <= 0 {
+                            n = length
+                          }
                         _ => ()
                       }
                       if n > 0 {
@@ -15530,7 +15420,10 @@ fn fill_global_initializer_bytes(
                         let mut idx = 0
                         while idx < copy_len {
                           store_int_le(
-                            bytes, base_off + idx, 1, str_bytes[idx].to_int(),
+                            bytes,
+                            base_off + idx,
+                            1,
+                            str_bytes[idx].to_int(),
                           )
                           idx = idx + 1
                         }
@@ -15539,14 +15432,18 @@ fn fill_global_initializer_bytes(
                         }
                       }
                     } else {
-                      let elem_sz = match scalar_size_signed_or_error(sem, elem_ty, loc) {
+                      let elem_sz = match
+                        scalar_size_signed_or_error(sem, elem_ty, loc) {
                         None => 0
                         Some((sz, _)) => sz
                       }
                       if is_int_like(elem_ty) && (elem_sz == 2 || elem_sz == 4) {
                         let mut n = n0
                         match strip_top_qualifiers(ty) {
-                          Array(size=None, size_expr=None, ..) => if n <= 0 { n = length }
+                          Array(size=None, size_expr=None, ..) =>
+                            if n <= 0 {
+                              n = length
+                            }
                           _ => ()
                         }
                         let cps = utf8_codepoints(value)
@@ -15590,7 +15487,7 @@ fn fill_global_initializer_bytes(
           if !is_aggregate_type_codegen(expr_ty) {
             let item : @ast.InitItem = {
               designators: [],
-              value: @ast.Initializer::Expr(expr=expr, loc=loc),
+              value: @ast.Initializer::Expr(expr~, loc~),
               loc,
             }
             fill_global_initializer_bytes(
@@ -15601,7 +15498,7 @@ fn fill_global_initializer_bytes(
               compound_literal_entries,
               compound_literal_index_by_id,
               ty,
-              @ast.Initializer::List(items=[item], loc=loc),
+              @ast.Initializer::List(items=[item], loc~),
               bytes,
               relocs,
               base_off,
@@ -15640,7 +15537,9 @@ fn fill_global_initializer_bytes(
                   match fields {
                     None =>
                       @diag.add_error(
-                        bag, loc, "codegen: incomplete union '\{tag}'",
+                        bag,
+                        loc,
+                        "codegen: incomplete union '\{tag}'",
                       )
                     Some(list) =>
                       if list.length() > 0 {
@@ -15707,23 +15606,16 @@ fn fill_global_initializer_bytes(
                       ty=lit_ty,
                       init=lit_init,
                       node_id~,
-                      loc=lit_loc,
+                      loc=lit_loc
                     ),
-                    ..,
+                    ..
                   ) =>
-                    match ensure_global_compound_literal(
-                      sem,
-                      syms,
-                      cstrings,
-                      static_locals,
-                      compound_literal_entries,
-                      compound_literal_index_by_id,
-                      lit_ty,
-                      lit_init,
-                      node_id,
-                      lit_loc,
-                      bag,
-                    ) {
+                    match
+                      ensure_global_compound_literal(
+                        sem, syms, cstrings, static_locals, compound_literal_entries,
+                        compound_literal_index_by_id, lit_ty, lit_init, node_id,
+                        lit_loc, bag,
+                      ) {
                       Some(sym) => {
                         let addend64 = (0 : Int64)
                         if size > 4 {
@@ -15773,19 +15665,23 @@ fn fill_global_initializer_bytes(
                       match const_null_pointer_offset_expr(sem, expr) {
                         Some(off) =>
                           if size > 4 {
-                            store_int64_le(bytes, base_off, size, off.to_int64())
+                            store_int64_le(
+                              bytes,
+                              base_off,
+                              size,
+                              off.to_int64(),
+                            )
                           } else {
                             store_int_le(bytes, base_off, size, off)
                           }
                         None =>
                           if size > 4 {
                             match const_int64_from_expr(sem, expr, loc) {
-                              Some(v) => store_int64_le(bytes, base_off, size, v)
+                              Some(v) =>
+                                store_int64_le(bytes, base_off, size, v)
                               None =>
                                 @diag.add_error(
-                                  bag,
-                                  loc,
-                                  "codegen: non-constant pointer initializer",
+                                  bag, loc, "codegen: non-constant pointer initializer",
                                 )
                             }
                           } else {
@@ -15793,9 +15689,7 @@ fn fill_global_initializer_bytes(
                               Some(v) => store_int_le(bytes, base_off, size, v)
                               None =>
                                 @diag.add_error(
-                                  bag,
-                                  loc,
-                                  "codegen: non-constant pointer initializer",
+                                  bag, loc, "codegen: non-constant pointer initializer",
                                 )
                             }
                           }
@@ -16036,9 +15930,7 @@ fn fill_global_initializer_bytes(
                             item.loc,
                           )
                           let (elided_items, count) = collect_elided_array_items_codegen(
-                            items,
-                            item_idx,
-                            n,
+                            items, item_idx, n,
                           )
                           let init = @ast.Initializer::List(
                             items=elided_items,
@@ -16082,10 +15974,7 @@ fn fill_global_initializer_bytes(
                       }
                       if !expr_is_record {
                         let (elided_items, count) = collect_elided_struct_items_codegen(
-                          sem,
-                          items,
-                          item_idx,
-                          elem_ty,
+                          sem, items, item_idx, elem_ty,
                         )
                         if count > 0 {
                           let init = @ast.Initializer::List(
@@ -16550,11 +16439,13 @@ fn fill_global_initializer_bytes(
                             label_ctx~,
                           )
                         _ => {
-                          let n = array_len_from_type_for_init(sem, field.ty, first.loc)
+                          let n = array_len_from_type_for_init(
+                            sem,
+                            field.ty,
+                            first.loc,
+                          )
                           let (elided_items, count) = collect_elided_array_items_codegen(
-                            items,
-                            0,
-                            n,
+                            items, 0, n,
                           )
                           if count > 0 {
                             let init = @ast.Initializer::List(
@@ -17012,10 +16903,7 @@ pub fn codegen_arm64_object_bytes_with_sem(
       let mut j = 0
       while j < 4 && i + j < entry.bytes.length() {
         word = word |
-          (
-            (entry.bytes[i + j].reinterpret_as_uint() & 0xff) <<
-            ((j & 3) << 3)
-          )
+          ((entry.bytes[i + j].reinterpret_as_uint() & 0xff) << ((j & 3) << 3))
         j = j + 1
       }
       data_words.push(word)

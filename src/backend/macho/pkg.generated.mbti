@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/backend/macho"
+package "hackwaly/fastcc/backend/macho"
 
 import {
-  "hackwaly/tinycc/backend/object",
-  "hackwaly/tinycc/host",
+  "hackwaly/fastcc/backend/object",
+  "hackwaly/fastcc/host",
 }
 
 // Values

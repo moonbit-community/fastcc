@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/backend/object"
+package "hackwaly/fastcc/backend/object"
 
 // Values
 pub fn new_section(String) -> Section

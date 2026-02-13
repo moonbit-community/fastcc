@@ -265,7 +265,9 @@ test "lexer next_token smoke" {
     "int x=1+2; if (x>=3) return x; #define A 0x1f ^=",
   )
   assert_true(!@diag.has_errors(bag))
-  let items = toks.map(tok => "\{tok.kind}:\{@tokens.token_text_with(interner, pool, tok)}")
+  let items = toks.map(tok => {
+    "\{tok.kind}:\{@tokens.token_text_with(interner, pool, tok)}"
+  })
   json_inspect(items, content=[
     "KwInt:int", "Ident:x", "Assign:=", "IntLit:1", "Plus:+", "IntLit:2", "Semicolon:;",
     "KwIf:if", "LParen:(", "Ident:x", "Ge:>=", "IntLit:3", "RParen:)", "KwReturn:return",

@@ -19,4 +19,4 @@ The bigger test files are intentionally “edge-case heavy”:
 ## Parallelization note
 
 Tests were originally introduced under a single `src/blackbox` package, which made it hard for `moon test` to parallelize work.
-They are now distributed into their owning packages, and shared filesystem helpers were extracted into `hackwaly/tinycc/testutil`.
+They are now distributed into their owning packages, and shared filesystem helpers were extracted into `hackwaly/fastcc/testutil`.

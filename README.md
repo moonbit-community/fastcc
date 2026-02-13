@@ -1,4 +1,4 @@
-# tinycc.mbt
+# fastcc.mbt
 
 ## Benchmarks
 
@@ -6,7 +6,7 @@
 
 File: `refs/vc/v.c` (138152 LOC)
 
-Environment: macOS arm64, tinycc from this repo built in release mode.
+Environment: macOS arm64, fastcc from this repo built in release mode.
 
 Command:
 
@@ -16,7 +16,7 @@ DATASET=vc APPLY_VC_PATCH=1 DETAIL=1 REPEAT=3 WARMUP=1 scripts/bench_tinycc_comp
 
 Results (3 runs):
 
-- tinycc.mbt total: 0.425s
+- fastcc.mbt total: 0.425s
 - refs/tinycc total: 0.113s
 - clang total: 1.592s
 - ratio (mbt/ref): 3.77x

@@ -255,7 +255,7 @@ fn join_temp_path(dir : String, name : String) -> String {
 ///|
 fn run_temp_base() -> String {
   let stamp = @ffi.bench_now_ns()
-  join_temp_path(temp_dir(), "tinycc.mbt.run.\{stamp}")
+  join_temp_path(temp_dir(), "fastcc.mbt.run.\{stamp}")
 }
 
 ///|

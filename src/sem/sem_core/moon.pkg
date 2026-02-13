@@ -1,0 +1,17 @@
+import {
+  "hackwaly/fastcc/frontend/ast",
+  "hackwaly/fastcc/support/diag",
+  "hackwaly/fastcc/support/source",
+  "hackwaly/fastcc/support/util",
+}
+
+import {
+  "hackwaly/fastcc/frontend/ast",
+  "hackwaly/fastcc/support/diag",
+} for "test"
+
+import {
+  "hackwaly/fastcc/frontend/parser",
+  "hackwaly/fastcc/frontend/preproc",
+  "hackwaly/fastcc/host/default_host",
+} for "wbtest"

@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/support/util/string_utils"
+package "hackwaly/fastcc/support/util/string_utils"
 
 // Values
 pub fn hex_digit_value(UInt16) -> Int?

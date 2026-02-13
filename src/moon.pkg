@@ -1,0 +1,8 @@
+import {
+  "hackwaly/fastcc/cmd/fastcc" @cmd_fastcc,
+}
+
+options(
+  "is-main": true,
+  link: { "native": { "cc-flags": "-w" } },
+)

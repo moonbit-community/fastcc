@@ -31,7 +31,9 @@ test "lex keywords and operators" {
     "int x = 1 + 2; if (x >= 3) return x;",
   )
   assert_true(!@diag.has_errors(bag))
-  let items = toks.map(tok => "\{tok.kind}:\{@tokens.token_text_with(interner, lexeme_pool, tok)}")
+  let items = toks.map(tok => {
+    "\{tok.kind}:\{@tokens.token_text_with(interner, lexeme_pool, tok)}"
+  })
   json_inspect(items, content=[
     "KwInt:int", "Ident:x", "Assign:=", "IntLit:1", "Plus:+", "IntLit:2", "Semicolon:;",
     "KwIf:if", "LParen:(", "Ident:x", "Ge:>=", "IntLit:3", "RParen:)", "KwReturn:return",
@@ -45,7 +47,9 @@ test "lex comments and literals" {
     "char c='\\n';/*c*/char* s=\"hi\\n\";//x\nc=c+1",
   )
   assert_true(!@diag.has_errors(bag))
-  let items = toks.map(tok => "\{tok.kind}:\{@tokens.token_text_with(interner, lexeme_pool, tok)}")
+  let items = toks.map(tok => {
+    "\{tok.kind}:\{@tokens.token_text_with(interner, lexeme_pool, tok)}"
+  })
   json_inspect(items, content=[
     "KwChar:char", "Ident:c", "Assign:=", "CharLit:'\\n'", "Semicolon:;", "KwChar:char",
     "Star:*", "Ident:s", "Assign:=", "StrLit:\"hi\\n\"", "Semicolon:;", "Ident:c",
@@ -59,7 +63,9 @@ test "lex numbers and preprocessor hash" {
     "#define X 0x1f\nfloat y = .5 + 2e3;",
   )
   assert_true(!@diag.has_errors(bag))
-  let items = toks.map(tok => "\{tok.kind}:\{@tokens.token_text_with(interner, lexeme_pool, tok)}:\{tok.line_start}")
+  let items = toks.map(tok => {
+    "\{tok.kind}:\{@tokens.token_text_with(interner, lexeme_pool, tok)}:\{tok.line_start}"
+  })
   json_inspect(items, content=[
     "Hash:#:true", "Ident:define:false", "Ident:X:false", "IntLit:0x1f:false", "KwFloat:float:true",
     "Ident:y:false", "Assign:=:false", "FloatLit:.5:false", "Plus:+:false", "FloatLit:2e3:false",

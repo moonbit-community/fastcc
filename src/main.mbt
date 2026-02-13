@@ -15,5 +15,5 @@
 
 ///|
 fn main {
-  @cmd_tinycc.run_main()
+  @cmd_fastcc.run_main()
 }

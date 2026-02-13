@@ -1,13 +1,13 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/frontend/preproc/preproc_core"
+package "hackwaly/fastcc/frontend/preproc/preproc_core"
 
 import {
-  "hackwaly/tinycc/frontend/lexer/lexer_core",
-  "hackwaly/tinycc/frontend/tokens/tokens_core",
-  "hackwaly/tinycc/host",
-  "hackwaly/tinycc/support/diag/diag_core",
-  "hackwaly/tinycc/support/intern/intern_core",
-  "hackwaly/tinycc/support/source/source_core",
+  "hackwaly/fastcc/frontend/lexer/lexer_core",
+  "hackwaly/fastcc/frontend/tokens/tokens_core",
+  "hackwaly/fastcc/host",
+  "hackwaly/fastcc/support/diag/diag_core",
+  "hackwaly/fastcc/support/intern/intern_core",
+  "hackwaly/fastcc/support/source/source_core",
   "moonbitlang/x/time",
 }
 
@@ -150,6 +150,8 @@ pub fn parse_bit_or(IfParser, @source_core.SrcLoc) -> PpValue
 
 pub fn parse_bit_xor(IfParser, @source_core.SrcLoc) -> PpValue
 
+pub fn parse_conditional(IfParser, @source_core.SrcLoc) -> PpValue
+
 pub fn parse_define_macro(Preprocessor, @tokens_core.Token, Array[@tokens_core.Token], @source_core.SrcLoc) -> Macro?
 
 pub fn parse_defined(IfParser, @source_core.SrcLoc) -> PpValue
@@ -289,6 +291,7 @@ pub(all) struct IfParser {
   tokens : Array[@tokens_core.Token]
   mut index : Int
   pp : Preprocessor
+  mut suppress_errors : Bool
 }
 
 pub(all) struct IncludeSpec {
@@ -304,6 +307,11 @@ pub(all) struct Macro {
   replacement_has_id : Bool
   replacement_needs_expand : Bool
   replacement_needs_epoch : Int
+}
+
+pub(all) struct MacroPushStack {
+  name_id : Int
+  mut stack : Array[Macro?]
 }
 
 pub(all) struct PpValue {
@@ -352,11 +360,13 @@ pub(all) struct Preprocessor {
   diags : @diag_core.DiagBag
   map : @source_core.SourceMap
   macros : Array[Macro?]
+  macro_push_stacks : Array[MacroPushStack]
   mut macro_epoch : Int
   pending : Array[@tokens_core.Token]
   mut held : @tokens_core.Token?
   cond_stack : Array[CondState]
   mut active : Bool
+  mut ms_struct_mode : Bool
   expanding : Array[Int]
   expanding_guards : Array[ExpandingGuard]
   date_literal : String

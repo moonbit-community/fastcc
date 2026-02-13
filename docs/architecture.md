@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document summarizes the current architecture of tinycc.mbt, how data flows
+This document summarizes the current architecture of fastcc.mbt, how data flows
 through the compiler, and where each major responsibility lives today. The code
 is intentionally close to refs/tinycc and is now split into focused MoonBit
 packages under `src/`.
@@ -21,7 +21,7 @@ CLI args
 
 Key entrypoints:
 - `main` lives in `src/cmd/tinycc/main.mbt`; root `src/main.mbt` delegates to
-  `@cmd_tinycc.run_main` for compatibility with existing scripts.
+  `@cmd_fastcc.run_main` for compatibility with existing scripts.
 - Compilation pipeline uses `compile_to_object_path` in `src/driver/driver.mbt`.
 - Preprocessor entry: `@preproc.new_preprocessor` + `@parser.parse_translation_unit`.
 - Semantic analysis entry: `@sem.check_translation_unit` in `src/sem/sem.mbt`.

@@ -1,0 +1,30 @@
+import {
+  "hackwaly/fastcc/backend/arm64",
+  "hackwaly/fastcc/backend/object",
+  "hackwaly/fastcc/backend/macho",
+  "hackwaly/fastcc/frontend/ast",
+  "hackwaly/fastcc/sem",
+  "hackwaly/fastcc/support/diag",
+  "hackwaly/fastcc/support/source",
+  "hackwaly/fastcc/support/util",
+  "moonbitlang/core/strconv",
+  "moonbitlang/core/math",
+  "moonbitlang/core/encoding/utf8" @encoding/utf8,
+  "moonbitlang/core/buffer",
+}
+
+import {
+  "hackwaly/fastcc/frontend/parser",
+  "hackwaly/fastcc/frontend/preproc",
+  "hackwaly/fastcc/support/source",
+  "hackwaly/fastcc/support/diag",
+  "hackwaly/fastcc/host/default_host",
+} for "test"
+
+import {
+  "hackwaly/fastcc/frontend/parser",
+  "hackwaly/fastcc/frontend/preproc",
+  "hackwaly/fastcc/support/source",
+  "hackwaly/fastcc/support/diag",
+  "hackwaly/fastcc/host/default_host",
+} for "wbtest"

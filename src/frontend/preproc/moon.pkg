@@ -1,0 +1,15 @@
+import {
+  "hackwaly/fastcc/frontend/preproc/preproc_core",
+  "hackwaly/fastcc/frontend/tokens",
+  "hackwaly/fastcc/support/diag",
+  "hackwaly/fastcc/support/source",
+  "moonbitlang/x/time",
+  "hackwaly/fastcc/host",
+}
+
+import {
+  "hackwaly/fastcc/support/diag",
+  "hackwaly/fastcc/support/source",
+  "hackwaly/fastcc/testutil",
+  "hackwaly/fastcc/host/default_host",
+} for "test"

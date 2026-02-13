@@ -1,0 +1,11 @@
+import {
+  "hackwaly/fastcc/frontend/parser/parser_core",
+  "hackwaly/fastcc/frontend/ast",
+  "hackwaly/fastcc/frontend/preproc",
+}
+
+import {
+  "hackwaly/fastcc/support/diag",
+  "hackwaly/fastcc/support/source",
+  "hackwaly/fastcc/host/default_host",
+} for "test"

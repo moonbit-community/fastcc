@@ -1,10 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/sem/sem_core"
+package "hackwaly/fastcc/sem/sem_core"
 
 import {
-  "hackwaly/tinycc/frontend/ast/ast_core",
-  "hackwaly/tinycc/support/diag/diag_core",
-  "hackwaly/tinycc/support/source/source_core",
+  "hackwaly/fastcc/frontend/ast/ast_core",
+  "hackwaly/fastcc/support/diag/diag_core",
+  "hackwaly/fastcc/support/source/source_core",
   "moonbitlang/core/hashmap",
 }
 
@@ -79,6 +79,8 @@ pub fn push_scope(SemContext) -> Unit
 
 pub fn record_local_binding(SemContext, Int, @ast_core.CType) -> Unit
 
+pub fn register_type_defs_for_codegen(SemContext, @ast_core.CType, @source_core.SrcLoc) -> Unit
+
 pub fn resolve_struct_fields(SemContext, String, Int, Array[@ast_core.RecordItem]?, is_union~ : Bool) -> Array[@ast_core.Field]?
 
 pub fn resolve_type(SemContext, @ast_core.CType, @source_core.SrcLoc) -> @ast_core.CType
@@ -127,6 +129,8 @@ pub(all) enum BuiltinCallKind {
 pub impl Eq for BuiltinCallKind
 pub impl Show for BuiltinCallKind
 pub impl ToJson for BuiltinCallKind
+
+type EnumConstOverride
 
 pub(all) struct FieldAccessInfo {
   offset : Int
@@ -204,6 +208,8 @@ pub struct SemContext {
   enum_defs_by_id : Array[Array[@ast_core.EnumItem]?]
   enum_consts : @hashmap.HashMap[String, Int]
   enum_consts_by_id : Array[Int?]
+  enum_const_scope_ids_by_id : Array[Int]
+  enum_const_overrides : Array[Array[EnumConstOverride]]
   enum_types : @hashmap.HashMap[String, @ast_core.CType]
   enum_types_by_id : Array[@ast_core.CType?]
   compound_literal_types : @hashmap.HashMap[Int, @ast_core.CType]

@@ -145,7 +145,7 @@ fn link_exe(obj_path : String, exe_path : String, libs : Array[String]) -> Int {
 ///|
 fn run_case(case : CCase) -> Unit raise {
   let root = @testutil.project_root()
-  let base_dir = @testutil.join_path(root, "target/blackbox")
+  let base_dir = @testutil.join_path(root, "_build/blackbox")
   @testutil.ensure_dir(base_dir)
   let stamp = @ffi.bench_now_ns()
   let case_dir = @testutil.join_path(
@@ -187,7 +187,7 @@ fn run_case(case : CCase) -> Unit raise {
 ///|
 fn compile_failure(source : String) -> Unit raise {
   let root = @testutil.project_root()
-  let base_dir = @testutil.join_path(root, "target/blackbox")
+  let base_dir = @testutil.join_path(root, "_build/blackbox")
   @testutil.ensure_dir(base_dir)
   let stamp = @ffi.bench_now_ns()
   let case_dir = @testutil.join_path(base_dir, "fail-" + stamp.to_string())
@@ -937,7 +937,7 @@ test "blackbox compile failures" {
 ///|
 test "driver run args" {
   let root = @testutil.project_root()
-  let base_dir = @testutil.join_path(root, "target/blackbox")
+  let base_dir = @testutil.join_path(root, "_build/blackbox")
   @testutil.ensure_dir(base_dir)
   let stamp = @ffi.bench_now_ns()
   let case_dir = @testutil.join_path(base_dir, "driver-" + stamp.to_string())

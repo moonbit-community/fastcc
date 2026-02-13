@@ -1,0 +1,14 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hackwaly/fastcc/cmd/fastcc"
+
+// Values
+pub fn run_main() -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

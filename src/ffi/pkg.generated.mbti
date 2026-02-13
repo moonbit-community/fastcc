@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/ffi"
+package "hackwaly/fastcc/ffi"
 
 // Values
 pub fn bench_now_ns() -> UInt64

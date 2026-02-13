@@ -1,11 +1,11 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/sem"
+package "hackwaly/fastcc/sem"
 
 import {
-  "hackwaly/tinycc/frontend/ast/ast_core",
-  "hackwaly/tinycc/sem/sem_core",
-  "hackwaly/tinycc/support/diag/diag_core",
-  "hackwaly/tinycc/support/source/source_core",
+  "hackwaly/fastcc/frontend/ast/ast_core",
+  "hackwaly/fastcc/sem/sem_core",
+  "hackwaly/fastcc/support/diag/diag_core",
+  "hackwaly/fastcc/support/source/source_core",
 }
 
 // Values
@@ -78,6 +78,8 @@ pub fn pop_scope(@sem_core.SemContext) -> Unit
 pub fn push_scope(@sem_core.SemContext) -> Unit
 
 pub fn record_local_binding(@sem_core.SemContext, Int, @ast_core.CType) -> Unit
+
+pub fn register_type_defs_for_codegen(@sem_core.SemContext, @ast_core.CType, @source_core.SrcLoc) -> Unit
 
 pub fn resolve_struct_fields(@sem_core.SemContext, String, Int, Array[@ast_core.RecordItem]?, is_union~ : Bool) -> Array[@ast_core.Field]?
 

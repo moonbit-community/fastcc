@@ -44,7 +44,7 @@ pub(all) enum CliParse {
 ///|
 fn print_usage() -> Unit {
   println(
-    "usage: tinycc.mbt [-c] [-run] [-bench] [-o OUT] [-I PATH]... [-isystem PATH]... [-L PATH]... [-l LIB]... [-D NAME[=VALUE]]... [-U NAME]... FILE...",
+    "usage: fastcc.mbt [-c] [-run] [-bench] [-o OUT] [-I PATH]... [-isystem PATH]... [-L PATH]... [-l LIB]... [-D NAME[=VALUE]]... [-U NAME]... FILE...",
   )
 }
 

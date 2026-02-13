@@ -1240,10 +1240,7 @@ fn parse_attribute_clause(p : Parser, loc : @source.SrcLoc) -> @ast.Attributes {
         }
       }
       "transparent_union" => {
-        attrs = @ast.merge_attrs(
-          attrs,
-          @ast.attrs_with(transparent_union=true),
-        )
+        attrs = @ast.merge_attrs(attrs, @ast.attrs_with(transparent_union=true))
         if has_args {
           skip_paren_group(p)
         }
@@ -3017,7 +3014,7 @@ fn parse_expr_cond(p : Parser) -> @ast.Expr {
         let cond_expr = @ast.Expr::Conditional(
           cond=tmp_ident,
           then_expr=tmp_ident_value,
-          else_expr=else_expr,
+          else_expr~,
           node_id=new_expr_id(p),
           loc=tok.loc,
         )
@@ -3395,7 +3392,8 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
                 break
               }
               Some(ty) => {
-                expect(p, Colon, "expected ':' in _Generic association") |> ignore
+                expect(p, Colon, "expected ':' in _Generic association")
+                |> ignore
                 let assoc_expr = parse_expr_cond(p)
                 associations.push((ty, assoc_expr))
               }
@@ -3447,7 +3445,11 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
           LParen => {
             let id = @tokens.token_id(tok)
             if id == p.builtin_ids.types_compatible_p {
-              expect(p, LParen, "expected '(' after __builtin_types_compatible_p")
+              expect(
+                p,
+                LParen,
+                "expected '(' after __builtin_types_compatible_p",
+              )
               |> ignore
               let a = match parse_type_name(p) {
                 None => {
@@ -3465,7 +3467,11 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
                 }
                 Some(ty) => ty
               }
-              expect(p, RParen, "expected ')' after __builtin_types_compatible_p")
+              expect(
+                p,
+                RParen,
+                "expected ')' after __builtin_types_compatible_p",
+              )
               |> ignore
               BuiltinTypesCompatibleP(
                 a~,
@@ -3474,7 +3480,8 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
                 loc=tok.loc,
               )
             } else if id == p.builtin_ids.offsetof {
-              expect(p, LParen, "expected '(' after __builtin_offsetof") |> ignore
+              expect(p, LParen, "expected '(' after __builtin_offsetof")
+              |> ignore
               let ty = match parse_type_name(p) {
                 None => {
                   add_parse_error(
@@ -3508,7 +3515,8 @@ fn parse_expr_primary(p : Parser) -> @ast.Expr {
                   _ => break
                 }
               }
-              expect(p, RParen, "expected ')' after __builtin_offsetof") |> ignore
+              expect(p, RParen, "expected ')' after __builtin_offsetof")
+              |> ignore
               BuiltinOffsetof(ty~, path~, node_id=new_expr_id(p), loc=tok.loc)
             } else if id == p.builtin_ids.va_arg {
               expect(p, LParen, "expected '(' after __builtin_va_arg") |> ignore

@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/support/source/source_core"
+package "hackwaly/fastcc/support/source/source_core"
 
 // Values
 pub fn add_file(SourceMap, String, String) -> SourceFile

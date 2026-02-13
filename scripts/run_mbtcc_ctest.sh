@@ -6,7 +6,7 @@ CTEST_DIR="${ROOT_DIR}/refs/mbtcc/ctest"
 LOCAL_CTEST_DIR="${ROOT_DIR}/tests/mbtcc/ctest"
 TMP_DIR="${ROOT_DIR}/target/mbtcc-ctest"
 SUPPORT_C="${ROOT_DIR}/tests/mbtcc/ctest_support.c"
-BOOTSTRAP_TINYCC_BIN="${TINYCC_BIN:-${ROOT_DIR}/_build/native/release/build/tinycc.exe}"
+BOOTSTRAP_TINYCC_BIN="${TINYCC_BIN:-${ROOT_DIR}/_build/native/release/build/fastcc.exe}"
 TINYCC_BUILD_TARGET="${TINYCC_BUILD_TARGET:-${ROOT_DIR}/src}"
 SELFHOST="${SELFHOST:-0}"
 SELFHOST_BIN="${SELFHOST_BIN:-${ROOT_DIR}/target/selfhost/tcc_selfhost}"
@@ -33,18 +33,18 @@ Usage:
 Env vars:
   FILTER=regex     Run only tests whose filename matches regex (grep -E).
   MODE=strict|allow-fail
-  SELFHOST=1       Build refs/tinycc with tinycc.mbt and run tests via tcc_selfhost.
+  SELFHOST=1       Build refs/tinycc with fastcc.mbt and run tests via tcc_selfhost.
   TINYCC_BIN=path  Bootstrap compiler path (used to build tcc_selfhost in SELFHOST mode).
   SELFHOST_BIN=path  Override tcc_selfhost path.
-  QUICKJS=0|1      Compile refs/quickjs/quickjs.c with tinycc.mbt (default: 1).
-  QUICKJS_TESTS=0|1     Run quickjs JS smoke tests using a qjs built by tinycc.mbt (default: 1).
+  QUICKJS=0|1      Compile refs/quickjs/quickjs.c with fastcc.mbt (default: 1).
+  QUICKJS_TESTS=0|1     Run quickjs JS smoke tests using a qjs built by fastcc.mbt (default: 1).
   QUICKJS_TEST_LIST=... Space-separated test list (paths relative to refs/quickjs).
-  QUICKJS_TINYCC_BIN=path  Compiler used for quickjs build (default: bootstrap tinycc.mbt).
+  QUICKJS_TINYCC_BIN=path  Compiler used for quickjs build (default: bootstrap fastcc.mbt).
 
-This runs mbtcc's C file tests (refs/mbtcc/ctest/*.c) against tinycc.mbt:
+This runs mbtcc's C file tests (refs/mbtcc/ctest/*.c) against fastcc.mbt:
   - also includes local tests in tests/mbtcc/ctest (if present)
   - expected output: gcc
-  - actual output: tinycc.mbt (-c -> .o) + clang link -> run
+  - actual output: fastcc.mbt (-c -> .o) + clang link -> run
 EOF
 }
 
@@ -441,7 +441,7 @@ EOF
       continue
     fi
     if ! "${TMP_DIR}/${base}.tinycc.out" >"${actual_file}"; then
-      echo "FAILED: tinycc.mbt run failed"
+      echo "FAILED: fastcc.mbt run failed"
       fail=$((fail + 1))
       continue
     fi

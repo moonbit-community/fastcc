@@ -1,8 +1,8 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/driver/cli"
+package "hackwaly/fastcc/driver/cli"
 
 import {
-  "hackwaly/tinycc/host",
+  "hackwaly/fastcc/host",
 }
 
 // Values

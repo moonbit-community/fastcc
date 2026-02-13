@@ -25,8 +25,8 @@ fn must_run(args : Array[String]) -> @cli.CliConfig raise {
 
 ///|
 test "cli parse help" {
-  expect_cli_help(["tinycc.mbt", "-h"])
-  expect_cli_help(["tinycc.mbt", "--help"])
+  expect_cli_help(["fastcc.mbt", "-h"])
+  expect_cli_help(["fastcc.mbt", "--help"])
 }
 
 ///|
@@ -42,7 +42,7 @@ test "cli parse listfile expansion" {
     #| bar.o
     #|
   @testutil.write_string(args_path, contents)
-  let cfg = must_run(["tinycc.mbt", "@" + args_path])
+  let cfg = must_run(["fastcc.mbt", "@" + args_path])
   assert_eq(cfg.include_paths, ["inc"])
   assert_eq(cfg.inputs, ["foo.c"])
   assert_eq(cfg.link_inputs, ["bar.o"])
@@ -72,7 +72,7 @@ test "cli parse listfile expansion" {
 
 ///|
 test "cli parse run args" {
-  let cfg = must_run(["tinycc.mbt", "-run", "main.c", "arg1", "arg2"])
+  let cfg = must_run(["fastcc.mbt", "-run", "main.c", "arg1", "arg2"])
   assert_true(cfg.run)
   assert_true(!cfg.compile_only)
   assert_eq(cfg.inputs, ["main.c"])
@@ -82,7 +82,7 @@ test "cli parse run args" {
 ///|
 test "cli parse option variants" {
   let cfg = must_run([
-    "tinycc.mbt", "-bench", "-fPIC", "-Q", "-O2", "-g", "-Wextra", "-w", "-isystem/usr/include",
+    "fastcc.mbt", "-bench", "-fPIC", "-Q", "-O2", "-g", "-Wextra", "-w", "-isystem/usr/include",
     "-Iinclude", "-L/usr/lib", "-l", "m", "-lfoo", "-oout.o", "main.c",
   ])
   assert_true(cfg.bench)
@@ -97,22 +97,22 @@ test "cli parse option variants" {
 
 ///|
 test "cli parse error branches" {
-  expect_cli_error(["tinycc.mbt", "@missing.args"])
-  expect_cli_error(["tinycc.mbt", "-o"])
-  expect_cli_error(["tinycc.mbt", "-I"])
-  expect_cli_error(["tinycc.mbt", "-D"])
-  expect_cli_error(["tinycc.mbt", "-D", ""])
-  expect_cli_error(["tinycc.mbt", "-D", "="])
-  expect_cli_error(["tinycc.mbt", "-D="])
-  expect_cli_error(["tinycc.mbt", "-U"])
-  expect_cli_error(["tinycc.mbt", "-U", ""])
-  expect_cli_error(["tinycc.mbt", "-isystem"])
-  expect_cli_error(["tinycc.mbt", "-L"])
-  expect_cli_error(["tinycc.mbt", "-l"])
-  expect_cli_error(["tinycc.mbt", "-run", "-c", "main.c"])
-  expect_cli_error(["tinycc.mbt", "-run", "--", "arg1"])
-  expect_cli_error(["tinycc.mbt", "-c", "-run", "main.c"])
-  expect_cli_error(["tinycc.mbt", "-c"])
-  expect_cli_error(["tinycc.mbt", "-o", "out.o", "a.c", "b.c"])
-  expect_cli_error(["tinycc.mbt", "-bogus", "a.c"])
+  expect_cli_error(["fastcc.mbt", "@missing.args"])
+  expect_cli_error(["fastcc.mbt", "-o"])
+  expect_cli_error(["fastcc.mbt", "-I"])
+  expect_cli_error(["fastcc.mbt", "-D"])
+  expect_cli_error(["fastcc.mbt", "-D", ""])
+  expect_cli_error(["fastcc.mbt", "-D", "="])
+  expect_cli_error(["fastcc.mbt", "-D="])
+  expect_cli_error(["fastcc.mbt", "-U"])
+  expect_cli_error(["fastcc.mbt", "-U", ""])
+  expect_cli_error(["fastcc.mbt", "-isystem"])
+  expect_cli_error(["fastcc.mbt", "-L"])
+  expect_cli_error(["fastcc.mbt", "-l"])
+  expect_cli_error(["fastcc.mbt", "-run", "-c", "main.c"])
+  expect_cli_error(["fastcc.mbt", "-run", "--", "arg1"])
+  expect_cli_error(["fastcc.mbt", "-c", "-run", "main.c"])
+  expect_cli_error(["fastcc.mbt", "-c"])
+  expect_cli_error(["fastcc.mbt", "-o", "out.o", "a.c", "b.c"])
+  expect_cli_error(["fastcc.mbt", "-bogus", "a.c"])
 }

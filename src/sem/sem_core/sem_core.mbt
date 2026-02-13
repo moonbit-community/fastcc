@@ -902,8 +902,7 @@ fn transparent_union_member_type(
             let arg_ty = decay_type(type_of_expr(ctx, arg))
             for field in list {
               if can_assign(field.ty, arg_ty) ||
-                (is_pointer_type(field.ty) &&
-                is_null_pointer_expr(ctx, arg)) {
+                (is_pointer_type(field.ty) && is_null_pointer_expr(ctx, arg)) {
                 return Some(field.ty)
               }
             }
@@ -1669,14 +1668,13 @@ pub fn type_for_sizeof(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
     Ident(name~, id~, loc~, ..) =>
       match lookup_value(ctx, name, id) {
         Some(ty) => ty
-        None => {
+        None =>
           if enum_const_value(ctx, name, id) is Some(_) {
             default_int_type()
           } else {
             add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
             default_int_type()
           }
-        }
       }
     StringLit(length~, ..) =>
       Array(elem=char_type(), size=Some(length), size_expr=None)
@@ -1698,14 +1696,13 @@ fn type_for_typeof(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
     Ident(name~, id~, loc~, ..) =>
       match lookup_value(ctx, name, id) {
         Some(ty) => ty
-        None => {
+        None =>
           if enum_const_value(ctx, name, id) is Some(_) {
             default_int_type()
           } else {
             add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
             default_int_type()
           }
-        }
       }
     StringLit(length~, ..) =>
       Array(elem=char_type(), size=Some(length), size_expr=None)
@@ -1871,9 +1868,9 @@ fn resolve_array_sizes_for_decl(
         return_type=resolve_array_sizes_for_decl(
           ctx, return_type, is_local, storage, loc,
         ),
-        params=params.map(p => resolve_array_sizes_for_decl(
-          ctx, p, is_local, storage, loc,
-        )),
+        params=params.map(p => {
+          resolve_array_sizes_for_decl(ctx, p, is_local, storage, loc)
+        }),
         varargs~,
         is_old_style~,
         call_conv~,
@@ -1936,7 +1933,11 @@ fn resolve_array_sizes_for_decl(
                       )
                       Array(elem=resolved_elem, size=None, size_expr~)
                     } else {
-                      Array(elem=resolved_elem, size=Some(value), size_expr=None)
+                      Array(
+                        elem=resolved_elem,
+                        size=Some(value),
+                        size_expr=None,
+                      )
                     }
                 }
               }
@@ -2381,11 +2382,19 @@ fn define_enum_const(
         return
       }
     }
-    if (if id > 0 { has_global_by_id(ctx, id) } else { ctx.globals.contains(name) }) {
+    if (if id > 0 {
+        has_global_by_id(ctx, id)
+      } else {
+        ctx.globals.contains(name)
+      }) {
       add_sem_error(ctx, loc, "redefinition of '\{name}'")
       return
     }
-    if (if id > 0 { has_function_by_id(ctx, id) } else { ctx.functions.contains(name) }) {
+    if (if id > 0 {
+        has_function_by_id(ctx, id)
+      } else {
+        ctx.functions.contains(name)
+      }) {
       add_sem_error(ctx, loc, "redefinition of '\{name}'")
       return
     }
@@ -2812,7 +2821,8 @@ fn eval_const_expr_value(
                       (0, false)
                     }
                     Some(idx) =>
-                      match element_type_for_pointer_arith(type_of_expr(ctx, base)) {
+                      match
+                        element_type_for_pointer_arith(type_of_expr(ctx, base)) {
                         None => {
                           add_sem_error(ctx, loc, "invalid constant expression")
                           (0, false)
@@ -3107,7 +3117,8 @@ fn eval_const_expr_value_i64(
                       (0, false)
                     }
                     Some(idx) =>
-                      match element_type_for_pointer_arith(type_of_expr(ctx, base)) {
+                      match
+                        element_type_for_pointer_arith(type_of_expr(ctx, base)) {
                         None => {
                           add_sem_error(ctx, loc, "invalid constant expression")
                           (0, false)
@@ -4271,7 +4282,9 @@ fn require_complete_object_type(
         is_union=false,
         loc,
       )
-      if field_list is None && def is Some(val) && val.fields.length() == 0 &&
+      if field_list is None &&
+        def is Some(val) &&
+        val.fields.length() == 0 &&
         !tag.has_prefix("__anon_tag_") {
         add_sem_error(ctx, loc, "incomplete struct '\{tag}'")
       }
@@ -4285,7 +4298,9 @@ fn require_complete_object_type(
         is_union=true,
         loc,
       )
-      if field_list is None && def is Some(val) && val.fields.length() == 0 &&
+      if field_list is None &&
+        def is Some(val) &&
+        val.fields.length() == 0 &&
         !tag.has_prefix("__anon_tag_") {
         add_sem_error(ctx, loc, "incomplete union '\{tag}'")
       }
@@ -4385,7 +4400,10 @@ fn check_var_decl(
       update_decl_type(ctx, decl.name, decl.id, updated, is_local~)
     }
     match (strip_top_qualifiers(final_ty), init) {
-      (Array(elem~, size=None, size_expr=None), Expr(expr=StringLit(length~, ..), ..)) => {
+      (
+        Array(elem~, size=None, size_expr=None),
+        Expr(expr=StringLit(length~, ..), ..),
+      ) => {
         let elem_sz = match type_size_align(ctx, elem, decl.loc) {
           Some((sz, _)) => sz
           None => -1
@@ -4402,7 +4420,10 @@ fn check_var_decl(
   if decl.storage != Extern || decl.init is Some(_) {
     let mut allow_incomplete_array = !is_local && decl.init is None
     match (strip_top_qualifiers(final_ty), decl.init) {
-      (Array(elem~, size=None, size_expr=None), Some(Expr(expr=StringLit(..), ..))) => {
+      (
+        Array(elem~, size=None, size_expr=None),
+        Some(Expr(expr=StringLit(..), ..)),
+      ) => {
         let elem_sz = match type_size_align(ctx, elem, decl.loc) {
           Some((sz, _)) => sz
           None => -1
@@ -4432,12 +4453,7 @@ fn check_initializer(
   if init is List(..) && !is_aggregate_type(ty) {
     match unwrap_single_init_expr(init) {
       Some(expr) => {
-        check_initializer(
-          ctx,
-          ty,
-          @ast.Initializer::Expr(expr=expr, loc=loc),
-          loc,
-        )
+        check_initializer(ctx, ty, @ast.Initializer::Expr(expr~, loc~), loc)
         |> ignore
         return None
       }
@@ -4510,7 +4526,7 @@ fn check_initializer(
                 None
               }
             }
-          _ => {
+          _ =>
             match strip_top_qualifiers(ty) {
               Union(name=tag, id=tag_id, fields=field_list, attrs=_) => {
                 let init_ty = type_of_expr(ctx, expr)
@@ -4549,7 +4565,6 @@ fn check_initializer(
                 None
               }
             }
-          }
         }
       }
     List(items~, ..) => check_initializer_list(ctx, ty, items, loc)
@@ -4628,9 +4643,7 @@ fn check_initializer_list(
                 StringLit(..) => ()
                 _ => {
                   let (elided_items, count) = collect_elided_array_items(
-                    items,
-                    item_index,
-                    inner_size,
+                    items, item_index, inner_size,
                   )
                   let init = @ast.Initializer::List(
                     items=elided_items,
@@ -4649,10 +4662,7 @@ fn check_initializer_list(
               }
               if !expr_is_record {
                 let (elided_items, count) = collect_elided_struct_items(
-                  ctx,
-                  items,
-                  item_index,
-                  target_ty,
+                  ctx, items, item_index, target_ty,
                 )
                 if count > 0 {
                   let init = @ast.Initializer::List(
@@ -6613,8 +6623,7 @@ pub fn type_of_lvalue(ctx : SemContext, expr : @ast.Expr) -> @ast.CType? {
         Some(ty) => ty
         None => type_of_expr(ctx, base)
       }
-      match
-        index_access_type(ctx, base_ty, type_of_expr(ctx, index), loc) {
+      match index_access_type(ctx, base_ty, type_of_expr(ctx, index), loc) {
         Some(ty) => Some(ty)
         None => None
       }
@@ -6845,14 +6854,13 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
     Ident(name~, id~, loc~, ..) =>
       match lookup_value(ctx, name, id) {
         Some(ty) => decay_type(ty)
-        None => {
+        None =>
           if enum_const_value(ctx, name, id) is Some(_) {
             default_int_type()
           } else {
             add_sem_error(ctx, loc, "use of undeclared identifier '\{name}'")
             default_int_type()
           }
-        }
       }
     LabelAddr(name~, loc~, ..) => {
       if ctx.current_func_name is None {
@@ -7152,7 +7160,7 @@ fn type_of_expr_impl(ctx : SemContext, expr : @ast.Expr) -> @ast.CType {
           }
           common_int_type(ctx, lhs_ty, rhs_ty)
         }
-    }
+      }
     Conditional(cond~, then_expr~, else_expr~, loc~, ..) => {
       check_cond_expr(ctx, cond)
       match try_eval_int_const(ctx, cond) {

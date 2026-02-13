@@ -1,0 +1,15 @@
+import {
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8" @encoding/utf8,
+  "moonbitlang/core/buffer",
+} for "test"
+
+options(
+  "native-stub": [ "bench_timer.c", "run_command.c" ],
+  targets: {
+    "bench_timer_native.mbt": [ "native" ],
+    "bench_timer_stub.mbt": [ "not", "native" ],
+    "run_command_native.mbt": [ "native" ],
+    "run_command_stub.mbt": [ "not", "native" ],
+  },
+)

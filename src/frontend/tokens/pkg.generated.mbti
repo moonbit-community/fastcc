@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/frontend/tokens"
+package "hackwaly/fastcc/frontend/tokens"
 
 import {
-  "hackwaly/tinycc/frontend/tokens/tokens_core",
-  "hackwaly/tinycc/support/intern/intern_core",
+  "hackwaly/fastcc/frontend/tokens/tokens_core",
+  "hackwaly/fastcc/support/intern/intern_core",
 }
 
 // Values

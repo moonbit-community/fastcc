@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/support/util"
+package "hackwaly/fastcc/support/util"
 
 import {
   "moonbitlang/core/hashmap",

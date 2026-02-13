@@ -42,7 +42,9 @@ fn pp_items(
   interner : @intern.StringInterner,
   lexeme_pool : @tokens.LexemePool,
 ) -> Array[String] {
-  toks.map(tok => "\{tok.kind}:\{@tokens.token_text_with(interner, lexeme_pool, tok)}")
+  toks.map(tok => {
+    "\{tok.kind}:\{@tokens.token_text_with(interner, lexeme_pool, tok)}"
+  })
 }
 
 ///|
@@ -297,7 +299,9 @@ test "preprocess gcc style version check" {
     }
     println(
       expanded
-      .map(tok => "\{tok.kind}:\{@tokens.token_text_with(pp.interner, pp.lexeme_pool, tok)}")
+      .map(tok => {
+        "\{tok.kind}:\{@tokens.token_text_with(pp.interner, pp.lexeme_pool, tok)}"
+      })
       .join(" "),
     )
   }

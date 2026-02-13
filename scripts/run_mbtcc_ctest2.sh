@@ -6,7 +6,7 @@ CTEST_DIR="${ROOT_DIR}/refs/mbtcc/ctest2"
 TMP_DIR="${ROOT_DIR}/target/mbtcc-ctest2"
 EXTRA_HDR="${ROOT_DIR}/tests/mbtcc/extra.h"
 PATCH_DIR="${ROOT_DIR}/tests/mbtcc/ctest2_patches"
-BOOTSTRAP_TINYCC_BIN="${TINYCC_BIN:-${ROOT_DIR}/_build/native/release/build/tinycc.exe}"
+BOOTSTRAP_TINYCC_BIN="${TINYCC_BIN:-${ROOT_DIR}/_build/native/release/build/fastcc.exe}"
 TINYCC_BUILD_TARGET="${TINYCC_BUILD_TARGET:-${ROOT_DIR}/src}"
 SELFHOST="${SELFHOST:-0}"
 SELFHOST_BIN="${SELFHOST_BIN:-${ROOT_DIR}/target/selfhost/tcc_selfhost}"
@@ -25,13 +25,13 @@ Usage:
 Env vars:
   FILTER=regex     Run only tests whose filename matches regex (grep -E).
   MODE=strict|allow-fail
-  SELFHOST=1       Build refs/tinycc with tinycc.mbt and run tests via tcc_selfhost.
+  SELFHOST=1       Build refs/tinycc with fastcc.mbt and run tests via tcc_selfhost.
   TINYCC_BIN=path  Bootstrap compiler path (used to build tcc_selfhost in SELFHOST mode).
   SELFHOST_BIN=path  Override tcc_selfhost path.
 
-This runs mbtcc's second C test suite (refs/mbtcc/ctest2/*.c) against tinycc.mbt:
+This runs mbtcc's second C test suite (refs/mbtcc/ctest2/*.c) against fastcc.mbt:
   - expected output: gcc
-  - actual output: tinycc.mbt (-c -> .o) + clang link -> run
+  - actual output: fastcc.mbt (-c -> .o) + clang link -> run
 EOF
 }
 
@@ -189,7 +189,7 @@ EOF
       continue
     fi
     if ! "${TMP_DIR}/${base}.tinycc.out" >"${actual_file}"; then
-      echo "FAILED: tinycc.mbt run failed"
+      echo "FAILED: fastcc.mbt run failed"
       fail=$((fail + 1))
       continue
     fi

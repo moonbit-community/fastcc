@@ -1,0 +1,4 @@
+import {
+  "hackwaly/fastcc/support/diag/diag_core",
+  "hackwaly/fastcc/support/source",
+}
