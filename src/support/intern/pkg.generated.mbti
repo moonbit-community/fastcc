@@ -1,8 +1,8 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/support/intern"
+package "hackwaly/fastcc/support/intern"
 
 import {
-  "hackwaly/tinycc/support/intern/intern_core",
+  "hackwaly/fastcc/support/intern/intern_core",
 }
 
 // Values

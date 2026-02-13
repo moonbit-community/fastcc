@@ -1,0 +1,5 @@
+import {
+  "hackwaly/fastcc/support/intern",
+  "hackwaly/fastcc/support/source",
+  "hackwaly/fastcc/support/util",
+}

@@ -1,0 +1,7 @@
+import {
+  "hackwaly/fastcc/frontend/lexer/lexer_core",
+  "hackwaly/fastcc/frontend/tokens",
+  "hackwaly/fastcc/support/diag",
+  "hackwaly/fastcc/support/intern",
+  "hackwaly/fastcc/support/source",
+}

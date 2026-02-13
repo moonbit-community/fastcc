@@ -1,0 +1,9 @@
+import {
+  "hackwaly/fastcc/frontend/tokens/tokens_core",
+  "hackwaly/fastcc/support/intern",
+}
+
+import {
+  "hackwaly/fastcc/frontend/preproc",
+  "hackwaly/fastcc/support/source",
+} for "test"

@@ -1,8 +1,8 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/support/diag/diag_core"
+package "hackwaly/fastcc/support/diag/diag_core"
 
 import {
-  "hackwaly/tinycc/support/source/source_core",
+  "hackwaly/fastcc/support/source/source_core",
 }
 
 // Values

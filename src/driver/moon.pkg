@@ -1,0 +1,23 @@
+import {
+  "hackwaly/fastcc/backend/codegen",
+  "hackwaly/fastcc/driver/cli",
+  "hackwaly/fastcc/ffi",
+  "hackwaly/fastcc/frontend/lexer",
+  "hackwaly/fastcc/frontend/parser",
+  "hackwaly/fastcc/frontend/preproc",
+  "hackwaly/fastcc/frontend/tokens",
+  "hackwaly/fastcc/sem",
+  "hackwaly/fastcc/support/diag",
+  "hackwaly/fastcc/support/source",
+  "hackwaly/fastcc/support/util",
+  "moonbitlang/x/sys",
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/encoding/utf8" @encoding/utf8,
+  "moonbitlang/core/env",
+  "hackwaly/fastcc/host",
+}
+
+import {
+  "hackwaly/fastcc/host/default_host",
+  "moonbitlang/x/fs",
+} for "test"

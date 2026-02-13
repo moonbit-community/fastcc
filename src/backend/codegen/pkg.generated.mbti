@@ -1,10 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/backend/codegen"
+package "hackwaly/fastcc/backend/codegen"
 
 import {
-  "hackwaly/tinycc/frontend/ast/ast_core",
-  "hackwaly/tinycc/sem/sem_core",
-  "hackwaly/tinycc/support/diag/diag_core",
+  "hackwaly/fastcc/frontend/ast/ast_core",
+  "hackwaly/fastcc/sem/sem_core",
+  "hackwaly/fastcc/support/diag/diag_core",
 }
 
 // Values

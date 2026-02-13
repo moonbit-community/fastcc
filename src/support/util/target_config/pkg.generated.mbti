@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/support/util/target_config"
+package "hackwaly/fastcc/support/util/target_config"
 
 // Values
 pub let char_is_unsigned : Bool

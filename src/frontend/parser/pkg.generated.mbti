@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/frontend/parser"
+package "hackwaly/fastcc/frontend/parser"
 
 import {
-  "hackwaly/tinycc/frontend/ast/ast_core",
-  "hackwaly/tinycc/frontend/preproc/preproc_core",
+  "hackwaly/fastcc/frontend/ast/ast_core",
+  "hackwaly/fastcc/frontend/preproc/preproc_core",
 }
 
 // Values

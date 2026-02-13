@@ -50,5 +50,4 @@ pub fn touch_unused_symbols() -> Unit {
     vdup_ref, format_diag_ref, new_section_ref, section_from_emitter_ref, reloc_addend_ref,
     type_contains_vla_ref, strip_qualifiers_ref, strip_qual_attrs_ref,
   )
-
 }

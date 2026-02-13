@@ -1,0 +1,4 @@
+import {
+  "moonbitlang/x/fs",
+  "hackwaly/fastcc/host",
+}

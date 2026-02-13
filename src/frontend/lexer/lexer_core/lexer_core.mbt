@@ -74,7 +74,9 @@ pub fn next_token(lex : Lexer) -> @tokens.Token {
               Some(v) => v
             }
             skip_string_literal(lex, loc, quote)
-            let kind = if quote == 34 { @tokens.TokenKind::StrLit } else {
+            let kind = if quote == 34 {
+              @tokens.TokenKind::StrLit
+            } else {
               CharLit
             }
             let lexeme_id = @tokens.lexeme_pool_intern_slice(

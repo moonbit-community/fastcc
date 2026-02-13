@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/support/util/int_literals"
+package "hackwaly/fastcc/support/util/int_literals"
 
 // Values
 pub fn int_literal_base(String) -> Int

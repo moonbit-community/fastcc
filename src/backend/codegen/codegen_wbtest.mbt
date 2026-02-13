@@ -408,7 +408,6 @@ test "codegen supports local pointers: addr, deref, compare" {
   }
   assert_true(!@diag.has_errors(bag))
   let (_, _, _) = macho_text_section_offsets(bytes)
-
 }
 
 ///|

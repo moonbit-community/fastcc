@@ -1,0 +1,11 @@
+import {
+  "hackwaly/fastcc/sem/sem_core",
+  "hackwaly/fastcc/frontend/ast",
+  "hackwaly/fastcc/support/diag",
+  "hackwaly/fastcc/support/source",
+}
+
+import {
+  "hackwaly/fastcc/frontend/ast",
+  "hackwaly/fastcc/support/diag",
+} for "test"

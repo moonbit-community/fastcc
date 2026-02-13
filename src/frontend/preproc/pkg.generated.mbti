@@ -1,12 +1,12 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hackwaly/tinycc/frontend/preproc"
+package "hackwaly/fastcc/frontend/preproc"
 
 import {
-  "hackwaly/tinycc/frontend/preproc/preproc_core",
-  "hackwaly/tinycc/frontend/tokens/tokens_core",
-  "hackwaly/tinycc/host",
-  "hackwaly/tinycc/support/diag/diag_core",
-  "hackwaly/tinycc/support/source/source_core",
+  "hackwaly/fastcc/frontend/preproc/preproc_core",
+  "hackwaly/fastcc/frontend/tokens/tokens_core",
+  "hackwaly/fastcc/host",
+  "hackwaly/fastcc/support/diag/diag_core",
+  "hackwaly/fastcc/support/source/source_core",
   "moonbitlang/x/time",
 }
 

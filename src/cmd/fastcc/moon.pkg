@@ -1,0 +1,9 @@
+import {
+  "hackwaly/fastcc/driver",
+  "hackwaly/fastcc/host/default_host",
+}
+
+options(
+  "is-main": true,
+  link: { "native": { "cc-flags": "-w" } },
+)

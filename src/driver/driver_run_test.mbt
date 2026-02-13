@@ -1,16 +1,16 @@
 ///|
 test "driver run_args help and error" {
-  assert_eq(@driver.run_args(host=@default_host.new(), ["tinycc.mbt", "-h"]), 0)
+  assert_eq(@driver.run_args(host=@default_host.new(), ["fastcc.mbt", "-h"]), 0)
   assert_eq(
-    @driver.run_args(host=@default_host.new(), ["tinycc.mbt", "--help"]),
+    @driver.run_args(host=@default_host.new(), ["fastcc.mbt", "--help"]),
     0,
   )
   assert_eq(
-    @driver.run_args(host=@default_host.new(), ["tinycc.mbt", "-bogus"]),
+    @driver.run_args(host=@default_host.new(), ["fastcc.mbt", "-bogus"]),
     1,
   )
   assert_eq(
-    @driver.run_args(host=@default_host.new(), ["tinycc.mbt", "missing-file.c"]),
+    @driver.run_args(host=@default_host.new(), ["fastcc.mbt", "missing-file.c"]),
     1,
   )
 }

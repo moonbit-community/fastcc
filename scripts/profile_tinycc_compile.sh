@@ -7,7 +7,7 @@ VC_PATCH="${ROOT_DIR}/refs/vc_patches/arm64_closure_bytes.patch"
 TINYCC_DIR="${ROOT_DIR}/refs/tinycc"
 TINYCC_MBT_C_DIR="${ROOT_DIR}/tests/tinycc_mbt_c"
 
-TINYCC_MBT_BIN="${TINYCC_MBT_BIN:-${ROOT_DIR}/_build/native/release/build/tinycc.exe}"
+TINYCC_MBT_BIN="${TINYCC_MBT_BIN:-${ROOT_DIR}/_build/native/release/build/fastcc.exe}"
 DATASET="${DATASET:-vc}" # vc | tinycc | tinycc_mbt_c
 APPLY_VC_PATCH="${APPLY_VC_PATCH:-1}"
 TINYCC_SOURCES="${TINYCC_SOURCES:-}"
@@ -32,7 +32,7 @@ Env vars:
   TINYCC_SOURCES="..."      Space-separated refs/tinycc sources (default: tcc.c)
   PROFILE_SOURCE=path       Override source file to compile (relative to repo ok)
   PROFILE_INCLUDES="..."    Override include dirs (space-separated), used with PROFILE_SOURCE
-  BUILD_MBT=0|1             Build tinycc.mbt before profiling (default: 1)
+  BUILD_MBT=0|1             Build fastcc.mbt before profiling (default: 1)
   TRACE_DIR=path            Output directory for .trace and summary (default: target/trace)
   TRACE_NAME=name.trace     Trace file name (default: tinycc_${DATASET}_timeprof_YYYYmmdd_HHMMSS.trace)
   XCTRACE_TEMPLATE=name     xctrace template (default: Time Profiler)
@@ -55,12 +55,12 @@ if ! xcrun --find xctrace >/dev/null 2>&1; then
 fi
 
 if [[ "${BUILD_MBT}" == "1" ]]; then
-  echo "Building tinycc.mbt (${TINYCC_MBT_BIN})"
+  echo "Building fastcc.mbt (${TINYCC_MBT_BIN})"
   moon build --release --target native src
 fi
 
 if [[ ! -x "${TINYCC_MBT_BIN}" ]]; then
-  echo "error: tinycc.mbt executable missing at ${TINYCC_MBT_BIN}" >&2
+  echo "error: fastcc.mbt executable missing at ${TINYCC_MBT_BIN}" >&2
   exit 1
 fi
 
@@ -228,7 +228,7 @@ def collect_counts(leaf_only):
             if f is None:
                 continue
             fid = f.get("id") or f.get("ref")
-            if frame_binary_name.get(fid) != "tinycc.exe":
+            if frame_binary_name.get(fid) != "fastcc.exe":
                 continue
             name = f.get("name") or "<unknown>"
             counts[name] += 1
@@ -238,11 +238,11 @@ inclusive = collect_counts(leaf_only=False)
 leaf = collect_counts(leaf_only=True)
 
 lines = []
-lines.append("Top inclusive frames (tinycc.exe):")
+lines.append("Top inclusive frames (fastcc.exe):")
 for name, count in inclusive.most_common(20):
     lines.append(f"{count:4d} {name}")
 lines.append("")
-lines.append("Top leaf frames (tinycc.exe):")
+lines.append("Top leaf frames (fastcc.exe):")
 for name, count in leaf.most_common(20):
     lines.append(f"{count:4d} {name}")
 

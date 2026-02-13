@@ -1,5 +1,5 @@
 {
-  "name": "hackwaly/tinycc",
+  "name": "hackwaly/fastcc",
   "deps": {
     "moonbitlang/x": "0.4.38"
   },

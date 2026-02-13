@@ -8,7 +8,7 @@ TINYCC_DIR="${ROOT_DIR}/refs/tinycc"
 TINYCC_MBT_C_DIR="${ROOT_DIR}/tests/tinycc_mbt_c"
 OUT_DIR="${ROOT_DIR}/target/bench"
 
-TINYCC_MBT_BIN="${TINYCC_MBT_BIN:-${ROOT_DIR}/_build/native/release/build/tinycc.exe}"
+TINYCC_MBT_BIN="${TINYCC_MBT_BIN:-${ROOT_DIR}/_build/native/release/build/fastcc.exe}"
 TINYCC_REF_BIN="${TINYCC_REF_BIN:-${TINYCC_DIR}/tcc}"
 CLANG_BIN="${CLANG_BIN:-clang}"
 CLANG_FLAGS="${CLANG_FLAGS:-}"
@@ -37,8 +37,8 @@ Env vars:
   TINYCC_SOURCES="..."  Space-separated refs/tinycc sources (default: tcc.c)
   REPEAT=N          Repeat the full compile set N times (default: 1)
   WARMUP=0|1        Run a warmup compile pass (default: 0)
-  BUILD_MBT=0|1     Build tinycc.mbt before benchmarking (default: 1)
-  DETAIL=0|1        Collect per-phase timings from tinycc.mbt -bench (default: 0)
+  BUILD_MBT=0|1     Build fastcc.mbt before benchmarking (default: 1)
+  DETAIL=0|1        Collect per-phase timings from fastcc.mbt -bench (default: 0)
   BASELINE_FILE=path  Baseline README to compare (default: README.md)
   REGRESSION_PCT=N    Flag regression if slower by N percent (default: 0)
   TINYCC_MBT_BIN=path
@@ -54,12 +54,12 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 fi
 
 if [[ "${BUILD_MBT}" == "1" ]]; then
-  echo "Building tinycc.mbt (${TINYCC_MBT_BIN})"
+  echo "Building fastcc.mbt (${TINYCC_MBT_BIN})"
   moon build --release --target native src
 fi
 
 if [[ ! -x "${TINYCC_MBT_BIN}" ]]; then
-  echo "error: tinycc.mbt executable missing at ${TINYCC_MBT_BIN}" >&2
+  echo "error: fastcc.mbt executable missing at ${TINYCC_MBT_BIN}" >&2
   exit 1
 fi
 if [[ ! -x "${TINYCC_REF_BIN}" ]]; then
@@ -254,7 +254,7 @@ clang_time, _ = run_compile("clang", clang_bin, clang_flags, False)
 ratio_mbt_ref = mbt_time / ref_time if ref_time > 0 else float("inf")
 ratio_mbt_clang = mbt_time / clang_time if clang_time > 0 else float("inf")
 ratio_ref_clang = ref_time / clang_time if clang_time > 0 else float("inf")
-print(f"tinycc.mbt total: {mbt_time:.3f}s")
+print(f"fastcc.mbt total: {mbt_time:.3f}s")
 print(f"refs/tinycc total: {ref_time:.3f}s")
 print(f"clang total: {clang_time:.3f}s")
 print(f"ratio (mbt/ref): {ratio_mbt_ref:.2f}x")
@@ -265,7 +265,7 @@ if detail:
     avg_sem = mbt_phases["sem_us"] / (1000.0 * repeat)
     avg_codegen = mbt_phases["codegen_us"] / (1000.0 * repeat)
     avg_total = mbt_phases["total_us"] / (1000.0 * repeat)
-    print(f"tinycc.mbt phases (avg ms): parse={avg_parse:.3f} sem={avg_sem:.3f} codegen={avg_codegen:.3f} total={avg_total:.3f}")
+    print(f"fastcc.mbt phases (avg ms): parse={avg_parse:.3f} sem={avg_sem:.3f} codegen={avg_codegen:.3f} total={avg_total:.3f}")
 
 def load_baseline(path, dataset_name):
     if not path or not os.path.isfile(path):
@@ -336,7 +336,7 @@ if baseline:
     print(f"Baseline ({baseline_file})")
     regressions = []
     if baseline.get("mbt_total_s") is not None:
-        regressions.append(report_delta("tinycc.mbt total", mbt_time, baseline["mbt_total_s"], "s"))
+        regressions.append(report_delta("fastcc.mbt total", mbt_time, baseline["mbt_total_s"], "s"))
     if baseline.get("ratio_mbt_ref") is not None:
         regressions.append(report_delta("ratio (mbt/ref)", ratio_mbt_ref, baseline["ratio_mbt_ref"], "x"))
     if detail and baseline.get("phase_total_ms") is not None:

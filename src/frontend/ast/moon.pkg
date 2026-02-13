@@ -1,0 +1,4 @@
+import {
+  "hackwaly/fastcc/frontend/ast/ast_core",
+  "hackwaly/fastcc/support/source",
+}

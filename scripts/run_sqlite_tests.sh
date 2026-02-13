@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 SQLITE_SRC="${ROOT_DIR}/refs/sqlite"
 SQLITE_BUILD_DIR="${SQLITE_BUILD_DIR:-${ROOT_DIR}/target/sqlite_build}"
-TINYCC_MBT_BIN="${TINYCC_MBT_BIN:-${ROOT_DIR}/_build/native/release/build/tinycc.exe}"
+TINYCC_MBT_BIN="${TINYCC_MBT_BIN:-${ROOT_DIR}/_build/native/release/build/fastcc.exe}"
 BUILD_MBT="${BUILD_MBT:-1}"
 SQLITE_TESTS="${SQLITE_TESTS:-1}"
 SQLITE_TEST_LIST="${SQLITE_TEST_LIST:-test/veryquick.test}"
@@ -45,8 +45,8 @@ Env vars:
   TCL_CONFIG_SH=path      Path to tclConfig.sh (auto-detected if unset)
   SQLITE_PATCH=path       Optional patch to apply to refs/sqlite before tests
   MAKE_ASSUME_OLD="..."   Space-separated make targets to treat as up-to-date when building testfixture
-  BUILD_MBT=0|1           Build tinycc.mbt before compiling sqlite3.c (default: 1)
-  TINYCC_MBT_BIN=path     Path to tinycc.mbt executable
+  BUILD_MBT=0|1           Build fastcc.mbt before compiling sqlite3.c (default: 1)
+  TINYCC_MBT_BIN=path     Path to fastcc.mbt executable
 EOF
 }
 
@@ -124,12 +124,12 @@ if [[ -z "${TCL_CONFIG_SH}" || ! -f "${TCL_CONFIG_SH}" ]]; then
 fi
 
 if [[ "${BUILD_MBT}" == "1" ]]; then
-  echo "Building tinycc.mbt (${TINYCC_MBT_BIN})"
+  echo "Building fastcc.mbt (${TINYCC_MBT_BIN})"
   moon build --release --target native src
 fi
 
 if [[ ! -x "${TINYCC_MBT_BIN}" ]]; then
-  echo "error: tinycc.mbt executable missing at ${TINYCC_MBT_BIN}" >&2
+  echo "error: fastcc.mbt executable missing at ${TINYCC_MBT_BIN}" >&2
   exit 1
 fi
 
@@ -203,7 +203,7 @@ SQLITE_INCLUDES=(
   -I "${SQLITE_SRC}/ext/misc"
 )
 
-echo "Compiling sqlite3.c with tinycc.mbt"
+echo "Compiling sqlite3.c with fastcc.mbt"
 "${TINYCC_MBT_BIN}" \
   "${SQLITE_CFLAGS[@]}" \
   "${SQLITE_INCLUDES[@]}" \

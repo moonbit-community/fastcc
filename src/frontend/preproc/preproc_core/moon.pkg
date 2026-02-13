@@ -1,0 +1,21 @@
+import {
+  "hackwaly/fastcc/frontend/lexer",
+  "hackwaly/fastcc/frontend/tokens",
+  "hackwaly/fastcc/support/diag",
+  "hackwaly/fastcc/support/intern",
+  "hackwaly/fastcc/support/source",
+  "hackwaly/fastcc/support/util",
+  "moonbitlang/x/time",
+  "moonbitlang/core/env",
+  "hackwaly/fastcc/host",
+}
+
+import {
+  "hackwaly/fastcc/host/default_host",
+} for "test"
+
+import {
+  "moonbitlang/core/json",
+  "hackwaly/fastcc/host/default_host",
+  "moonbitlang/x/fs",
+} for "wbtest"

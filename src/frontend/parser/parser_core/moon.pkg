@@ -1,0 +1,19 @@
+import {
+  "hackwaly/fastcc/frontend/ast",
+  "hackwaly/fastcc/frontend/preproc",
+  "hackwaly/fastcc/frontend/tokens",
+  "hackwaly/fastcc/support/diag",
+  "hackwaly/fastcc/support/source",
+  "hackwaly/fastcc/support/util",
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/strconv",
+}
+
+import {
+  "hackwaly/fastcc/host",
+  "hackwaly/fastcc/host/default_host",
+} for "test"
+
+import {
+  "hackwaly/fastcc/host/default_host",
+} for "wbtest"

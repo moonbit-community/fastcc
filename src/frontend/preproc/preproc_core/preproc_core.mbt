@@ -618,11 +618,7 @@ fn push_macro_state(pp : Preprocessor, id : Int) -> Unit {
       entry.stack.push(saved)
       pp.macro_push_stacks[idx] = entry
     }
-    None =>
-      pp.macro_push_stacks.push({
-        name_id: id,
-        stack: [saved],
-      })
+    None => pp.macro_push_stacks.push({ name_id: id, stack: [saved] })
   }
 }
 
@@ -684,7 +680,7 @@ pub fn next_input_token(pp : Preprocessor) -> @tokens.Token {
         }
       }
     }
-  } else {
+  } nobreak {
     {
       kind: Eof,
       value: 0,
@@ -740,8 +736,7 @@ fn handle_pragma_tokens(
   pp : Preprocessor,
   tokens : Array[@tokens.Token],
 ) -> Unit {
-  if tokens.length() >= 2 && tokens[0].kind is Ident &&
-    tokens[1].kind is Ident {
+  if tokens.length() >= 2 && tokens[0].kind is Ident && tokens[1].kind is Ident {
     let name = pp_token_lexeme(pp, tokens[0])
     if name == "ms_struct" {
       let mode = pp_token_lexeme(pp, tokens[1])
@@ -763,7 +758,8 @@ fn handle_pragma_tokens(
   if action != "push_macro" && action != "pop_macro" {
     return
   }
-  if !(tokens[1].kind is LParen) || !(tokens[2].kind is StrLit) ||
+  if !(tokens[1].kind is LParen) ||
+    !(tokens[2].kind is StrLit) ||
     !(tokens[3].kind is RParen) {
     return
   }
@@ -909,7 +905,6 @@ pub fn read_directive_text(pp : Preprocessor) -> String {
         saw_non_ws = true
         sb.write_char(code.unsafe_to_char())
         let _ = @lexer.advance(pp.lexer)
-
       }
     }
   }
@@ -3184,7 +3179,11 @@ pub fn parse_conditional(p : IfParser, loc : @source.SrcLoc) -> PpValue {
     }
     let else_val = parse_conditional(p, loc)
     p.suppress_errors = prev
-    if !pp_is_zero(cond) { then_val } else { else_val }
+    if !pp_is_zero(cond) {
+      then_val
+    } else {
+      else_val
+    }
   } else {
     cond
   }
@@ -3520,7 +3519,7 @@ pub fn next_pp_token(pp : Preprocessor) -> @tokens.Token {
       }
     }
     return tok
-  } else {
+  } nobreak {
     {
       kind: Eof,
       value: 0,
