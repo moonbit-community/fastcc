@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/core/env",
   "moonbitlang/x/fs",
   "hackwaly/fastcc/host",
+  "hackwaly/fastcc/include",
 }
