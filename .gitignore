@@ -1,4 +1,4 @@
 /target
 /_build/*
 /.mooncakes/
-/.beads/.sync.lock
+/.beads/
