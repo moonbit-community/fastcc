@@ -121,7 +121,7 @@ fn expand_cli_args(host : &@host.Host, args : Array[String]) -> Array[String]? {
 
 ///|
 fn is_c_source_path(path : String) -> Bool {
-  path.has_suffix(".c") || path.has_suffix(".i")
+  path == "-" || path.has_suffix(".c") || path.has_suffix(".i")
 }
 
 ///|
@@ -355,7 +355,7 @@ pub fn parse_cli_args(host~ : &@host.Host, args : Array[String]) -> CliParse {
       i = i + 1
       continue
     }
-    if arg.has_prefix("-") {
+    if arg.has_prefix("-") && arg != "-" {
       println("error: unsupported option '\{arg}'")
       print_usage()
       return Error

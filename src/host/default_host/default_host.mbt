@@ -9,7 +9,7 @@ pub impl @host.Host for DefaultHost with include_dir(_self) {
 ///|
 pub impl @host.Host for DefaultHost with path_exists(_self, path) {
   if path.has_prefix("/__FASTCC__/include/") {
-    let rel_path = try! path["/__FASTCC__/include/".length():].to_string()
+    let rel_path = path["/__FASTCC__/include/".length():].to_string()
     match @include.headers.get(rel_path) {
       None => false
       Some(_) => true
@@ -21,8 +21,10 @@ pub impl @host.Host for DefaultHost with path_exists(_self, path) {
 
 ///|
 pub impl @host.Host for DefaultHost with read_file_to_string(_self, path) {
-  if path.has_prefix("/__FASTCC__/include/") {
-    let rel_path = try! path["/__FASTCC__/include/".length():].to_string()
+  if path == "-" {
+    @encoding/utf8.decode(@ffi.read_stdin_bytes())
+  } else if path.has_prefix("/__FASTCC__/include/") {
+    let rel_path = path["/__FASTCC__/include/".length():].to_string()
     match @include.headers.get(rel_path) {
       None => fail("not found")
       Some(content) => content

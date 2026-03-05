@@ -97,6 +97,23 @@ test "cli parse option variants" {
 }
 
 ///|
+test "cli parse stdin input" {
+  let cfg = must_run(["fastcc.mbt", "-"])
+  assert_true(!cfg.compile_only)
+  assert_true(!cfg.run)
+  assert_eq(cfg.inputs, ["-"])
+  assert_eq(cfg.link_inputs, [])
+}
+
+///|
+test "cli parse run stdin input" {
+  let cfg = must_run(["fastcc.mbt", "-run", "-", "arg1"])
+  assert_true(cfg.run)
+  assert_eq(cfg.inputs, ["-"])
+  assert_eq(cfg.run_args, ["arg1"])
+}
+
+///|
 test "cli parse link mode output with multiple inputs" {
   let cfg = must_run(["fastcc.mbt", "-o", "app.out", "a.c", "b.c"])
   assert_true(!cfg.compile_only)

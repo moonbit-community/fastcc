@@ -1,5 +1,7 @@
 import {
+  "moonbitlang/core/encoding/utf8" @encoding/utf8,
   "moonbitlang/core/env",
+  "hackwaly/fastcc/ffi",
   "moonbitlang/x/fs",
   "hackwaly/fastcc/host",
   "hackwaly/fastcc/include",
