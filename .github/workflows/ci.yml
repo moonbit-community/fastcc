@@ -20,6 +20,22 @@ jobs:
         run: |
           moon install ./src/cmd/fastcc
           echo "${MOON_HOME:-$HOME/.moon}/bin" >> "$GITHUB_PATH"
+      - name: Patch cmd/fastcc to use fastcc toolchain in this CI run
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          
+          moon_pkg = Path("src/cmd/fastcc/moon.pkg")
+          text = moon_pkg.read_text()
+          old = '  link: { "native": { "cc-flags": "-w" } },\n'
+          new = '  link: { "native": { "cc": "fastcc", "cc-flags": "-w" } },\n'
+          
+          if old not in text:
+              raise SystemExit("unexpected src/cmd/fastcc/moon.pkg content")
+          
+          moon_pkg.write_text(text.replace(old, new))
+          print("patched src/cmd/fastcc/moon.pkg for CI")
+          PY
       - name: Init and update git submodules
         run: git submodule init && git submodule update
       - name: Install sqlite test dependencies
