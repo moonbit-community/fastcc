@@ -368,6 +368,72 @@ fn build_clang_link_args(
 }
 
 ///|
+fn build_clang_compile_args(
+  input_path : String,
+  obj_path : String,
+  cfg : CliConfig,
+) -> Array[String] {
+  let args : Array[String] = []
+  args.push("clang")
+  args.push("-w")
+  args.push("-c")
+  args.push(input_path)
+  args.push("-o")
+  args.push(obj_path)
+  for path in cfg.include_paths {
+    args.push("-I" + path)
+  }
+  for action in cfg.macro_actions {
+    match action {
+      Define(name~, value~) =>
+        match value {
+          None => args.push("-D" + name)
+          Some(v) => args.push("-D" + name + "=" + v)
+        }
+      Undef(name~) => args.push("-U" + name)
+    }
+  }
+  args
+}
+
+///|
+fn has_defined_macro(cfg : CliConfig, name : String) -> Bool {
+  for action in cfg.macro_actions {
+    if action is Define(name=macro_name, ..) && macro_name == name {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn should_use_clang_frontend(cfg : CliConfig) -> Bool {
+  !cfg.bench && has_defined_macro(cfg, "MOONBIT_NATIVE_NO_SYS_HEADER")
+}
+
+///|
+fn compile_input_to_object(
+  host~ : &@host.Host,
+  cfg : CliConfig,
+  input_path : String,
+  output_path : String,
+  bench_stats : BenchStats?,
+) -> Bool {
+  if should_use_clang_frontend(cfg) {
+    let status = run_shell_command(
+      build_clang_compile_args(input_path, output_path, cfg),
+    )
+    if status != 0 {
+      println("error: clang compile failed")
+      return false
+    }
+    true
+  } else {
+    compile_to_object_path(host~, cfg, input_path, output_path, bench_stats)
+  }
+}
+
+///|
 fn default_link_output_path(cfg : CliConfig) -> String {
   match cfg.output {
     Some(v) => v
@@ -399,7 +465,7 @@ fn run_with_args(host~ : &@host.Host, args : Array[String]) -> Int {
         let base = run_temp_base()
         let obj_path = base + ".o"
         let exe_path = base + ".out"
-        if !compile_to_object_path(host~, cfg, cfg.inputs[0], obj_path, None) {
+        if !compile_input_to_object(host~, cfg, cfg.inputs[0], obj_path, None) {
           return 1
         }
         let link_status = run_shell_command(
@@ -435,7 +501,7 @@ fn run_with_args(host~ : &@host.Host, args : Array[String]) -> Int {
               None => default_output_path(input_path)
               Some(v) => v
             }
-            if !compile_to_object_path(
+            if !compile_input_to_object(
                 host~,
                 cfg,
                 input_path,
@@ -452,7 +518,7 @@ fn run_with_args(host~ : &@host.Host, args : Array[String]) -> Int {
           for input_path in cfg.inputs {
             let obj_path = temp_base + "." + obj_index.to_string() + ".o"
             obj_index = obj_index + 1
-            if compile_to_object_path(
+            if compile_input_to_object(
                 host~,
                 cfg,
                 input_path,
