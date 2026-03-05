@@ -4,6 +4,8 @@ package "hackwaly/fastcc/ffi"
 // Values
 pub fn bench_now_ns() -> UInt64
 
+pub fn read_stdin_bytes() -> Bytes
+
 pub fn run_command(Bytes) -> Int
 
 // Errors

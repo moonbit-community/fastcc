@@ -17,3 +17,8 @@
 pub fn run_command(_cmd : Bytes) -> Int {
   1
 }
+
+///|
+pub fn read_stdin_bytes() -> Bytes {
+  b""
+}

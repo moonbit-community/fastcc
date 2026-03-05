@@ -16,3 +16,6 @@
 ///|
 #borrow(cmd)
 pub extern "C" fn run_command(cmd : Bytes) -> Int = "tinyccmbt_run_command"
+
+///|
+pub extern "C" fn read_stdin_bytes() -> Bytes = "tinyccmbt_read_stdin_bytes"
