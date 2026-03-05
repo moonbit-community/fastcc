@@ -1,0 +1,14 @@
+{
+  "import": [
+    {
+      "path": "moonbitlang/core/encoding/utf8",
+      "alias": "encoding/utf8"
+    },
+    "hackwaly/tinycc/host"
+  ],
+  "link": {
+    "js": {
+      "exports": ["new"]
+    }
+  }
+}
