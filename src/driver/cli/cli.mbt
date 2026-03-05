@@ -295,7 +295,10 @@ pub fn parse_cli_args(host~ : &@host.Host, args : Array[String]) -> CliParse {
       i = i + 1
       continue
     }
-    if arg == "-fPIC" || arg == "-fpic" {
+    if arg == "-fPIC" ||
+      arg == "-fpic" ||
+      arg == "-fwrapv" ||
+      arg == "-fno-strict-aliasing" {
       i = i + 1
       continue
     }
@@ -377,7 +380,7 @@ pub fn parse_cli_args(host~ : &@host.Host, args : Array[String]) -> CliParse {
     print_usage()
     return Error
   }
-  if output is Some(_) && inputs.length() != 1 {
+  if compile_only && output is Some(_) && inputs.length() != 1 {
     println("error: -o requires exactly one input file")
     return Error
   }

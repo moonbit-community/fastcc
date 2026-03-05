@@ -82,8 +82,9 @@ test "cli parse run args" {
 ///|
 test "cli parse option variants" {
   let cfg = must_run([
-    "fastcc.mbt", "-bench", "-fPIC", "-Q", "-O2", "-g", "-Wextra", "-w", "-isystem/usr/include",
-    "-Iinclude", "-L/usr/lib", "-l", "m", "-lfoo", "-oout.o", "main.c",
+    "fastcc.mbt", "-bench", "-fPIC", "-fwrapv", "-fno-strict-aliasing", "-Q", "-O2",
+    "-g", "-Wextra", "-w", "-isystem/usr/include", "-Iinclude", "-L/usr/lib", "-l",
+    "m", "-lfoo", "-oout.o", "main.c",
   ])
   assert_true(cfg.bench)
   assert_true(!cfg.compile_only)
@@ -93,6 +94,15 @@ test "cli parse option variants" {
   assert_eq(cfg.link_paths, ["/usr/lib"])
   assert_eq(cfg.link_libs, ["m", "foo"])
   assert_eq(cfg.inputs, ["main.c"])
+}
+
+///|
+test "cli parse link mode output with multiple inputs" {
+  let cfg = must_run(["fastcc.mbt", "-o", "app.out", "a.c", "b.c"])
+  assert_true(!cfg.compile_only)
+  assert_true(!cfg.run)
+  assert_eq(cfg.output, Some("app.out"))
+  assert_eq(cfg.inputs, ["a.c", "b.c"])
 }
 
 ///|
@@ -113,6 +123,6 @@ test "cli parse error branches" {
   expect_cli_error(["fastcc.mbt", "-run", "--", "arg1"])
   expect_cli_error(["fastcc.mbt", "-c", "-run", "main.c"])
   expect_cli_error(["fastcc.mbt", "-c"])
-  expect_cli_error(["fastcc.mbt", "-o", "out.o", "a.c", "b.c"])
+  expect_cli_error(["fastcc.mbt", "-c", "-o", "out.o", "a.c", "b.c"])
   expect_cli_error(["fastcc.mbt", "-bogus", "a.c"])
 }

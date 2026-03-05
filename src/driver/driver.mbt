@@ -343,14 +343,16 @@ fn compile_to_object_path(
 
 ///|
 fn build_clang_link_args(
-  obj_path : String,
+  obj_paths : Array[String],
   exe_path : String,
   cfg : CliConfig,
 ) -> Array[String] {
   let args : Array[String] = []
   args.push("clang")
   args.push("-w")
-  args.push(obj_path)
+  for obj_path in obj_paths {
+    args.push(obj_path)
+  }
   args.push("-o")
   args.push(exe_path)
   for input in cfg.link_inputs {
@@ -363,6 +365,14 @@ fn build_clang_link_args(
     args.push("-l" + lib)
   }
   args
+}
+
+///|
+fn default_link_output_path(cfg : CliConfig) -> String {
+  match cfg.output {
+    Some(v) => v
+    None => "a.out"
+  }
 }
 
 ///|
@@ -393,7 +403,7 @@ fn run_with_args(host~ : &@host.Host, args : Array[String]) -> Int {
           return 1
         }
         let link_status = run_shell_command(
-          build_clang_link_args(obj_path, exe_path, cfg),
+          build_clang_link_args([obj_path], exe_path, cfg),
         )
         if link_status != 0 {
           println("error: clang link failed")
@@ -419,32 +429,8 @@ fn run_with_args(host~ : &@host.Host, args : Array[String]) -> Int {
         let mut any_errors = false
         let bench_enabled = cfg.bench
         let bench_stats = bench_stats_new()
-        for input_path in cfg.inputs {
-          if !cfg.compile_only {
-            match load_input(host~, input_path) {
-              None => {
-                any_errors = true
-                continue
-              }
-              Some((path, text)) => {
-                let bag = @diag.new_diag_bag()
-                let map = @source.new_source_map()
-                let file = @source.add_file(map, path, text)
-                let pp = @preproc.new_preprocessor(map, file, bag, host~)
-                @preproc.add_include_path(pp, host.include_dir())
-                for p in cfg.include_paths {
-                  @preproc.add_include_path(pp, p)
-                }
-                apply_cli_macros(pp, cfg.macro_actions)
-                if @diag.has_errors(bag) {
-                  any_errors = true
-                  for d in bag.diags {
-                    println(format_diag_for_cli(pp.map, d))
-                  }
-                }
-              }
-            }
-          } else {
+        if cfg.compile_only {
+          for input_path in cfg.inputs {
             let out_path = match cfg.output {
               None => default_output_path(input_path)
               Some(v) => v
@@ -457,6 +443,43 @@ fn run_with_args(host~ : &@host.Host, args : Array[String]) -> Int {
                 Some(bench_stats),
               ) {
               any_errors = true
+            }
+          }
+        } else {
+          let obj_paths : Array[String] = []
+          let temp_base = run_temp_base()
+          let mut obj_index = 0
+          for input_path in cfg.inputs {
+            let obj_path = temp_base + "." + obj_index.to_string() + ".o"
+            obj_index = obj_index + 1
+            if compile_to_object_path(
+                host~,
+                cfg,
+                input_path,
+                obj_path,
+                Some(bench_stats),
+              ) {
+              obj_paths.push(obj_path)
+            } else {
+              any_errors = true
+            }
+          }
+          if !any_errors {
+            let link_status = run_shell_command(
+              build_clang_link_args(
+                obj_paths,
+                default_link_output_path(cfg),
+                cfg,
+              ),
+            )
+            if link_status != 0 {
+              println("error: clang link failed")
+              any_errors = true
+            }
+          }
+          for obj_path in obj_paths {
+            host.remove_file(obj_path) catch {
+              _ => ()
             }
           }
         }
