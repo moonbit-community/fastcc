@@ -776,6 +776,14 @@ test "sem accepts sizeof in enum constant" {
 }
 
 ///|
+test "sem accepts fundamental offsetof-style constant expression" {
+  let (_, bag) = check_text(
+    "typedef unsigned long uintptr_t;\nstruct S { int a; int b; };\n#define offsetof(type, field) ((uintptr_t)(&(((type*)0)->field)))\nunsigned meta = (((unsigned)(offsetof(struct S, b)) & (((unsigned)1 << 11) - 1)) << 19);\nint main(){return (int)meta;}\n",
+  )
+  assert_true(!@diag.has_errors(bag))
+}
+
+///|
 test "sem rejects sizeof incomplete enum" {
   let (_, bag) = check_text("enum E; int main(){return sizeof(enum E);}")
   assert_true(@diag.has_errors(bag))
