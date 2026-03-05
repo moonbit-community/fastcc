@@ -2725,6 +2725,71 @@ fn float_type_from_literal(lit : String) -> @ast.CType {
 }
 
 ///|
+fn eval_addr_const_expr_value(
+  ctx : SemContext,
+  expr : @ast.Expr,
+  loc : @source.SrcLoc,
+) -> (Int, Bool) {
+  match expr {
+    Member(base~, name~, is_arrow~, loc=mem_loc, ..) =>
+      match try_eval_int_const(ctx, base) {
+        Some(v0) if v0 == 0 => {
+          let base_ty = type_of_expr(ctx, base)
+          let record_ty = if is_arrow {
+            match strip_top_qualifiers(base_ty) {
+              Pointer(pointee) => pointee
+              _ => {
+                add_sem_error(ctx, loc, "invalid constant expression")
+                return (0, false)
+              }
+            }
+          } else {
+            base_ty
+          }
+          match eval_builtin_offsetof(ctx, record_ty, [name], mem_loc) {
+            Some(off) => (off, true)
+            None => (0, false)
+          }
+        }
+        _ => {
+          add_sem_error(ctx, loc, "invalid constant expression")
+          (0, false)
+        }
+      }
+    Index(base~, index~, loc=idx_loc, ..) =>
+      match try_eval_int_const(ctx, base) {
+        Some(v0) if v0 == 0 =>
+          match const_int_from_expr(ctx, index, idx_loc) {
+            None => {
+              add_sem_error(ctx, loc, "invalid constant expression")
+              (0, false)
+            }
+            Some(idx) =>
+              match element_type_for_pointer_arith(type_of_expr(ctx, base)) {
+                None => {
+                  add_sem_error(ctx, loc, "invalid constant expression")
+                  (0, false)
+                }
+                Some(elem_ty) =>
+                  match type_size_align(ctx, elem_ty, loc) {
+                    None => (0, false)
+                    Some((elem_size, _)) => (idx * elem_size, true)
+                  }
+              }
+          }
+        _ => {
+          add_sem_error(ctx, loc, "invalid constant expression")
+          (0, false)
+        }
+      }
+    _ => {
+      add_sem_error(ctx, loc, "invalid constant expression")
+      (0, false)
+    }
+  }
+}
+
+///|
 fn eval_const_expr_value(
   ctx : SemContext,
   expr : @ast.Expr,
@@ -2779,81 +2844,30 @@ fn eval_const_expr_value(
       add_sem_error(ctx, loc, "invalid constant expression")
       (0, false)
     }
-    Unary(op~, expr~, ..) => {
-      let (v, ok) = eval_const_expr_value(ctx, expr, loc)
-      if !ok {
-        return (0, false)
-      }
+    Unary(op~, expr~, ..) =>
       match op {
-        Addr =>
-          match expr {
-            Member(base~, name~, is_arrow~, loc=mem_loc, ..) =>
-              match try_eval_int_const(ctx, base) {
-                Some(v0) if v0 == 0 => {
-                  let base_ty = type_of_expr(ctx, base)
-                  let record_ty = if is_arrow {
-                    match strip_top_qualifiers(base_ty) {
-                      Pointer(pointee) => pointee
-                      _ => {
-                        add_sem_error(ctx, loc, "invalid constant expression")
-                        return (0, false)
-                      }
-                    }
-                  } else {
-                    base_ty
-                  }
-                  match eval_builtin_offsetof(ctx, record_ty, [name], mem_loc) {
-                    Some(off) => (off, true)
-                    None => (0, false)
-                  }
-                }
-                _ => {
-                  add_sem_error(ctx, loc, "invalid constant expression")
-                  (0, false)
-                }
-              }
-            Index(base~, index~, loc=idx_loc, ..) =>
-              match try_eval_int_const(ctx, base) {
-                Some(v0) if v0 == 0 =>
-                  match const_int_from_expr(ctx, index, idx_loc) {
-                    None => {
-                      add_sem_error(ctx, loc, "invalid constant expression")
-                      (0, false)
-                    }
-                    Some(idx) =>
-                      match
-                        element_type_for_pointer_arith(type_of_expr(ctx, base)) {
-                        None => {
-                          add_sem_error(ctx, loc, "invalid constant expression")
-                          (0, false)
-                        }
-                        Some(elem_ty) =>
-                          match type_size_align(ctx, elem_ty, loc) {
-                            None => (0, false)
-                            Some((elem_size, _)) => (idx * elem_size, true)
-                          }
-                      }
-                  }
-                _ => {
-                  add_sem_error(ctx, loc, "invalid constant expression")
-                  (0, false)
-                }
-              }
+        Addr => eval_addr_const_expr_value(ctx, expr, loc)
+        Plus | Minus | BitNot | Not => {
+          let (v, ok) = eval_const_expr_value(ctx, expr, loc)
+          if !ok {
+            return (0, false)
+          }
+          match op {
+            Plus => (v, true)
+            Minus => (0 - v, true)
+            BitNot => (v ^ -1, true)
+            Not => (if v == 0 { 1 } else { 0 }, true)
             _ => {
               add_sem_error(ctx, loc, "invalid constant expression")
               (0, false)
             }
           }
-        Plus => (v, true)
-        Minus => (0 - v, true)
-        BitNot => (v ^ -1, true)
-        Not => (if v == 0 { 1 } else { 0 }, true)
+        }
         _ => {
           add_sem_error(ctx, loc, "invalid constant expression")
           (0, false)
         }
       }
-    }
     Binary(op~, left~, right~, ..) => {
       let (lhs, ok_lhs) = eval_const_expr_value(ctx, left, loc)
       let (rhs, ok_rhs) = eval_const_expr_value(ctx, right, loc)
@@ -3075,82 +3089,33 @@ fn eval_const_expr_value_i64(
       add_sem_error(ctx, loc, "invalid constant expression")
       (0, false)
     }
-    Unary(op~, expr~, ..) => {
-      let (v, ok) = eval_const_expr_value_i64(ctx, expr, loc)
-      if !ok {
-        return (0, false)
-      }
+    Unary(op~, expr~, ..) =>
       match op {
-        Addr =>
-          match expr {
-            Member(base~, name~, is_arrow~, loc=mem_loc, ..) =>
-              match try_eval_int_const(ctx, base) {
-                Some(v0) if v0 == 0 => {
-                  let base_ty = type_of_expr(ctx, base)
-                  let record_ty = if is_arrow {
-                    match strip_top_qualifiers(base_ty) {
-                      Pointer(pointee) => pointee
-                      _ => {
-                        add_sem_error(ctx, loc, "invalid constant expression")
-                        return (0, false)
-                      }
-                    }
-                  } else {
-                    base_ty
-                  }
-                  match eval_builtin_offsetof(ctx, record_ty, [name], mem_loc) {
-                    Some(off) => (off.to_int64(), true)
-                    None => (0, false)
-                  }
-                }
-                _ => {
-                  add_sem_error(ctx, loc, "invalid constant expression")
-                  (0, false)
-                }
-              }
-            Index(base~, index~, loc=idx_loc, ..) =>
-              match try_eval_int_const(ctx, base) {
-                Some(v0) if v0 == 0 =>
-                  match const_int_from_expr(ctx, index, idx_loc) {
-                    None => {
-                      add_sem_error(ctx, loc, "invalid constant expression")
-                      (0, false)
-                    }
-                    Some(idx) =>
-                      match
-                        element_type_for_pointer_arith(type_of_expr(ctx, base)) {
-                        None => {
-                          add_sem_error(ctx, loc, "invalid constant expression")
-                          (0, false)
-                        }
-                        Some(elem_ty) =>
-                          match type_size_align(ctx, elem_ty, loc) {
-                            None => (0, false)
-                            Some((elem_size, _)) =>
-                              ((idx * elem_size).to_int64(), true)
-                          }
-                      }
-                  }
-                _ => {
-                  add_sem_error(ctx, loc, "invalid constant expression")
-                  (0, false)
-                }
-              }
+        Addr => {
+          let (off, ok) = eval_addr_const_expr_value(ctx, expr, loc)
+          (off.to_int64(), ok)
+        }
+        Plus | Minus | BitNot | Not => {
+          let (v, ok) = eval_const_expr_value_i64(ctx, expr, loc)
+          if !ok {
+            return (0, false)
+          }
+          match op {
+            Plus => (v, true)
+            Minus => (0 - v, true)
+            BitNot => (v ^ (-1 : Int64), true)
+            Not => (if v == 0 { 1 } else { 0 }, true)
             _ => {
               add_sem_error(ctx, loc, "invalid constant expression")
               (0, false)
             }
           }
-        Plus => (v, true)
-        Minus => (0 - v, true)
-        BitNot => (v ^ (-1 : Int64), true)
-        Not => (if v == 0 { 1 } else { 0 }, true)
+        }
         _ => {
           add_sem_error(ctx, loc, "invalid constant expression")
           (0, false)
         }
       }
-    }
     Binary(op~, left~, right~, ..) => {
       let (lhs, ok_lhs) = eval_const_expr_value_i64(ctx, left, loc)
       let (rhs, ok_rhs) = eval_const_expr_value_i64(ctx, right, loc)
