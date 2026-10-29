@@ -15,11 +15,11 @@ fn tok_word(pp : @preproc.Preprocessor, word : String) -> @tokens.Token {
 }
 
 ///|
-fn tok_with_offset(tok : @tokens.Token, offset : Int) -> @tokens.Token {
+fn tok_with_offset(tok : @tokens.Token, offset : Int32) -> @tokens.Token {
   {
     kind: tok.kind,
     value: tok.value,
-    loc: { file_id: 0, line: 1, col: offset + 1, offset },
+    loc: { file_id: 0, line: 1, col: offset + 1, offset, },
     line_start: false,
     hidden: tok.hidden,
   }
@@ -179,7 +179,7 @@ test "preproc api include helpers" {
     @preproc.resolve_include_path(pp, "foo.h", false, include_next=false)
     is Some(_),
   )
-  let spec = @preproc.IncludeSpec::{ path: "foo.h", is_angle: false }
+  let spec = @preproc.IncludeSpec::{ path: "foo.h", is_angle: false, }
   @preproc.include_file(pp, spec, @source.dummy_loc(0), include_next=false)
   let tok = @preproc.next_input_token(pp)
   assert_eq(tok.kind, KwInt)
@@ -280,7 +280,7 @@ test "preproc api error helpers" {
   )
   let dir_path = @testutil.join_path(case_dir, "dir")
   @testutil.ensure_dir(dir_path)
-  let spec = @preproc.IncludeSpec::{ path: "dir", is_angle: false }
+  let spec = @preproc.IncludeSpec::{ path: "dir", is_angle: false, }
   pp.current_dir = case_dir
   @preproc.include_file(pp, spec, loc, include_next=false)
   let name_tok = tok_with_offset(tok_word(pp, "F"), 0)
@@ -820,7 +820,7 @@ test "preproc api expansion and line helpers" {
   let raw = @preproc.next_raw_token(pp)
   assert_eq(raw.kind, IntLit)
   @preproc.push_expanding(pp, obj_id)
-  pp.expanding_guards.push({ restore_len: 0 })
+  pp.expanding_guards.push({ restore_len: 0, })
   @preproc.release_expanding_guards(pp)
   assert_true(!@preproc.is_expanding(pp, obj_id))
   let line_tok = @preproc.make_int_literal_token(pp, 10, loc)
@@ -860,10 +860,10 @@ test "preproc api if parser wrappers" {
   let val = @preproc.pp_bool_value(true)
   assert_true(!@preproc.pp_is_zero(val))
   assert_true(
-    @preproc.pp_unsigned_result(val, { value: (1 : UInt64), is_unsigned: true }),
+    @preproc.pp_unsigned_result(val, { value: (1 : UInt64), is_unsigned: true, }),
   )
   assert_eq(
-    @preproc.pp_shift_count({ value: (65 : UInt64), is_unsigned: false }),
+    @preproc.pp_shift_count({ value: (65 : UInt64), is_unsigned: false, }),
     1,
   )
   let tok1 = @preproc.make_int_literal_token(pp, 1, loc)
@@ -1001,8 +1001,8 @@ test "preproc api if parser wrappers" {
   }
   let left = tok_word(pp, "a")
   let right = tok_word(pp, "b")
-  let left_loc = @source.SrcLoc::{ file_id: 0, line: 1, col: 1, offset: 0 }
-  let right_loc = @source.SrcLoc::{ file_id: 0, line: 1, col: 2, offset: 1 }
+  let left_loc = @source.SrcLoc::{ file_id: 0, line: 1, col: 1, offset: 0, }
+  let right_loc = @source.SrcLoc::{ file_id: 0, line: 1, col: 2, offset: 1, }
   let left_adj = @tokens.Token::{
     kind: left.kind,
     value: left.value,

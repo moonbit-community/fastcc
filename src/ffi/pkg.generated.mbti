@@ -6,7 +6,7 @@ pub fn bench_now_ns() -> UInt64
 
 pub fn read_stdin_bytes() -> Bytes
 
-pub fn run_command(Bytes) -> Int
+pub fn run_command(Bytes) -> Int32
 
 // Errors
 
@@ -15,4 +15,3 @@ pub fn run_command(Bytes) -> Int
 // Type aliases
 
 // Traits
-

@@ -14,7 +14,7 @@
 // License along with this library.  If not, see <https://www.gnu.org/licenses/>.
 
 ///|
-fn read_u32_le_at(bytes : Bytes, offset : Int) -> UInt {
+fn read_u32_le_at(bytes : Bytes, offset : Int32) -> UInt32 {
   let b0 = bytes[offset].to_uint()
   let b1 = bytes[offset + 1].to_uint() << 8
   let b2 = bytes[offset + 2].to_uint() << 16
@@ -23,7 +23,7 @@ fn read_u32_le_at(bytes : Bytes, offset : Int) -> UInt {
 }
 
 ///|
-fn read_padded_name(bytes : Bytes, offset : Int) -> String {
+fn read_padded_name(bytes : Bytes, offset : Int32) -> String {
   let mut end = 0
   while end < 16 && bytes[offset + end] != 0 {
     end = end + 1
@@ -52,14 +52,14 @@ fn parse_text(text : String) -> (@ast.TranslationUnit, @diag.DiagBag) {
 }
 
 ///|
-const LC_SEGMENT_64 : UInt = 0x19
+const LC_SEGMENT_64 : UInt32 = 0x19
 
 ///|
 fn macho_section_file_offset(
   bytes : Bytes,
   seg : String,
   sect : String,
-) -> Int? {
+) -> Int32? {
   let ncmds = read_u32_le_at(bytes, 16).reinterpret_as_int()
   let mut off = 32
   let mut i = 0
@@ -87,7 +87,7 @@ fn macho_section_file_offset(
 }
 
 ///|
-fn macho_text_section_offsets(bytes : Bytes) -> (Int, Int, Int) {
+fn macho_text_section_offsets(bytes : Bytes) -> (Int32, Int32, Int32) {
   let section_hdr = 32 + 72
   let text_off = read_u32_le_at(bytes, section_hdr + 48).reinterpret_as_int()
   let reloff = read_u32_le_at(bytes, section_hdr + 56).reinterpret_as_int()
@@ -96,11 +96,11 @@ fn macho_text_section_offsets(bytes : Bytes) -> (Int, Int, Int) {
 }
 
 ///|
-fn has_b_cond(bytes : Bytes, text_offset : Int, max_words : Int) -> Bool {
+fn has_b_cond(bytes : Bytes, text_offset : Int32, max_words : Int32) -> Bool {
   let mut i = 0
   while i < max_words {
     let w = read_u32_le_at(bytes, text_offset + (i << 2))
-    if (w & (0xff000010 : UInt)) == (0x54000000 : UInt) {
+    if (w & (0xff000010 : UInt32)) == (0x54000000 : UInt32) {
       return true
     }
     i = i + 1
@@ -109,11 +109,11 @@ fn has_b_cond(bytes : Bytes, text_offset : Int, max_words : Int) -> Bool {
 }
 
 ///|
-fn has_b_uncond(bytes : Bytes, text_offset : Int, max_words : Int) -> Bool {
+fn has_b_uncond(bytes : Bytes, text_offset : Int32, max_words : Int32) -> Bool {
   let mut i = 0
   while i < max_words {
     let w = read_u32_le_at(bytes, text_offset + (i << 2))
-    if (w & (0x7c000000 : UInt)) == (0x14000000 : UInt) {
+    if (w & (0x7c000000 : UInt32)) == (0x14000000 : UInt32) {
       return true
     }
     i = i + 1
@@ -122,12 +122,12 @@ fn has_b_uncond(bytes : Bytes, text_offset : Int, max_words : Int) -> Bool {
 }
 
 ///|
-fn has_ldr_w(bytes : Bytes, text_offset : Int, max_words : Int) -> Bool {
+fn has_ldr_w(bytes : Bytes, text_offset : Int32, max_words : Int32) -> Bool {
   let mut i = 0
   while i < max_words {
     let w = read_u32_le_at(bytes, text_offset + (i << 2))
-    let op = w & (0xffc00000 : UInt)
-    if op == (0xb9400000 : UInt) || op == (0xb9800000 : UInt) {
+    let op = w & (0xffc00000 : UInt32)
+    if op == (0xb9400000 : UInt32) || op == (0xb9800000 : UInt32) {
       return true
     }
     i = i + 1
@@ -138,10 +138,10 @@ fn has_ldr_w(bytes : Bytes, text_offset : Int, max_words : Int) -> Bool {
 ///|
 fn find_word_offset(
   bytes : Bytes,
-  text_offset : Int,
-  max_words : Int,
-  value : UInt,
-) -> Int? {
+  text_offset : Int32,
+  max_words : Int32,
+  value : UInt32,
+) -> Int32? {
   let mut i = 0
   while i < max_words {
     let off = text_offset + (i << 2)
@@ -165,16 +165,16 @@ test "codegen emits arm64 main return 0 object" {
   }
   assert_true(!@diag.has_errors(bag))
   let (text_offset, _, _) = macho_text_section_offsets(bytes)
-  assert_eq(read_u32_le_at(bytes, text_offset), (0xa9bf7bfd : UInt))
-  assert_eq(read_u32_le_at(bytes, text_offset + 4), (0x910003fd : UInt))
+  assert_eq(read_u32_le_at(bytes, text_offset), (0xa9bf7bfd : UInt32))
+  assert_eq(read_u32_le_at(bytes, text_offset + 4), (0x910003fd : UInt32))
   assert_true(
-    find_word_offset(bytes, text_offset, 64, (0x52800000 : UInt)) is Some(_),
+    find_word_offset(bytes, text_offset, 64, (0x52800000 : UInt32)) is Some(_),
   )
   assert_true(
-    find_word_offset(bytes, text_offset, 64, (0xa8c17bfd : UInt)) is Some(_),
+    find_word_offset(bytes, text_offset, 64, (0xa8c17bfd : UInt32)) is Some(_),
   )
   assert_true(
-    find_word_offset(bytes, text_offset, 64, (0xd65f03c0 : UInt)) is Some(_),
+    find_word_offset(bytes, text_offset, 64, (0xd65f03c0 : UInt32)) is Some(_),
   )
 }
 
@@ -241,7 +241,7 @@ test "codegen emits call relocation for return f()" {
   let (text_offset, reloff, nreloc) = macho_text_section_offsets(bytes)
   assert_eq(nreloc, 1)
   let call_off = match
-    find_word_offset(bytes, text_offset, 64, (0x94000000 : UInt)) {
+    find_word_offset(bytes, text_offset, 64, (0x94000000 : UInt32)) {
     None => fail("expected BL instruction")
     Some(v) => v
   }
@@ -249,7 +249,7 @@ test "codegen emits call relocation for return f()" {
     read_u32_le_at(bytes, reloff),
     (call_off - text_offset).reinterpret_as_uint(),
   )
-  assert_eq(read_u32_le_at(bytes, reloff + 4), (0x2d000001 : UInt))
+  assert_eq(read_u32_le_at(bytes, reloff + 4), (0x2d000001 : UInt32))
 }
 
 ///|
@@ -371,7 +371,7 @@ test "codegen emits .cstring and relocs for extern call with string literal" {
     None => fail("expected __TEXT,__cstring section")
     Some(v) => v
   }
-  assert_eq(read_u32_le_at(bytes, cstring_off), (0x00006968 : UInt))
+  assert_eq(read_u32_le_at(bytes, cstring_off), (0x00006968 : UInt32))
 }
 
 ///|
@@ -391,7 +391,7 @@ test "codegen stores embedded-nul strings in .rodata" {
     None => fail("expected __TEXT,__const section")
     Some(v) => v
   }
-  assert_eq(read_u32_le_at(bytes, rodata_off), (0x00620061 : UInt))
+  assert_eq(read_u32_le_at(bytes, rodata_off), (0x00620061 : UInt32))
 }
 
 ///|
@@ -427,12 +427,12 @@ test "codegen emits global load relocs for return x" {
   let scan_words = if max_words < 64 { max_words } else { 64 }
   assert_eq(nreloc, 2)
   let adrp_off = match
-    find_word_offset(bytes, text_offset, scan_words, (0x90000000 : UInt)) {
+    find_word_offset(bytes, text_offset, scan_words, (0x90000000 : UInt32)) {
     None => fail("expected ADRP instruction")
     Some(v) => v
   }
   let add_off = match
-    find_word_offset(bytes, text_offset, scan_words, (0x91000000 : UInt)) {
+    find_word_offset(bytes, text_offset, scan_words, (0x91000000 : UInt32)) {
     None => fail("expected ADD instruction")
     Some(v) => v
   }
@@ -441,12 +441,12 @@ test "codegen emits global load relocs for return x" {
     read_u32_le_at(bytes, reloff),
     (adrp_off - text_offset).reinterpret_as_uint(),
   )
-  assert_eq(read_u32_le_at(bytes, reloff + 4), (0x3d000001 : UInt))
+  assert_eq(read_u32_le_at(bytes, reloff + 4), (0x3d000001 : UInt32))
   assert_eq(
     read_u32_le_at(bytes, reloff + 8),
     (add_off - text_offset).reinterpret_as_uint(),
   )
-  assert_eq(read_u32_le_at(bytes, reloff + 12), (0x4c000001 : UInt))
+  assert_eq(read_u32_le_at(bytes, reloff + 12), (0x4c000001 : UInt32))
 }
 
 ///|
@@ -463,7 +463,7 @@ test "codegen emits .data for initialized global int" {
     None => fail("expected __DATA,__data section")
     Some(v) => v
   }
-  assert_eq(read_u32_le_at(bytes, data_off), (3 : UInt))
+  assert_eq(read_u32_le_at(bytes, data_off), (3 : UInt32))
 }
 
 ///|
@@ -480,7 +480,7 @@ test "codegen emits .data for extern initialized global int" {
     None => fail("expected __DATA,__data section")
     Some(v) => v
   }
-  assert_eq(read_u32_le_at(bytes, data_off), (3 : UInt))
+  assert_eq(read_u32_le_at(bytes, data_off), (3 : UInt32))
 }
 
 ///|
@@ -499,5 +499,5 @@ test "codegen keeps definition after extern redeclare" {
     None => fail("expected __DATA,__data section")
     Some(v) => v
   }
-  assert_eq(read_u32_le_at(bytes, data_off), (3 : UInt))
+  assert_eq(read_u32_le_at(bytes, data_off), (3 : UInt32))
 }

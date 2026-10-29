@@ -15,31 +15,31 @@
 
 ///|
 pub(all) struct StringInterner {
-  buckets : Array[Int]
-  next_by_id : Array[Int]
+  buckets : Array[Int32]
+  next_by_id : Array[Int32]
   strings : Array[String]
   views : Array[StringView]
-  hashes : Array[UInt]
+  hashes : Array[UInt32]
 }
 
 ///|
-let tok_hash_size : Int = 65536
+let tok_hash_size : Int32 = 65536
 
 ///|
-let tok_hash_mask : UInt = 65535
+let tok_hash_mask : UInt32 = 65535
 
 ///|
-pub let tok_hash_init : UInt = 1
+pub let tok_hash_init : UInt32 = 1
 
 ///|
-pub fn tok_hash_step(h : UInt, code : UInt16) -> UInt {
+pub fn tok_hash_step(h : UInt32, code : UInt16) -> UInt32 {
   h + (h << 5) + (h >> 27) + code.to_uint()
 }
 
 ///|
-fn tok_hash_view(view : StringView) -> UInt {
+fn tok_hash_view(view : StringView) -> UInt32 {
   let len = view.length()
-  let mut h : UInt = tok_hash_init
+  let mut h : UInt32 = tok_hash_init
   for i in 0..<len {
     let code = view.code_unit_at(i)
     h = tok_hash_step(h, code)
@@ -48,7 +48,7 @@ fn tok_hash_view(view : StringView) -> UInt {
 }
 
 ///|
-pub fn new_string_interner_with_capacity(capacity? : Int) -> StringInterner {
+pub fn new_string_interner_with_capacity(capacity? : Int32) -> StringInterner {
   match capacity {
     None =>
       {
@@ -75,7 +75,7 @@ pub fn new_string_interner_with_capacity(capacity? : Int) -> StringInterner {
 pub fn StringInterner::intern_view_with_id(
   self : StringInterner,
   view : StringView,
-) -> (String, Int) {
+) -> (String, Int32) {
   let hash = tok_hash_view(view)
   self.intern_view_with_id_hash(view, hash)
 }
@@ -84,8 +84,8 @@ pub fn StringInterner::intern_view_with_id(
 pub fn StringInterner::intern_view_with_id_hash(
   self : StringInterner,
   view : StringView,
-  hash : UInt,
-) -> (String, Int) {
+  hash : UInt32,
+) -> (String, Int32) {
   let bucket = (hash & tok_hash_mask).reinterpret_as_int()
   let len = view.length()
   let mut id = self.buckets[bucket]
@@ -119,7 +119,7 @@ pub fn StringInterner::intern_view(
 }
 
 ///|
-pub fn StringInterner::get(self : StringInterner, id : Int) -> String {
+pub fn StringInterner::get(self : StringInterner, id : Int32) -> String {
   if id <= 0 || id > self.strings.length() {
     return ""
   }

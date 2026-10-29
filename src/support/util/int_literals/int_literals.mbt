@@ -14,7 +14,7 @@
 // License along with this library.  If not, see <https://www.gnu.org/licenses/>.
 
 ///|
-pub fn int_literal_end(text : String) -> Int {
+pub fn int_literal_end(text : String) -> Int32 {
   let len = text.length()
   if len == 0 {
     return 0
@@ -37,7 +37,7 @@ pub fn int_literal_end(text : String) -> Int {
 }
 
 ///|
-pub fn int_literal_base(text : String) -> Int {
+pub fn int_literal_base(text : String) -> Int32 {
   let trimmed = @string_utils.slice_string(text, 0, int_literal_end(text))
   if trimmed.length() >= 2 && trimmed[0] == 48 {
     let next = trimmed[1]
@@ -53,7 +53,7 @@ pub fn int_literal_base(text : String) -> Int {
 }
 
 ///|
-pub fn int_literal_base_from(text : String, end : Int) -> Int {
+pub fn int_literal_base_from(text : String, end : Int32) -> Int32 {
   if end >= 2 && text[0] == 48 {
     let next = text[1]
     if next == 120 || next == 88 {
@@ -68,7 +68,7 @@ pub fn int_literal_base_from(text : String, end : Int) -> Int {
 }
 
 ///|
-pub fn parse_uint64_literal(text : String, base : Int) -> UInt64 {
+pub fn parse_uint64_literal(text : String, base : Int32) -> UInt64 {
   let mut value : UInt64 = 0
   let mut i = 0
   if base == 16 &&
@@ -102,8 +102,8 @@ pub fn parse_uint64_literal(text : String, base : Int) -> UInt64 {
 ///|
 pub fn parse_uint64_literal_prefix(
   text : String,
-  base : Int,
-  end : Int,
+  base : Int32,
+  end : Int32,
 ) -> UInt64 {
   let mut value : UInt64 = 0
   let mut i = 0
@@ -136,7 +136,7 @@ pub fn parse_uint64_literal_prefix(
 }
 
 ///|
-pub fn parse_int_suffix(suffix : String) -> (Int, Bool) {
+pub fn parse_int_suffix(suffix : String) -> (Int32, Bool) {
   let mut long_count = 0
   let mut unsigned = false
   for code in suffix.to_lower() {
@@ -153,7 +153,7 @@ pub fn parse_int_suffix(suffix : String) -> (Int, Bool) {
 }
 
 ///|
-pub fn parse_int_suffix_range(text : String, start : Int) -> (Int, Bool) {
+pub fn parse_int_suffix_range(text : String, start : Int32) -> (Int32, Bool) {
   let mut long_count = 0
   let mut unsigned = false
   let len = text.length()
@@ -174,7 +174,11 @@ pub fn parse_int_suffix_range(text : String, start : Int) -> (Int, Bool) {
 }
 
 ///|
-fn scan_digits(text : String, start : Int, accept : (UInt16) -> Bool) -> Int {
+fn scan_digits(
+  text : String,
+  start : Int32,
+  accept : (UInt16) -> Bool,
+) -> Int32 {
   let mut i = start
   while i < text.length() {
     if !accept(text[i]) {
@@ -208,7 +212,7 @@ fn is_hex_digit_code(code : UInt16) -> Bool {
 }
 
 ///|
-fn digit_value(code : UInt16) -> Int? {
+fn digit_value(code : UInt16) -> Int32? {
   if is_dec_digit_code(code) {
     Some(code.to_int() - 48)
   } else if code >= 65 && code <= 70 {

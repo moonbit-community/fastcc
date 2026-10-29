@@ -15,12 +15,12 @@
 
 ///|
 pub(all) struct Lexer {
-  file_id : Int
+  file_id : Int32
   text : String
-  text_len : Int
-  mut index : Int
-  mut line : Int
-  mut col : Int
+  text_len : Int32
+  mut index : Int32
+  mut line : Int32
+  mut col : Int32
   mut line_start : Bool
   diags : @diag.DiagBag
   interner : @intern.StringInterner
@@ -53,7 +53,7 @@ pub fn new_lexer(
 
 ///|
 pub fn lexer_loc(lex : Lexer) -> @source.SrcLoc {
-  { file_id: lex.file_id, line: lex.line, col: lex.col, offset: lex.index }
+  { file_id: lex.file_id, line: lex.line, col: lex.col, offset: lex.index, }
 }
 
 ///|
@@ -114,11 +114,11 @@ pub fn make_token(
   kind : @tokens.TokenKind,
   loc : @source.SrcLoc,
   line_start : Bool,
-  id? : Int = 0,
-  lexeme_id? : Int = 0,
+  id~ : Int32 = 0,
+  lexeme_id~ : Int32 = 0,
 ) -> @tokens.Token {
   let value = @tokens.token_value_from_parts(id, lexeme_id)
-  { kind, value, loc, line_start, hidden: @tokens.empty_hidden }
+  { kind, value, loc, line_start, hidden: @tokens.empty_hidden, }
 }
 
 ///|
@@ -130,7 +130,7 @@ pub fn peek_char(lex : Lexer) -> UInt16? {
 }
 
 ///|
-pub fn peek_char_offset(lex : Lexer, offset : Int) -> UInt16? {
+pub fn peek_char_offset(lex : Lexer, offset : Int32) -> UInt16? {
   let idx = lex.index + offset
   if idx >= lex.text_len {
     return None
@@ -340,7 +340,7 @@ pub fn is_bin_digit(code : UInt16) -> Bool {
 ///|
 
 ///|
-pub fn slice_to_view(text : String, start : Int, end : Int) -> StringView {
+pub fn slice_to_view(text : String, start : Int32, end : Int32) -> StringView {
   text.view(start_offset=start, end_offset=end)
 }
 
@@ -353,7 +353,7 @@ pub fn lex_ident(
   let start = lex.index
   let text = lex.text
   let len = lex.text_len
-  let mut hash : UInt = @intern.tok_hash_init
+  let mut hash : UInt32 = @intern.tok_hash_init
   let mut idx = start + 1
   hash = @intern.tok_hash_step(hash, text[start])
   while idx < len && is_ident_continue(text[idx]) {

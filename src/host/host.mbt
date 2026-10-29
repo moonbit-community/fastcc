@@ -1,8 +1,8 @@
 ///|
 pub(open) trait Host {
-  include_dir(Self) -> String
-  path_exists(Self, path : String) -> Bool
-  read_file_to_string(Self, path : String) -> String raise
-  write_bytes_to_file(Self, path : String, bytes : Bytes) -> Unit raise
-  remove_file(Self, path : String) -> Unit raise
+  fn include_dir(Self) -> String
+  fn path_exists(Self, path : String) -> Bool
+  fn read_file_to_string(Self, path : String) -> String raise
+  fn write_bytes_to_file(Self, path : String, bytes : Bytes) -> Unit raise
+  fn remove_file(Self, path : String) -> Unit raise
 }

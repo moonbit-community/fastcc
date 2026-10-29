@@ -1,10 +1,14 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "hackwaly/fastcc/support/source/source_core"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
 pub fn add_file(SourceMap, String, String) -> SourceFile
 
-pub fn dummy_loc(Int) -> SrcLoc
+pub fn dummy_loc(Int32) -> SrcLoc
 
 pub fn new_source_map() -> SourceMap
 
@@ -12,7 +16,7 @@ pub fn new_source_map() -> SourceMap
 
 // Types and methods
 pub(all) struct SourceFile {
-  id : Int
+  id : Int32
   path : String
   text : String
 }
@@ -22,16 +26,12 @@ pub(all) struct SourceMap {
 }
 
 pub(all) struct SrcLoc {
-  file_id : Int
-  line : Int
-  col : Int
-  offset : Int
-}
-pub impl Eq for SrcLoc
-pub impl Show for SrcLoc
-pub impl ToJson for SrcLoc
+  file_id : Int32
+  line : Int32
+  col : Int32
+  offset : Int32
+} derive(Eq, Show, ToJson, @debug.Debug)
 
 // Type aliases
 
 // Traits
-

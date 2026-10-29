@@ -42,8 +42,8 @@ pub fn make_token(
   kind : @tokens.TokenKind,
   loc : @source.SrcLoc,
   line_start : Bool,
-  id? : Int = 0,
-  lexeme_id? : Int = 0,
+  id~ : Int32 = 0,
+  lexeme_id~ : Int32 = 0,
 ) -> @tokens.Token {
   @lexer_core.make_token(kind, loc, line_start, id~, lexeme_id~)
 }
@@ -54,7 +54,7 @@ pub fn peek_char(lex : Lexer) -> UInt16? {
 }
 
 ///|
-pub fn peek_char_offset(lex : Lexer, offset : Int) -> UInt16? {
+pub fn peek_char_offset(lex : Lexer, offset : Int32) -> UInt16? {
   @lexer_core.peek_char_offset(lex, offset)
 }
 
@@ -161,7 +161,7 @@ pub fn is_ws_no_newline(code : UInt16) -> Bool {
 }
 
 ///|
-pub fn slice_to_view(text : String, start : Int, end : Int) -> StringView {
+pub fn slice_to_view(text : String, start : Int32, end : Int32) -> StringView {
   @lexer_core.slice_to_view(text, start, end)
 }
 

@@ -1,188 +1,188 @@
 ///|
-const VT_BTYPE : Int = 0x000f
+const VT_BTYPE : Int32 = 0x000f
 
 ///|
-const VT_VOID : Int = 0
+const VT_VOID : Int32 = 0
 
 ///|
-const VT_BYTE : Int = 1
+const VT_BYTE : Int32 = 1
 
 ///|
-const VT_SHORT : Int = 2
+const VT_SHORT : Int32 = 2
 
 ///|
-const VT_INT : Int = 3
+const VT_INT : Int32 = 3
 
 ///|
-const VT_LLONG : Int = 4
+const VT_LLONG : Int32 = 4
 
 ///|
-const VT_PTR : Int = 5
+const VT_PTR : Int32 = 5
 
 ///|
-const VT_FUNC : Int = 6
+const VT_FUNC : Int32 = 6
 
 ///|
-const VT_STRUCT : Int = 7
+const VT_STRUCT : Int32 = 7
 
 ///|
-const VT_FLOAT : Int = 8
+const VT_FLOAT : Int32 = 8
 
 ///|
-const VT_DOUBLE : Int = 9
+const VT_DOUBLE : Int32 = 9
 
 ///|
-const VT_LDOUBLE : Int = 10
+const VT_LDOUBLE : Int32 = 10
 
 ///|
-const VT_BOOL : Int = 11
+const VT_BOOL : Int32 = 11
 
 ///|
-const VT_UNSIGNED : Int = 0x0010
+const VT_UNSIGNED : Int32 = 0x0010
 
 ///|
-const VT_CONST : Int = 0x0030
+const VT_CONST : Int32 = 0x0030
 
 ///|
-const VT_LLOCAL : Int = 0x0031
+const VT_LLOCAL : Int32 = 0x0031
 
 ///|
-const VT_LOCAL : Int = 0x0032
+const VT_LOCAL : Int32 = 0x0032
 
 ///|
-const VT_CMP : Int = 0x0033
+const VT_CMP : Int32 = 0x0033
 
 ///|
-const VT_JMP : Int = 0x0034
+const VT_JMP : Int32 = 0x0034
 
 ///|
-const VT_JMPI : Int = 0x0035
+const VT_JMPI : Int32 = 0x0035
 
 ///|
-const VT_VALMASK : Int = 0x003f
+const VT_VALMASK : Int32 = 0x003f
 
 ///|
-const VT_LVAL : Int = 0x0100
+const VT_LVAL : Int32 = 0x0100
 
 ///|
-const VT_SYM : Int = 0x0200
+const VT_SYM : Int32 = 0x0200
 
 ///|
-pub const TOK_LAND : Int = 0x90
+pub const TOK_LAND : Int32 = 0x90
 
 ///|
-pub const TOK_LOR : Int = 0x91
+pub const TOK_LOR : Int32 = 0x91
 
 ///|
-pub const TOK_ULT : Int = 0x92
+pub const TOK_ULT : Int32 = 0x92
 
 ///|
-pub const TOK_UGE : Int = 0x93
+pub const TOK_UGE : Int32 = 0x93
 
 ///|
-pub const TOK_EQ : Int = 0x94
+pub const TOK_EQ : Int32 = 0x94
 
 ///|
-pub const TOK_NE : Int = 0x95
+pub const TOK_NE : Int32 = 0x95
 
 ///|
-pub const TOK_ULE : Int = 0x96
+pub const TOK_ULE : Int32 = 0x96
 
 ///|
-pub const TOK_UGT : Int = 0x97
+pub const TOK_UGT : Int32 = 0x97
 
 ///|
-pub const TOK_LT : Int = 0x9c
+pub const TOK_LT : Int32 = 0x9c
 
 ///|
-pub const TOK_GE : Int = 0x9d
+pub const TOK_GE : Int32 = 0x9d
 
 ///|
-pub const TOK_LE : Int = 0x9e
+pub const TOK_LE : Int32 = 0x9e
 
 ///|
-pub const TOK_GT : Int = 0x9f
+pub const TOK_GT : Int32 = 0x9f
 
 ///|
-pub const TOK_UDIV : Int = 0x83
+pub const TOK_UDIV : Int32 = 0x83
 
 ///|
-pub const TOK_UMOD : Int = 0x84
+pub const TOK_UMOD : Int32 = 0x84
 
 ///|
-pub const TOK_PDIV : Int = 0x85
+pub const TOK_PDIV : Int32 = 0x85
 
 ///|
-pub const TOK_SHL : Int = 0x3c
+pub const TOK_SHL : Int32 = 0x3c
 
 ///|
-pub const TOK_SAR : Int = 0x3e
+pub const TOK_SAR : Int32 = 0x3e
 
 ///|
-pub const TOK_SHR : Int = 0x8b
+pub const TOK_SHR : Int32 = 0x8b
 
 ///|
-pub const TOK_ADD : Int = 0x2b
+pub const TOK_ADD : Int32 = 0x2b
 
 ///|
-pub const TOK_SUB : Int = 0x2d
+pub const TOK_SUB : Int32 = 0x2d
 
 ///|
-pub const TOK_MUL : Int = 0x2a
+pub const TOK_MUL : Int32 = 0x2a
 
 ///|
-pub const TOK_DIV : Int = 0x2f
+pub const TOK_DIV : Int32 = 0x2f
 
 ///|
-pub const TOK_MOD : Int = 0x25
+pub const TOK_MOD : Int32 = 0x25
 
 ///|
-pub const TOK_XOR : Int = 0x5e
+pub const TOK_XOR : Int32 = 0x5e
 
 ///|
-pub const TOK_AND : Int = 0x26
+pub const TOK_AND : Int32 = 0x26
 
 ///|
-pub const TOK_OR : Int = 0x7c
+pub const TOK_OR : Int32 = 0x7c
 
 ///|
-const RC_INT : Int = 1 << 0
+const RC_INT : Int32 = 1 << 0
 
 ///|
-const RC_FLOAT : Int = 1 << 1
+const RC_FLOAT : Int32 = 1 << 1
 
 ///|
-const RC_R30 : Int = 1 << 21
+const RC_R30 : Int32 = 1 << 21
 
 ///|
-pub const RC_IRET : Int = 1 << 2
+pub const RC_IRET : Int32 = 1 << 2
 
 ///|
-pub const RC_FRET : Int = 1 << 22
+pub const RC_FRET : Int32 = 1 << 22
 
 ///|
 priv struct SValue {
-  type_t : Int
-  mut r : Int
-  r2 : Int
-  mut jtrue : Int
-  mut jfalse : Int
+  type_t : Int32
+  mut r : Int32
+  r2 : Int32
+  mut jtrue : Int32
+  mut jfalse : Int32
   c_i : Int64
   sym : Sym?
-  mut cmp_op : Int
-  mut cmp_r : Int
+  mut cmp_op : Int32
+  mut cmp_r : Int32
 }
 
 ///|
 let vstack : Array[SValue] = []
 
 ///|
-fn vtop_index() -> Int {
+fn vtop_index() -> Int32 {
   vstack.length() - 1
 }
 
 ///|
-fn vpushi(value : Int) -> Unit {
+fn vpushi(value : Int32) -> Unit {
   vstack.push({
     type_t: VT_INT,
     r: VT_CONST,
@@ -234,7 +234,7 @@ fn vswap() -> Unit {
 }
 
 ///|
-fn vset_VT_CMP(op : Int) -> Unit {
+fn vset_VT_CMP(op : Int32) -> Unit {
   let idx = vtop_index()
   if idx >= 0 {
     vstack[idx].r = VT_CMP
@@ -245,7 +245,7 @@ fn vset_VT_CMP(op : Int) -> Unit {
 }
 
 ///|
-fn gv(emitter : Arm64Emitter, rc : Int) -> Int raise {
+fn gv(emitter : Arm64Emitter, rc : Int32) -> Int32 raise {
   let idx = vtop_index()
   if idx < 0 {
     fail("gv empty")
@@ -263,7 +263,7 @@ fn gv(emitter : Arm64Emitter, rc : Int) -> Int raise {
 }
 
 ///|
-fn get_reg(rc : Int) -> Int raise {
+fn get_reg(rc : Int32) -> Int32 raise {
   let mut r = 0
   while r < NB_REGS {
     if (reg_classes[r] & rc) != 0 {
@@ -285,7 +285,7 @@ fn get_reg(rc : Int) -> Int raise {
 }
 
 ///|
-fn gv2(emitter : Arm64Emitter, rc1 : Int, rc2 : Int) -> Unit raise {
+fn gv2(emitter : Arm64Emitter, rc1 : Int32, rc2 : Int32) -> Unit raise {
   let idx = vtop_index()
   if idx < 1 {
     fail("gv2 stack underflow")
@@ -312,7 +312,7 @@ fn gv2(emitter : Arm64Emitter, rc1 : Int, rc2 : Int) -> Unit raise {
 }
 
 ///|
-fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
+fn arm64_gen_opil(emitter : Arm64Emitter, op : Int32, l : Int32) -> Unit raise {
   let mut rev = true
   if vtop_index() >= 0 {
     if arm64_iconst(vtop_index()) is Some(_) {
@@ -354,7 +354,7 @@ fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
     TOK_MOD => {
       emit32(
         emitter,
-        (0x1ac00c00 : Int)
+        (0x1ac00c00 : Int32)
         .lor(l << 31)
         .lor(30)
         .lor(a << 5)
@@ -363,7 +363,7 @@ fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
       )
       emit32(
         emitter,
-        (0x1b008000 : Int)
+        (0x1b008000 : Int32)
         .lor(l << 31)
         .lor(x1)
         .lor(30 << 5)
@@ -375,7 +375,7 @@ fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
     TOK_AND =>
       emit32(
         emitter,
-        (0x0a000000 : Int)
+        (0x0a000000 : Int32)
         .lor(l << 31)
         .lor(x1)
         .lor(a << 5)
@@ -385,7 +385,7 @@ fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
     TOK_MUL =>
       emit32(
         emitter,
-        (0x1b007c00 : Int)
+        (0x1b007c00 : Int32)
         .lor(l << 31)
         .lor(x1)
         .lor(a << 5)
@@ -395,7 +395,7 @@ fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
     TOK_ADD =>
       emit32(
         emitter,
-        (0x0b000000 : Int)
+        (0x0b000000 : Int32)
         .lor(l << 31)
         .lor(x1)
         .lor(a << 5)
@@ -405,7 +405,7 @@ fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
     TOK_SUB =>
       emit32(
         emitter,
-        (0x4b000000 : Int)
+        (0x4b000000 : Int32)
         .lor(l << 31)
         .lor(x1)
         .lor(a << 5)
@@ -415,7 +415,7 @@ fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
     TOK_DIV =>
       emit32(
         emitter,
-        (0x1ac00c00 : Int)
+        (0x1ac00c00 : Int32)
         .lor(l << 31)
         .lor(x1)
         .lor(a << 5)
@@ -425,7 +425,7 @@ fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
     TOK_PDIV =>
       emit32(
         emitter,
-        (0x1ac00c00 : Int)
+        (0x1ac00c00 : Int32)
         .lor(l << 31)
         .lor(x1)
         .lor(a << 5)
@@ -435,7 +435,7 @@ fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
     TOK_XOR =>
       emit32(
         emitter,
-        (0x4a000000 : Int)
+        (0x4a000000 : Int32)
         .lor(l << 31)
         .lor(x1)
         .lor(a << 5)
@@ -445,7 +445,7 @@ fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
     TOK_OR =>
       emit32(
         emitter,
-        (0x2a000000 : Int)
+        (0x2a000000 : Int32)
         .lor(l << 31)
         .lor(x1)
         .lor(a << 5)
@@ -455,73 +455,73 @@ fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
     TOK_EQ => {
       emit32(
         emitter,
-        (0x6b00001f : Int)
+        (0x6b00001f : Int32)
         .lor(l << 31)
         .lor(a << 5)
         .lor(b << 16)
         .reinterpret_as_uint(),
       )
-      emit32(emitter, (0x1a9f17e0 : Int).lor(x1).reinterpret_as_uint())
+      emit32(emitter, (0x1a9f17e0 : Int32).lor(x1).reinterpret_as_uint())
     }
     TOK_GE => {
       emit32(
         emitter,
-        (0x6b00001f : Int)
+        (0x6b00001f : Int32)
         .lor(l << 31)
         .lor(a << 5)
         .lor(b << 16)
         .reinterpret_as_uint(),
       )
-      emit32(emitter, (0x1a9fb7e0 : Int).lor(x1).reinterpret_as_uint())
+      emit32(emitter, (0x1a9fb7e0 : Int32).lor(x1).reinterpret_as_uint())
     }
     TOK_GT => {
       emit32(
         emitter,
-        (0x6b00001f : Int)
+        (0x6b00001f : Int32)
         .lor(l << 31)
         .lor(a << 5)
         .lor(b << 16)
         .reinterpret_as_uint(),
       )
-      emit32(emitter, (0x1a9fd7e0 : Int).lor(x1).reinterpret_as_uint())
+      emit32(emitter, (0x1a9fd7e0 : Int32).lor(x1).reinterpret_as_uint())
     }
     TOK_LE => {
       emit32(
         emitter,
-        (0x6b00001f : Int)
+        (0x6b00001f : Int32)
         .lor(l << 31)
         .lor(a << 5)
         .lor(b << 16)
         .reinterpret_as_uint(),
       )
-      emit32(emitter, (0x1a9fc7e0 : Int).lor(x1).reinterpret_as_uint())
+      emit32(emitter, (0x1a9fc7e0 : Int32).lor(x1).reinterpret_as_uint())
     }
     TOK_LT => {
       emit32(
         emitter,
-        (0x6b00001f : Int)
+        (0x6b00001f : Int32)
         .lor(l << 31)
         .lor(a << 5)
         .lor(b << 16)
         .reinterpret_as_uint(),
       )
-      emit32(emitter, (0x1a9fa7e0 : Int).lor(x1).reinterpret_as_uint())
+      emit32(emitter, (0x1a9fa7e0 : Int32).lor(x1).reinterpret_as_uint())
     }
     TOK_NE => {
       emit32(
         emitter,
-        (0x6b00001f : Int)
+        (0x6b00001f : Int32)
         .lor(l << 31)
         .lor(a << 5)
         .lor(b << 16)
         .reinterpret_as_uint(),
       )
-      emit32(emitter, (0x1a9f07e0 : Int).lor(x1).reinterpret_as_uint())
+      emit32(emitter, (0x1a9f07e0 : Int32).lor(x1).reinterpret_as_uint())
     }
     TOK_SAR =>
       emit32(
         emitter,
-        (0x1ac02800 : Int)
+        (0x1ac02800 : Int32)
         .lor(l << 31)
         .lor(x1)
         .lor(a << 5)
@@ -531,7 +531,7 @@ fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
     TOK_SHL =>
       emit32(
         emitter,
-        (0x1ac02000 : Int)
+        (0x1ac02000 : Int32)
         .lor(l << 31)
         .lor(x1)
         .lor(a << 5)
@@ -541,7 +541,7 @@ fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
     TOK_SHR =>
       emit32(
         emitter,
-        (0x1ac02400 : Int)
+        (0x1ac02400 : Int32)
         .lor(l << 31)
         .lor(x1)
         .lor(a << 5)
@@ -551,7 +551,7 @@ fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
     TOK_UDIV =>
       emit32(
         emitter,
-        (0x1ac00800 : Int)
+        (0x1ac00800 : Int32)
         .lor(l << 31)
         .lor(x1)
         .lor(a << 5)
@@ -561,51 +561,51 @@ fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
     TOK_UGE => {
       emit32(
         emitter,
-        (0x6b00001f : Int)
+        (0x6b00001f : Int32)
         .lor(l << 31)
         .lor(a << 5)
         .lor(b << 16)
         .reinterpret_as_uint(),
       )
-      emit32(emitter, (0x1a9f37e0 : Int).lor(x1).reinterpret_as_uint())
+      emit32(emitter, (0x1a9f37e0 : Int32).lor(x1).reinterpret_as_uint())
     }
     TOK_UGT => {
       emit32(
         emitter,
-        (0x6b00001f : Int)
+        (0x6b00001f : Int32)
         .lor(l << 31)
         .lor(a << 5)
         .lor(b << 16)
         .reinterpret_as_uint(),
       )
-      emit32(emitter, (0x1a9f97e0 : Int).lor(x1).reinterpret_as_uint())
+      emit32(emitter, (0x1a9f97e0 : Int32).lor(x1).reinterpret_as_uint())
     }
     TOK_ULT => {
       emit32(
         emitter,
-        (0x6b00001f : Int)
+        (0x6b00001f : Int32)
         .lor(l << 31)
         .lor(a << 5)
         .lor(b << 16)
         .reinterpret_as_uint(),
       )
-      emit32(emitter, (0x1a9f27e0 : Int).lor(x1).reinterpret_as_uint())
+      emit32(emitter, (0x1a9f27e0 : Int32).lor(x1).reinterpret_as_uint())
     }
     TOK_ULE => {
       emit32(
         emitter,
-        (0x6b00001f : Int)
+        (0x6b00001f : Int32)
         .lor(l << 31)
         .lor(a << 5)
         .lor(b << 16)
         .reinterpret_as_uint(),
       )
-      emit32(emitter, (0x1a9f87e0 : Int).lor(x1).reinterpret_as_uint())
+      emit32(emitter, (0x1a9f87e0 : Int32).lor(x1).reinterpret_as_uint())
     }
     TOK_UMOD => {
       emit32(
         emitter,
-        (0x1ac00800 : Int)
+        (0x1ac00800 : Int32)
         .lor(l << 31)
         .lor(30)
         .lor(a << 5)
@@ -614,7 +614,7 @@ fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
       )
       emit32(
         emitter,
-        (0x1b008000 : Int)
+        (0x1b008000 : Int32)
         .lor(l << 31)
         .lor(x1)
         .lor(30 << 5)
@@ -628,7 +628,7 @@ fn arm64_gen_opil(emitter : Arm64Emitter, op : Int, l : Int) -> Unit raise {
 }
 
 ///|
-fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
+fn load(emitter : Arm64Emitter, r : Int32, sv_index : Int32) -> Unit raise {
   let sv = vstack[sv_index]
   let svtt = sv.type_t
   let svr = sv.r
@@ -643,7 +643,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
         emitter,
         arm64_type_size(svtt),
         fltr(r).reinterpret_as_uint(),
-        (29 : UInt),
+        (29 : UInt32),
         svcul,
       )
     } else {
@@ -652,7 +652,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
         (svtt & VT_UNSIGNED) == 0,
         arm64_type_size(svtt),
         intr(r).reinterpret_as_uint(),
-        (29 : UInt),
+        (29 : UInt32),
         svcul,
       )
     }
@@ -662,9 +662,9 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
     let mut i = sv.c_i.reinterpret_as_uint64()
     if sv.sym is Some(sym) {
       let off = arm64_check_offset(false, arm64_type_size(svtt), i)
-      arm64_sym(emitter, (30 : UInt), sym, off)
+      arm64_sym(emitter, (30 : UInt32), sym, off)
     } else {
-      arm64_movimm(emitter, (30 : UInt), i)
+      arm64_movimm(emitter, (30 : UInt32), i)
       i = 0
     }
     if is_freg(r) {
@@ -672,7 +672,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
         emitter,
         arm64_type_size(svtt),
         fltr(r).reinterpret_as_uint(),
-        (30 : UInt),
+        (30 : UInt32),
         arm64_check_offset(true, arm64_type_size(svtt), i),
       )
     } else {
@@ -681,7 +681,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
         (svtt & VT_UNSIGNED) == 0,
         arm64_type_size(svtt),
         intr(r).reinterpret_as_uint(),
-        (30 : UInt),
+        (30 : UInt32),
         arm64_check_offset(true, arm64_type_size(svtt), i),
       )
     }
@@ -713,7 +713,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
   if svr == (VT_CONST | VT_LVAL | VT_SYM) {
     let off = arm64_check_offset(false, arm64_type_size(svtt), svcul)
     match sv.sym {
-      Some(sym) => arm64_sym(emitter, (30 : UInt), sym, off)
+      Some(sym) => arm64_sym(emitter, (30 : UInt32), sym, off)
       None => fail("missing symbol for VT_SYM")
     }
     if is_freg(r) {
@@ -721,7 +721,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
         emitter,
         arm64_type_size(svtt),
         fltr(r).reinterpret_as_uint(),
-        (30 : UInt),
+        (30 : UInt32),
         arm64_check_offset(true, arm64_type_size(svtt), svcul),
       )
     } else {
@@ -730,7 +730,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
         (svtt & VT_UNSIGNED) == 0,
         arm64_type_size(svtt),
         intr(r).reinterpret_as_uint(),
-        (30 : UInt),
+        (30 : UInt32),
         arm64_check_offset(true, arm64_type_size(svtt), svcul),
       )
     }
@@ -759,14 +759,14 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
       if svtt == VT_LDOUBLE {
         emit32(
           emitter,
-          (0x4ea01c00 : Int)
+          (0x4ea01c00 : Int32)
           .lor(fltr(r) | (fltr(svr) << 5))
           .reinterpret_as_uint(),
         )
       } else {
         emit32(
           emitter,
-          (0x1e604000 : Int)
+          (0x1e604000 : Int32)
           .lor(fltr(r) | (fltr(svr) << 5))
           .reinterpret_as_uint(),
         )
@@ -774,7 +774,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
     } else if !is_freg(r) && !is_freg(svr) {
       emit32(
         emitter,
-        (0xaa0003e0 : Int)
+        (0xaa0003e0 : Int32)
         .lor(intr(r))
         .lor(intr(svr) << 16)
         .reinterpret_as_uint(),
@@ -789,16 +789,16 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
     if neg < (0x1000 : UInt64) {
       emit32(
         emitter,
-        (0xd10003a0 : Int)
+        (0xd10003a0 : Int32)
         .lor(intr(r))
         .lor(neg.reinterpret_as_int64().to_int() << 10)
         .reinterpret_as_uint(),
       )
     } else {
-      arm64_movimm(emitter, (30 : UInt), neg)
+      arm64_movimm(emitter, (30 : UInt32), neg)
       emit32(
         emitter,
-        (0xcb0003a0 : Int).lor(intr(r)).lor(30 << 16).reinterpret_as_uint(),
+        (0xcb0003a0 : Int32).lor(intr(r)).lor(30 << 16).reinterpret_as_uint(),
       )
     }
     return
@@ -806,19 +806,19 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
   if svr == VT_JMP || svr == VT_JMPI {
     let t = if svr == VT_JMPI { 1 } else { 0 }
     arm64_movimm(emitter, intr(r).reinterpret_as_uint(), t.to_uint64())
-    emit32(emitter, (0x14000002 : UInt))
+    emit32(emitter, (0x14000002 : UInt32))
     gsym(emitter, svcul.reinterpret_as_int64().to_int())
     arm64_movimm(emitter, intr(r).reinterpret_as_uint(), (1 - t).to_uint64())
     return
   }
   if svr == (VT_LLOCAL | VT_LVAL) {
-    arm64_ldrx(emitter, false, 3, (30 : UInt), (29 : UInt), svcul)
+    arm64_ldrx(emitter, false, 3, (30 : UInt32), (29 : UInt32), svcul)
     if is_freg(r) {
       arm64_ldrv(
         emitter,
         arm64_type_size(svtt),
         fltr(r).reinterpret_as_uint(),
-        (30 : UInt),
+        (30 : UInt32),
         0,
       )
     } else {
@@ -827,7 +827,7 @@ fn load(emitter : Arm64Emitter, r : Int, sv_index : Int) -> Unit raise {
         (svtt & VT_UNSIGNED) == 0,
         arm64_type_size(svtt),
         intr(r).reinterpret_as_uint(),
-        (30 : UInt),
+        (30 : UInt32),
         0,
       )
     }

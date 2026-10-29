@@ -6,33 +6,32 @@ pub fn new_section(String) -> Section
 
 pub fn reloc_addend(Reloc) -> Int64
 
-pub fn section_size_bytes(Section) -> Int
+pub fn section_size_bytes(Section) -> Int32
 
-pub fn section_word_len(Section) -> Int
+pub fn section_word_len(Section) -> Int32
 
 // Errors
 
 // Types and methods
 pub(all) struct Reloc {
-  offset : Int
-  kind : Int
+  offset : Int32
+  kind : Int32
   sym : Sym
   addend : Int64
 }
 
 pub(all) struct Section {
   name : String
-  data : Array[UInt]
+  data : Array[UInt32]
   relocs : Array[Reloc]
-  align : Int
-  size_bytes : Int
+  align : Int32
+  size_bytes : Int32
 }
 
 pub(all) struct Sym {
-  id : Int
+  id : Int32
 }
 
 // Type aliases
 
 // Traits
-

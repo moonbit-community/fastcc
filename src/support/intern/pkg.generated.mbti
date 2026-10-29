@@ -6,11 +6,11 @@ import {
 }
 
 // Values
-pub fn new_string_interner_with_capacity(capacity? : Int) -> @intern_core.StringInterner
+pub fn new_string_interner_with_capacity(capacity? : Int32) -> @intern_core.StringInterner
 
-pub let tok_hash_init : UInt
+pub let tok_hash_init : UInt32
 
-pub fn tok_hash_step(UInt, UInt16) -> UInt
+pub fn tok_hash_step(UInt32, UInt16) -> UInt32
 
 // Errors
 
@@ -20,4 +20,3 @@ pub fn tok_hash_step(UInt, UInt16) -> UInt
 pub using @intern_core {type StringInterner}
 
 // Traits
-

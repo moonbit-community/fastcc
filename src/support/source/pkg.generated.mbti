@@ -8,7 +8,7 @@ import {
 // Values
 pub fn add_file(@source_core.SourceMap, String, String) -> @source_core.SourceFile
 
-pub fn dummy_loc(Int) -> @source_core.SrcLoc
+pub fn dummy_loc(Int32) -> @source_core.SrcLoc
 
 pub fn new_source_map() -> @source_core.SourceMap
 
@@ -24,4 +24,3 @@ pub using @source_core {type SourceMap}
 pub using @source_core {type SrcLoc}
 
 // Traits
-

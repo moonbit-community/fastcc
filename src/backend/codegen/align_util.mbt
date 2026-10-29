@@ -14,7 +14,7 @@
 // License along with this library.  If not, see <https://www.gnu.org/licenses/>.
 
 ///|
-fn align_up(value : Int, align : Int) -> Int {
+fn align_up(value : Int32, align : Int32) -> Int32 {
   if align <= 0 {
     value
   } else {

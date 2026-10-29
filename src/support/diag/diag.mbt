@@ -35,7 +35,7 @@ pub fn has_errors(bag : DiagBag) -> Bool {
 }
 
 ///|
-pub fn error_count(bag : DiagBag) -> Int {
+pub fn error_count(bag : DiagBag) -> Int32 {
   @diag_core.error_count(bag)
 }
 

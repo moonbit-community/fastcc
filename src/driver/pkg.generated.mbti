@@ -11,7 +11,7 @@ pub fn bench_now_ns() -> UInt64
 
 pub fn parse_cli_args(host~ : &@host.Host, Array[String]) -> @cli.CliParse
 
-pub fn run_args(host~ : &@host.Host, Array[String]) -> Int
+pub fn run_args(host~ : &@host.Host, Array[String]) -> Int32
 
 pub fn run_main(&@host.Host) -> Unit
 
@@ -27,4 +27,3 @@ pub using @cli {type CliMacroAction}
 pub using @cli {type CliParse}
 
 // Traits
-

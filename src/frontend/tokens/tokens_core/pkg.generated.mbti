@@ -4,40 +4,41 @@ package "hackwaly/fastcc/frontend/tokens/tokens_core"
 import {
   "hackwaly/fastcc/support/intern/intern_core",
   "hackwaly/fastcc/support/source/source_core",
+  "moonbitlang/core/debug",
 }
 
 // Values
-pub let empty_hidden : Int
+pub let empty_hidden : Int32
 
 pub fn init_keyword_ids(@intern_core.StringInterner) -> KeywordIds
 
-pub fn keyword_kind_from_id(Int, KeywordIds) -> TokenKind?
+pub fn keyword_kind_from_id(Int32, KeywordIds) -> TokenKind?
 
-pub fn lexeme_pool_get(LexemePool, Int) -> String
+pub fn lexeme_pool_get(LexemePool, Int32) -> String
 
-pub fn lexeme_pool_intern(LexemePool, String) -> Int
+pub fn lexeme_pool_intern(LexemePool, String) -> Int32
 
-pub fn lexeme_pool_intern_slice(LexemePool, String, Int, Int) -> Int
+pub fn lexeme_pool_intern_slice(LexemePool, String, Int32, Int32) -> Int32
 
-pub fn lexeme_pool_len(LexemePool, Int) -> Int
+pub fn lexeme_pool_len(LexemePool, Int32) -> Int32
 
-pub fn new_lexeme_pool(capacity? : Int) -> LexemePool
+pub fn new_lexeme_pool(capacity? : Int32) -> LexemePool
 
 pub fn token_has_id(Token) -> Bool
 
-pub fn token_id(Token) -> Int
+pub fn token_id(Token) -> Int32
 
 pub fn token_kind_text(TokenKind) -> String
 
-pub fn token_kind_text_len(TokenKind) -> Int
+pub fn token_kind_text_len(TokenKind) -> Int32
 
-pub fn token_lexeme_id(Token) -> Int
+pub fn token_lexeme_id(Token) -> Int32
 
-pub fn token_text_len_with(@intern_core.StringInterner, LexemePool, Token) -> Int
+pub fn token_text_len_with(@intern_core.StringInterner, LexemePool, Token) -> Int32
 
 pub fn token_text_with(@intern_core.StringInterner, LexemePool, Token) -> String
 
-pub fn token_value_from_parts(Int, Int) -> Int
+pub fn token_value_from_parts(Int32, Int32) -> Int32
 
 // Errors
 
@@ -48,7 +49,7 @@ pub(all) struct KeywordIds {
 
 pub(all) enum LexemeEntry {
   Owned(String)
-  Slice(text~ : String, start~ : Int, len~ : Int)
+  Slice(text~ : String, start~ : Int32, len~ : Int32)
 }
 
 pub(all) struct LexemePool {
@@ -57,14 +58,11 @@ pub(all) struct LexemePool {
 
 pub(all) struct Token {
   kind : TokenKind
-  value : Int
+  value : Int32
   loc : @source_core.SrcLoc
   line_start : Bool
-  hidden : Int
-}
-pub impl Eq for Token
-pub impl Show for Token
-pub impl ToJson for Token
+  hidden : Int32
+} derive(Eq, Show, ToJson, @debug.Debug)
 
 pub(all) enum TokenKind {
   Eof
@@ -164,12 +162,8 @@ pub(all) enum TokenKind {
   CaretAssign
   Hash
   HashHash
-}
-pub impl Eq for TokenKind
-pub impl Show for TokenKind
-pub impl ToJson for TokenKind
+} derive(Eq, Show, ToJson, @debug.Debug)
 
 // Type aliases
 
 // Traits
-

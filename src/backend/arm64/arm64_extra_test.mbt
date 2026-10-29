@@ -22,7 +22,7 @@ test "arm64 masks and encodings" {
 
 ///|
 test "arm64 movi patterns" {
-  let reg : UInt = 1
+  let reg : UInt32 = 1
   let value0 : UInt64 = 0x1234
   let expected0 = (0x52800000 : UInt64)
     .lor(reg.to_uint64())
@@ -45,7 +45,7 @@ test "arm64 movi patterns" {
 
 ///|
 test "arm64 movi complement patterns" {
-  let reg : UInt = 2
+  let reg : UInt32 = 2
   let value3 : UInt64 = 0x00000000_ffff0001
   let expected3 = (0x12800000 : UInt64)
     .lor(reg.to_uint64())

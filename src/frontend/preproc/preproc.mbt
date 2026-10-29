@@ -78,8 +78,8 @@ pub fn clear_hidden_pool(pool : HiddenPool) -> Unit {
 ///|
 pub fn make_builtin_token(
   kind : @tokens.TokenKind,
-  id? : Int = 0,
-  lexeme_id? : Int = 0,
+  id~ : Int32 = 0,
+  lexeme_id~ : Int32 = 0,
 ) -> @tokens.Token {
   @preproc_core.make_builtin_token(kind, id~, lexeme_id~)
 }
@@ -98,7 +98,7 @@ pub fn pp_token_lexeme(pp : Preprocessor, tok : @tokens.Token) -> String {
 }
 
 ///|
-pub fn pp_token_lexeme_len(pp : Preprocessor, tok : @tokens.Token) -> Int {
+pub fn pp_token_lexeme_len(pp : Preprocessor, tok : @tokens.Token) -> Int32 {
   @preproc_core.pp_token_lexeme_len(pp, tok)
 }
 
@@ -121,7 +121,11 @@ pub fn define_words_macro(
 }
 
 ///|
-pub fn define_int_macro(pp : Preprocessor, name : String, value : Int) -> Unit {
+pub fn define_int_macro(
+  pp : Preprocessor,
+  name : String,
+  value : Int32,
+) -> Unit {
   @preproc_core.define_int_macro(pp, name, value)
 }
 
@@ -175,37 +179,37 @@ pub fn is_macro_name_token(tok : @tokens.Token) -> Bool {
 }
 
 ///|
-pub fn macro_id_from_name(pp : Preprocessor, name : String) -> Int {
+pub fn macro_id_from_name(pp : Preprocessor, name : String) -> Int32 {
   @preproc_core.macro_id_from_name(pp, name)
 }
 
 ///|
-pub fn macro_id_from_token(_pp : Preprocessor, tok : @tokens.Token) -> Int {
+pub fn macro_id_from_token(_pp : Preprocessor, tok : @tokens.Token) -> Int32 {
   @preproc_core.macro_id_from_token(_pp, tok)
 }
 
 ///|
-pub fn ensure_macro_capacity(pp : Preprocessor, id : Int) -> Unit {
+pub fn ensure_macro_capacity(pp : Preprocessor, id : Int32) -> Unit {
   @preproc_core.ensure_macro_capacity(pp, id)
 }
 
 ///|
-pub fn get_macro(pp : Preprocessor, id : Int) -> Macro? {
+pub fn get_macro(pp : Preprocessor, id : Int32) -> Macro? {
   @preproc_core.get_macro(pp, id)
 }
 
 ///|
-pub fn has_macro(pp : Preprocessor, id : Int) -> Bool {
+pub fn has_macro(pp : Preprocessor, id : Int32) -> Bool {
   @preproc_core.has_macro(pp, id)
 }
 
 ///|
-pub fn set_macro(pp : Preprocessor, id : Int, macro_def : Macro) -> Unit {
+pub fn set_macro(pp : Preprocessor, id : Int32, macro_def : Macro) -> Unit {
   @preproc_core.set_macro(pp, id, macro_def)
 }
 
 ///|
-pub fn remove_macro(pp : Preprocessor, id : Int) -> Unit {
+pub fn remove_macro(pp : Preprocessor, id : Int32) -> Unit {
   @preproc_core.remove_macro(pp, id)
 }
 
@@ -242,7 +246,7 @@ pub fn read_directive_text(pp : Preprocessor) -> String {
 ///|
 pub fn slice_tokens(
   tokens : Array[@tokens.Token],
-  start : Int,
+  start : Int32,
 ) -> Array[@tokens.Token] {
   @preproc_core.slice_tokens(tokens, start)
 }
@@ -250,7 +254,7 @@ pub fn slice_tokens(
 ///|
 pub fn prefix_tokens(
   tokens : Array[@tokens.Token],
-  end : Int,
+  end : Int32,
 ) -> Array[@tokens.Token] {
   @preproc_core.prefix_tokens(tokens, end)
 }
@@ -297,7 +301,7 @@ pub fn eval_has_include(
   pp : Preprocessor,
   args : Array[@tokens.Token],
   include_next~ : Bool,
-) -> Int {
+) -> Int32 {
   @preproc_core.eval_has_include(pp, args, include_next~)
 }
 
@@ -336,7 +340,7 @@ pub fn parse_macro_params(
   pp : Preprocessor,
   args : Array[@tokens.Token],
   loc : @source.SrcLoc,
-) -> (Array[Int], Bool, Array[@tokens.Token])? {
+) -> (Array[Int32], Bool, Array[@tokens.Token])? {
   @preproc_core.parse_macro_params(pp, args, loc)
 }
 
@@ -377,12 +381,12 @@ pub fn is_adjacent(
 }
 
 ///|
-pub fn is_expanding(pp : Preprocessor, id : Int) -> Bool {
+pub fn is_expanding(pp : Preprocessor, id : Int32) -> Bool {
   @preproc_core.is_expanding(pp, id)
 }
 
 ///|
-pub fn push_expanding(pp : Preprocessor, id : Int) -> Unit {
+pub fn push_expanding(pp : Preprocessor, id : Int32) -> Unit {
   @preproc_core.push_expanding(pp, id)
 }
 
@@ -414,14 +418,14 @@ pub fn escape_string(text : String) -> String {
 }
 
 ///|
-pub fn logical_line(pp : Preprocessor, loc : @source.SrcLoc) -> Int {
+pub fn logical_line(pp : Preprocessor, loc : @source.SrcLoc) -> Int32 {
   @preproc_core.logical_line(pp, loc)
 }
 
 ///|
 pub fn make_int_literal_token(
   pp : Preprocessor,
-  value : Int,
+  value : Int32,
   loc : @source.SrcLoc,
 ) -> @tokens.Token {
   @preproc_core.make_int_literal_token(pp, value, loc)
@@ -436,7 +440,7 @@ pub fn builtin_macro_tokens(
 }
 
 ///|
-pub fn is_builtin_macro_id(pp : Preprocessor, id : Int) -> Bool {
+pub fn is_builtin_macro_id(pp : Preprocessor, id : Int32) -> Bool {
   @preproc_core.is_builtin_macro_id(pp, id)
 }
 
@@ -456,7 +460,7 @@ pub fn token_needs_expansion(pp : Preprocessor, tok : @tokens.Token) -> Bool {
 ///|
 pub fn macro_replacement_needs_expand(
   pp : Preprocessor,
-  macro_id : Int,
+  macro_id : Int32,
   macro_def : Macro,
 ) -> Bool {
   @preproc_core.macro_replacement_needs_expand(pp, macro_id, macro_def)
@@ -483,22 +487,22 @@ pub fn format_time(dt : @time.ZonedDateTime) -> String {
 }
 
 ///|
-pub fn month_name(month : Int) -> String {
+pub fn month_name(month : Int32) -> String {
   @preproc_core.month_name(month)
 }
 
 ///|
-pub fn pad2(value : Int) -> String {
+pub fn pad2(value : Int32) -> String {
   @preproc_core.pad2(value)
 }
 
 ///|
-pub fn pad2_space(value : Int) -> String {
+pub fn pad2_space(value : Int32) -> String {
   @preproc_core.pad2_space(value)
 }
 
 ///|
-pub fn lookup_param_index(params : Array[Int], id : Int) -> Int? {
+pub fn lookup_param_index(params : Array[Int32], id : Int32) -> Int32? {
   @preproc_core.lookup_param_index(params, id)
 }
 
@@ -509,7 +513,7 @@ pub fn lex_paste_tokens(
   left : String,
   right : String,
   loc : @source.SrcLoc,
-  hidden : Int,
+  hidden : Int32,
 ) -> Array[@tokens.Token] {
   @preproc_core.lex_paste_tokens(pp, text, left, right, loc, hidden)
 }
@@ -528,9 +532,9 @@ pub fn substitute_macro(
 pub fn read_macro_args_from_tokens(
   pp : Preprocessor,
   tokens : Array[@tokens.Token],
-  start : Int,
+  start : Int32,
   loc : @source.SrcLoc,
-) -> (Array[Array[@tokens.Token]], Int)? {
+) -> (Array[Array[@tokens.Token]], Int32)? {
   @preproc_core.read_macro_args_from_tokens(pp, tokens, start, loc)
 }
 
@@ -539,7 +543,7 @@ pub fn ensure_expanded_arg(
   pp : Preprocessor,
   raw_args : Array[Array[@tokens.Token]],
   expanded_cache : Array[Array[@tokens.Token]?],
-  idx : Int,
+  idx : Int32,
 ) -> Array[@tokens.Token] {
   @preproc_core.ensure_expanded_arg(pp, raw_args, expanded_cache, idx)
 }
@@ -602,27 +606,27 @@ pub fn release_expanding_guards(pp : Preprocessor) -> Unit {
 }
 
 ///|
-pub fn hidden_is_empty(hidden : Int) -> Bool {
+pub fn hidden_is_empty(hidden : Int32) -> Bool {
   @preproc_core.hidden_is_empty(hidden)
 }
 
 ///|
-pub fn hidden_contains(pool : HiddenPool, hidden : Int, id : Int) -> Bool {
+pub fn hidden_contains(pool : HiddenPool, hidden : Int32, id : Int32) -> Bool {
   @preproc_core.hidden_contains(pool, hidden, id)
 }
 
 ///|
-pub fn ensure_hidden_singleton_slot(pool : HiddenPool, id : Int) -> Unit {
+pub fn ensure_hidden_singleton_slot(pool : HiddenPool, id : Int32) -> Unit {
   @preproc_core.ensure_hidden_singleton_slot(pool, id)
 }
 
 ///|
-pub fn hidden_add(pool : HiddenPool, hidden : Int, id : Int) -> Int {
+pub fn hidden_add(pool : HiddenPool, hidden : Int32, id : Int32) -> Int32 {
   @preproc_core.hidden_add(pool, hidden, id)
 }
 
 ///|
-pub fn merge_hidden(pool : HiddenPool, a : Int, b : Int) -> Int {
+pub fn merge_hidden(pool : HiddenPool, a : Int32, b : Int32) -> Int32 {
   @preproc_core.merge_hidden(pool, a, b)
 }
 
@@ -630,7 +634,7 @@ pub fn merge_hidden(pool : HiddenPool, a : Int, b : Int) -> Int {
 pub fn add_hidden(
   pp : Preprocessor,
   tok : @tokens.Token,
-  id : Int,
+  id : Int32,
 ) -> @tokens.Token {
   @preproc_core.add_hidden(pp, tok, id)
 }
@@ -639,7 +643,7 @@ pub fn add_hidden(
 pub fn add_hidden_tokens(
   pp : Preprocessor,
   tokens : Array[@tokens.Token],
-  id : Int,
+  id : Int32,
 ) -> Array[@tokens.Token] {
   @preproc_core.add_hidden_tokens(pp, tokens, id)
 }
@@ -678,7 +682,7 @@ pub fn pp_unsigned_result(a : PpValue, b : PpValue) -> Bool {
 }
 
 ///|
-pub fn pp_shift_count(v : PpValue) -> Int {
+pub fn pp_shift_count(v : PpValue) -> Int32 {
   @preproc_core.pp_shift_count(v)
 }
 
@@ -702,7 +706,7 @@ pub fn parse_line_int_literal(
   pp : Preprocessor,
   lexeme : String,
   loc : @source.SrcLoc,
-) -> Int {
+) -> Int32 {
   @preproc_core.parse_line_int_literal(pp, lexeme, loc)
 }
 
@@ -724,9 +728,9 @@ pub fn parse_pp_char_literal(pp : Preprocessor, tok : @tokens.Token) -> PpValue 
 pub fn decode_pp_escape_value(
   pp : Preprocessor,
   text : String,
-  start : Int,
+  start : Int32,
   loc : @source.SrcLoc,
-) -> (Int, Int) {
+) -> (Int32, Int32) {
   @preproc_core.decode_pp_escape_value(pp, text, start, loc)
 }
 
@@ -734,14 +738,14 @@ pub fn decode_pp_escape_value(
 pub fn parse_pp_hex_escape(
   pp : Preprocessor,
   text : String,
-  start : Int,
+  start : Int32,
   loc : @source.SrcLoc,
-) -> (Int, Int) {
+) -> (Int32, Int32) {
   @preproc_core.parse_pp_hex_escape(pp, text, start, loc)
 }
 
 ///|
-pub fn parse_pp_octal_escape(text : String, start : Int) -> (Int, Int) {
+pub fn parse_pp_octal_escape(text : String, start : Int32) -> (Int32, Int32) {
   @preproc_core.parse_pp_octal_escape(text, start)
 }
 
@@ -751,7 +755,7 @@ pub fn pp_is_oct_digit(code : UInt16) -> Bool {
 }
 
 ///|
-pub fn pp_hex_digit_value(code : UInt16) -> Int? {
+pub fn pp_hex_digit_value(code : UInt16) -> Int32? {
   @preproc_core.pp_hex_digit_value(code)
 }
 
@@ -850,6 +854,9 @@ pub fn next_pp_token(pp : Preprocessor) -> @tokens.Token {
 }
 
 ///|
-pub fn dump_tokens(pp : Preprocessor, max_count : Int) -> Array[@tokens.Token] {
+pub fn dump_tokens(
+  pp : Preprocessor,
+  max_count : Int32,
+) -> Array[@tokens.Token] {
   @preproc_core.dump_tokens(pp, max_count)
 }

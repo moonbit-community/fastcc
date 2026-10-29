@@ -2,7 +2,8 @@ import {
   "hackwaly/fastcc/cmd/fastcc" @cmd_fastcc,
 }
 
+pkgtype(kind: "executable")
+
 options(
-  "is-main": true,
   link: { "native": { "cc-flags": "-w" } },
 )

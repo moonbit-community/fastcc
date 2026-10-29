@@ -3,7 +3,7 @@ struct CCase {
   name : String
   source : String
   headers : Array[(String, String)]
-  defines : Array[(String, Int)]
+  defines : Array[(String, Int32)]
 }
 
 ///|
@@ -51,12 +51,12 @@ fn command_bytes(cmd : String) -> Bytes {
 }
 
 ///|
-fn run_command(args : Array[String]) -> Int {
+fn run_command(args : Array[String]) -> Int32 {
   @ffi.run_command(command_bytes(join_shell_args(args)))
 }
 
 ///|
-fn run_command_capture(args : Array[String], out_path : String) -> Int {
+fn run_command_capture(args : Array[String], out_path : String) -> Int32 {
   let cmd = join_shell_args(args) + " > " + shell_quote(out_path) + " 2>&1"
   @ffi.run_command(command_bytes(cmd))
 }
@@ -66,7 +66,7 @@ fn compile_tinycc(
   c_path : String,
   obj_path : String,
   include_dirs : Array[String],
-  defines : Array[(String, Int)],
+  defines : Array[(String, Int32)],
 ) -> Bool raise {
   let bag = @diag.new_diag_bag()
   let map = @source.new_source_map()
@@ -105,9 +105,9 @@ fn compile_system(
   c_path : String,
   exe_path : String,
   include_dirs : Array[String],
-  defines : Array[(String, Int)],
+  defines : Array[(String, Int32)],
   libs : Array[String],
-) -> Int {
+) -> Int32 {
   let args : Array[String] = []
   args.push("clang")
   args.push("-w")
@@ -129,7 +129,11 @@ fn compile_system(
 }
 
 ///|
-fn link_exe(obj_path : String, exe_path : String, libs : Array[String]) -> Int {
+fn link_exe(
+  obj_path : String,
+  exe_path : String,
+  libs : Array[String],
+) -> Int32 {
   let args : Array[String] = []
   args.push("clang")
   args.push("-w")

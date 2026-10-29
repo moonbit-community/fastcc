@@ -33,6 +33,6 @@ pub fn add_file(map : SourceMap, path : String, text : String) -> SourceFile {
 }
 
 ///|
-pub fn dummy_loc(file_id : Int) -> SrcLoc {
+pub fn dummy_loc(file_id : Int32) -> SrcLoc {
   @source_core.dummy_loc(file_id)
 }

@@ -82,7 +82,7 @@ pub fn parse_int64_literal(text : String) -> Int64? {
       start = 1
     }
   }
-  fn digit_value(base : Int, ch : Int) -> UInt64? {
+  fn digit_value(base : Int32, ch : Int32) -> UInt64? {
     let zero = 48
     let nine = 57
     let lower_a = 97
@@ -175,7 +175,7 @@ pub fn expr_loc(expr : Expr) -> @source.SrcLoc {
 }
 
 ///|
-pub fn expr_node_id(expr : Expr) -> Int {
+pub fn expr_node_id(expr : Expr) -> Int32 {
   match expr {
     IntLit(node_id~, ..) => node_id
     FloatLit(node_id~, ..) => node_id

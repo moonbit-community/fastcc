@@ -10,7 +10,7 @@ test "arm64 encode bimm64 basics" {
 
 ///|
 test "arm64 movi immediate encodings" {
-  let reg : UInt = 3
+  let reg : UInt32 = 3
   let imm0 : UInt64 = 0x1234
   let insn0 = @arm64.arm64_movi(reg, imm0)
   let expect0 = (0x52800000 : UInt64)

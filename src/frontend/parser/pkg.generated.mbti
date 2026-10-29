@@ -16,4 +16,3 @@ pub fn parse_translation_unit(@preproc_core.Preprocessor) -> @ast_core.Translati
 // Type aliases
 
 // Traits
-

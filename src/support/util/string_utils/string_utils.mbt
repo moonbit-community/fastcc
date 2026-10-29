@@ -14,12 +14,12 @@
 // License along with this library.  If not, see <https://www.gnu.org/licenses/>.
 
 ///|
-pub fn slice_string(text : String, start : Int, end : Int) -> String {
+pub fn slice_string(text : String, start : Int32, end : Int32) -> String {
   text.view(start_offset=start, end_offset=end).to_string()
 }
 
 ///|
-pub fn hex_digit_value(code : UInt16) -> Int? {
+pub fn hex_digit_value(code : UInt16) -> Int32? {
   if code >= 48 && code <= 57 {
     return Some(code.to_int() - 48)
   }

@@ -14,7 +14,7 @@
 // License along with this library.  If not, see <https://www.gnu.org/licenses/>.
 
 ///|
-fn read_u32_le(bytes : Bytes, offset : Int) -> UInt {
+fn read_u32_le(bytes : Bytes, offset : Int32) -> UInt32 {
   let b0 = bytes[offset].to_uint()
   let b1 = bytes[offset + 1].to_uint() << 8
   let b2 = bytes[offset + 2].to_uint() << 16
@@ -25,7 +25,7 @@ fn read_u32_le(bytes : Bytes, offset : Int) -> UInt {
 ///|
 test "macho encode writes magic" {
   let sec = @object.new_section(".text")
-  sec.data.push((0x14000000 : UInt))
+  sec.data.push((0x14000000 : UInt32))
   let symbols = [
     @macho.ObjSymbol::{
       id: 1,

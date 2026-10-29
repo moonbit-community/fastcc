@@ -91,7 +91,7 @@ test "preprocess defined operator" {
 test "preprocess include" {
   let path = "/tmp/tinyccmbt_include_test.h"
   @fs.write_string_to_file(path, "int inc;") catch {
-    err => fail("write include failed: \{err.to_string()}")
+    err => fail("write include failed: \{to_repr(err).to_string()}")
   }
   let (toks, bag, interner, lexeme_pool) = pp_tokens("#include \"\{path}\"")
   assert_true(!@diag.has_errors(bag))
@@ -103,7 +103,7 @@ test "preprocess include" {
 test "preprocess include with macro" {
   let path = "/tmp/tinyccmbt_include_macro.h"
   @fs.write_string_to_file(path, "int inc2;") catch {
-    err => fail("write include failed: \{err.to_string()}")
+    err => fail("write include failed: \{to_repr(err).to_string()}")
   }
   let (toks, bag, interner, lexeme_pool) = pp_tokens(
     "#define HDR \"\{path}\"\n#include HDR",
@@ -118,12 +118,12 @@ test "preprocess include search path" {
   let dir = "/tmp/tinyccmbt_include_dir"
   if !@fs.path_exists(dir) {
     @fs.create_dir(dir) catch {
-      err => fail("create include dir failed: \{err.to_string()}")
+      err => fail("create include dir failed: \{to_repr(err).to_string()}")
     }
   }
   let path = dir + "/inc.h"
   @fs.write_string_to_file(path, "int inc3;") catch {
-    err => fail("write include failed: \{err.to_string()}")
+    err => fail("write include failed: \{to_repr(err).to_string()}")
   }
   let (toks, bag, interner, lexeme_pool) = pp_tokens_with_paths(
     "#include <inc.h>",

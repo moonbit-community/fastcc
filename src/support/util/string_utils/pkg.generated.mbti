@@ -2,9 +2,9 @@
 package "hackwaly/fastcc/support/util/string_utils"
 
 // Values
-pub fn hex_digit_value(UInt16) -> Int?
+pub fn hex_digit_value(UInt16) -> Int32?
 
-pub fn slice_string(String, Int, Int) -> String
+pub fn slice_string(String, Int32, Int32) -> String
 
 // Errors
 
@@ -13,4 +13,3 @@ pub fn slice_string(String, Int, Int) -> String
 // Type aliases
 
 // Traits
-

@@ -17,4 +17,3 @@ pub impl @host.Host for DefaultHost
 // Type aliases
 
 // Traits
-

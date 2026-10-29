@@ -1,6 +1,6 @@
 ///|
 test "intern token hash step" {
-  let h0 : UInt = @intern.tok_hash_init
+  let h0 : UInt32 = @intern.tok_hash_init
   let code_a : UInt16 = ('a' : UInt16)
   let code_b : UInt16 = ('b' : UInt16)
   let h1 = @intern.tok_hash_step(h0, code_a)

@@ -19,4 +19,3 @@ pub fn write_string(String, String) -> Unit raise
 // Type aliases
 
 // Traits
-

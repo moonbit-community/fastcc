@@ -1,7 +1,7 @@
 options(
   "pre-build": [
     {
-      "command": "moon -C $mod_dir/scripts/embed_headers run . -- $mod_dir/compat/include -o $output",
+      "command": "moon -C $mod_dir/scripts/embed_headers run . -- $mod_dir/compat/include -o $mod_dir/src/include/headers.mbt",
       "input": [ ],
       "output": "headers.mbt",
     },

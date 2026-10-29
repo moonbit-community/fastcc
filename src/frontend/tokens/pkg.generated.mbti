@@ -7,37 +7,37 @@ import {
 }
 
 // Values
-pub let empty_hidden : Int
+pub let empty_hidden : Int32
 
 pub fn init_keyword_ids(@intern_core.StringInterner) -> @tokens_core.KeywordIds
 
-pub fn keyword_kind_from_id(Int, @tokens_core.KeywordIds) -> @tokens_core.TokenKind?
+pub fn keyword_kind_from_id(Int32, @tokens_core.KeywordIds) -> @tokens_core.TokenKind?
 
-pub fn lexeme_pool_get(@tokens_core.LexemePool, Int) -> String
+pub fn lexeme_pool_get(@tokens_core.LexemePool, Int32) -> String
 
-pub fn lexeme_pool_intern(@tokens_core.LexemePool, String) -> Int
+pub fn lexeme_pool_intern(@tokens_core.LexemePool, String) -> Int32
 
-pub fn lexeme_pool_intern_slice(@tokens_core.LexemePool, String, Int, Int) -> Int
+pub fn lexeme_pool_intern_slice(@tokens_core.LexemePool, String, Int32, Int32) -> Int32
 
-pub fn lexeme_pool_len(@tokens_core.LexemePool, Int) -> Int
+pub fn lexeme_pool_len(@tokens_core.LexemePool, Int32) -> Int32
 
-pub fn new_lexeme_pool(capacity? : Int) -> @tokens_core.LexemePool
+pub fn new_lexeme_pool(capacity? : Int32) -> @tokens_core.LexemePool
 
 pub fn token_has_id(@tokens_core.Token) -> Bool
 
-pub fn token_id(@tokens_core.Token) -> Int
+pub fn token_id(@tokens_core.Token) -> Int32
 
 pub fn token_kind_text(@tokens_core.TokenKind) -> String
 
-pub fn token_kind_text_len(@tokens_core.TokenKind) -> Int
+pub fn token_kind_text_len(@tokens_core.TokenKind) -> Int32
 
-pub fn token_lexeme_id(@tokens_core.Token) -> Int
+pub fn token_lexeme_id(@tokens_core.Token) -> Int32
 
-pub fn token_text_len_with(@intern_core.StringInterner, @tokens_core.LexemePool, @tokens_core.Token) -> Int
+pub fn token_text_len_with(@intern_core.StringInterner, @tokens_core.LexemePool, @tokens_core.Token) -> Int32
 
 pub fn token_text_with(@intern_core.StringInterner, @tokens_core.LexemePool, @tokens_core.Token) -> String
 
-pub fn token_value_from_parts(Int, Int) -> Int
+pub fn token_value_from_parts(Int32, Int32) -> Int32
 
 // Errors
 
@@ -55,4 +55,3 @@ pub using @tokens_core {type Token}
 pub using @tokens_core {type TokenKind}
 
 // Traits
-
