@@ -26,16 +26,16 @@ pub(all) struct DiagBag {
 
 ///|
 pub fn new_diag_bag() -> DiagBag {
-  { diags: [] }
+  { diags: [], }
 }
 
 ///|
 pub fn add_error(bag : DiagBag, loc : @source.SrcLoc, message : String) -> Unit {
-  bag.diags.push({ loc, message })
+  bag.diags.push({ loc, message, })
 }
 
 ///|
-pub fn error_count(bag : DiagBag) -> Int {
+pub fn error_count(bag : DiagBag) -> Int32 {
   bag.diags.length()
 }
 

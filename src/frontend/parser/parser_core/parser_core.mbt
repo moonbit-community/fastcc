@@ -4,33 +4,33 @@ priv struct Parser {
   mut current : @tokens.Token
   mut lookahead : @tokens.Token
   buffer : Array[@tokens.Token]
-  mut buffer_pos : Int
+  mut buffer_pos : Int32
   diags : @diag.DiagBag
-  typedef_counts : Array[Int]
+  typedef_counts : Array[Int32]
   typedef_values : Array[@ast.CType?]
-  typedef_scope_levels : Array[Int]
-  typedef_scope_stack : Array[Int]
-  mut next_typedef_scope_id : Int
-  typedef_overrides : Array[Array[(Int, @ast.CType?, Int)]]
+  typedef_scope_levels : Array[Int32]
+  typedef_scope_stack : Array[Int32]
+  mut next_typedef_scope_id : Int32
+  typedef_overrides : Array[Array[(Int32, @ast.CType?, Int32)]]
   pending_typedef_scopes : Array[Bool]
-  tag_values : Array[Int]
-  tag_scope_levels : Array[Int]
-  tag_scope_stack : Array[Int]
-  mut next_tag_scope_id : Int
-  tag_overrides : Array[Array[(Int, Int, Int)]]
+  tag_values : Array[Int32]
+  tag_scope_levels : Array[Int32]
+  tag_scope_stack : Array[Int32]
+  mut next_tag_scope_id : Int32
+  tag_overrides : Array[Array[(Int32, Int32, Int32)]]
   pending_tag_scopes : Array[Bool]
-  mut next_tag_id : Int
-  mut anon_tag_id : Int
-  mut next_expr_id : Int
-  mut next_temp_id : Int
+  mut next_tag_id : Int32
+  mut anon_tag_id : Int32
+  mut next_expr_id : Int32
+  mut next_temp_id : Int32
   builtin_ids : BuiltinIds
 }
 
 ///|
 priv struct BuiltinIds {
-  types_compatible_p : Int
-  offsetof : Int
-  va_arg : Int
+  types_compatible_p : Int32
+  offsetof : Int32
+  va_arg : Int32
 }
 
 ///|
@@ -45,21 +45,21 @@ fn new_parser(pp : @preproc.Preprocessor) -> Parser {
   let buffer_capacity = 64
   let scope_capacity = 128
   let override_capacity = 128
-  let typedef_counts : Array[Int] = Array::new(capacity=id_capacity)
+  let typedef_counts : Array[Int32] = Array::new(capacity=id_capacity)
   let typedef_values : Array[@ast.CType?] = Array::new(capacity=id_capacity)
-  let typedef_scope_levels : Array[Int] = Array::new(capacity=id_capacity)
-  let typedef_scope_stack : Array[Int] = Array::new(capacity=scope_capacity)
+  let typedef_scope_levels : Array[Int32] = Array::new(capacity=id_capacity)
+  let typedef_scope_stack : Array[Int32] = Array::new(capacity=scope_capacity)
   typedef_scope_stack.push(1)
-  let typedef_overrides : Array[Array[(Int, @ast.CType?, Int)]] = Array::new(
+  let typedef_overrides : Array[Array[(Int32, @ast.CType?, Int32)]] = Array::new(
     capacity=override_capacity,
   )
   typedef_overrides.push([])
   let pending_typedef_scopes : Array[Bool] = Array::new(capacity=scope_capacity)
-  let tag_values : Array[Int] = Array::new(capacity=id_capacity)
-  let tag_scope_levels : Array[Int] = Array::new(capacity=id_capacity)
-  let tag_scope_stack : Array[Int] = Array::new(capacity=scope_capacity)
+  let tag_values : Array[Int32] = Array::new(capacity=id_capacity)
+  let tag_scope_levels : Array[Int32] = Array::new(capacity=id_capacity)
+  let tag_scope_stack : Array[Int32] = Array::new(capacity=scope_capacity)
   tag_scope_stack.push(1)
-  let tag_overrides : Array[Array[(Int, Int, Int)]] = Array::new(
+  let tag_overrides : Array[Array[(Int32, Int32, Int32)]] = Array::new(
     capacity=override_capacity,
   )
   tag_overrides.push([])
@@ -125,7 +125,7 @@ fn new_parser(pp : @preproc.Preprocessor) -> Parser {
 }
 
 ///|
-fn new_expr_id(p : Parser) -> Int {
+fn new_expr_id(p : Parser) -> Int32 {
   let id = p.next_expr_id + 1
   p.next_expr_id = id
   id
@@ -188,7 +188,7 @@ fn parse_translation_unit_with(p : Parser) -> @ast.TranslationUnit {
     }
   }
   let expr_id_max = p.next_expr_id
-  { decls, expr_id_max }
+  { decls, expr_id_max, }
 }
 
 ///|
@@ -420,7 +420,7 @@ fn parse_old_style_param_decls(
   params : Array[@ast.Param],
 ) -> Array[@ast.Param] {
   let updated = params
-  let param_map : @util.FastMap[String, Int] = @util.fast_map_new()
+  let param_map : @util.FastMap[String, Int32] = @util.fast_map_new()
   for i = 0; i < params.length(); i = i + 1 {
     let name = params[i].name
     if name == "" {
@@ -920,11 +920,11 @@ fn parse_type_specifiers(
   }
   let qualified = @ast.apply_qualifiers(ty, qual)
   let final_ty = @ast.apply_type_attrs(qualified, @ast.type_attrs_from(attrs))
-  Some({ ty: final_ty, loc: start_loc, is_typedef, storage, is_inline, attrs })
+  Some({ ty: final_ty, loc: start_loc, is_typedef, storage, is_inline, attrs, })
 }
 
 ///|
-fn parse_decl_specs(p : Parser, allow_storage? : Bool = true) -> DeclSpecs? {
+fn parse_decl_specs(p : Parser, allow_storage~ : Bool = true) -> DeclSpecs? {
   parse_type_specifiers(p, allow_storage~, allow_typedef=true)
 }
 
@@ -1027,7 +1027,7 @@ fn parse_static_assert(p : Parser, loc : @source.SrcLoc) -> @ast.StaticAssert {
     message = parse_attr_string(p, loc)
   }
   expect(p, RParen, "expected ')' after _Static_assert") |> ignore
-  { expr, message, loc }
+  { expr, message, loc, }
 }
 
 ///|
@@ -1065,7 +1065,7 @@ fn parse_asm_operands(p : Parser) -> Array[@ast.AsmOperand] {
     expect(p, LParen, "expected '(' after asm constraint") |> ignore
     let expr = parse_expr(p)
     expect(p, RParen, "expected ')' after asm operand") |> ignore
-    operands.push({ name, constraint, expr, loc: start_loc })
+    operands.push({ name, constraint, expr, loc: start_loc, })
     if match_token(p, Comma) is Some(_) {
       continue
     }
@@ -1162,7 +1162,7 @@ fn parse_asm_stmt(p : Parser, loc : @source.SrcLoc) -> @ast.AsmStmt {
     }
   }
   expect(p, RParen, "expected ')' after asm") |> ignore
-  { template, outputs, inputs, clobbers, labels, is_volatile, is_goto, loc }
+  { template, outputs, inputs, clobbers, labels, is_volatile, is_goto, loc, }
 }
 
 ///|
@@ -1366,7 +1366,7 @@ fn parse_attribute_clause(p : Parser, loc : @source.SrcLoc) -> @ast.Attributes {
           let raw = if peek_token(p).kind is IntLit {
             let tok = advance_token(p)
             let parsed = try
-              @strconv.parse_int(token_lexeme(p, tok), base=0)
+              @string.parse_int(token_lexeme(p, tok), base=0)
             catch {
               _ => 0
             } noraise {
@@ -1488,7 +1488,7 @@ fn parse_type_name(p : Parser) -> @ast.CType? {
 ///|
 priv struct Declarator {
   name : String
-  id : Int
+  id : Int32
   ty : @ast.CType
   params : Array[@ast.Param]?
   varargs : Bool
@@ -1605,7 +1605,7 @@ fn parse_field_declarator(
       p, ty0,
     )
     attrs = @ast.merge_attrs(attrs, suffix_attrs)
-    Some({ name, id, ty, params, varargs, is_old_style, attrs, loc })
+    Some({ name, id, ty, params, varargs, is_old_style, attrs, loc, })
   }
 }
 
@@ -1621,7 +1621,7 @@ fn parse_initializer(p : Parser) -> @ast.Initializer {
     while true {
       let (designators, item_loc) = parse_designator_list(p)
       let value = parse_initializer(p)
-      items.push({ designators, value, loc: item_loc })
+      items.push({ designators, value, loc: item_loc, })
       if p.current.kind is Comma {
         advance_token(p) |> ignore
         if p.current.kind is RBrace {
@@ -1726,14 +1726,14 @@ fn is_paren_pointer_declarator(p : Parser) -> Bool {
 ///|
 priv enum DeclWrapper {
   Pointer(@ast.TypeQual)
-  Array(Int?, @ast.Expr?)
+  Array(Int32?, @ast.Expr?)
   Function(Array[@ast.Param], Bool, Bool)
 }
 
 ///|
 priv struct ParenDeclParts {
   name : String
-  id : Int
+  id : Int32
   loc : @source.SrcLoc
   wrappers : Array[DeclWrapper]
   params : Array[@ast.Param]?
@@ -1973,7 +1973,7 @@ fn parse_declarator_suffix(
   let mut varargs = false
   let mut old_style = false
   let mut attrs = parse_attributes(p)
-  let array_sizes : Array[(Int?, @ast.Expr?)] = []
+  let array_sizes : Array[(Int32?, @ast.Expr?)] = []
   while match_token(p, LBracket) is Some(_) {
     let size = parse_array_size(p)
     expect(p, RBracket, "expected ']' after array size") |> ignore
@@ -2008,7 +2008,7 @@ fn parse_declarator_suffix(
 }
 
 ///|
-fn parse_array_size(p : Parser) -> (Int?, @ast.Expr?) {
+fn parse_array_size(p : Parser) -> (Int32?, @ast.Expr?) {
   if peek_token(p).kind is RBracket {
     return (None, None)
   }
@@ -2067,7 +2067,7 @@ fn parse_array_size(p : Parser) -> (Int?, @ast.Expr?) {
 }
 
 ///|
-fn next_anon_tag(p : Parser) -> (String, Int) {
+fn next_anon_tag(p : Parser) -> (String, Int32) {
   p.anon_tag_id = p.anon_tag_id + 1
   let name = "__anon_tag_\{p.anon_tag_id}"
   let id = p.next_tag_id
@@ -2076,7 +2076,7 @@ fn next_anon_tag(p : Parser) -> (String, Int) {
 }
 
 ///|
-fn next_temp_ident(p : Parser) -> (String, Int) {
+fn next_temp_ident(p : Parser) -> (String, Int32) {
   p.next_temp_id = p.next_temp_id + 1
   let name = "__mbt_cond_tmp_\{p.next_temp_id}"
   let (_, id) = p.pp.interner.intern_view_with_id(name[:])
@@ -2390,7 +2390,7 @@ fn parse_param_after_base(
     Some(param) => {
       let call_conv = @ast.normalize_call_conv(attrs.call_conv)
       let adjusted_ty = @ast.apply_call_conv_to_type(param.ty, call_conv)
-      Some({ name: param.name, id: param.id, ty: adjusted_ty, loc: param.loc })
+      Some({ name: param.name, id: param.id, ty: adjusted_ty, loc: param.loc, })
     }
     None => {
       add_parse_error(p, loc, "expected parameter declarator")
@@ -2432,7 +2432,7 @@ fn parse_param_declarator(
     let mut ty = apply_decl_wrappers(ty0, wrappers)
     let call_conv = @ast.normalize_call_conv(attrs.call_conv)
     ty = @ast.apply_call_conv_to_type(ty, call_conv)
-    return Some({ name: "", id: 0, ty, loc: lparen.loc })
+    return Some({ name: "", id: 0, ty, loc: lparen.loc, })
   }
   if is_paren_pointer_declarator(p) {
     let parts = parse_paren_pointer_parts(p, true, fallback_loc)
@@ -2456,7 +2456,7 @@ fn parse_param_declarator(
     let mut ty = apply_decl_wrappers(ty0, wrappers)
     let call_conv = @ast.normalize_call_conv(attrs.call_conv)
     ty = @ast.apply_call_conv_to_type(ty, call_conv)
-    return Some({ name: parts.name, id: parts.id, ty, loc: parts.loc })
+    return Some({ name: parts.name, id: parts.id, ty, loc: parts.loc, })
   }
   if peek_token(p).kind is Ident {
     let name_tok = advance_token(p)
@@ -2481,7 +2481,7 @@ fn parse_param_declarator(
   attrs = @ast.merge_attrs(attrs, suffix_attrs)
   let call_conv = @ast.normalize_call_conv(attrs.call_conv)
   let adjusted_ty = @ast.apply_call_conv_to_type(ty, call_conv)
-  Some({ name: "", id: 0, ty: adjusted_ty, loc: fallback_loc })
+  Some({ name: "", id: 0, ty: adjusted_ty, loc: fallback_loc, })
 }
 
 ///|
@@ -3046,7 +3046,7 @@ fn parse_expr_cond(p : Parser) -> @ast.Expr {
 ///|
 
 ///|
-fn parse_expr_binary(p : Parser, min_prec : Int) -> @ast.Expr {
+fn parse_expr_binary(p : Parser, min_prec : Int32) -> @ast.Expr {
   let mut expr = parse_expr_unary(p)
   while true {
     let mut prec = 0
@@ -3613,7 +3613,7 @@ fn decode_string_literal(
   p : Parser,
   lexeme : String,
   loc : @source.SrcLoc,
-) -> (String, Int) {
+) -> (String, Int32) {
   let len = lexeme.length()
   let mut start = 1
   if len >= 3 && lexeme[0] == ('L' : UInt16) {
@@ -3651,7 +3651,7 @@ fn decode_string_literal(
 }
 
 ///|
-fn parse_char_literal_value(p : Parser, tok : @tokens.Token) -> Int {
+fn parse_char_literal_value(p : Parser, tok : @tokens.Token) -> Int32 {
   let lexeme = token_lexeme(p, tok)
   if lexeme.length() < 3 {
     add_parse_error(p, tok.loc, "invalid character literal")
@@ -3687,9 +3687,9 @@ fn parse_char_literal_value(p : Parser, tok : @tokens.Token) -> Int {
 fn decode_escape_value(
   p : Parser,
   text : String,
-  start : Int,
+  start : Int32,
   loc : @source.SrcLoc,
-) -> (Int, Int) {
+) -> (Int32, Int32) {
   if start >= text.length() {
     add_parse_error(p, loc, "unterminated escape sequence")
     return (0, start)
@@ -3721,9 +3721,9 @@ fn decode_escape_value(
 fn parse_hex_escape(
   p : Parser,
   text : String,
-  start : Int,
+  start : Int32,
   loc : @source.SrcLoc,
-) -> (Int, Int) {
+) -> (Int32, Int32) {
   let mut i = start
   let mut value = 0
   let mut saw = false
@@ -3746,7 +3746,7 @@ fn parse_hex_escape(
 }
 
 ///|
-fn parse_octal_escape(text : String, start : Int) -> (Int, Int) {
+fn parse_octal_escape(text : String, start : Int32) -> (Int32, Int32) {
   let mut i = start
   let mut value = 0
   let mut count = 0
@@ -3802,10 +3802,10 @@ fn is_type_start(p : Parser, tok : @tokens.Token) -> Bool {
 
 ///|
 fn ensure_typedef_capacity_with(
-  counts : Array[Int],
+  counts : Array[Int32],
   values : Array[@ast.CType?],
-  scope_levels : Array[Int],
-  id : Int,
+  scope_levels : Array[Int32],
+  id : Int32,
 ) -> Unit {
   if id <= 0 {
     return
@@ -3820,7 +3820,7 @@ fn ensure_typedef_capacity_with(
 }
 
 ///|
-fn ensure_typedef_capacity(p : Parser, id : Int) -> Unit {
+fn ensure_typedef_capacity(p : Parser, id : Int32) -> Unit {
   ensure_typedef_capacity_with(
     p.typedef_counts,
     p.typedef_values,
@@ -3830,7 +3830,7 @@ fn ensure_typedef_capacity(p : Parser, id : Int) -> Unit {
 }
 
 ///|
-fn get_typedef_count(p : Parser, id : Int) -> Int {
+fn get_typedef_count(p : Parser, id : Int32) -> Int32 {
   if id <= 0 || id > p.typedef_counts.length() {
     0
   } else {
@@ -3839,7 +3839,7 @@ fn get_typedef_count(p : Parser, id : Int) -> Int {
 }
 
 ///|
-fn set_typedef_count(p : Parser, id : Int, count : Int) -> Unit {
+fn set_typedef_count(p : Parser, id : Int32, count : Int32) -> Unit {
   if id <= 0 {
     return
   }
@@ -3848,7 +3848,7 @@ fn set_typedef_count(p : Parser, id : Int, count : Int) -> Unit {
 }
 
 ///|
-fn get_typedef_value(p : Parser, id : Int) -> @ast.CType? {
+fn get_typedef_value(p : Parser, id : Int32) -> @ast.CType? {
   if id <= 0 || id > p.typedef_values.length() {
     None
   } else {
@@ -3857,7 +3857,7 @@ fn get_typedef_value(p : Parser, id : Int) -> @ast.CType? {
 }
 
 ///|
-fn set_typedef_value(p : Parser, id : Int, value : @ast.CType?) -> Unit {
+fn set_typedef_value(p : Parser, id : Int32, value : @ast.CType?) -> Unit {
   if id <= 0 {
     return
   }
@@ -3866,7 +3866,7 @@ fn set_typedef_value(p : Parser, id : Int, value : @ast.CType?) -> Unit {
 }
 
 ///|
-fn get_typedef_scope_level(p : Parser, id : Int) -> Int {
+fn get_typedef_scope_level(p : Parser, id : Int32) -> Int32 {
   if id <= 0 || id > p.typedef_scope_levels.length() {
     0
   } else {
@@ -3875,7 +3875,7 @@ fn get_typedef_scope_level(p : Parser, id : Int) -> Int {
 }
 
 ///|
-fn set_typedef_scope_level(p : Parser, id : Int, level : Int) -> Unit {
+fn set_typedef_scope_level(p : Parser, id : Int32, level : Int32) -> Unit {
   if id <= 0 {
     return
   }
@@ -3884,7 +3884,7 @@ fn set_typedef_scope_level(p : Parser, id : Int, level : Int) -> Unit {
 }
 
 ///|
-fn ensure_tag_capacity(p : Parser, id : Int) -> Unit {
+fn ensure_tag_capacity(p : Parser, id : Int32) -> Unit {
   if id <= 0 {
     return
   }
@@ -3901,7 +3901,7 @@ fn ensure_tag_capacity(p : Parser, id : Int) -> Unit {
 }
 
 ///|
-fn get_tag_scope_level(p : Parser, id : Int) -> Int {
+fn get_tag_scope_level(p : Parser, id : Int32) -> Int32 {
   if id <= 0 || id > p.tag_scope_levels.length() {
     0
   } else {
@@ -3910,7 +3910,7 @@ fn get_tag_scope_level(p : Parser, id : Int) -> Int {
 }
 
 ///|
-fn set_tag_scope_level(p : Parser, id : Int, level : Int) -> Unit {
+fn set_tag_scope_level(p : Parser, id : Int32, level : Int32) -> Unit {
   if id <= 0 {
     return
   }
@@ -3919,7 +3919,7 @@ fn set_tag_scope_level(p : Parser, id : Int, level : Int) -> Unit {
 }
 
 ///|
-fn current_tag_scope_id(p : Parser) -> Int {
+fn current_tag_scope_id(p : Parser) -> Int32 {
   let len = p.tag_scope_stack.length()
   if len == 0 {
     0
@@ -3965,7 +3965,7 @@ fn ensure_tag_scope(p : Parser) -> Unit {
 }
 
 ///|
-fn resolve_tag_id(p : Parser, name_id : Int) -> Int {
+fn resolve_tag_id(p : Parser, name_id : Int32) -> Int32 {
   if name_id <= 0 {
     return 0
   }
@@ -3988,7 +3988,7 @@ fn resolve_tag_id(p : Parser, name_id : Int) -> Int {
 }
 
 ///|
-fn define_tag_id(p : Parser, name_id : Int) -> Int {
+fn define_tag_id(p : Parser, name_id : Int32) -> Int32 {
   if name_id <= 0 {
     return 0
   }
@@ -4011,7 +4011,7 @@ fn define_tag_id(p : Parser, name_id : Int) -> Int {
 }
 
 ///|
-fn current_typedef_scope_id(p : Parser) -> Int {
+fn current_typedef_scope_id(p : Parser) -> Int32 {
   let len = p.typedef_scope_stack.length()
   if len == 0 {
     0
@@ -4057,7 +4057,7 @@ fn ensure_typedef_scope(p : Parser) -> Unit {
 }
 
 ///|
-fn typedef_id_from_name(p : Parser, name : String) -> Int {
+fn typedef_id_from_name(p : Parser, name : String) -> Int32 {
   if name == "" {
     return 0
   }
@@ -4066,7 +4066,7 @@ fn typedef_id_from_name(p : Parser, name : String) -> Int {
 }
 
 ///|
-fn typedef_id_from_token(_p : Parser, tok : @tokens.Token) -> Int {
+fn typedef_id_from_token(_p : Parser, tok : @tokens.Token) -> Int32 {
   if tok.kind != Ident {
     return 0
   }
@@ -4074,7 +4074,7 @@ fn typedef_id_from_token(_p : Parser, tok : @tokens.Token) -> Int {
 }
 
 ///|
-fn inc_typedef_count(p : Parser, id : Int) -> Unit {
+fn inc_typedef_count(p : Parser, id : Int32) -> Unit {
   if id == 0 {
     return
   }
@@ -4083,7 +4083,7 @@ fn inc_typedef_count(p : Parser, id : Int) -> Unit {
 }
 
 ///|
-fn dec_typedef_count(p : Parser, id : Int) -> Unit {
+fn dec_typedef_count(p : Parser, id : Int32) -> Unit {
   if id == 0 {
     return
   }
@@ -4172,7 +4172,7 @@ fn token_lexeme(p : Parser, tok : @tokens.Token) -> String {
 }
 
 ///|
-fn token_lexeme_len(p : Parser, tok : @tokens.Token) -> Int {
+fn token_lexeme_len(p : Parser, tok : @tokens.Token) -> Int32 {
   @tokens.token_text_len_with(p.pp.interner, p.pp.lexeme_pool, tok)
 }
 
@@ -4182,7 +4182,7 @@ fn peek_token(p : Parser) -> @tokens.Token {
 }
 
 ///|
-fn peek_token_at(p : Parser, offset : Int) -> @tokens.Token {
+fn peek_token_at(p : Parser, offset : Int32) -> @tokens.Token {
   if offset <= 0 {
     return p.current
   }
@@ -4197,7 +4197,7 @@ fn peek_token_at(p : Parser, offset : Int) -> @tokens.Token {
 }
 
 ///|
-fn peek_kind(p : Parser, offset : Int) -> @tokens.TokenKind {
+fn peek_kind(p : Parser, offset : Int32) -> @tokens.TokenKind {
   peek_token_at(p, offset).kind
 }
 

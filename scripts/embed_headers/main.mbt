@@ -36,7 +36,7 @@ struct CliOptions {
 async fn main {
   let args = @env.args()
 
-  let cli_options = CliOptions::{ dir_path: "", output_file: "" }
+  let cli_options = CliOptions::{ dir_path: "", output_file: "", }
   loop args[:] {
     ["-o", output_file, ..] => cli_options.output_file = output_file
     [dir, .. args] => {
@@ -65,5 +65,9 @@ async fn main {
     buffer.write_string(",\n")
   }
   buffer.write_string("}")
-  @fs.write_file(output_path.to_string(), "pub let headers : Map[String, String] = \{buffer.to_string()}\n", create=0o644)
+  @fs.write_file(
+    output_path.to_string(),
+    "pub let headers : Map[String, String] = \{buffer.to_string()}\n",
+    permission=0o644,
+  )
 }

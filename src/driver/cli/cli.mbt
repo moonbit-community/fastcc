@@ -32,7 +32,7 @@ pub struct CliConfig {
 pub(all) enum CliMacroAction {
   Define(name~ : String, value~ : String?)
   Undef(name~ : String)
-} derive(Show, Eq, ToJson)
+} derive(Show, Debug, Eq, ToJson)
 
 ///|
 pub(all) enum CliParse {
@@ -67,7 +67,7 @@ fn split_define_spec(spec : String) -> (String, String?)? {
 }
 
 ///|
-fn is_cli_whitespace(code : Int) -> Bool {
+fn is_cli_whitespace(code : Int32) -> Bool {
   code == 32 || code == 9 || code == 10 || code == 13
 }
 

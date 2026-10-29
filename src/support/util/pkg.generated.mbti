@@ -8,25 +8,25 @@ import {
 // Values
 pub let char_is_unsigned : Bool
 
-pub fn[K, V] fast_map_new(capacity? : Int) -> @hashmap.HashMap[K, V]
+pub fn[K, V] fast_map_new(capacity? : Int32) -> @hashmap.HashMap[K, V]
 
-pub fn hex_digit_value(UInt16) -> Int?
+pub fn hex_digit_value(UInt16) -> Int32?
 
-pub fn int_literal_base(String) -> Int
+pub fn int_literal_base(String) -> Int32
 
-pub fn int_literal_base_from(String, Int) -> Int
+pub fn int_literal_base_from(String, Int32) -> Int32
 
-pub fn int_literal_end(String) -> Int
+pub fn int_literal_end(String) -> Int32
 
-pub fn parse_int_suffix(String) -> (Int, Bool)
+pub fn parse_int_suffix(String) -> (Int32, Bool)
 
-pub fn parse_int_suffix_range(String, Int) -> (Int, Bool)
+pub fn parse_int_suffix_range(String, Int32) -> (Int32, Bool)
 
-pub fn parse_uint64_literal(String, Int) -> UInt64
+pub fn parse_uint64_literal(String, Int32) -> UInt64
 
-pub fn parse_uint64_literal_prefix(String, Int, Int) -> UInt64
+pub fn parse_uint64_literal_prefix(String, Int32, Int32) -> UInt64
 
-pub fn slice_string(String, Int, Int) -> String
+pub fn slice_string(String, Int32, Int32) -> String
 
 // Errors
 
@@ -36,4 +36,3 @@ pub fn slice_string(String, Int, Int) -> String
 pub using @hashmap {type HashMap as FastMap}
 
 // Traits
-

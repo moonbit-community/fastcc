@@ -31,7 +31,7 @@ pub fn expr_loc(@ast_core.Expr) -> @source_core.SrcLoc
 
 pub fn expr_may_call(@ast_core.Expr) -> Bool
 
-pub fn expr_node_id(@ast_core.Expr) -> Int
+pub fn expr_node_id(@ast_core.Expr) -> Int32
 
 pub fn has_type_attrs(@ast_core.Attributes) -> Bool
 
@@ -117,4 +117,3 @@ pub using @ast_core {type VarDecl}
 pub using @ast_core {type Visibility}
 
 // Traits
-

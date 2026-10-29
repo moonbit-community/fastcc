@@ -1,8 +1,0 @@
-{
-  "name": "hackwaly/fastcc",
-  "deps": {
-    "moonbitlang/x": "0.4.38"
-  },
-  "source": "src",
-  "preferred-target": "native"
-}

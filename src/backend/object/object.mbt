@@ -15,13 +15,13 @@
 
 ///|
 pub(all) struct Sym {
-  id : Int
+  id : Int32
 }
 
 ///|
 pub(all) struct Reloc {
-  offset : Int
-  kind : Int
+  offset : Int32
+  kind : Int32
   sym : Sym
   addend : Int64
 }
@@ -29,15 +29,15 @@ pub(all) struct Reloc {
 ///|
 pub(all) struct Section {
   name : String
-  data : Array[UInt]
+  data : Array[UInt32]
   relocs : Array[Reloc]
-  align : Int
-  size_bytes : Int
+  align : Int32
+  size_bytes : Int32
 }
 
 ///|
 pub fn new_section(name : String) -> Section {
-  { name, data: [], relocs: [], align: 4, size_bytes: 0 }
+  { name, data: [], relocs: [], align: 4, size_bytes: 0, }
 }
 
 ///|
@@ -46,7 +46,7 @@ pub fn reloc_addend(rel : Reloc) -> Int64 {
 }
 
 ///|
-pub fn section_size_bytes(sec : Section) -> Int {
+pub fn section_size_bytes(sec : Section) -> Int32 {
   if sec.size_bytes > 0 {
     sec.size_bytes
   } else {
@@ -55,7 +55,7 @@ pub fn section_size_bytes(sec : Section) -> Int {
 }
 
 ///|
-pub fn section_word_len(sec : Section) -> Int {
+pub fn section_word_len(sec : Section) -> Int32 {
   if sec.size_bytes > 0 {
     sec.size_bytes >> 2
   } else {

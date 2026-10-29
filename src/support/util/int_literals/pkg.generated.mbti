@@ -2,19 +2,19 @@
 package "hackwaly/fastcc/support/util/int_literals"
 
 // Values
-pub fn int_literal_base(String) -> Int
+pub fn int_literal_base(String) -> Int32
 
-pub fn int_literal_base_from(String, Int) -> Int
+pub fn int_literal_base_from(String, Int32) -> Int32
 
-pub fn int_literal_end(String) -> Int
+pub fn int_literal_end(String) -> Int32
 
-pub fn parse_int_suffix(String) -> (Int, Bool)
+pub fn parse_int_suffix(String) -> (Int32, Bool)
 
-pub fn parse_int_suffix_range(String, Int) -> (Int, Bool)
+pub fn parse_int_suffix_range(String, Int32) -> (Int32, Bool)
 
-pub fn parse_uint64_literal(String, Int) -> UInt64
+pub fn parse_uint64_literal(String, Int32) -> UInt64
 
-pub fn parse_uint64_literal_prefix(String, Int, Int) -> UInt64
+pub fn parse_uint64_literal_prefix(String, Int32, Int32) -> UInt64
 
 // Errors
 
@@ -23,4 +23,3 @@ pub fn parse_uint64_literal_prefix(String, Int, Int) -> UInt64
 // Type aliases
 
 // Traits
-

@@ -3,7 +3,8 @@ import {
   "hackwaly/fastcc/host/default_host",
 }
 
+pkgtype(kind: "executable")
+
 options(
-  "is-main": true,
   link: { "native": { "cc-flags": "-w" } },
 )

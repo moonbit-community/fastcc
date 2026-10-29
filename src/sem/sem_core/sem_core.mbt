@@ -30,11 +30,11 @@ pub struct RecordDef {
 
 ///|
 pub(all) struct FieldAccessInfo {
-  offset : Int
+  offset : Int32
   ty : @ast.CType
-  bit_offset : Int?
-  bit_width : Int?
-  bit_unit_size : Int?
+  bit_offset : Int32?
+  bit_width : Int32?
+  bit_unit_size : Int32?
 }
 
 ///|
@@ -62,9 +62,9 @@ pub struct SemContext {
   builtin_sig_ids : Array[FuncSig?]
   atomic_template_ids : Array[String?]
   function_defs : @util.FastMap[String, Bool]
-  local_scope_ids_by_id : Array[Int]
-  local_scope_stack : Array[Int]
-  mut next_local_scope_id : Int
+  local_scope_ids_by_id : Array[Int32]
+  local_scope_stack : Array[Int32]
+  mut next_local_scope_id : Int32
   local_values_by_id : Array[@ast.CType?]
   local_overrides : Array[Array[LocalOverride]]
   type_aliases : @util.FastMap[String, @ast.CType]
@@ -73,30 +73,32 @@ pub struct SemContext {
   union_defs : @util.FastMap[String, RecordDef]
   union_defs_by_id : Array[RecordDef?]
   struct_member_cache : @util.FastMap[String, @util.FastMap[String, @ast.CType]]
-  struct_member_cache_by_id : Array[@util.FastMap[Int, @ast.CType]?]
+  struct_member_cache_by_id : Array[@util.FastMap[Int32, @ast.CType]?]
   union_member_cache : @util.FastMap[String, @util.FastMap[String, @ast.CType]]
-  union_member_cache_by_id : Array[@util.FastMap[Int, @ast.CType]?]
+  union_member_cache_by_id : Array[@util.FastMap[Int32, @ast.CType]?]
   struct_field_access_cache : @util.FastMap[
     String,
     @util.FastMap[String, FieldAccessInfo],
   ]
-  struct_field_access_cache_by_id : Array[@util.FastMap[Int, FieldAccessInfo]?]
+  struct_field_access_cache_by_id : Array[
+    @util.FastMap[Int32, FieldAccessInfo]?,
+  ]
   union_field_access_cache : @util.FastMap[
     String,
     @util.FastMap[String, FieldAccessInfo],
   ]
-  union_field_access_cache_by_id : Array[@util.FastMap[Int, FieldAccessInfo]?]
-  struct_field_index_cache : @util.FastMap[String, @util.FastMap[String, Int]]
-  struct_field_index_cache_by_id : Array[@util.FastMap[Int, Int]?]
-  union_field_index_cache : @util.FastMap[String, @util.FastMap[String, Int]]
-  union_field_index_cache_by_id : Array[@util.FastMap[Int, Int]?]
-  struct_size_cache : @util.FastMap[String, (Int, Int)]
-  struct_size_cache_by_id : Array[(Int, Int)?]
-  union_size_cache : @util.FastMap[String, (Int, Int)]
-  union_size_cache_by_id : Array[(Int, Int)?]
-  func_compound_literals : @util.FastMap[String, Array[Int]]
-  func_compound_literals_by_id : Array[Array[Int]?]
-  compound_literal_sizes : @util.FastMap[Int, (Int, Int)]
+  union_field_access_cache_by_id : Array[@util.FastMap[Int32, FieldAccessInfo]?]
+  struct_field_index_cache : @util.FastMap[String, @util.FastMap[String, Int32]]
+  struct_field_index_cache_by_id : Array[@util.FastMap[Int32, Int32]?]
+  union_field_index_cache : @util.FastMap[String, @util.FastMap[String, Int32]]
+  union_field_index_cache_by_id : Array[@util.FastMap[Int32, Int32]?]
+  struct_size_cache : @util.FastMap[String, (Int32, Int32)]
+  struct_size_cache_by_id : Array[(Int32, Int32)?]
+  union_size_cache : @util.FastMap[String, (Int32, Int32)]
+  union_size_cache_by_id : Array[(Int32, Int32)?]
+  func_compound_literals : @util.FastMap[String, Array[Int32]]
+  func_compound_literals_by_id : Array[Array[Int32]?]
+  compound_literal_sizes : @util.FastMap[Int32, (Int32, Int32)]
   func_has_compound_literal : @util.FastMap[String, Bool]
   func_has_stmt_expr : @util.FastMap[String, Bool]
   func_has_stmt_expr_by_id : Array[Bool?]
@@ -106,45 +108,45 @@ pub struct SemContext {
   func_has_local_decl_by_id : Array[Bool?]
   enum_defs : @util.FastMap[String, Array[@ast.EnumItem]]
   enum_defs_by_id : Array[Array[@ast.EnumItem]?]
-  enum_consts : @util.FastMap[String, Int]
-  enum_consts_by_id : Array[Int?]
-  enum_const_scope_ids_by_id : Array[Int]
+  enum_consts : @util.FastMap[String, Int32]
+  enum_consts_by_id : Array[Int32?]
+  enum_const_scope_ids_by_id : Array[Int32]
   enum_const_overrides : Array[Array[EnumConstOverride]]
   enum_types : @util.FastMap[String, @ast.CType]
   enum_types_by_id : Array[@ast.CType?]
-  compound_literal_types : @util.FastMap[Int, @ast.CType]
+  compound_literal_types : @util.FastMap[Int32, @ast.CType]
   expr_type_cache : Array[@ast.CType?]
-  func_agg_temps : @util.FastMap[String, (Int, Int)]
-  func_agg_temps_by_id : Array[(Int, Int)?]
+  func_agg_temps : @util.FastMap[String, (Int32, Int32)]
+  func_agg_temps_by_id : Array[(Int32, Int32)?]
   switch_stack : Array[SwitchInfo]
   mut labels_defined : @util.FastMap[String, Bool]
   mut labels_used : Array[(String, @source.SrcLoc)]
-  mut loop_depth : Int
-  mut switch_depth : Int
+  mut loop_depth : Int32
+  mut switch_depth : Int32
   mut current_func_name : String?
-  mut current_func_id : Int
-  mut current_agg_temp_size : Int
-  mut current_agg_temp_align : Int
+  mut current_func_id : Int32
+  mut current_agg_temp_size : Int32
+  mut current_agg_temp_align : Int32
   mut record_agg_temps : Bool
 }
 
 ///|
 struct LocalOverride {
-  id : Int
+  id : Int32
   prev_ty : @ast.CType?
-  prev_scope : Int
+  prev_scope : Int32
 }
 
 ///|
 struct EnumConstOverride {
-  id : Int
-  prev_value : Int?
-  prev_scope : Int
+  id : Int32
+  prev_value : Int32?
+  prev_scope : Int32
 }
 
 ///|
 struct SwitchInfo {
-  cases : Array[(Int, Int, @source.SrcLoc)]
+  cases : Array[(Int32, Int32, @source.SrcLoc)]
   mut has_default : Bool
 }
 
@@ -235,7 +237,7 @@ fn new_sem_context(diags : @diag.DiagBag) -> SemContext {
 }
 
 ///|
-fn[T] ensure_opt_array_capacity(arr : Array[T?], id : Int) -> Unit {
+fn[T] ensure_opt_array_capacity(arr : Array[T?], id : Int32) -> Unit {
   if id <= 0 {
     return
   }
@@ -251,7 +253,7 @@ fn[T] ensure_opt_array_capacity(arr : Array[T?], id : Int) -> Unit {
 }
 
 ///|
-pub fn[T] get_opt_by_id(arr : Array[T?], id : Int) -> T? {
+pub fn[T] get_opt_by_id(arr : Array[T?], id : Int32) -> T? {
   if id <= 0 || id > arr.length() {
     None
   } else {
@@ -260,7 +262,7 @@ pub fn[T] get_opt_by_id(arr : Array[T?], id : Int) -> T? {
 }
 
 ///|
-pub fn[T] set_opt_by_id(arr : Array[T?], id : Int, value : T) -> Unit {
+pub fn[T] set_opt_by_id(arr : Array[T?], id : Int32, value : T) -> Unit {
   if id <= 0 {
     return
   }
@@ -269,7 +271,7 @@ pub fn[T] set_opt_by_id(arr : Array[T?], id : Int, value : T) -> Unit {
 }
 
 ///|
-fn ensure_int_array_capacity(arr : Array[Int], id : Int) -> Unit {
+fn ensure_int_array_capacity(arr : Array[Int32], id : Int32) -> Unit {
   if id <= 0 {
     return
   }
@@ -285,7 +287,7 @@ fn ensure_int_array_capacity(arr : Array[Int], id : Int) -> Unit {
 }
 
 ///|
-pub fn current_local_scope_id(ctx : SemContext) -> Int {
+pub fn current_local_scope_id(ctx : SemContext) -> Int32 {
   let len = ctx.local_scope_stack.length()
   if len == 0 {
     0
@@ -295,12 +297,12 @@ pub fn current_local_scope_id(ctx : SemContext) -> Int {
 }
 
 ///|
-pub fn[T] has_opt_by_id(arr : Array[T?], id : Int) -> Bool {
+pub fn[T] has_opt_by_id(arr : Array[T?], id : Int32) -> Bool {
   get_opt_by_id(arr, id) is Some(_)
 }
 
 ///|
-fn ensure_globals_by_id(ctx : SemContext, id : Int) -> Unit {
+fn ensure_globals_by_id(ctx : SemContext, id : Int32) -> Unit {
   if id <= 0 {
     return
   }
@@ -316,7 +318,7 @@ fn ensure_globals_by_id(ctx : SemContext, id : Int) -> Unit {
 }
 
 ///|
-fn set_global_by_id(ctx : SemContext, id : Int, ty : @ast.CType) -> Unit {
+fn set_global_by_id(ctx : SemContext, id : Int32, ty : @ast.CType) -> Unit {
   if id <= 0 {
     return
   }
@@ -325,17 +327,17 @@ fn set_global_by_id(ctx : SemContext, id : Int, ty : @ast.CType) -> Unit {
 }
 
 ///|
-pub fn get_global_by_id(ctx : SemContext, id : Int) -> @ast.CType? {
+pub fn get_global_by_id(ctx : SemContext, id : Int32) -> @ast.CType? {
   get_opt_by_id(ctx.globals_by_id, id)
 }
 
 ///|
-fn has_global_by_id(ctx : SemContext, id : Int) -> Bool {
+fn has_global_by_id(ctx : SemContext, id : Int32) -> Bool {
   get_global_by_id(ctx, id) is Some(_)
 }
 
 ///|
-fn ensure_functions_by_id(ctx : SemContext, id : Int) -> Unit {
+fn ensure_functions_by_id(ctx : SemContext, id : Int32) -> Unit {
   if id <= 0 {
     return
   }
@@ -351,7 +353,7 @@ fn ensure_functions_by_id(ctx : SemContext, id : Int) -> Unit {
 }
 
 ///|
-fn set_function_by_id(ctx : SemContext, id : Int, sig : FuncSig) -> Unit {
+fn set_function_by_id(ctx : SemContext, id : Int32, sig : FuncSig) -> Unit {
   if id <= 0 {
     return
   }
@@ -360,17 +362,17 @@ fn set_function_by_id(ctx : SemContext, id : Int, sig : FuncSig) -> Unit {
 }
 
 ///|
-pub fn get_function_by_id(ctx : SemContext, id : Int) -> FuncSig? {
+pub fn get_function_by_id(ctx : SemContext, id : Int32) -> FuncSig? {
   get_opt_by_id(ctx.functions_by_id, id)
 }
 
 ///|
-pub fn has_function_by_id(ctx : SemContext, id : Int) -> Bool {
+pub fn has_function_by_id(ctx : SemContext, id : Int32) -> Bool {
   get_function_by_id(ctx, id) is Some(_)
 }
 
 ///|
-fn ensure_enum_consts_by_id(ctx : SemContext, id : Int) -> Unit {
+fn ensure_enum_consts_by_id(ctx : SemContext, id : Int32) -> Unit {
   if id <= 0 {
     return
   }
@@ -386,7 +388,7 @@ fn ensure_enum_consts_by_id(ctx : SemContext, id : Int) -> Unit {
 }
 
 ///|
-fn ensure_enum_const_scopes_by_id(ctx : SemContext, id : Int) -> Unit {
+fn ensure_enum_const_scopes_by_id(ctx : SemContext, id : Int32) -> Unit {
   if id <= 0 {
     return
   }
@@ -402,7 +404,7 @@ fn ensure_enum_const_scopes_by_id(ctx : SemContext, id : Int) -> Unit {
 }
 
 ///|
-fn set_enum_const_by_id(ctx : SemContext, id : Int, value : Int) -> Unit {
+fn set_enum_const_by_id(ctx : SemContext, id : Int32, value : Int32) -> Unit {
   if id <= 0 {
     return
   }
@@ -411,17 +413,17 @@ fn set_enum_const_by_id(ctx : SemContext, id : Int, value : Int) -> Unit {
 }
 
 ///|
-fn get_enum_const_by_id(ctx : SemContext, id : Int) -> Int? {
+fn get_enum_const_by_id(ctx : SemContext, id : Int32) -> Int32? {
   get_opt_by_id(ctx.enum_consts_by_id, id)
 }
 
 ///|
-fn has_enum_const_by_id(ctx : SemContext, id : Int) -> Bool {
+fn has_enum_const_by_id(ctx : SemContext, id : Int32) -> Bool {
   get_enum_const_by_id(ctx, id) is Some(_)
 }
 
 ///|
-fn get_enum_const_scope_id(ctx : SemContext, id : Int) -> Int {
+fn get_enum_const_scope_id(ctx : SemContext, id : Int32) -> Int32 {
   if id <= 0 || id > ctx.enum_const_scope_ids_by_id.length() {
     0
   } else {
@@ -430,7 +432,11 @@ fn get_enum_const_scope_id(ctx : SemContext, id : Int) -> Int {
 }
 
 ///|
-fn set_enum_const_scope_id(ctx : SemContext, id : Int, scope_id : Int) -> Unit {
+fn set_enum_const_scope_id(
+  ctx : SemContext,
+  id : Int32,
+  scope_id : Int32,
+) -> Unit {
   if id <= 0 {
     return
   }
@@ -488,12 +494,12 @@ fn char_pointer_type() -> @ast.CType {
 }
 
 ///|
-fn lookup_local_only(ctx : SemContext, id : Int) -> @ast.CType? {
+fn lookup_local_only(ctx : SemContext, id : Int32) -> @ast.CType? {
   get_opt_by_id(ctx.local_values_by_id, id)
 }
 
 ///|
-pub fn enum_const_value(ctx : SemContext, name : String, id : Int) -> Int? {
+pub fn enum_const_value(ctx : SemContext, name : String, id : Int32) -> Int32? {
   if id > 0 {
     get_enum_const_by_id(ctx, id)
   } else {
@@ -502,7 +508,7 @@ pub fn enum_const_value(ctx : SemContext, name : String, id : Int) -> Int? {
 }
 
 ///|
-fn enum_const_exists(ctx : SemContext, name : String, id : Int) -> Bool {
+fn enum_const_exists(ctx : SemContext, name : String, id : Int32) -> Bool {
   if id > 0 {
     has_enum_const_by_id(ctx, id)
   } else {
@@ -511,7 +517,7 @@ fn enum_const_exists(ctx : SemContext, name : String, id : Int) -> Bool {
 }
 
 ///|
-fn enum_int_type_from_range(min_value : Int, max_value : Int) -> @ast.CType {
+fn enum_int_type_from_range(min_value : Int32, max_value : Int32) -> @ast.CType {
   let max_int = 2147483647
   let min_int = -2147483647 - 1
   if min_value >= 0 {
@@ -647,7 +653,7 @@ fn is_void_type(ty : @ast.CType) -> Bool {
 }
 
 ///|
-fn int_rank(kind : @ast.CIntKind) -> Int {
+fn int_rank(kind : @ast.CIntKind) -> Int32 {
   match kind {
     Char => 1
     Short => 2
@@ -658,7 +664,7 @@ fn int_rank(kind : @ast.CIntKind) -> Int {
 }
 
 ///|
-fn int_bits(kind : @ast.CIntKind) -> Int {
+fn int_bits(kind : @ast.CIntKind) -> Int32 {
   match kind {
     Char => 8
     Short => 16
@@ -669,7 +675,7 @@ fn int_bits(kind : @ast.CIntKind) -> Int {
 }
 
 ///|
-fn float_rank(kind : @ast.CFloatKind) -> Int {
+fn float_rank(kind : @ast.CFloatKind) -> Int32 {
   match kind {
     Float => 1
     Double => 2
@@ -678,7 +684,7 @@ fn float_rank(kind : @ast.CFloatKind) -> Int {
 }
 
 ///|
-pub fn int_size(kind : @ast.CIntKind) -> Int {
+pub fn int_size(kind : @ast.CIntKind) -> Int32 {
   match kind {
     Char => 1
     Short => 2
@@ -689,7 +695,7 @@ pub fn int_size(kind : @ast.CIntKind) -> Int {
 }
 
 ///|
-pub fn float_size(kind : @ast.CFloatKind) -> Int {
+pub fn float_size(kind : @ast.CFloatKind) -> Int32 {
   match kind {
     Float => 4
     Double => 8
@@ -699,7 +705,7 @@ pub fn float_size(kind : @ast.CFloatKind) -> Int {
 }
 
 ///|
-pub fn align_to(value : Int, align : Int) -> Int {
+pub fn align_to(value : Int32, align : Int32) -> Int32 {
   if align <= 1 {
     return value
   }
@@ -710,7 +716,7 @@ pub fn align_to(value : Int, align : Int) -> Int {
 let max_align = 16
 
 ///|
-fn is_power_of_two(value : Int) -> Bool {
+fn is_power_of_two(value : Int32) -> Bool {
   value > 0 && (value & (value - 1)) == 0
 }
 
@@ -719,7 +725,7 @@ fn resolve_align_spec(
   ctx : SemContext,
   spec : @ast.AlignSpec,
   loc : @source.SrcLoc,
-) -> Int? {
+) -> Int32? {
   match spec {
     Default => Some(max_align)
     Expr(expr~) =>
@@ -741,7 +747,7 @@ pub fn attr_align_value(
   ctx : SemContext,
   attrs : @ast.Attributes,
   loc : @source.SrcLoc,
-) -> Int? {
+) -> Int32? {
   match attrs.aligned {
     None => None
     Some(spec) => resolve_align_spec(ctx, spec, loc)
@@ -950,7 +956,7 @@ pub fn type_size_align(
   ctx : SemContext,
   ty : @ast.CType,
   loc : @source.SrcLoc,
-) -> (Int, Int)? {
+) -> (Int32, Int32)? {
   match strip_top_qualifiers_keep_attrs(ty) {
     TypeofExpr(expr~) => type_size_align(ctx, type_for_typeof(ctx, expr), loc)
     Attributed(attrs~, base~) =>
@@ -1183,7 +1189,7 @@ fn maybe_record_agg_temp_for_expr(
 pub fn ensure_struct_fields(
   ctx : SemContext,
   tag : String,
-  tag_id : Int,
+  tag_id : Int32,
   fields : Array[@ast.RecordItem]?,
   is_union~ : Bool,
   loc : @source.SrcLoc,
@@ -1200,7 +1206,10 @@ pub fn ensure_struct_fields(
             })
         }
       } else {
-        Some({ fields: record_items_to_fields(list), attrs: @ast.empty_attrs() })
+        Some({
+          fields: record_items_to_fields(list),
+          attrs: @ast.empty_attrs(),
+        })
       }
     None =>
       if is_union {
@@ -1311,7 +1320,7 @@ pub fn struct_size_align(
   fields : Array[@ast.Field],
   attrs : @ast.Attributes,
   loc : @source.SrcLoc,
-) -> (Int, Int) {
+) -> (Int32, Int32) {
   if attrs.ms_struct {
     return struct_size_align_ms(ctx, fields, attrs, loc)
   }
@@ -1444,7 +1453,7 @@ fn struct_size_align_ms(
   fields : Array[@ast.Field],
   attrs : @ast.Attributes,
   loc : @source.SrcLoc,
-) -> (Int, Int) {
+) -> (Int32, Int32) {
   let mut size = 0
   let mut align = 1
   let mut bit_pos = 0
@@ -1595,7 +1604,7 @@ pub fn union_size_align(
   fields : Array[@ast.Field],
   attrs : @ast.Attributes,
   loc : @source.SrcLoc,
-) -> (Int, Int) {
+) -> (Int32, Int32) {
   let mut size = 0
   let mut align = 1
   for field in fields {
@@ -2099,7 +2108,7 @@ fn define_enum_consts_for_codegen(
 fn register_struct_def(
   ctx : SemContext,
   name : String,
-  id : Int,
+  id : Int32,
   fields : Array[@ast.RecordItem]?,
   attrs : @ast.Attributes,
   is_union~ : Bool,
@@ -2131,7 +2140,7 @@ fn register_struct_def(
     None => []
     Some(val) => record_items_to_fields_checked(ctx, val)
   }
-  let incoming = { fields: incoming_fields, attrs }
+  let incoming = { fields: incoming_fields, attrs, }
   let validate_fields = fn(def : RecordDef) -> Unit {
     if def.fields.length() == 0 {
       return
@@ -2278,7 +2287,7 @@ fn register_struct_def(
 fn register_enum_def(
   ctx : SemContext,
   name : String,
-  id : Int,
+  id : Int32,
   items : Array[@ast.EnumItem]?,
   loc : @source.SrcLoc,
 ) -> Unit {
@@ -2359,9 +2368,9 @@ fn register_enum_def(
 fn define_enum_const(
   ctx : SemContext,
   name : String,
-  id : Int,
+  id : Int32,
   loc : @source.SrcLoc,
-  value : Int,
+  value : Int32,
 ) -> Unit {
   let scope_id = current_local_scope_id(ctx)
   let prev_scope = if id > 0 { get_enum_const_scope_id(ctx, id) } else { 0 }
@@ -2413,7 +2422,7 @@ fn define_enum_const(
     match ctx.enum_const_overrides.get(ctx.enum_const_overrides.length() - 1) {
       Some(overrides) => {
         let prev_value = get_enum_const_by_id(ctx, id)
-        overrides.push({ id, prev_value, prev_scope })
+        overrides.push({ id, prev_value, prev_scope, })
       }
       None => ()
     }
@@ -2428,7 +2437,7 @@ fn define_enum_const(
 }
 
 ///|
-fn parse_int_value(text : String) -> Int {
+fn parse_int_value(text : String) -> Int32 {
   parse_uint64_value(text).reinterpret_as_int64().to_int()
 }
 
@@ -2468,7 +2477,7 @@ fn int_literal_type(text : String) -> @ast.CType {
 }
 
 ///|
-fn int_literal_end(text : String) -> Int {
+fn int_literal_end(text : String) -> Int32 {
   let len = text.length()
   if len == 0 {
     return 0
@@ -2491,7 +2500,11 @@ fn int_literal_end(text : String) -> Int {
 }
 
 ///|
-fn scan_digits(text : String, start : Int, accept : (UInt16) -> Bool) -> Int {
+fn scan_digits(
+  text : String,
+  start : Int32,
+  accept : (UInt16) -> Bool,
+) -> Int32 {
   let mut i = start
   while i < text.length() {
     if !accept(text[i]) {
@@ -2503,7 +2516,7 @@ fn scan_digits(text : String, start : Int, accept : (UInt16) -> Bool) -> Int {
 }
 
 ///|
-fn slice_string_sem(text : String, start : Int, end : Int) -> String {
+fn slice_string_sem(text : String, start : Int32, end : Int32) -> String {
   text.view(start_offset=start, end_offset=end).to_string()
 }
 
@@ -2530,7 +2543,7 @@ fn is_hex_digit_code(code : UInt16) -> Bool {
 }
 
 ///|
-fn _parse_uint64_literal(text : String, base : Int) -> UInt64 {
+fn _parse_uint64_literal(text : String, base : Int32) -> UInt64 {
   let mut value : UInt64 = 0
   let mut i = 0
   if base == 16 &&
@@ -2562,7 +2575,11 @@ fn _parse_uint64_literal(text : String, base : Int) -> UInt64 {
 }
 
 ///|
-fn parse_uint64_literal_prefix(text : String, base : Int, end : Int) -> UInt64 {
+fn parse_uint64_literal_prefix(
+  text : String,
+  base : Int32,
+  end : Int32,
+) -> UInt64 {
   let mut value : UInt64 = 0
   let mut i = 0
   if base == 16 &&
@@ -2594,7 +2611,7 @@ fn parse_uint64_literal_prefix(text : String, base : Int, end : Int) -> UInt64 {
 }
 
 ///|
-fn digit_value(code : UInt16) -> Int? {
+fn digit_value(code : UInt16) -> Int32? {
   if is_dec_digit_code(code) {
     Some(code.to_int() - 48)
   } else if code >= 65 && code <= 70 {
@@ -2607,7 +2624,7 @@ fn digit_value(code : UInt16) -> Int? {
 }
 
 ///|
-fn _int_literal_base(text : String) -> Int {
+fn _int_literal_base(text : String) -> Int32 {
   let trimmed = trim_int_literal(text)
   if trimmed.length() >= 2 && trimmed[0] == 48 {
     let next = trimmed[1]
@@ -2623,7 +2640,7 @@ fn _int_literal_base(text : String) -> Int {
 }
 
 ///|
-fn int_literal_base_from(text : String, end : Int) -> Int {
+fn int_literal_base_from(text : String, end : Int32) -> Int32 {
   if end >= 2 && text[0] == 48 {
     let next = text[1]
     if next == 120 || next == 88 {
@@ -2638,7 +2655,7 @@ fn int_literal_base_from(text : String, end : Int) -> Int {
 }
 
 ///|
-fn _parse_int_suffix(suffix : String) -> (Int, Bool) {
+fn _parse_int_suffix(suffix : String) -> (Int32, Bool) {
   let mut long_count = 0
   let mut unsigned = false
   for code in suffix.to_lower() {
@@ -2655,7 +2672,7 @@ fn _parse_int_suffix(suffix : String) -> (Int, Bool) {
 }
 
 ///|
-fn parse_int_suffix_range(text : String, start : Int) -> (Int, Bool) {
+fn parse_int_suffix_range(text : String, start : Int32) -> (Int32, Bool) {
   let mut long_count = 0
   let mut unsigned = false
   let len = text.length()
@@ -2678,10 +2695,10 @@ fn parse_int_suffix_range(text : String, start : Int) -> (Int, Bool) {
 ///|
 fn adjust_int_literal_kind(
   value : UInt64,
-  base : Int,
-  long_count : Int,
+  base : Int32,
+  long_count : Int32,
   unsigned : Bool,
-) -> (Int, Bool) {
+) -> (Int32, Bool) {
   let mut lcount = long_count
   let mut ucount = unsigned
   if !ucount && base == 10 {
@@ -2729,7 +2746,7 @@ fn eval_addr_const_expr_value(
   ctx : SemContext,
   expr : @ast.Expr,
   loc : @source.SrcLoc,
-) -> (Int, Bool) {
+) -> (Int32, Bool) {
   match expr {
     Member(base~, name~, is_arrow~, loc=mem_loc, ..) =>
       match try_eval_int_const(ctx, base) {
@@ -2794,7 +2811,7 @@ fn eval_const_expr_value(
   ctx : SemContext,
   expr : @ast.Expr,
   loc : @source.SrcLoc,
-) -> (Int, Bool) {
+) -> (Int32, Bool) {
   match expr {
     IntLit(value~, ..) => (parse_int_value(value), true)
     CharLit(value~, ..) => (value, true)
@@ -3248,7 +3265,7 @@ fn eval_const_expr(
   ctx : SemContext,
   expr : @ast.Expr,
   loc : @source.SrcLoc,
-) -> Int {
+) -> Int32 {
   let (value, _) = eval_const_expr_value(ctx, expr, loc)
   value
 }
@@ -3259,7 +3276,7 @@ pub fn eval_builtin_offsetof(
   ty : @ast.CType,
   path : Array[String],
   loc : @source.SrcLoc,
-) -> Int? {
+) -> Int32? {
   match eval_builtin_offsetof_and_type(ctx, ty, path, loc, false) {
     None => None
     Some((off, _, _)) => Some(off)
@@ -3273,7 +3290,7 @@ fn eval_builtin_offsetof_and_type(
   path : Array[String],
   loc : @source.SrcLoc,
   suppress_error : Bool,
-) -> (Int, @ast.CType, Bool)? {
+) -> (Int32, @ast.CType, Bool)? {
   if path.length() == 0 {
     add_sem_error(ctx, loc, "__builtin_offsetof expects member designator")
     return None
@@ -3373,7 +3390,7 @@ fn struct_field_offset_and_type(
   struct_attrs : @ast.Attributes,
   name : String,
   loc : @source.SrcLoc,
-) -> (Int, @ast.CType, Bool)? {
+) -> (Int32, @ast.CType, Bool)? {
   let fields = def.fields
   let attrs = @ast.merge_attrs(def.attrs, struct_attrs)
   if attrs.ms_struct {
@@ -3638,7 +3655,7 @@ fn union_field_offset_and_type(
   union_attrs : @ast.Attributes,
   name : String,
   loc : @source.SrcLoc,
-) -> (Int, @ast.CType, Bool)? {
+) -> (Int32, @ast.CType, Bool)? {
   let fields = def.fields
   let _attrs = @ast.merge_attrs(def.attrs, union_attrs)
   for field in fields {
@@ -3734,7 +3751,7 @@ fn is_constant_expr_for_builtin(ctx : SemContext, expr : @ast.Expr) -> Bool {
 }
 
 ///|
-pub fn try_eval_int_const(ctx : SemContext, expr : @ast.Expr) -> Int? {
+pub fn try_eval_int_const(ctx : SemContext, expr : @ast.Expr) -> Int32? {
   match expr {
     IntLit(value~, ..) => Some(parse_int_value(value))
     CharLit(value~, ..) => Some(value)
@@ -3953,14 +3970,14 @@ fn func_sig_from_params(
   call_conv : @ast.CallConv,
 ) -> FuncSig {
   let param_types = params.map(p => adjust_param_type_for_sig(p.ty))
-  { return_type, params: param_types, varargs, is_old_style, call_conv }
+  { return_type, params: param_types, varargs, is_old_style, call_conv, }
 }
 
 ///|
 fn add_function_sig(
   ctx : SemContext,
   name : String,
-  id : Int,
+  id : Int32,
   sig : FuncSig,
   loc : @source.SrcLoc,
   is_def~ : Bool,
@@ -4033,7 +4050,7 @@ fn func_sig_eq(a : FuncSig, b : FuncSig) -> Bool {
 }
 
 ///|
-pub fn apply_inferred_array_size(ty : @ast.CType, size : Int) -> @ast.CType {
+pub fn apply_inferred_array_size(ty : @ast.CType, size : Int32) -> @ast.CType {
   match ty {
     Qualified(qual~, base~) => {
       let updated = apply_inferred_array_size(base, size)
@@ -4049,7 +4066,7 @@ pub fn apply_inferred_array_size(ty : @ast.CType, size : Int) -> @ast.CType {
 }
 
 ///|
-pub fn compound_literal_key(node_id : Int) -> Int {
+pub fn compound_literal_key(node_id : Int32) -> Int32 {
   node_id
 }
 
@@ -4059,7 +4076,7 @@ pub fn compound_literal_type(
   ty : @ast.CType,
   init : @ast.Initializer,
   loc : @source.SrcLoc,
-  node_id : Int,
+  node_id : Int32,
 ) -> @ast.CType {
   let key = compound_literal_key(node_id)
   match ctx.compound_literal_types.get(key) {
@@ -4082,7 +4099,7 @@ pub fn compound_literal_type(
 fn update_decl_type(
   ctx : SemContext,
   name : String,
-  id : Int,
+  id : Int32,
   ty : @ast.CType,
   is_local~ : Bool,
 ) -> Unit {
@@ -4110,7 +4127,7 @@ fn update_decl_type(
 ///|
 pub fn record_local_binding(
   ctx : SemContext,
-  id : Int,
+  id : Int32,
   ty : @ast.CType,
 ) -> Unit {
   let scope_id = current_local_scope_id(ctx)
@@ -4175,7 +4192,7 @@ fn record_local_decl(ctx : SemContext) -> Unit {
 fn record_compound_literal(
   ctx : SemContext,
   loc : @source.SrcLoc,
-  node_id : Int,
+  node_id : Int32,
   ty : @ast.CType,
 ) -> Unit {
   if !ctx.record_agg_temps {
@@ -4229,7 +4246,7 @@ fn require_complete_object_type(
   ctx : SemContext,
   ty : @ast.CType,
   loc : @source.SrcLoc,
-  allow_incomplete_array? : Bool = false,
+  allow_incomplete_array~ : Bool = false,
 ) -> Unit {
   match strip_top_qualifiers(ty) {
     Array(elem~, size~, size_expr~) => {
@@ -4341,7 +4358,7 @@ fn check_var_decl(
           "function declaration cannot have initializer",
         )
       }
-      let sig = { return_type, params, varargs, is_old_style, call_conv }
+      let sig = { return_type, params, varargs, is_old_style, call_conv, }
       add_function_sig(ctx, decl.name, decl.id, sig, decl.loc, is_def=false)
       return
     }
@@ -4414,7 +4431,7 @@ fn check_initializer(
   ty : @ast.CType,
   init : @ast.Initializer,
   loc : @source.SrcLoc,
-) -> Int? {
+) -> Int32? {
   if init is List(..) && !is_aggregate_type(ty) {
     match unwrap_single_init_expr(init) {
       Some(expr) => {
@@ -4558,7 +4575,7 @@ fn check_initializer_list(
   ty : @ast.CType,
   items : Array[@ast.InitItem],
   loc : @source.SrcLoc,
-) -> Int? {
+) -> Int32? {
   match strip_top_qualifiers(ty) {
     Array(elem~, size~, ..) => {
       let mut next_index = 0
@@ -4568,7 +4585,7 @@ fn check_initializer_list(
         let item = items[item_index]
         let mut index = next_index
         let mut has_index = false
-        let mut range_end : Int? = None
+        let mut range_end : Int32? = None
         let target = if item.designators.length() > 0 {
           match item.designators[0] {
             Index(expr~, loc=des_loc) =>
@@ -4823,9 +4840,9 @@ fn check_struct_initializer(
 ///|
 fn collect_elided_array_items(
   items : Array[@ast.InitItem],
-  start : Int,
-  max_count : Int?,
-) -> (Array[@ast.InitItem], Int) {
+  start : Int32,
+  max_count : Int32?,
+) -> (Array[@ast.InitItem], Int32) {
   let collected : Array[@ast.InitItem] = []
   let mut idx = start
   let limit = match max_count {
@@ -4837,14 +4854,14 @@ fn collect_elided_array_items(
     if item.designators.length() > 0 {
       break
     }
-    collected.push({ designators: [], value: item.value, loc: item.loc })
+    collected.push({ designators: [], value: item.value, loc: item.loc, })
     idx = idx + 1
   }
   (collected, idx - start)
 }
 
 ///|
-fn init_flatten_count(ctx : SemContext, ty : @ast.CType) -> Int? {
+fn init_flatten_count(ctx : SemContext, ty : @ast.CType) -> Int32? {
   match strip_top_qualifiers(ty) {
     Array(elem~, size=Some(n), ..) =>
       if n <= 0 {
@@ -4904,8 +4921,8 @@ fn init_flatten_count(ctx : SemContext, ty : @ast.CType) -> Int? {
 fn init_flatten_count_from_fields(
   ctx : SemContext,
   fields : Array[@ast.Field],
-  start : Int,
-) -> Int? {
+  start : Int32,
+) -> Int32? {
   let mut total = 0
   let mut idx = start
   while idx < fields.length() {
@@ -4922,10 +4939,10 @@ fn init_flatten_count_from_fields(
 fn collect_elided_struct_items(
   ctx : SemContext,
   items : Array[@ast.InitItem],
-  start : Int,
+  start : Int32,
   ty : @ast.CType,
-  max_count? : Int? = None,
-) -> (Array[@ast.InitItem], Int) {
+  max_count~ : Int32? = None,
+) -> (Array[@ast.InitItem], Int32) {
   let count = match init_flatten_count(ctx, ty) {
     None => return ([], 0)
     Some(v) => v
@@ -4979,7 +4996,7 @@ fn collect_elided_struct_items(
     if item.designators.length() > 0 {
       break
     }
-    collected.push({ designators: [], value: item.value, loc: item.loc })
+    collected.push({ designators: [], value: item.value, loc: item.loc, })
     idx = idx + 1
   }
   (collected, idx - start)
@@ -5029,8 +5046,8 @@ fn has_single_init_field(ctx : SemContext, ty : @ast.CType) -> Bool {
 ///|
 pub fn next_init_field(
   fields : Array[@ast.Field],
-  start : Int,
-) -> (@ast.Field, Int)? {
+  start : Int32,
+) -> (@ast.Field, Int32)? {
   let mut i = start
   while i < fields.length() {
     let field = fields[i]
@@ -5044,7 +5061,10 @@ pub fn next_init_field(
 }
 
 ///|
-fn count_remaining_init_fields(fields : Array[@ast.Field], start : Int) -> Int {
+fn count_remaining_init_fields(
+  fields : Array[@ast.Field],
+  start : Int32,
+) -> Int32 {
   let mut count = 0
   let mut idx = start
   while true {
@@ -5064,7 +5084,7 @@ pub fn const_int_from_expr(
   ctx : SemContext,
   expr : @ast.Expr,
   loc : @source.SrcLoc,
-) -> Int? {
+) -> Int32? {
   let (value, ok) = eval_const_expr_value(ctx, expr, loc)
   if ok {
     Some(value)
@@ -5388,8 +5408,8 @@ fn check_cond_expr(ctx : SemContext, expr : @ast.Expr) -> Unit {
 ///|
 fn register_case_range(
   ctx : SemContext,
-  start : Int,
-  end : Int,
+  start : Int32,
+  end : Int32,
   loc : @source.SrcLoc,
 ) -> Unit {
   if ctx.switch_stack.length() == 0 {
@@ -5414,7 +5434,7 @@ fn with_loop(ctx : SemContext, f : () -> Unit) -> Unit {
 ///|
 fn with_switch(ctx : SemContext, f : () -> Unit) -> Unit {
   ctx.switch_depth = ctx.switch_depth + 1
-  ctx.switch_stack.push({ cases: [], has_default: false })
+  ctx.switch_stack.push({ cases: [], has_default: false, })
   f()
   if ctx.switch_stack.pop() is Some(info) {
     check_switch_cases(ctx, info)
@@ -5817,7 +5837,7 @@ fn promote_old_style_params(params : Array[@ast.Param]) -> Array[@ast.Param] {
 fn lookup_struct_fields(
   ctx : SemContext,
   name : String,
-  id : Int,
+  id : Int32,
   is_union~ : Bool,
 ) -> Array[@ast.Field]? {
   match lookup_struct_def(ctx, name, id, is_union~) {
@@ -5830,7 +5850,7 @@ fn lookup_struct_fields(
 fn lookup_struct_def(
   ctx : SemContext,
   name : String,
-  id : Int,
+  id : Int32,
   is_union~ : Bool,
 ) -> RecordDef? {
   if id != 0 {
@@ -5856,7 +5876,7 @@ fn lookup_struct_def(
 pub fn resolve_struct_fields(
   ctx : SemContext,
   tag : String,
-  tag_id : Int,
+  tag_id : Int32,
   fields : Array[@ast.RecordItem]?,
   is_union~ : Bool,
 ) -> Array[@ast.Field]? {
@@ -5876,7 +5896,7 @@ fn find_field(
   ctx : SemContext,
   fields : Array[@ast.Field],
   name : String,
-  id : Int,
+  id : Int32,
 ) -> @ast.Field? {
   for field in fields {
     if (id > 0 && field.id == id) || field.name == name {
@@ -5924,8 +5944,8 @@ fn find_field_index(
   ctx : SemContext,
   fields : Array[@ast.Field],
   name : String,
-  id : Int,
-) -> Int? {
+  id : Int32,
+) -> Int32? {
   for i = 0; i < fields.length(); i = i + 1 {
     if (id > 0 && fields[i].id == id) || fields[i].name == name {
       return Some(i)
@@ -5971,10 +5991,10 @@ fn find_field_index(
 fn collect_field_index_cache_from_field(
   ctx : SemContext,
   field : @ast.Field,
-  top_index : Int,
+  top_index : Int32,
   loc : @source.SrcLoc,
-  cache_by_name : @util.FastMap[String, Int],
-  cache_by_id : @util.FastMap[Int, Int],
+  cache_by_name : @util.FastMap[String, Int32],
+  cache_by_id : @util.FastMap[Int32, Int32],
 ) -> Unit {
   if field.name != "" {
     if !cache_by_name.contains(field.name) {
@@ -6029,9 +6049,9 @@ fn build_field_index_caches(
   ctx : SemContext,
   fields : Array[@ast.Field],
   loc : @source.SrcLoc,
-) -> (@util.FastMap[String, Int], @util.FastMap[Int, Int]) {
-  let cache_by_name : @util.FastMap[String, Int] = @util.fast_map_new()
-  let cache_by_id : @util.FastMap[Int, Int] = @util.fast_map_new()
+) -> (@util.FastMap[String, Int32], @util.FastMap[Int32, Int32]) {
+  let cache_by_name : @util.FastMap[String, Int32] = @util.fast_map_new()
+  let cache_by_id : @util.FastMap[Int32, Int32] = @util.fast_map_new()
   for i = 0; i < fields.length(); i = i + 1 {
     collect_field_index_cache_from_field(
       ctx,
@@ -6050,9 +6070,9 @@ pub fn find_field_index_cached(
   ctx : SemContext,
   record_ty : @ast.CType,
   name : String,
-  id : Int,
+  id : Int32,
   loc : @source.SrcLoc,
-) -> Int? {
+) -> Int32? {
   let resolved = resolve_type(ctx, record_ty, loc) |> strip_top_qualifiers
   match resolved {
     Struct(name=tag, id=tag_id, fields=field_list, attrs=_) =>
@@ -6202,7 +6222,7 @@ fn collect_member_cache_from_fields(
   qual : @ast.TypeQual,
   loc : @source.SrcLoc,
   cache_by_name : @util.FastMap[String, @ast.CType],
-  cache_by_id : @util.FastMap[Int, @ast.CType],
+  cache_by_id : @util.FastMap[Int32, @ast.CType],
 ) -> Unit {
   for field in fields {
     let (field_qual, _) = split_top_qual(field.ty)
@@ -6267,9 +6287,9 @@ fn build_member_caches(
   ctx : SemContext,
   fields : Array[@ast.Field],
   loc : @source.SrcLoc,
-) -> (@util.FastMap[String, @ast.CType], @util.FastMap[Int, @ast.CType]) {
+) -> (@util.FastMap[String, @ast.CType], @util.FastMap[Int32, @ast.CType]) {
   let cache_by_name : @util.FastMap[String, @ast.CType] = @util.fast_map_new()
-  let cache_by_id : @util.FastMap[Int, @ast.CType] = @util.fast_map_new()
+  let cache_by_id : @util.FastMap[Int32, @ast.CType] = @util.fast_map_new()
   collect_member_cache_from_fields(
     ctx,
     fields,
@@ -6287,7 +6307,7 @@ fn member_access_search(
   ty : @ast.CType,
   qual : @ast.TypeQual,
   name : String,
-  id : Int,
+  id : Int32,
   loc : @source.SrcLoc,
 ) -> @ast.CType? {
   match strip_top_qualifiers(ty) {
@@ -6358,7 +6378,7 @@ fn member_access_type(
   ctx : SemContext,
   base_ty : @ast.CType,
   name : String,
-  id : Int,
+  id : Int32,
   is_arrow~ : Bool,
   loc : @source.SrcLoc,
 ) -> @ast.CType? {
@@ -6760,7 +6780,7 @@ fn stmt_expr_lvalue_type(
 }
 
 ///|
-fn ensure_expr_type_cache(ctx : SemContext, id : Int) -> Unit {
+fn ensure_expr_type_cache(ctx : SemContext, id : Int32) -> Unit {
   if id <= 0 {
     return
   }
@@ -7386,7 +7406,7 @@ fn has_atomic_prefix(name : String) -> Bool {
 pub fn builtin_call_kind(
   ctx : SemContext,
   name : String,
-  id : Int,
+  id : Int32,
 ) -> BuiltinCallKind? {
   if id != 0 {
     if get_opt_by_id(ctx.builtin_call_ids, id) is Some(kind) {
@@ -7426,7 +7446,7 @@ pub fn builtin_call_kind(
 fn builtin_func_sig_from_ident(
   ctx : SemContext,
   name : String,
-  id : Int,
+  id : Int32,
 ) -> FuncSig? {
   if id != 0 {
     if get_opt_by_id(ctx.builtin_sig_ids, id) is Some(sig) {
@@ -7452,7 +7472,7 @@ fn builtin_func_sig_from_ident(
 pub fn atomic_builtin_template_from_ident(
   ctx : SemContext,
   name : String,
-  id : Int,
+  id : Int32,
 ) -> String? {
   if id != 0 {
     if get_opt_by_id(ctx.atomic_template_ids, id) is Some(template) {
@@ -7661,7 +7681,7 @@ fn atomic_builtin_template_by_name(name : String) -> String? {
 }
 
 ///|
-fn is_pow2_int(x : Int) -> Bool {
+fn is_pow2_int(x : Int32) -> Bool {
   x > 0 && (x & (x - 1)) == 0
 }
 
@@ -7669,7 +7689,7 @@ fn is_pow2_int(x : Int) -> Bool {
 pub fn atomic_builtin_return_type(
   ctx : SemContext,
   name : String,
-  id : Int,
+  id : Int32,
   args : Array[@ast.Expr],
   loc : @source.SrcLoc,
 ) -> @ast.CType? {
@@ -7930,7 +7950,7 @@ fn type_of_compound_assign(
 fn declare_local(
   ctx : SemContext,
   name : String,
-  id : Int,
+  id : Int32,
   ty : @ast.CType,
   loc : @source.SrcLoc,
 ) -> Unit {
@@ -7954,7 +7974,7 @@ fn declare_local(
 fn declare_global(
   ctx : SemContext,
   name : String,
-  id : Int,
+  id : Int32,
   ty : @ast.CType,
   loc : @source.SrcLoc,
 ) -> Unit {
@@ -8040,7 +8060,7 @@ fn merge_global_decl_type(
 }
 
 ///|
-fn lookup_value(ctx : SemContext, name : String, id : Int) -> @ast.CType? {
+fn lookup_value(ctx : SemContext, name : String, id : Int32) -> @ast.CType? {
   let mut found = if id > 0 {
     get_opt_by_id(ctx.local_values_by_id, id)
   } else {

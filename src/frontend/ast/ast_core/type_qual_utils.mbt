@@ -15,7 +15,7 @@
 
 ///|
 pub fn empty_qual() -> TypeQual {
-  { is_const: false, is_volatile: false, is_restrict: false, is_atomic: false }
+  { is_const: false, is_volatile: false, is_restrict: false, is_atomic: false, }
 }
 
 ///|

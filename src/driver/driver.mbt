@@ -33,12 +33,12 @@ priv struct BenchStats {
   mut sem_ns : UInt64
   mut codegen_ns : UInt64
   mut total_ns : UInt64
-  mut files : Int
+  mut files : Int32
 }
 
 ///|
 fn bench_stats_new() -> BenchStats {
-  { parse_ns: 0UL, sem_ns: 0UL, codegen_ns: 0UL, total_ns: 0UL, files: 0 }
+  { parse_ns: 0UL, sem_ns: 0UL, codegen_ns: 0UL, total_ns: 0UL, files: 0, }
 }
 
 ///|
@@ -47,12 +47,12 @@ fn bench_delta_ns(start_ns : UInt64, end_ns : UInt64) -> UInt64 {
 }
 
 ///|
-fn bench_ms(delta_ns : UInt64) -> Int {
+fn bench_ms(delta_ns : UInt64) -> Int32 {
   (delta_ns / 1_000_000UL).to_int()
 }
 
 ///|
-fn bench_us(delta_ns : UInt64) -> Int {
+fn bench_us(delta_ns : UInt64) -> Int32 {
   ((delta_ns + 999UL) / 1_000UL).to_int()
 }
 
@@ -62,7 +62,7 @@ pub fn bench_now_ns() -> UInt64 {
 }
 
 ///|
-pub fn run_args(host~ : &@host.Host, args : Array[String]) -> Int {
+pub fn run_args(host~ : &@host.Host, args : Array[String]) -> Int32 {
   run_with_args(host~, args)
 }
 
@@ -229,7 +229,7 @@ fn build_shell_command_bytes(args : Array[String]) -> Bytes {
 }
 
 ///|
-fn run_shell_command(args : Array[String]) -> Int {
+fn run_shell_command(args : Array[String]) -> Int32 {
   @ffi.run_command(build_shell_command_bytes(args))
 }
 
@@ -381,7 +381,7 @@ pub fn run_main(host : &@host.Host) -> Unit {
 }
 
 ///|
-fn run_with_args(host~ : &@host.Host, args : Array[String]) -> Int {
+fn run_with_args(host~ : &@host.Host, args : Array[String]) -> Int32 {
   @codegen.touch_unused_symbols()
   match parse_cli_args(host~, args) {
     Help => 0

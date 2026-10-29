@@ -38,7 +38,7 @@ pub fn lex_string_literal(@lexer_core.Lexer, @source_core.SrcLoc, Bool, UInt16) 
 
 pub fn lexer_loc(@lexer_core.Lexer) -> @source_core.SrcLoc
 
-pub fn make_token(@tokens_core.TokenKind, @source_core.SrcLoc, Bool, id? : Int, lexeme_id? : Int) -> @tokens_core.Token
+pub fn make_token(@tokens_core.TokenKind, @source_core.SrcLoc, Bool, id? : Int32, lexeme_id? : Int32) -> @tokens_core.Token
 
 pub fn new_lexer(@source_core.SourceFile, @diag_core.DiagBag, @intern_core.StringInterner, @tokens_core.KeywordIds, @tokens_core.LexemePool) -> @lexer_core.Lexer
 
@@ -46,7 +46,7 @@ pub fn next_token(@lexer_core.Lexer) -> @tokens_core.Token
 
 pub fn peek_char(@lexer_core.Lexer) -> UInt16?
 
-pub fn peek_char_offset(@lexer_core.Lexer, Int) -> UInt16?
+pub fn peek_char_offset(@lexer_core.Lexer, Int32) -> UInt16?
 
 pub fn skip_block_comment(@lexer_core.Lexer, @source_core.SrcLoc) -> Unit
 
@@ -56,7 +56,7 @@ pub fn skip_string_literal(@lexer_core.Lexer, @source_core.SrcLoc, UInt16) -> Un
 
 pub fn skip_ws(@lexer_core.Lexer) -> Unit
 
-pub fn slice_to_view(String, Int, Int) -> StringView
+pub fn slice_to_view(String, Int32, Int32) -> StringView
 
 // Errors
 
@@ -66,4 +66,3 @@ pub fn slice_to_view(String, Int, Int) -> StringView
 pub using @lexer_core {type Lexer}
 
 // Traits
-

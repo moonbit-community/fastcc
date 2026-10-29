@@ -4,11 +4,11 @@ test "macho encode and write" {
     name: ".text",
     data: [0x1234],
     relocs: [
-      { offset: 0, kind: @arm64.R_AARCH64_POINTER, sym: { id: 1 }, addend: 0 },
+      { offset: 0, kind: @arm64.R_AARCH64_POINTER, sym: { id: 1, }, addend: 0, },
       {
         offset: 0,
         kind: @arm64.R_AARCH64_ADR_PREL_PG_HI21_NC,
-        sym: { id: 2 },
+        sym: { id: 2, },
         addend: 4,
       },
     ],
@@ -95,9 +95,9 @@ test "macho reloc variants" {
     name: ".text",
     data: [0x90],
     relocs: [
-      { offset: 0, kind: @arm64.R_AARCH64_POINTER, sym: { id: 1 }, addend: 0 },
-      { offset: 0, kind: @arm64.R_AARCH64_CALL26, sym: { id: 2 }, addend: 0 },
-      { offset: 0, kind: 999, sym: { id: 99 }, addend: 0 },
+      { offset: 0, kind: @arm64.R_AARCH64_POINTER, sym: { id: 1, }, addend: 0, },
+      { offset: 0, kind: @arm64.R_AARCH64_CALL26, sym: { id: 2, }, addend: 0, },
+      { offset: 0, kind: 999, sym: { id: 99, }, addend: 0, },
     ],
     align: 4,
     size_bytes: 0,
@@ -117,7 +117,7 @@ test "macho reloc variants" {
       value: 0,
       is_external: false,
     },
-    { id: 2, name: "sym_undef", section: None, value: 0, is_external: true },
+    { id: 2, name: "sym_undef", section: None, value: 0, is_external: true, },
     {
       id: 3,
       name: "sym_data",

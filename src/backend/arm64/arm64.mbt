@@ -23,39 +23,39 @@ pub type Reloc = @object.Reloc
 pub type Section = @object.Section
 
 ///|
-pub const NB_REGS : Int = 28
+pub const NB_REGS : Int32 = 28
 
 ///|
-pub const TREG_R30 : Int = 19
+pub const TREG_R30 : Int32 = 19
 
 ///|
-pub const TREG_F0 : Int = 20
+pub const TREG_F0 : Int32 = 20
 
 ///|
-pub const TREG_F7 : Int = 27
+pub const TREG_F7 : Int32 = 27
 
 ///|
-pub fn treg_r(x : Int) -> Int {
+pub fn treg_r(x : Int32) -> Int32 {
   x
 }
 
 ///|
-pub fn treg_f(x : Int) -> Int {
+pub fn treg_f(x : Int32) -> Int32 {
   TREG_F0 + x
 }
 
 ///|
-pub fn rc_r(x : Int) -> Int {
+pub fn rc_r(x : Int32) -> Int32 {
   1 << (2 + x)
 }
 
 ///|
-pub fn rc_f(x : Int) -> Int {
+pub fn rc_f(x : Int32) -> Int32 {
   1 << (22 + x)
 }
 
 ///|
-let reg_classes : Array[Int] = [
+let reg_classes : Array[Int32] = [
   RC_INT | rc_r(0),
   RC_INT | rc_r(1),
   RC_INT | rc_r(2),
@@ -87,56 +87,56 @@ let reg_classes : Array[Int] = [
 ]
 
 ///|
-pub const R_AARCH64_ADR_GOT_PAGE : Int = 311
+pub const R_AARCH64_ADR_GOT_PAGE : Int32 = 311
 
 ///|
-pub const R_AARCH64_LD64_GOT_LO12_NC : Int = 312
+pub const R_AARCH64_LD64_GOT_LO12_NC : Int32 = 312
 
 ///|
-pub const R_AARCH64_CALL26 : Int = 283
+pub const R_AARCH64_CALL26 : Int32 = 283
 
 ///|
-pub const R_AARCH64_ADR_PREL_PG_HI21 : Int = 275
+pub const R_AARCH64_ADR_PREL_PG_HI21 : Int32 = 275
 
 ///|
-pub const R_AARCH64_ADR_PREL_PG_HI21_NC : Int = 276
+pub const R_AARCH64_ADR_PREL_PG_HI21_NC : Int32 = 276
 
 ///|
-pub const R_AARCH64_ADD_ABS_LO12_NC : Int = 277
+pub const R_AARCH64_ADD_ABS_LO12_NC : Int32 = 277
 
 ///|
-pub const R_AARCH64_LDST8_ABS_LO12_NC : Int = 278
+pub const R_AARCH64_LDST8_ABS_LO12_NC : Int32 = 278
 
 ///|
-pub const R_AARCH64_JUMP26 : Int = 282
+pub const R_AARCH64_JUMP26 : Int32 = 282
 
 ///|
 /// Absolute 64-bit relocation used for data/pointer references.
-pub const R_AARCH64_POINTER : Int = 257
+pub const R_AARCH64_POINTER : Int32 = 257
 
 ///|
 pub(all) struct Arm64Emitter {
-  mut code : Array[UInt]
-  mut code_len : Int
+  mut code : Array[UInt32]
+  mut code_len : Int32
   relocs : Array[Reloc]
 }
 
 ///|
 pub fn new_arm64_emitter() -> Arm64Emitter {
-  { code: [], code_len: 0, relocs: [] }
+  { code: [], code_len: 0, relocs: [], }
 }
 
 ///|
 pub fn new_arm64_emitter_with_capacity(
-  code_capacity : Int,
-  reloc_capacity : Int,
+  code_capacity : Int32,
+  reloc_capacity : Int32,
 ) -> Arm64Emitter {
   if code_capacity <= 0 && reloc_capacity <= 0 {
     return new_arm64_emitter()
   }
   let code_cap = if code_capacity > 0 { code_capacity } else { 0 }
   let reloc_cap = if reloc_capacity > 0 { reloc_capacity } else { 0 }
-  let zero : UInt = 0
+  let zero : UInt32 = 0
   {
     code: if code_cap > 0 {
       Array::make(code_cap, zero)
@@ -151,8 +151,8 @@ pub fn new_arm64_emitter_with_capacity(
 ///|
 pub fn section_from_emitter(name : String, emitter : Arm64Emitter) -> Section {
   let code_len = emitter.code_len
-  let zero : UInt = 0
-  let data : Array[UInt] = Array::make(code_len, zero)
+  let zero : UInt32 = 0
+  let data : Array[UInt32] = Array::make(code_len, zero)
   let mut i = 0
   while i < code_len {
     data[i] = emitter.code[i]
@@ -183,7 +183,7 @@ pub fn section_from_emitter_take(
 }
 
 ///|
-pub fn emit32(emitter : Arm64Emitter, insn : UInt) -> Unit {
+pub fn emit32(emitter : Arm64Emitter, insn : UInt32) -> Unit {
   let idx = emitter.code_len
   if idx >= emitter.code.length() {
     let current = emitter.code.length()
@@ -191,8 +191,8 @@ pub fn emit32(emitter : Arm64Emitter, insn : UInt) -> Unit {
     if next < idx + 1 {
       next = idx + 1
     }
-    let zero : UInt = 0
-    let expanded : Array[UInt] = Array::make(next, zero)
+    let zero : UInt32 = 0
+    let expanded : Array[UInt32] = Array::make(next, zero)
     let mut i = 0
     while i < idx {
       expanded[i] = emitter.code[i]
@@ -205,7 +205,7 @@ pub fn emit32(emitter : Arm64Emitter, insn : UInt) -> Unit {
 }
 
 ///|
-pub fn emitter_pc(emitter : Arm64Emitter) -> Int {
+pub fn emitter_pc(emitter : Arm64Emitter) -> Int32 {
   emitter.code_len << 2
 }
 
@@ -213,25 +213,25 @@ pub fn emitter_pc(emitter : Arm64Emitter) -> Int {
 pub fn greloca(
   emitter : Arm64Emitter,
   sym : Sym,
-  offset : Int,
-  kind : Int,
+  offset : Int32,
+  kind : Int32,
   addend : Int64,
 ) -> Unit {
-  emitter.relocs.push({ offset, kind, sym, addend })
+  emitter.relocs.push({ offset, kind, sym, addend, })
 }
 
 ///|
 pub fn greloc(
   emitter : Arm64Emitter,
   sym : Sym,
-  offset : Int,
-  kind : Int,
+  offset : Int32,
+  kind : Int32,
 ) -> Unit {
   greloca(emitter, sym, offset, kind, 0)
 }
 
 ///|
-pub fn intr(r : Int) -> Int {
+pub fn intr(r : Int32) -> Int32 {
   if r < TREG_R30 {
     r
   } else {
@@ -240,17 +240,17 @@ pub fn intr(r : Int) -> Int {
 }
 
 ///|
-pub fn fltr(r : Int) -> Int {
+pub fn fltr(r : Int32) -> Int32 {
   r - TREG_F0
 }
 
 ///|
-pub fn is_freg(r : Int) -> Bool {
+pub fn is_freg(r : Int32) -> Bool {
   r >= TREG_F0
 }
 
 ///|
-pub fn u64_mask(bits : Int) -> UInt64 {
+pub fn u64_mask(bits : Int32) -> UInt64 {
   if bits <= 0 {
     return 0
   }
@@ -259,7 +259,7 @@ pub fn u64_mask(bits : Int) -> UInt64 {
 }
 
 ///|
-pub fn arm64_encode_bimm64(value : UInt64) -> Int {
+pub fn arm64_encode_bimm64(value : UInt64) -> Int32 {
   let mut x = value
   let neg = (x & 1) != 0
   if neg {
@@ -351,7 +351,7 @@ pub fn arm64_encode_bimm64(value : UInt64) -> Int {
 }
 
 ///|
-pub fn arm64_movi(reg : UInt, value : UInt64) -> UInt {
+pub fn arm64_movi(reg : UInt32, value : UInt64) -> UInt32 {
   let m : UInt64 = 0xffff
   if (value & m.lnot()) == 0 {
     return (0x52800000 : UInt64).lor(reg.to_uint64()).lor(value << 5).to_uint()
@@ -421,7 +421,11 @@ pub fn arm64_movi(reg : UInt, value : UInt64) -> UInt {
 }
 
 ///|
-pub fn arm64_movimm(emitter : Arm64Emitter, reg : UInt, value : UInt64) -> Unit {
+pub fn arm64_movimm(
+  emitter : Arm64Emitter,
+  reg : UInt32,
+  value : UInt64,
+) -> Unit {
   let insn = arm64_movi(reg, value)
   if insn != 0 {
     emit32(emitter, insn)
@@ -476,7 +480,7 @@ pub fn arm64_movimm(emitter : Arm64Emitter, reg : UInt, value : UInt64) -> Unit 
 }
 
 ///|
-pub fn gsym_addr(emitter : Arm64Emitter, t_ : Int, a_ : Int) -> Unit raise {
+pub fn gsym_addr(emitter : Arm64Emitter, t_ : Int32, a_ : Int32) -> Unit raise {
   let mut t = t_
   let a = a_
   while t != 0 {
@@ -486,11 +490,11 @@ pub fn gsym_addr(emitter : Arm64Emitter, t_ : Int, a_ : Int) -> Unit raise {
     if diff + 0x8000000 >= 0x10000000 {
       fail("branch out of range")
     }
-    let insn : UInt = if diff == 4 {
+    let insn : UInt32 = if diff == 4 {
       0xd503201f
     } else {
       let imm = (diff >> 2) & 0x3ffffff
-      (0x14000000 : Int).lor(imm).reinterpret_as_uint()
+      (0x14000000 : Int32).lor(imm).reinterpret_as_uint()
     }
     emitter.code[idx] = insn
     t = next
@@ -498,37 +502,37 @@ pub fn gsym_addr(emitter : Arm64Emitter, t_ : Int, a_ : Int) -> Unit raise {
 }
 
 ///|
-pub fn gsym(emitter : Arm64Emitter, t : Int) -> Unit raise {
+pub fn gsym(emitter : Arm64Emitter, t : Int32) -> Unit raise {
   if t != 0 {
     gsym_addr(emitter, t, emitter_pc(emitter))
   }
 }
 
 ///|
-pub fn gind(emitter : Arm64Emitter) -> Int {
+pub fn gind(emitter : Arm64Emitter) -> Int32 {
   emitter_pc(emitter)
 }
 
 ///|
-pub fn gjmp(emitter : Arm64Emitter, t : Int) -> Int {
+pub fn gjmp(emitter : Arm64Emitter, t : Int32) -> Int32 {
   let r = emitter_pc(emitter)
   emit32(emitter, t.reinterpret_as_uint())
   r
 }
 
 ///|
-pub fn gjmp_addr(emitter : Arm64Emitter, a : Int) -> Unit raise {
+pub fn gjmp_addr(emitter : Arm64Emitter, a : Int32) -> Unit raise {
   let ind = emitter_pc(emitter)
   if a - ind + 0x8000000 >= 0x10000000 {
     fail("branch out of range")
   }
   let imm = ((a - ind) >> 2) & 0x3ffffff
-  let insn = (0x14000000 : Int).lor(imm).reinterpret_as_uint()
+  let insn = (0x14000000 : Int32).lor(imm).reinterpret_as_uint()
   emit32(emitter, insn)
 }
 
 ///|
-pub fn gjmp_append(emitter : Arm64Emitter, n : Int, t : Int) -> Int {
+pub fn gjmp_append(emitter : Arm64Emitter, n : Int32, t : Int32) -> Int32 {
   let mut t1 = t
   let mut n1 = n
   if n1 != 0 {
@@ -547,7 +551,7 @@ pub fn gjmp_append(emitter : Arm64Emitter, n : Int, t : Int) -> Int {
 }
 
 ///|
-pub fn gen_fill_nops(emitter : Arm64Emitter, bytes : Int) -> Unit raise {
+pub fn gen_fill_nops(emitter : Arm64Emitter, bytes : Int32) -> Unit raise {
   let mut remaining = bytes
   if (remaining & 3) != 0 {
     fail("alignment of code section not multiple of 4")
@@ -559,7 +563,7 @@ pub fn gen_fill_nops(emitter : Arm64Emitter, bytes : Int) -> Unit raise {
 }
 
 ///|
-pub fn arm64_vset_VT_CMP(op : Int) -> Unit {
+pub fn arm64_vset_VT_CMP(op : Int32) -> Unit {
   if op >= TOK_ULT && op <= TOK_GT {
     let idx = vtop_index()
     vstack[idx].cmp_r = vstack[idx].r
@@ -570,8 +574,8 @@ pub fn arm64_vset_VT_CMP(op : Int) -> Unit {
 ///|
 pub fn arm64_load_cmp(
   emitter : Arm64Emitter,
-  r : Int,
-  sv_index : Int,
+  r : Int32,
+  sv_index : Int32,
 ) -> Unit raise {
   vstack[sv_index].r = vstack[sv_index].cmp_r
   if (vstack[sv_index].c_i & 1L) != 0 {
@@ -585,7 +589,7 @@ pub fn arm64_load_cmp(
 }
 
 ///|
-pub fn gjmp_cond(emitter : Arm64Emitter, op : Int, t : Int) -> Int raise {
+pub fn gjmp_cond(emitter : Arm64Emitter, op : Int32, t : Int32) -> Int32 raise {
   let idx = vtop_index()
   let bt = vstack[idx].type_t & VT_BTYPE
   let inv = op & 1
@@ -598,16 +602,22 @@ pub fn gjmp_cond(emitter : Arm64Emitter, op : Int, t : Int) -> Int raise {
     let b0 = get_reg(RC_INT)
     let a = intr(a0)
     let b = intr(b0)
-    emit32(emitter, (0x4e083c00 : Int).lor(a).lor(f << 5).reinterpret_as_uint())
-    emit32(emitter, (0x4e183c00 : Int).lor(b).lor(f << 5).reinterpret_as_uint())
     emit32(
       emitter,
-      (0xaa000400 : Int).lor(a).lor(a << 5).lor(b << 16).reinterpret_as_uint(),
+      (0x4e083c00 : Int32).lor(a).lor(f << 5).reinterpret_as_uint(),
+    )
+    emit32(
+      emitter,
+      (0x4e183c00 : Int32).lor(b).lor(f << 5).reinterpret_as_uint(),
+    )
+    emit32(
+      emitter,
+      (0xaa000400 : Int32).lor(a).lor(a << 5).lor(b << 16).reinterpret_as_uint(),
     )
     let inv_bit = if inv != 0 { 1 } else { 0 }
     emit32(
       emitter,
-      (0xb4000040 : Int).lor(a).lor(inv_bit << 24).reinterpret_as_uint(),
+      (0xb4000040 : Int32).lor(a).lor(inv_bit << 24).reinterpret_as_uint(),
     )
     vpop()
   } else if bt == VT_FLOAT || bt == VT_DOUBLE {
@@ -615,10 +625,13 @@ pub fn gjmp_cond(emitter : Arm64Emitter, op : Int, t : Int) -> Int raise {
     let is_double = if bt != VT_FLOAT { 1 } else { 0 }
     emit32(
       emitter,
-      (0x1e202008 : Int).lor(a << 5).lor(is_double << 22).reinterpret_as_uint(),
+      (0x1e202008 : Int32)
+      .lor(a << 5)
+      .lor(is_double << 22)
+      .reinterpret_as_uint(),
     )
     let inv_bit = if inv != 0 { 1 } else { 0 }
-    emit32(emitter, (0x54000040 : Int).lor(inv_bit).reinterpret_as_uint())
+    emit32(emitter, (0x54000040 : Int32).lor(inv_bit).reinterpret_as_uint())
   } else {
     let ll = bt == VT_PTR || bt == VT_LLONG
     let a = intr(gv(emitter, RC_INT))
@@ -626,7 +639,7 @@ pub fn gjmp_cond(emitter : Arm64Emitter, op : Int, t : Int) -> Int raise {
     let ll_bit = if ll { 1 } else { 0 }
     emit32(
       emitter,
-      (0x34000040 : Int)
+      (0x34000040 : Int32)
       .lor(a)
       .lor(inv_bit << 24)
       .lor(ll_bit << 31)
@@ -637,7 +650,7 @@ pub fn gjmp_cond(emitter : Arm64Emitter, op : Int, t : Int) -> Int raise {
 }
 
 ///|
-pub fn arm64_iconst(sv_index : Int) -> UInt64? {
+pub fn arm64_iconst(sv_index : Int32) -> UInt64? {
   let sv = vstack[sv_index]
   let mask = VT_VALMASK | VT_LVAL | VT_SYM
   if (sv.r & mask) != VT_CONST {
@@ -652,7 +665,7 @@ pub fn arm64_iconst(sv_index : Int) -> UInt64? {
   if (t & VT_UNSIGNED) != 0 {
     return Some(low)
   }
-  let sign_mask : UInt = 0x80000000
+  let sign_mask : UInt32 = 0x80000000
   let low_u32 = low.to_uint()
   if (low_u32 & sign_mask) != 0 {
     let upper : UInt64 = (0xffffffff : UInt64) << 32
@@ -662,7 +675,7 @@ pub fn arm64_iconst(sv_index : Int) -> UInt64? {
 }
 
 ///|
-pub fn arm64_type_size(t : Int) -> Int {
+pub fn arm64_type_size(t : Int32) -> Int32 {
   match t & VT_BTYPE {
     VT_BYTE => 0
     VT_SHORT => 1
@@ -683,12 +696,12 @@ pub fn arm64_type_size(t : Int) -> Int {
 ///|
 pub fn arm64_gen_opic(
   emitter : Arm64Emitter,
-  op : Int,
-  l : Int,
+  op : Int32,
+  l : Int32,
   rev : Bool,
   val : UInt64,
-  x : Int,
-  a : Int,
+  x : Int32,
+  a : Int32,
 ) -> Bool {
   let mut op1 = op
   let mut val1 = val
@@ -702,7 +715,7 @@ pub fn arm64_gen_opic(
   match op1 {
     TOK_ADD => {
       let s : UInt64 = if l != 0 { val1 >> 63 } else { val1 >> 31 }
-      let s_bit : Int = if (s & 1) != 0 { 1 } else { 0 }
+      let s_bit : Int32 = if (s & 1) != 0 { 1 } else { 0 }
       if s_bit != 0 {
         val1 = (0 : UInt64) - val1
       }
@@ -712,7 +725,7 @@ pub fn arm64_gen_opic(
       if (val1 & (0xfff : UInt64).lnot()) == 0 {
         emit32(
           emitter,
-          (0x11000000 : Int)
+          (0x11000000 : Int32)
           .lor(l << 31)
           .lor(s_bit << 30)
           .lor(x)
@@ -723,7 +736,7 @@ pub fn arm64_gen_opic(
       } else if (val1 & (0xfff000 : UInt64).lnot()) == 0 {
         emit32(
           emitter,
-          (0x11400000 : Int)
+          (0x11400000 : Int32)
           .lor(l << 31)
           .lor(s_bit << 30)
           .lor(x)
@@ -732,10 +745,10 @@ pub fn arm64_gen_opic(
           .reinterpret_as_uint(),
         )
       } else {
-        arm64_movimm(emitter, (30 : UInt), val1)
+        arm64_movimm(emitter, (30 : UInt32), val1)
         emit32(
           emitter,
-          (0x0b1e0000 : Int)
+          (0x0b1e0000 : Int32)
           .lor(l << 31)
           .lor(s_bit << 30)
           .lor(x)
@@ -754,7 +767,7 @@ pub fn arm64_gen_opic(
       if val1 == 0 {
         emit32(
           emitter,
-          (0x4b0003e0 : Int)
+          (0x4b0003e0 : Int32)
           .lor(l << 31)
           .lor(x)
           .lor(a << 16)
@@ -763,17 +776,17 @@ pub fn arm64_gen_opic(
       } else if val1 == minus_one {
         emit32(
           emitter,
-          (0x2a2003e0 : Int)
+          (0x2a2003e0 : Int32)
           .lor(l << 31)
           .lor(x)
           .lor(a << 16)
           .reinterpret_as_uint(),
         )
       } else {
-        arm64_movimm(emitter, (30 : UInt), val1)
+        arm64_movimm(emitter, (30 : UInt32), val1)
         emit32(
           emitter,
-          (0x4b0003c0 : Int)
+          (0x4b0003c0 : Int32)
           .lor(l << 31)
           .lor(x)
           .lor(a << 16)
@@ -787,7 +800,7 @@ pub fn arm64_gen_opic(
         (l == 0 && val1 == (0xffffffff : UInt64)) {
         emit32(
           emitter,
-          (0x2a2003e0 : Int)
+          (0x2a2003e0 : Int32)
           .lor(l << 31)
           .lor(x)
           .lor(a << 16)
@@ -807,7 +820,7 @@ pub fn arm64_gen_opic(
       }
       emit32(
         emitter,
-        (0x52000000 : Int)
+        (0x52000000 : Int32)
         .lor(l << 31)
         .lor(x)
         .lor(a << 5)
@@ -829,7 +842,7 @@ pub fn arm64_gen_opic(
       }
       emit32(
         emitter,
-        (0x12000000 : Int)
+        (0x12000000 : Int32)
         .lor(l << 31)
         .lor(x)
         .lor(a << 5)
@@ -851,7 +864,7 @@ pub fn arm64_gen_opic(
       }
       emit32(
         emitter,
-        (0x32000000 : Int)
+        (0x32000000 : Int32)
         .lor(l << 31)
         .lor(x)
         .lor(a << 5)
@@ -861,21 +874,21 @@ pub fn arm64_gen_opic(
       true
     }
     TOK_SAR | TOK_SHL | TOK_SHR => {
-      let n : Int = 32 << l
+      let n : Int32 = 32 << l
       if rev {
         return false
       }
-      let val2 : Int = (val1 & (n - 1).to_uint64()).to_int()
+      let val2 : Int32 = (val1 & (n - 1).to_uint64()).to_int()
       if val2 == 0 {
         // Shift-by-zero is a no-op; preserve the destination register.
-        let base : Int = if l != 0 { 0xaa0003e0 } else { 0x2a0003e0 }
+        let base : Int32 = if l != 0 { 0xaa0003e0 } else { 0x2a0003e0 }
         emit32(emitter, base.lor(x).lor(a << 16).reinterpret_as_uint())
         return true
       }
       if op1 == TOK_SHL {
         emit32(
           emitter,
-          (0x53000000 : Int)
+          (0x53000000 : Int32)
           .lor(l << 31)
           .lor(l << 22)
           .lor(x)
@@ -887,7 +900,7 @@ pub fn arm64_gen_opic(
       } else {
         emit32(
           emitter,
-          (0x13000000 : Int)
+          (0x13000000 : Int32)
           .lor((if op1 == TOK_SHR { 1 } else { 0 }) << 30)
           .lor(l << 31)
           .lor(l << 22)
@@ -905,7 +918,7 @@ pub fn arm64_gen_opic(
 }
 
 ///|
-pub fn arm64_spoff(emitter : Arm64Emitter, reg : UInt, off : UInt64) -> Unit {
+pub fn arm64_spoff(emitter : Arm64Emitter, reg : UInt32, off : UInt64) -> Unit {
   let sub = off >> 63
   let mut off1 = off
   if sub != 0 {
@@ -919,7 +932,7 @@ pub fn arm64_spoff(emitter : Arm64Emitter, reg : UInt, off : UInt64) -> Unit {
       .to_uint()
     emit32(emitter, insn)
   } else {
-    arm64_movimm(emitter, (30 : UInt), off1)
+    arm64_movimm(emitter, (30 : UInt32), off1)
     let insn = (0x8b3e63e0 : UInt64)
       .lor(sub << 30)
       .lor(reg.to_uint64())
@@ -929,9 +942,9 @@ pub fn arm64_spoff(emitter : Arm64Emitter, reg : UInt, off : UInt64) -> Unit {
 }
 
 ///|
-pub fn arm64_check_offset(invert : Bool, sz_ : Int, off : UInt64) -> UInt64 {
+pub fn arm64_check_offset(invert : Bool, sz_ : Int32, off : UInt64) -> UInt64 {
   let sz = sz_
-  let mask32 : UInt = (0xfff : UInt) << sz
+  let mask32 : UInt32 = (0xfff : UInt32) << sz
   let mask32_u64 = mask32.to_uint64()
   let mask32_not_u64 = mask32.lnot().to_uint64()
   let neg_off = (0 : UInt64) - off
@@ -942,7 +955,7 @@ pub fn arm64_check_offset(invert : Bool, sz_ : Int, off : UInt64) -> UInt64 {
   } else if (off & mask32_u64) != 0 {
     return if invert { off & mask32_u64 } else { off & mask32_not_u64 }
   } else {
-    let mask9 : UInt = 0x1ff
+    let mask9 : UInt32 = 0x1ff
     let mask9_u64 = mask9.to_uint64()
     let mask9_not_u64 = mask9.lnot().to_uint64()
     if (off & mask9_u64) != 0 {
@@ -959,7 +972,7 @@ pub fn arm64_check_offset(invert : Bool, sz_ : Int, off : UInt64) -> UInt64 {
 ///|
 pub fn arm64_sym(
   emitter : Arm64Emitter,
-  r : UInt,
+  r : UInt32,
   sym : Sym,
   addend : UInt64,
 ) -> Unit {
@@ -995,7 +1008,7 @@ pub fn arm64_sym(
         )
       }
       if addend > (0xffffff : UInt64) {
-        let t : UInt = if r != (0 : UInt) { 0 } else { 1 }
+        let t : UInt32 = if r != (0 : UInt32) { 0 } else { 1 }
         emit32(emitter, (0xf81f0fe0 : UInt64).lor(t.to_uint64()).to_uint())
         arm64_movimm(emitter, t, addend & (0xffffff : UInt64).lnot())
         emit32(
@@ -1016,14 +1029,14 @@ pub fn arm64_sym(
 pub fn arm64_ldrx(
   emitter : Arm64Emitter,
   sg : Bool,
-  sz_ : Int,
-  dst : UInt,
-  bas : UInt,
+  sz_ : Int32,
+  dst : UInt32,
+  bas : UInt32,
   off : UInt64,
 ) -> Unit {
   let sz = sz_
   if sg && sz == 2 {
-    let mask32 : UInt = (0xfff : UInt) << sz
+    let mask32 : UInt32 = (0xfff : UInt32) << sz
     let mask32_not_u64 = mask32.lnot().to_uint64()
     if (off & mask32_not_u64) == 0 {
       let insn = (0xb9800000 : UInt64)
@@ -1040,7 +1053,7 @@ pub fn arm64_ldrx(
         .to_uint()
       emit32(emitter, insn)
     } else {
-      arm64_movimm(emitter, (30 : UInt), off)
+      arm64_movimm(emitter, (30 : UInt32), off)
       let insn = (0xb8a06800 : UInt64)
         .lor(dst.to_uint64())
         .lor(bas.to_uint64() << 5)
@@ -1052,7 +1065,7 @@ pub fn arm64_ldrx(
   }
   let sg1 = if sz >= 2 { false } else { sg }
   let sg_bit : UInt64 = if sg1 { 1 } else { 0 }
-  let mask32 : UInt = (0xfff : UInt) << sz
+  let mask32 : UInt32 = (0xfff : UInt32) << sz
   let mask32_not_u64 = mask32.lnot().to_uint64()
   if (off & mask32_not_u64) == 0 {
     let insn = (0x39400000 : UInt64)
@@ -1073,7 +1086,7 @@ pub fn arm64_ldrx(
       .to_uint()
     emit32(emitter, insn)
   } else {
-    arm64_movimm(emitter, (30 : UInt), off)
+    arm64_movimm(emitter, (30 : UInt32), off)
     let sg_enc : UInt64 = if sg1 { 2 } else { 1 }
     let insn = (0x38206800 : UInt64)
       .lor(dst.to_uint64())
@@ -1089,13 +1102,13 @@ pub fn arm64_ldrx(
 ///|
 pub fn arm64_ldrv(
   emitter : Arm64Emitter,
-  sz_ : Int,
-  dst : UInt,
-  bas : UInt,
+  sz_ : Int32,
+  dst : UInt32,
+  bas : UInt32,
   off : UInt64,
 ) -> Unit {
   let sz = sz_
-  let mask32 : UInt = (0xfff : UInt) << sz
+  let mask32 : UInt32 = (0xfff : UInt32) << sz
   let mask32_not_u64 = mask32.lnot().to_uint64()
   if (off & mask32_not_u64) == 0 {
     let insn = (0x3d400000 : UInt64)
@@ -1116,7 +1129,7 @@ pub fn arm64_ldrv(
       .to_uint()
     emit32(emitter, insn)
   } else {
-    arm64_movimm(emitter, (30 : UInt), off)
+    arm64_movimm(emitter, (30 : UInt32), off)
     let insn = (0x3c606800 : UInt64)
       .lor(dst.to_uint64())
       .lor(bas.to_uint64() << 5)
@@ -1129,7 +1142,7 @@ pub fn arm64_ldrv(
 }
 
 ///|
-pub fn arm64_ldrs(emitter : Arm64Emitter, reg : UInt, size : Int) -> Unit {
+pub fn arm64_ldrs(emitter : Arm64Emitter, reg : UInt32, size : Int32) -> Unit {
   match size {
     0 => ()
     1 => arm64_ldrx(emitter, false, 0, reg, reg, 0)
@@ -1311,13 +1324,13 @@ pub fn arm64_ldrs(emitter : Arm64Emitter, reg : UInt, size : Int) -> Unit {
 ///|
 pub fn arm64_strx(
   emitter : Arm64Emitter,
-  sz_ : Int,
-  dst : UInt,
-  bas : UInt,
+  sz_ : Int32,
+  dst : UInt32,
+  bas : UInt32,
   off : UInt64,
 ) -> Unit {
   let sz = sz_
-  let mask32 : UInt = (0xfff : UInt) << sz
+  let mask32 : UInt32 = (0xfff : UInt32) << sz
   let mask32_not_u64 = mask32.lnot().to_uint64()
   if (off & mask32_not_u64) == 0 {
     let insn = (0x39000000 : UInt64)
@@ -1336,7 +1349,7 @@ pub fn arm64_strx(
       .to_uint()
     emit32(emitter, insn)
   } else {
-    arm64_movimm(emitter, (30 : UInt), off)
+    arm64_movimm(emitter, (30 : UInt32), off)
     let insn = (0x38206800 : UInt64)
       .lor(dst.to_uint64())
       .lor(bas.to_uint64() << 5)
@@ -1350,13 +1363,13 @@ pub fn arm64_strx(
 ///|
 pub fn arm64_strv(
   emitter : Arm64Emitter,
-  sz_ : Int,
-  dst : UInt,
-  bas : UInt,
+  sz_ : Int32,
+  dst : UInt32,
+  bas : UInt32,
   off : UInt64,
 ) -> Unit {
   let sz = sz_
-  let mask32 : UInt = (0xfff : UInt) << sz
+  let mask32 : UInt32 = (0xfff : UInt32) << sz
   let mask32_not_u64 = mask32.lnot().to_uint64()
   if (off & mask32_not_u64) == 0 {
     let insn = (0x3d000000 : UInt64)
@@ -1377,7 +1390,7 @@ pub fn arm64_strv(
       .to_uint()
     emit32(emitter, insn)
   } else {
-    arm64_movimm(emitter, (30 : UInt), off)
+    arm64_movimm(emitter, (30 : UInt32), off)
     let insn = (0x3c206800 : UInt64)
       .lor(dst.to_uint64())
       .lor(bas.to_uint64() << 5)

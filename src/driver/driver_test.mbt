@@ -116,12 +116,12 @@ test "cli expands @listfile" {
   let dir = "target"
   if !@fs.path_exists(dir) {
     @fs.create_dir(dir) catch {
-      err => fail("failed to create target dir: \{err.to_string()}")
+      err => fail("failed to create target dir: \{to_repr(err).to_string()}")
     }
   }
   let path = dir + "/cli_args.txt"
   @fs.write_string_to_file(path, "-I inc -DTEST=1 in.c") catch {
-    err => fail("failed to write listfile: \{err.to_string()}")
+    err => fail("failed to write listfile: \{to_repr(err).to_string()}")
   }
   let cfg = match
     @driver.parse_cli_args(host=@default_host.new(), ["prog", "@" + path]) {

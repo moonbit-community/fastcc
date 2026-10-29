@@ -114,25 +114,25 @@ pub fn empty_attrs() -> Attributes {
 
 ///|
 pub fn attrs_with(
-  aligned? : AlignSpec? = None,
-  packed? : Bool = false,
-  ms_struct? : Bool = false,
-  transparent_union? : Bool = false,
-  weak? : Bool = false,
-  visibility? : Visibility? = None,
-  section? : String? = None,
-  alias_name? : String? = None,
-  asm_label? : String? = None,
-  cleanup? : String? = None,
-  noreturn? : Bool = false,
-  constructor_attr? : Bool = false,
-  destructor? : Bool = false,
-  always_inline? : Bool = false,
-  call_conv? : CallConv? = None,
-  dll_import? : Bool = false,
-  dll_export? : Bool = false,
-  nodecorate? : Bool = false,
-  nodebug? : Bool = false,
+  aligned~ : AlignSpec? = None,
+  packed~ : Bool = false,
+  ms_struct~ : Bool = false,
+  transparent_union~ : Bool = false,
+  weak~ : Bool = false,
+  visibility~ : Visibility? = None,
+  section~ : String? = None,
+  alias_name~ : String? = None,
+  asm_label~ : String? = None,
+  cleanup~ : String? = None,
+  noreturn~ : Bool = false,
+  constructor_attr~ : Bool = false,
+  destructor~ : Bool = false,
+  always_inline~ : Bool = false,
+  call_conv~ : CallConv? = None,
+  dll_import~ : Bool = false,
+  dll_export~ : Bool = false,
+  nodecorate~ : Bool = false,
+  nodebug~ : Bool = false,
 ) -> Attributes {
   @ast_core.attrs_with(
     aligned~,
@@ -218,7 +218,7 @@ pub fn expr_loc(expr : Expr) -> @source.SrcLoc {
 }
 
 ///|
-pub fn expr_node_id(expr : Expr) -> Int {
+pub fn expr_node_id(expr : Expr) -> Int32 {
   @ast_core.expr_node_id(expr)
 }
 

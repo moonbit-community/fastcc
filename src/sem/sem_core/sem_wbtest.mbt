@@ -51,7 +51,7 @@ fn check_text_with_paths(
 fn struct_size_align_from_text(
   text : String,
   name : String,
-) -> (Int, Int) raise {
+) -> (Int32, Int32) raise {
   let (unit, bag) = parse_text(text)
   assert_true(!@diag.has_errors(bag))
   let sem_bag = @diag.new_diag_bag()
@@ -76,7 +76,7 @@ fn struct_size_align_from_text(
 fn collect_ident_ids_expr(
   expr : @ast.Expr,
   name : String,
-  out : Array[Int],
+  out : Array[Int32],
 ) -> Unit {
   match expr {
     Ident(name=ident_name, id~, ..) => if ident_name == name { out.push(id) }
@@ -130,7 +130,7 @@ fn collect_ident_ids_expr(
 fn collect_ident_ids_init(
   init : @ast.Initializer,
   name : String,
-  out : Array[Int],
+  out : Array[Int32],
 ) -> Unit {
   match init {
     Expr(expr=inner, ..) => collect_ident_ids_expr(inner, name, out)
@@ -188,7 +188,7 @@ test "sem accepts static local arrays used in sizeof macro" {
             Return(value=Some(expr), ..) => expr
             _ => fail("expected return statement")
           }
-          let ids : Array[Int] = []
+          let ids : Array[Int32] = []
           collect_ident_ids_expr(ret_expr, "aTable", ids)
           assert_true(ids.length() > 0)
           for id in ids {

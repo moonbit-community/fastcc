@@ -14,7 +14,7 @@
 // License along with this library.  If not, see <https://www.gnu.org/licenses/>.
 
 ///|
-pub fn run_command(_cmd : Bytes) -> Int {
+pub fn run_command(_cmd : Bytes) -> Int32 {
   1
 }
 

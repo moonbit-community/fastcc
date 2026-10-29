@@ -16,7 +16,7 @@ test "object section defaults" {
   }
   assert_eq(@object.section_word_len(sec_fixed), 3)
   assert_eq(@object.section_size_bytes(sec_fixed), 12)
-  let sym = @object.Sym::{ id: 7 }
-  let rel = @object.Reloc::{ offset: 4, kind: 1, sym, addend: 9 }
+  let sym = @object.Sym::{ id: 7, }
+  let rel = @object.Reloc::{ offset: 4, kind: 1, sym, addend: 9, }
   assert_eq(@object.reloc_addend(rel), 9)
 }

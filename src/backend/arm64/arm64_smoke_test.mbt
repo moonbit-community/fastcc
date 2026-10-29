@@ -45,7 +45,7 @@ test "arm64 emitter helpers" {
   let emitter = @arm64.new_arm64_emitter_with_capacity(0, 2)
   assert_eq(emitter.code.length(), 0)
   assert_eq(emitter.relocs.length(), 0)
-  let sym : @arm64.Sym = { id: 1 }
+  let sym : @arm64.Sym = { id: 1, }
   @arm64.greloc(emitter, sym, 4, @arm64.R_AARCH64_POINTER)
   assert_eq(emitter.relocs.length(), 1)
   assert_eq(emitter.relocs[0].addend, 0)
@@ -63,7 +63,9 @@ test "arm64 emit32 expansion and errors" {
   @arm64.emit32(emitter, 0xd503201f)
   assert_true(emitter.code.length() >= 2)
   assert_eq(emitter.code_len, 2)
-  let bad_fill : Result[Unit, Error] = try? @arm64.gen_fill_nops(emitter, 3)
+  let bad_fill : Result[Unit, Error] = Ok(@arm64.gen_fill_nops(emitter, 3)) catch {
+    e => Err(e)
+  }
   assert_true(bad_fill is Err(_))
 }
 
@@ -99,10 +101,14 @@ test "arm64 movi and bimm64 coverage" {
 test "arm64 branch range errors" {
   let emitter = @arm64.new_arm64_emitter_with_capacity(2, 0)
   emitter.code_len = 2
-  let bad_gsym : Result[Unit, Error] = try? @arm64.gsym_addr(
-    emitter, 4, 0x20000000,
-  )
+  let bad_gsym : Result[Unit, Error] = Ok(
+    @arm64.gsym_addr(emitter, 4, 0x20000000),
+  ) catch {
+    e => Err(e)
+  }
   assert_true(bad_gsym is Err(_))
-  let bad_jmp : Result[Unit, Error] = try? @arm64.gjmp_addr(emitter, 0x20000000)
+  let bad_jmp : Result[Unit, Error] = Ok(@arm64.gjmp_addr(emitter, 0x20000000)) catch {
+    e => Err(e)
+  }
   assert_true(bad_jmp is Err(_))
 }

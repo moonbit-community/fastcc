@@ -7,7 +7,7 @@ import {
 }
 
 // Values
-pub const MH_MAGIC_64 : UInt = 0xfeedfacf
+pub const MH_MAGIC_64 : UInt32 = 0xfeedfacf
 
 pub fn encode_macho_object(Array[@object.Section], Array[ObjSymbol]) -> Bytes
 
@@ -17,10 +17,10 @@ pub fn write_macho_object(host~ : &@host.Host, String, Array[@object.Section], A
 
 // Types and methods
 pub(all) struct ObjSymbol {
-  id : Int
+  id : Int32
   name : String
   section : String?
-  value : Int
+  value : Int32
   is_external : Bool
 }
 
@@ -30,4 +30,3 @@ pub using @object {type Reloc}
 pub using @object {type Section}
 
 // Traits
-

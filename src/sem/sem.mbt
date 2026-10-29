@@ -43,12 +43,12 @@ pub fn adjust_param_type_for_local(ty : @ast.CType) -> @ast.CType {
 }
 
 ///|
-pub fn align_to(value : Int, align : Int) -> Int {
+pub fn align_to(value : Int32, align : Int32) -> Int32 {
   @sem_core.align_to(value, align)
 }
 
 ///|
-pub fn apply_inferred_array_size(ty : @ast.CType, size : Int) -> @ast.CType {
+pub fn apply_inferred_array_size(ty : @ast.CType, size : Int32) -> @ast.CType {
   @sem_core.apply_inferred_array_size(ty, size)
 }
 
@@ -56,7 +56,7 @@ pub fn apply_inferred_array_size(ty : @ast.CType, size : Int) -> @ast.CType {
 pub fn atomic_builtin_return_type(
   ctx : SemContext,
   name : String,
-  id : Int,
+  id : Int32,
   args : Array[@ast.Expr],
   loc : @source.SrcLoc,
 ) -> @ast.CType? {
@@ -67,7 +67,7 @@ pub fn atomic_builtin_return_type(
 pub fn atomic_builtin_template_from_ident(
   ctx : SemContext,
   name : String,
-  id : Int,
+  id : Int32,
 ) -> String? {
   @sem_core.atomic_builtin_template_from_ident(ctx, name, id)
 }
@@ -77,7 +77,7 @@ pub fn attr_align_value(
   ctx : SemContext,
   attrs : @ast.Attributes,
   loc : @source.SrcLoc,
-) -> Int? {
+) -> Int32? {
   @sem_core.attr_align_value(ctx, attrs, loc)
 }
 
@@ -90,7 +90,7 @@ pub fn attrs_layout_empty(attrs : @ast.Attributes) -> Bool {
 pub fn builtin_call_kind(
   ctx : SemContext,
   name : String,
-  id : Int,
+  id : Int32,
 ) -> BuiltinCallKind? {
   @sem_core.builtin_call_kind(ctx, name, id)
 }
@@ -113,7 +113,7 @@ pub fn common_int_type(
 }
 
 ///|
-pub fn compound_literal_key(id : Int) -> Int {
+pub fn compound_literal_key(id : Int32) -> Int32 {
   @sem_core.compound_literal_key(id)
 }
 
@@ -123,7 +123,7 @@ pub fn compound_literal_type(
   ty : @ast.CType,
   init : @ast.Initializer,
   loc : @source.SrcLoc,
-  node_id : Int,
+  node_id : Int32,
 ) -> @ast.CType {
   @sem_core.compound_literal_type(ctx, ty, init, loc, node_id)
 }
@@ -151,12 +151,12 @@ pub fn const_int_from_expr(
   ctx : SemContext,
   expr : @ast.Expr,
   loc : @source.SrcLoc,
-) -> Int? {
+) -> Int32? {
   @sem_core.const_int_from_expr(ctx, expr, loc)
 }
 
 ///|
-pub fn current_local_scope_id(ctx : SemContext) -> Int {
+pub fn current_local_scope_id(ctx : SemContext) -> Int32 {
   @sem_core.current_local_scope_id(ctx)
 }
 
@@ -174,7 +174,7 @@ pub fn default_int_type() -> @ast.CType {
 pub fn ensure_struct_fields(
   ctx : SemContext,
   name : String,
-  id : Int,
+  id : Int32,
   items : Array[@ast.RecordItem]?,
   is_union~ : Bool,
   loc : @source.SrcLoc,
@@ -183,7 +183,7 @@ pub fn ensure_struct_fields(
 }
 
 ///|
-pub fn enum_const_value(ctx : SemContext, name : String, id : Int) -> Int? {
+pub fn enum_const_value(ctx : SemContext, name : String, id : Int32) -> Int32? {
   @sem_core.enum_const_value(ctx, name, id)
 }
 
@@ -193,7 +193,7 @@ pub fn eval_builtin_offsetof(
   ty : @ast.CType,
   path : Array[String],
   loc : @source.SrcLoc,
-) -> Int? {
+) -> Int32? {
   @sem_core.eval_builtin_offsetof(ctx, ty, path, loc)
 }
 
@@ -202,44 +202,44 @@ pub fn find_field_index_cached(
   ctx : SemContext,
   ty : @ast.CType,
   name : String,
-  id : Int,
+  id : Int32,
   loc : @source.SrcLoc,
-) -> Int? {
+) -> Int32? {
   @sem_core.find_field_index_cached(ctx, ty, name, id, loc)
 }
 
 ///|
-pub fn float_size(kind : @ast.CFloatKind) -> Int {
+pub fn float_size(kind : @ast.CFloatKind) -> Int32 {
   @sem_core.float_size(kind)
 }
 
 ///|
-pub fn get_function_by_id(ctx : SemContext, id : Int) -> FuncSig? {
+pub fn get_function_by_id(ctx : SemContext, id : Int32) -> FuncSig? {
   @sem_core.get_function_by_id(ctx, id)
 }
 
 ///|
-pub fn get_global_by_id(ctx : SemContext, id : Int) -> @ast.CType? {
+pub fn get_global_by_id(ctx : SemContext, id : Int32) -> @ast.CType? {
   @sem_core.get_global_by_id(ctx, id)
 }
 
 ///|
-pub fn[T] get_opt_by_id(arr : Array[T?], id : Int) -> T? {
+pub fn[T] get_opt_by_id(arr : Array[T?], id : Int32) -> T? {
   @sem_core.get_opt_by_id(arr, id)
 }
 
 ///|
-pub fn has_function_by_id(ctx : SemContext, id : Int) -> Bool {
+pub fn has_function_by_id(ctx : SemContext, id : Int32) -> Bool {
   @sem_core.has_function_by_id(ctx, id)
 }
 
 ///|
-pub fn[T] has_opt_by_id(arr : Array[T?], id : Int) -> Bool {
+pub fn[T] has_opt_by_id(arr : Array[T?], id : Int32) -> Bool {
   @sem_core.has_opt_by_id(arr, id)
 }
 
 ///|
-pub fn int_size(kind : @ast.CIntKind) -> Int {
+pub fn int_size(kind : @ast.CIntKind) -> Int32 {
   @sem_core.int_size(kind)
 }
 
@@ -256,8 +256,8 @@ pub fn is_int_like(ty : @ast.CType) -> Bool {
 ///|
 pub fn next_init_field(
   fields : Array[@ast.Field],
-  index : Int,
-) -> (@ast.Field, Int)? {
+  index : Int32,
+) -> (@ast.Field, Int32)? {
   @sem_core.next_init_field(fields, index)
 }
 
@@ -274,7 +274,7 @@ pub fn push_scope(ctx : SemContext) -> Unit {
 ///|
 pub fn record_local_binding(
   ctx : SemContext,
-  id : Int,
+  id : Int32,
   ty : @ast.CType,
 ) -> Unit {
   @sem_core.record_local_binding(ctx, id, ty)
@@ -284,7 +284,7 @@ pub fn record_local_binding(
 pub fn resolve_struct_fields(
   ctx : SemContext,
   name : String,
-  id : Int,
+  id : Int32,
   items : Array[@ast.RecordItem]?,
   is_union~ : Bool,
 ) -> Array[@ast.Field]? {
@@ -301,7 +301,7 @@ pub fn resolve_type(
 }
 
 ///|
-pub fn[T] set_opt_by_id(arr : Array[T?], id : Int, value : T) -> Unit {
+pub fn[T] set_opt_by_id(arr : Array[T?], id : Int32, value : T) -> Unit {
   @sem_core.set_opt_by_id(arr, id, value)
 }
 
@@ -331,12 +331,12 @@ pub fn struct_size_align(
   fields : Array[@ast.Field],
   attrs : @ast.Attributes,
   loc : @source.SrcLoc,
-) -> (Int, Int) {
+) -> (Int32, Int32) {
   @sem_core.struct_size_align(ctx, fields, attrs, loc)
 }
 
 ///|
-pub fn try_eval_int_const(ctx : SemContext, expr : @ast.Expr) -> Int? {
+pub fn try_eval_int_const(ctx : SemContext, expr : @ast.Expr) -> Int32? {
   @sem_core.try_eval_int_const(ctx, expr)
 }
 
@@ -365,7 +365,7 @@ pub fn type_size_align(
   ctx : SemContext,
   ty : @ast.CType,
   loc : @source.SrcLoc,
-) -> (Int, Int)? {
+) -> (Int32, Int32)? {
   @sem_core.type_size_align(ctx, ty, loc)
 }
 
@@ -375,6 +375,6 @@ pub fn union_size_align(
   fields : Array[@ast.Field],
   attrs : @ast.Attributes,
   loc : @source.SrcLoc,
-) -> (Int, Int) {
+) -> (Int32, Int32) {
   @sem_core.union_size_align(ctx, fields, attrs, loc)
 }

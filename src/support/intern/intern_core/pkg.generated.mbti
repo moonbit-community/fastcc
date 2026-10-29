@@ -2,28 +2,27 @@
 package "hackwaly/fastcc/support/intern/intern_core"
 
 // Values
-pub fn new_string_interner_with_capacity(capacity? : Int) -> StringInterner
+pub fn new_string_interner_with_capacity(capacity? : Int32) -> StringInterner
 
-pub let tok_hash_init : UInt
+pub let tok_hash_init : UInt32
 
-pub fn tok_hash_step(UInt, UInt16) -> UInt
+pub fn tok_hash_step(UInt32, UInt16) -> UInt32
 
 // Errors
 
 // Types and methods
 pub(all) struct StringInterner {
-  buckets : Array[Int]
-  next_by_id : Array[Int]
+  buckets : Array[Int32]
+  next_by_id : Array[Int32]
   strings : Array[String]
   views : Array[StringView]
-  hashes : Array[UInt]
+  hashes : Array[UInt32]
 }
-pub fn StringInterner::get(Self, Int) -> String
+pub fn StringInterner::get(Self, Int32) -> String
 pub fn StringInterner::intern_view(Self, StringView) -> String
-pub fn StringInterner::intern_view_with_id(Self, StringView) -> (String, Int)
-pub fn StringInterner::intern_view_with_id_hash(Self, StringView, UInt) -> (String, Int)
+pub fn StringInterner::intern_view_with_id(Self, StringView) -> (String, Int32)
+pub fn StringInterner::intern_view_with_id_hash(Self, StringView, UInt32) -> (String, Int32)
 
 // Type aliases
 
 // Traits
-

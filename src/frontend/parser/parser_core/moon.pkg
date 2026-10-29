@@ -6,7 +6,7 @@ import {
   "hackwaly/fastcc/support/source",
   "hackwaly/fastcc/support/util",
   "moonbitlang/core/buffer",
-  "moonbitlang/core/strconv",
+  "moonbitlang/core/string",
 }
 
 import {

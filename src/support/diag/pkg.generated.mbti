@@ -9,7 +9,7 @@ import {
 // Values
 pub fn add_error(@diag_core.DiagBag, @source_core.SrcLoc, String) -> Unit
 
-pub fn error_count(@diag_core.DiagBag) -> Int
+pub fn error_count(@diag_core.DiagBag) -> Int32
 
 pub fn format_diag(@diag_core.Diag) -> String
 
@@ -27,4 +27,3 @@ pub using @diag_core {type Diag}
 pub using @diag_core {type DiagBag}
 
 // Traits
-

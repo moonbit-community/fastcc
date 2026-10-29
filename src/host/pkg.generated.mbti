@@ -11,9 +11,9 @@ package "hackwaly/fastcc/host"
 
 // Traits
 pub(open) trait Host {
-  path_exists(Self, String) -> Bool
-  read_file_to_string(Self, String) -> String raise
-  write_bytes_to_file(Self, String, Bytes) -> Unit raise
-  remove_file(Self, String) -> Unit raise
+  fn include_dir(Self) -> String
+  fn path_exists(Self, String) -> Bool
+  fn read_file_to_string(Self, String) -> String raise
+  fn write_bytes_to_file(Self, String, Bytes) -> Unit raise
+  fn remove_file(Self, String) -> Unit raise
 }
-

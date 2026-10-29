@@ -21,7 +21,7 @@ test "driver link mode emits executable" {
   let src_path = "target/link-mode-\{stamp}.c"
   let exe_path = "target/link-mode-\{stamp}.exe"
   @fs.write_string_to_file(src_path, "int main(void) { return 0; }\n") catch {
-    err => fail("failed to write source file: \{err.to_string()}")
+    err => fail("failed to write source file: \{to_repr(err).to_string()}")
   }
   let status = @driver.run_args(host=@default_host.new(), [
     "fastcc.mbt", "-o", exe_path, src_path,

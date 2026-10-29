@@ -3,6 +3,7 @@ package "hackwaly/fastcc/driver/cli"
 
 import {
   "hackwaly/fastcc/host",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -28,10 +29,7 @@ pub struct CliConfig {
 pub(all) enum CliMacroAction {
   Define(name~ : String, value~ : String?)
   Undef(name~ : String)
-}
-pub impl Eq for CliMacroAction
-pub impl Show for CliMacroAction
-pub impl ToJson for CliMacroAction
+} derive(Eq, Show, ToJson, @debug.Debug)
 
 pub(all) enum CliParse {
   Run(CliConfig)
@@ -42,4 +40,3 @@ pub(all) enum CliParse {
 // Type aliases
 
 // Traits
-

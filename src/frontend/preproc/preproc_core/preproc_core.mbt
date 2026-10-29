@@ -22,18 +22,18 @@ pub(all) struct CondState {
 
 ///|
 pub(all) struct Macro {
-  params : Array[Int]
+  params : Array[Int32]
   is_variadic : Bool
   is_function : Bool
   replacement : Array[@tokens.Token]
   replacement_has_id : Bool
   replacement_needs_expand : Bool
-  replacement_needs_epoch : Int
+  replacement_needs_epoch : Int32
 }
 
 ///|
 pub(all) struct MacroPushStack {
-  name_id : Int
+  name_id : Int32
   mut stack : Array[Macro?]
 }
 
@@ -45,39 +45,39 @@ pub(all) struct IncludeSpec {
 
 ///|
 pub(all) struct PreprocBuiltinIds {
-  line_macro : Int
-  file_macro : Int
-  date_macro : Int
-  time_macro : Int
-  defined : Int
-  has_include : Int
-  has_include_next : Int
-  dir_define : Int
-  dir_undef : Int
-  dir_if : Int
-  dir_ifdef : Int
-  dir_ifndef : Int
-  dir_elif : Int
-  dir_else : Int
-  dir_endif : Int
-  dir_include : Int
-  dir_include_next : Int
-  dir_line : Int
-  dir_error : Int
-  dir_warning : Int
-  dir_pragma : Int
+  line_macro : Int32
+  file_macro : Int32
+  date_macro : Int32
+  time_macro : Int32
+  defined : Int32
+  has_include : Int32
+  has_include_next : Int32
+  dir_define : Int32
+  dir_undef : Int32
+  dir_if : Int32
+  dir_ifdef : Int32
+  dir_ifndef : Int32
+  dir_elif : Int32
+  dir_else : Int32
+  dir_endif : Int32
+  dir_include : Int32
+  dir_include_next : Int32
+  dir_line : Int32
+  dir_error : Int32
+  dir_warning : Int32
+  dir_pragma : Int32
 }
 
 ///|
 pub(all) struct HiddenNode {
-  id : Int
-  next : Int
+  id : Int32
+  next : Int32
 }
 
 ///|
 pub(all) struct HiddenPool {
   nodes : Array[HiddenNode]
-  singleton_by_id : Array[Int]
+  singleton_by_id : Array[Int32]
 }
 
 ///|
@@ -92,20 +92,20 @@ pub(all) struct Preprocessor {
   mut current_dir : String
   mut logical_path : String
   logical_path_stack : Array[String]
-  mut line_adjust : Int
-  line_adjust_stack : Array[Int]
+  mut line_adjust : Int32
+  line_adjust_stack : Array[Int32]
   include_paths : Array[String]
   diags : @diag.DiagBag
   map : @source.SourceMap
   macros : Array[Macro?]
   macro_push_stacks : Array[MacroPushStack]
-  mut macro_epoch : Int
+  mut macro_epoch : Int32
   pending : Array[@tokens.Token]
   mut held : @tokens.Token?
   cond_stack : Array[CondState]
   mut active : Bool
   mut ms_struct_mode : Bool
-  expanding : Array[Int]
+  expanding : Array[Int32]
   expanding_guards : Array[ExpandingGuard]
   date_literal : String
   time_literal : String
@@ -118,12 +118,12 @@ pub(all) struct Preprocessor {
 
 ///|
 pub(all) struct ExpandingGuard {
-  restore_len : Int
+  restore_len : Int32
 }
 
 ///|
 pub fn new_hidden_pool() -> HiddenPool {
-  { nodes: [], singleton_by_id: [] }
+  { nodes: [], singleton_by_id: [], }
 }
 
 ///|
@@ -135,8 +135,8 @@ pub fn clear_hidden_pool(pool : HiddenPool) -> Unit {
 ///|
 pub fn make_builtin_token(
   kind : @tokens.TokenKind,
-  id? : Int = 0,
-  lexeme_id? : Int = 0,
+  id~ : Int32 = 0,
+  lexeme_id~ : Int32 = 0,
 ) -> @tokens.Token {
   let value = @tokens.token_value_from_parts(id, lexeme_id)
   {
@@ -166,7 +166,7 @@ pub fn pp_token_lexeme(pp : Preprocessor, tok : @tokens.Token) -> String {
 }
 
 ///|
-pub fn pp_token_lexeme_len(pp : Preprocessor, tok : @tokens.Token) -> Int {
+pub fn pp_token_lexeme_len(pp : Preprocessor, tok : @tokens.Token) -> Int32 {
   @tokens.token_text_len_with(pp.interner, pp.lexeme_pool, tok)
 }
 
@@ -203,7 +203,11 @@ pub fn define_words_macro(
 }
 
 ///|
-pub fn define_int_macro(pp : Preprocessor, name : String, value : Int) -> Unit {
+pub fn define_int_macro(
+  pp : Preprocessor,
+  name : String,
+  value : Int32,
+) -> Unit {
   let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, value.to_string())
   define_macro(pp, name, [make_builtin_token(IntLit, lexeme_id~)])
 }
@@ -492,7 +496,7 @@ pub fn finalize_preprocessor(pp : Preprocessor) -> Unit {
   while i < pp.map.files.length() {
     let file = pp.map.files[i]
     if file.text.length() > 0 {
-      pp.map.files[i] = { id: file.id, path: file.path, text: "" }
+      pp.map.files[i] = { id: file.id, path: file.path, text: "", }
     }
     i = i + 1
   }
@@ -526,7 +530,7 @@ pub fn is_macro_name_token(tok : @tokens.Token) -> Bool {
 }
 
 ///|
-pub fn macro_id_from_name(pp : Preprocessor, name : String) -> Int {
+pub fn macro_id_from_name(pp : Preprocessor, name : String) -> Int32 {
   if name == "" {
     return 0
   }
@@ -535,12 +539,12 @@ pub fn macro_id_from_name(pp : Preprocessor, name : String) -> Int {
 }
 
 ///|
-pub fn macro_id_from_token(_pp : Preprocessor, tok : @tokens.Token) -> Int {
+pub fn macro_id_from_token(_pp : Preprocessor, tok : @tokens.Token) -> Int32 {
   @tokens.token_id(tok)
 }
 
 ///|
-pub fn ensure_macro_capacity(pp : Preprocessor, id : Int) -> Unit {
+pub fn ensure_macro_capacity(pp : Preprocessor, id : Int32) -> Unit {
   if id <= 0 {
     return
   }
@@ -556,7 +560,7 @@ pub fn ensure_macro_capacity(pp : Preprocessor, id : Int) -> Unit {
 }
 
 ///|
-pub fn get_macro(pp : Preprocessor, id : Int) -> Macro? {
+pub fn get_macro(pp : Preprocessor, id : Int32) -> Macro? {
   if id <= 0 {
     return None
   }
@@ -569,12 +573,12 @@ pub fn get_macro(pp : Preprocessor, id : Int) -> Macro? {
 }
 
 ///|
-pub fn has_macro(pp : Preprocessor, id : Int) -> Bool {
+pub fn has_macro(pp : Preprocessor, id : Int32) -> Bool {
   get_macro(pp, id) is Some(_)
 }
 
 ///|
-pub fn set_macro(pp : Preprocessor, id : Int, macro_def : Macro) -> Unit {
+pub fn set_macro(pp : Preprocessor, id : Int32, macro_def : Macro) -> Unit {
   ensure_macro_capacity(pp, id)
   if id > 0 {
     pp.macros[id - 1] = Some(macro_def)
@@ -583,7 +587,7 @@ pub fn set_macro(pp : Preprocessor, id : Int, macro_def : Macro) -> Unit {
 }
 
 ///|
-pub fn remove_macro(pp : Preprocessor, id : Int) -> Unit {
+pub fn remove_macro(pp : Preprocessor, id : Int32) -> Unit {
   if id <= 0 {
     return
   }
@@ -595,7 +599,7 @@ pub fn remove_macro(pp : Preprocessor, id : Int) -> Unit {
 }
 
 ///|
-fn macro_push_stack_index(pp : Preprocessor, id : Int) -> Int? {
+fn macro_push_stack_index(pp : Preprocessor, id : Int32) -> Int32? {
   let mut i = 0
   while i < pp.macro_push_stacks.length() {
     if pp.macro_push_stacks[i].name_id == id {
@@ -607,7 +611,7 @@ fn macro_push_stack_index(pp : Preprocessor, id : Int) -> Int? {
 }
 
 ///|
-fn push_macro_state(pp : Preprocessor, id : Int) -> Unit {
+fn push_macro_state(pp : Preprocessor, id : Int32) -> Unit {
   if id <= 0 {
     return
   }
@@ -618,12 +622,12 @@ fn push_macro_state(pp : Preprocessor, id : Int) -> Unit {
       entry.stack.push(saved)
       pp.macro_push_stacks[idx] = entry
     }
-    None => pp.macro_push_stacks.push({ name_id: id, stack: [saved] })
+    None => pp.macro_push_stacks.push({ name_id: id, stack: [saved], })
   }
 }
 
 ///|
-fn pop_macro_state(pp : Preprocessor, id : Int) -> Unit {
+fn pop_macro_state(pp : Preprocessor, id : Int32) -> Unit {
   if id <= 0 {
     return
   }
@@ -914,7 +918,7 @@ pub fn read_directive_text(pp : Preprocessor) -> String {
 ///|
 pub fn slice_tokens(
   tokens : Array[@tokens.Token],
-  start : Int,
+  start : Int32,
 ) -> Array[@tokens.Token] {
   if start <= 0 {
     return tokens
@@ -928,7 +932,7 @@ pub fn slice_tokens(
 ///|
 pub fn prefix_tokens(
   tokens : Array[@tokens.Token],
-  end : Int,
+  end : Int32,
 ) -> Array[@tokens.Token] {
   if end <= 0 {
     return []
@@ -1001,7 +1005,7 @@ pub fn parse_include_path(
     let mut i = 1
     while i < args.length() {
       if args[i].kind == Gt {
-        return Some({ path: sb.to_string(), is_angle: true })
+        return Some({ path: sb.to_string(), is_angle: true, })
       }
       sb.write_string(pp_token_lexeme(pp, args[i]))
       i = i + 1
@@ -1032,7 +1036,7 @@ pub fn parse_has_include_path(
     let mut i = 1
     while i < args.length() {
       if args[i].kind == Gt {
-        return Some({ path: sb.to_string(), is_angle: true })
+        return Some({ path: sb.to_string(), is_angle: true, })
       }
       sb.write_string(pp_token_lexeme(pp, args[i]))
       i = i + 1
@@ -1046,7 +1050,7 @@ pub fn eval_has_include(
   pp : Preprocessor,
   args : Array[@tokens.Token],
   include_next~ : Bool,
-) -> Int {
+) -> Int32 {
   match parse_has_include_path(pp, args) {
     None => 0
     Some(spec) =>
@@ -1175,8 +1179,8 @@ pub fn parse_macro_params(
   pp : Preprocessor,
   args : Array[@tokens.Token],
   loc : @source.SrcLoc,
-) -> (Array[Int], Bool, Array[@tokens.Token])? {
-  let params : Array[Int] = []
+) -> (Array[Int32], Bool, Array[@tokens.Token])? {
+  let params : Array[Int32] = []
   let mut i = 1
   let mut is_variadic = false
   while i < args.length() {
@@ -1373,7 +1377,7 @@ pub fn is_adjacent(
 }
 
 ///|
-pub fn is_expanding(pp : Preprocessor, id : Int) -> Bool {
+pub fn is_expanding(pp : Preprocessor, id : Int32) -> Bool {
   for n in pp.expanding {
     if n == id {
       return true
@@ -1383,7 +1387,7 @@ pub fn is_expanding(pp : Preprocessor, id : Int) -> Bool {
 }
 
 ///|
-pub fn push_expanding(pp : Preprocessor, id : Int) -> Unit {
+pub fn push_expanding(pp : Preprocessor, id : Int32) -> Unit {
   pp.expanding.push(id)
 }
 
@@ -1483,14 +1487,14 @@ pub fn escape_string(text : String) -> String {
 }
 
 ///|
-pub fn logical_line(pp : Preprocessor, loc : @source.SrcLoc) -> Int {
+pub fn logical_line(pp : Preprocessor, loc : @source.SrcLoc) -> Int32 {
   loc.line + pp.line_adjust
 }
 
 ///|
 pub fn make_int_literal_token(
   pp : Preprocessor,
-  value : Int,
+  value : Int32,
   loc : @source.SrcLoc,
 ) -> @tokens.Token {
   let lexeme_id = @tokens.lexeme_pool_intern(pp.lexeme_pool, value.to_string())
@@ -1531,7 +1535,7 @@ pub fn builtin_macro_tokens(
 }
 
 ///|
-pub fn is_builtin_macro_id(pp : Preprocessor, id : Int) -> Bool {
+pub fn is_builtin_macro_id(pp : Preprocessor, id : Int32) -> Bool {
   id == pp.builtin_ids.line_macro ||
   id == pp.builtin_ids.file_macro ||
   id == pp.builtin_ids.date_macro ||
@@ -1560,7 +1564,7 @@ pub fn token_needs_expansion(pp : Preprocessor, tok : @tokens.Token) -> Bool {
 ///|
 pub fn macro_replacement_needs_expand(
   pp : Preprocessor,
-  macro_id : Int,
+  macro_id : Int32,
   macro_def : Macro,
 ) -> Bool {
   if !macro_def.replacement_has_id {
@@ -1622,7 +1626,7 @@ pub fn format_time(dt : @time.ZonedDateTime) -> String {
 }
 
 ///|
-pub fn month_name(month : Int) -> String {
+pub fn month_name(month : Int32) -> String {
   match month {
     1 => "Jan"
     2 => "Feb"
@@ -1641,7 +1645,7 @@ pub fn month_name(month : Int) -> String {
 }
 
 ///|
-pub fn pad2(value : Int) -> String {
+pub fn pad2(value : Int32) -> String {
   if value < 10 {
     "0" + value.to_string()
   } else {
@@ -1650,7 +1654,7 @@ pub fn pad2(value : Int) -> String {
 }
 
 ///|
-pub fn pad2_space(value : Int) -> String {
+pub fn pad2_space(value : Int32) -> String {
   if value < 10 {
     " " + value.to_string()
   } else {
@@ -1659,7 +1663,7 @@ pub fn pad2_space(value : Int) -> String {
 }
 
 ///|
-pub fn lookup_param_index(params : Array[Int], id : Int) -> Int? {
+pub fn lookup_param_index(params : Array[Int32], id : Int32) -> Int32? {
   for i = 0; i < params.length(); i = i + 1 {
     if params[i] == id {
       return Some(i)
@@ -1675,9 +1679,9 @@ pub fn lex_paste_tokens(
   left : String,
   right : String,
   loc : @source.SrcLoc,
-  hidden : Int,
+  hidden : Int32,
 ) -> Array[@tokens.Token] {
-  let file = @source.SourceFile::{ id: loc.file_id, path: ":paste:", text }
+  let file = @source.SourceFile::{ id: loc.file_id, path: ":paste:", text, }
   let lex = @lexer.new_lexer(
     file,
     pp.diags,
@@ -1887,9 +1891,9 @@ pub fn substitute_macro(
 pub fn read_macro_args_from_tokens(
   pp : Preprocessor,
   tokens : Array[@tokens.Token],
-  start : Int,
+  start : Int32,
   loc : @source.SrcLoc,
-) -> (Array[Array[@tokens.Token]], Int)? {
+) -> (Array[Array[@tokens.Token]], Int32)? {
   let len = tokens.length()
   let args : Array[Array[@tokens.Token]] = []
   let mut current : Array[@tokens.Token] = []
@@ -1966,7 +1970,7 @@ pub fn ensure_expanded_arg(
   pp : Preprocessor,
   raw_args : Array[Array[@tokens.Token]],
   expanded_cache : Array[Array[@tokens.Token]?],
-  idx : Int,
+  idx : Int32,
 ) -> Array[@tokens.Token] {
   if idx < 0 || idx >= raw_args.length() {
     return []
@@ -2165,7 +2169,7 @@ pub fn expand_tokens(
 pub fn push_cond(pp : Preprocessor, cond : Bool) -> Unit {
   let parent = current_active(pp)
   let active = parent && cond
-  pp.cond_stack.push({ parent_active: parent, taken: active, active })
+  pp.cond_stack.push({ parent_active: parent, taken: active, active, })
   pp.active = active
 }
 
@@ -2340,12 +2344,12 @@ pub fn release_expanding_guards(pp : Preprocessor) -> Unit {
 }
 
 ///|
-pub fn hidden_is_empty(hidden : Int) -> Bool {
+pub fn hidden_is_empty(hidden : Int32) -> Bool {
   hidden == 0
 }
 
 ///|
-pub fn hidden_contains(pool : HiddenPool, hidden : Int, id : Int) -> Bool {
+pub fn hidden_contains(pool : HiddenPool, hidden : Int32, id : Int32) -> Bool {
   let mut cur = hidden
   while cur != 0 {
     let node = pool.nodes[cur - 1]
@@ -2358,14 +2362,14 @@ pub fn hidden_contains(pool : HiddenPool, hidden : Int, id : Int) -> Bool {
 }
 
 ///|
-pub fn ensure_hidden_singleton_slot(pool : HiddenPool, id : Int) -> Unit {
+pub fn ensure_hidden_singleton_slot(pool : HiddenPool, id : Int32) -> Unit {
   while pool.singleton_by_id.length() < id {
     pool.singleton_by_id.push(0)
   }
 }
 
 ///|
-pub fn hidden_add(pool : HiddenPool, hidden : Int, id : Int) -> Int {
+pub fn hidden_add(pool : HiddenPool, hidden : Int32, id : Int32) -> Int32 {
   if hidden_contains(pool, hidden, id) {
     return hidden
   }
@@ -2377,7 +2381,7 @@ pub fn hidden_add(pool : HiddenPool, hidden : Int, id : Int) -> Int {
     }
   }
   let node_id = pool.nodes.length() + 1
-  pool.nodes.push({ id, next: hidden })
+  pool.nodes.push({ id, next: hidden, })
   if hidden == 0 {
     pool.singleton_by_id[id - 1] = node_id
   }
@@ -2385,7 +2389,7 @@ pub fn hidden_add(pool : HiddenPool, hidden : Int, id : Int) -> Int {
 }
 
 ///|
-pub fn merge_hidden(pool : HiddenPool, a : Int, b : Int) -> Int {
+pub fn merge_hidden(pool : HiddenPool, a : Int32, b : Int32) -> Int32 {
   if hidden_is_empty(a) {
     return b
   }
@@ -2406,7 +2410,7 @@ pub fn merge_hidden(pool : HiddenPool, a : Int, b : Int) -> Int {
 pub fn add_hidden(
   pp : Preprocessor,
   tok : @tokens.Token,
-  id : Int,
+  id : Int32,
 ) -> @tokens.Token {
   let new_hidden = hidden_add(pp.hidden_pool, tok.hidden, id)
   if new_hidden == tok.hidden {
@@ -2426,7 +2430,7 @@ pub fn add_hidden(
 pub fn add_hidden_tokens(
   pp : Preprocessor,
   tokens : Array[@tokens.Token],
-  id : Int,
+  id : Int32,
 ) -> Array[@tokens.Token] {
   let out : Array[@tokens.Token] = Array::new(capacity=tokens.length())
   for tok in tokens {
@@ -2477,7 +2481,7 @@ pub fn eval_if_expr(
     add_pp_error(pp, loc, "empty #if expression")
     return false
   }
-  let parser = { tokens, index: 0, pp, suppress_errors: false }
+  let parser = { tokens, index: 0, pp, suppress_errors: false, }
   let value = parse_conditional(parser, loc)
   !pp_is_zero(value)
 }
@@ -2485,7 +2489,7 @@ pub fn eval_if_expr(
 ///|
 pub(all) struct IfParser {
   tokens : Array[@tokens.Token]
-  mut index : Int
+  mut index : Int32
   pp : Preprocessor
   mut suppress_errors : Bool
 }
@@ -2498,7 +2502,7 @@ pub(all) struct PpValue {
 
 ///|
 pub fn pp_bool_value(cond : Bool) -> PpValue {
-  { value: if cond { 1 } else { 0 }, is_unsigned: false }
+  { value: if cond { 1 } else { 0 }, is_unsigned: false, }
 }
 
 ///|
@@ -2512,7 +2516,7 @@ pub fn pp_unsigned_result(a : PpValue, b : PpValue) -> Bool {
 }
 
 ///|
-pub fn pp_shift_count(v : PpValue) -> Int {
+pub fn pp_shift_count(v : PpValue) -> Int32 {
   (v.value & (63 : UInt64)).to_int()
 }
 
@@ -2551,7 +2555,7 @@ pub fn parse_line_int_literal(
   pp : Preprocessor,
   lexeme : String,
   loc : @source.SrcLoc,
-) -> Int {
+) -> Int32 {
   let end = @util.int_literal_end(lexeme)
   if end <= 0 {
     add_pp_error(pp, loc, "invalid integer in #line")
@@ -2581,7 +2585,7 @@ pub fn parse_pp_int_literal(
   let end = @util.int_literal_end(lexeme)
   if end <= 0 {
     add_pp_error(pp, loc, "invalid integer in #if")
-    return { value: 0, is_unsigned: false }
+    return { value: 0, is_unsigned: false, }
   }
   let suffix = if end < lexeme.length() {
     @util.slice_string(lexeme, end, lexeme.length())
@@ -2591,7 +2595,7 @@ pub fn parse_pp_int_literal(
   for ch in suffix {
     if ch != 'u' && ch != 'U' && ch != 'l' && ch != 'L' {
       add_pp_error(pp, loc, "invalid integer in #if")
-      return { value: 0, is_unsigned: false }
+      return { value: 0, is_unsigned: false, }
     }
   }
   let trimmed = @util.slice_string(lexeme, 0, end)
@@ -2600,7 +2604,7 @@ pub fn parse_pp_int_literal(
   let (_, unsigned_suffix) = @util.parse_int_suffix(suffix)
   let max_signed : UInt64 = 0x7fffffffffffffff
   let is_unsigned = unsigned_suffix || value > max_signed
-  { value, is_unsigned }
+  { value, is_unsigned, }
 }
 
 ///|
@@ -2608,14 +2612,14 @@ pub fn parse_pp_char_literal(pp : Preprocessor, tok : @tokens.Token) -> PpValue 
   let lexeme = pp_token_lexeme(pp, tok)
   if lexeme.length() < 3 {
     add_pp_error(pp, tok.loc, "invalid character literal in #if")
-    return { value: 0, is_unsigned: false }
+    return { value: 0, is_unsigned: false, }
   }
   let len = lexeme.length()
   let mut value = 0
   let mut i = 1
   if i + 1 >= len {
     add_pp_error(pp, tok.loc, "invalid character literal in #if")
-    return { value: 0, is_unsigned: false }
+    return { value: 0, is_unsigned: false, }
   }
   let code = lexeme[i]
   if code == 92 {
@@ -2629,16 +2633,16 @@ pub fn parse_pp_char_literal(pp : Preprocessor, tok : @tokens.Token) -> PpValue 
   if i + 1 < len {
     add_pp_error(pp, tok.loc, "multi-character literal in #if")
   }
-  { value: value.to_uint64(), is_unsigned: false }
+  { value: value.to_uint64(), is_unsigned: false, }
 }
 
 ///|
 pub fn decode_pp_escape_value(
   pp : Preprocessor,
   text : String,
-  start : Int,
+  start : Int32,
   loc : @source.SrcLoc,
-) -> (Int, Int) {
+) -> (Int32, Int32) {
   if start >= text.length() {
     add_pp_error(pp, loc, "unterminated escape sequence in #if")
     return (0, start)
@@ -2670,9 +2674,9 @@ pub fn decode_pp_escape_value(
 pub fn parse_pp_hex_escape(
   pp : Preprocessor,
   text : String,
-  start : Int,
+  start : Int32,
   loc : @source.SrcLoc,
-) -> (Int, Int) {
+) -> (Int32, Int32) {
   let mut i = start
   let mut value = 0
   let mut saw = false
@@ -2695,7 +2699,7 @@ pub fn parse_pp_hex_escape(
 }
 
 ///|
-pub fn parse_pp_octal_escape(text : String, start : Int) -> (Int, Int) {
+pub fn parse_pp_octal_escape(text : String, start : Int32) -> (Int32, Int32) {
   let mut i = start
   let mut value = 0
   let mut count = 0
@@ -2717,7 +2721,7 @@ pub fn pp_is_oct_digit(code : UInt16) -> Bool {
 }
 
 ///|
-pub fn pp_hex_digit_value(code : UInt16) -> Int? {
+pub fn pp_hex_digit_value(code : UInt16) -> Int32? {
   if code >= 48 && code <= 57 {
     return Some(code.to_int() - 48)
   }
@@ -2766,12 +2770,12 @@ pub fn parse_primary(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   match advance_if(p) {
     None => {
       add_pp_error(p.pp, loc, "unexpected end of #if expression")
-      { value: 0, is_unsigned: false }
+      { value: 0, is_unsigned: false, }
     }
     Some(tok) => {
       if tok.kind == RParen {
         p.index = p.index - 1
-        return { value: 0, is_unsigned: false }
+        return { value: 0, is_unsigned: false, }
       }
       if tok.kind == IntLit {
         return parse_pp_int_literal(p.pp, pp_token_lexeme(p.pp, tok), tok.loc)
@@ -2788,9 +2792,9 @@ pub fn parse_primary(p : IfParser, loc : @source.SrcLoc) -> PpValue {
           None => {
             if match_kind(p, LParen) {
               skip_paren_expr(p, tok.loc)
-              return { value: 0, is_unsigned: false }
+              return { value: 0, is_unsigned: false, }
             }
-            return { value: 0, is_unsigned: false }
+            return { value: 0, is_unsigned: false, }
           }
         }
       }
@@ -2813,7 +2817,7 @@ pub fn parse_primary(p : IfParser, loc : @source.SrcLoc) -> PpValue {
         return value
       }
       add_pp_error(p.pp, loc, "unexpected token in #if expression")
-      { value: 0, is_unsigned: false }
+      { value: 0, is_unsigned: false, }
     }
   }
 }
@@ -2838,7 +2842,7 @@ pub fn parse_defined(p : IfParser, loc : @source.SrcLoc) -> PpValue {
       }
       _ => {
         add_pp_error(p.pp, loc, "expected identifier after defined(")
-        return { value: 0, is_unsigned: false }
+        return { value: 0, is_unsigned: false, }
       }
     }
   }
@@ -2847,7 +2851,7 @@ pub fn parse_defined(p : IfParser, loc : @source.SrcLoc) -> PpValue {
       pp_bool_value(has_macro(p.pp, macro_id_from_token(p.pp, tok)))
     _ => {
       add_pp_error(p.pp, loc, "expected identifier after defined")
-      { value: 0, is_unsigned: false }
+      { value: 0, is_unsigned: false, }
     }
   }
 }
@@ -2878,7 +2882,7 @@ pub fn parse_unary(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   }
   if match_kind(p, Tilde) {
     let v = parse_unary(p, loc)
-    return { value: v.value.lnot(), is_unsigned: v.is_unsigned }
+    return { value: v.value.lnot(), is_unsigned: v.is_unsigned, }
   }
   if match_kind(p, Plus) {
     return parse_unary(p, loc)
@@ -2886,7 +2890,7 @@ pub fn parse_unary(p : IfParser, loc : @source.SrcLoc) -> PpValue {
   if match_kind(p, Minus) {
     let v = parse_unary(p, loc)
     let value : UInt64 = 0 - v.value
-    return { value, is_unsigned: v.is_unsigned }
+    return { value, is_unsigned: v.is_unsigned, }
   }
   parse_primary(p, loc)
 }
@@ -2901,7 +2905,7 @@ pub fn parse_mul(p : IfParser, loc : @source.SrcLoc) -> PpValue {
     if match_kind(p, Star) {
       let rhs = parse_unary(p, loc)
       let unsigned = pp_unsigned_result(value, rhs)
-      value = { value: value.value * rhs.value, is_unsigned: unsigned }
+      value = { value: value.value * rhs.value, is_unsigned: unsigned, }
       continue
     }
     if match_kind(p, Slash) {
@@ -2910,7 +2914,7 @@ pub fn parse_mul(p : IfParser, loc : @source.SrcLoc) -> PpValue {
         if !p.suppress_errors {
           add_pp_error(p.pp, loc, "division by zero in #if")
         }
-        value = { value: 0, is_unsigned: false }
+        value = { value: 0, is_unsigned: false, }
       } else {
         let unsigned = pp_unsigned_result(value, rhs)
         let new_value = if unsigned {
@@ -2920,7 +2924,7 @@ pub fn parse_mul(p : IfParser, loc : @source.SrcLoc) -> PpValue {
           let rhs_val = rhs.value.reinterpret_as_int64()
           (lhs / rhs_val).reinterpret_as_uint64()
         }
-        value = { value: new_value, is_unsigned: unsigned }
+        value = { value: new_value, is_unsigned: unsigned, }
       }
       continue
     }
@@ -2930,7 +2934,7 @@ pub fn parse_mul(p : IfParser, loc : @source.SrcLoc) -> PpValue {
         if !p.suppress_errors {
           add_pp_error(p.pp, loc, "modulo by zero in #if")
         }
-        value = { value: 0, is_unsigned: false }
+        value = { value: 0, is_unsigned: false, }
       } else {
         let unsigned = pp_unsigned_result(value, rhs)
         let new_value = if unsigned {
@@ -2940,7 +2944,7 @@ pub fn parse_mul(p : IfParser, loc : @source.SrcLoc) -> PpValue {
           let rhs_val = rhs.value.reinterpret_as_int64()
           (lhs % rhs_val).reinterpret_as_uint64()
         }
-        value = { value: new_value, is_unsigned: unsigned }
+        value = { value: new_value, is_unsigned: unsigned, }
       }
       continue
     }
@@ -2959,13 +2963,13 @@ pub fn parse_add(p : IfParser, loc : @source.SrcLoc) -> PpValue {
     if match_kind(p, Plus) {
       let rhs = parse_mul(p, loc)
       let unsigned = pp_unsigned_result(value, rhs)
-      value = { value: value.value + rhs.value, is_unsigned: unsigned }
+      value = { value: value.value + rhs.value, is_unsigned: unsigned, }
       continue
     }
     if match_kind(p, Minus) {
       let rhs = parse_mul(p, loc)
       let unsigned = pp_unsigned_result(value, rhs)
-      value = { value: value.value - rhs.value, is_unsigned: unsigned }
+      value = { value: value.value - rhs.value, is_unsigned: unsigned, }
       continue
     }
     break
@@ -2983,7 +2987,7 @@ pub fn parse_shift(p : IfParser, loc : @source.SrcLoc) -> PpValue {
     if match_kind(p, ShiftLeft) {
       let rhs = parse_add(p, loc)
       let shift = pp_shift_count(rhs)
-      value = { value: value.value << shift, is_unsigned: value.is_unsigned }
+      value = { value: value.value << shift, is_unsigned: value.is_unsigned, }
       continue
     }
     if match_kind(p, ShiftRight) {
@@ -2995,7 +2999,7 @@ pub fn parse_shift(p : IfParser, loc : @source.SrcLoc) -> PpValue {
         let lhs = value.value.reinterpret_as_int64()
         (lhs >> shift).reinterpret_as_uint64()
       }
-      value = { value: new_value, is_unsigned: value.is_unsigned }
+      value = { value: new_value, is_unsigned: value.is_unsigned, }
       continue
     }
     break
@@ -3086,7 +3090,7 @@ pub fn parse_bit_and(p : IfParser, loc : @source.SrcLoc) -> PpValue {
     }
     let rhs = parse_eq(p, loc)
     let unsigned = pp_unsigned_result(value, rhs)
-    value = { value: value.value & rhs.value, is_unsigned: unsigned }
+    value = { value: value.value & rhs.value, is_unsigned: unsigned, }
   }
   value
 }
@@ -3100,7 +3104,7 @@ pub fn parse_bit_xor(p : IfParser, loc : @source.SrcLoc) -> PpValue {
     }
     let rhs = parse_bit_and(p, loc)
     let unsigned = pp_unsigned_result(value, rhs)
-    value = { value: value.value ^ rhs.value, is_unsigned: unsigned }
+    value = { value: value.value ^ rhs.value, is_unsigned: unsigned, }
   }
   value
 }
@@ -3114,7 +3118,7 @@ pub fn parse_bit_or(p : IfParser, loc : @source.SrcLoc) -> PpValue {
     }
     let rhs = parse_bit_xor(p, loc)
     let unsigned = pp_unsigned_result(value, rhs)
-    value = { value: value.value | rhs.value, is_unsigned: unsigned }
+    value = { value: value.value | rhs.value, is_unsigned: unsigned, }
   }
   value
 }
@@ -3531,7 +3535,10 @@ pub fn next_pp_token(pp : Preprocessor) -> @tokens.Token {
 }
 
 ///|
-pub fn dump_tokens(pp : Preprocessor, max_count : Int) -> Array[@tokens.Token] {
+pub fn dump_tokens(
+  pp : Preprocessor,
+  max_count : Int32,
+) -> Array[@tokens.Token] {
   let out : Array[@tokens.Token] = []
   while out.length() < max_count {
     let tok = next_pp_token(pp)

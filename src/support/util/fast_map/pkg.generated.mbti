@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn[K, V] fast_map_new(capacity? : Int) -> @hashmap.HashMap[K, V]
+pub fn[K, V] fast_map_new(capacity? : Int32) -> @hashmap.HashMap[K, V]
 
 // Errors
 
@@ -16,4 +16,3 @@ pub fn[K, V] fast_map_new(capacity? : Int) -> @hashmap.HashMap[K, V]
 pub using @hashmap {type HashMap as FastMap}
 
 // Traits
-

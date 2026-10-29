@@ -8,100 +8,100 @@ pub type Reloc = @object.Reloc
 type FastMap[K, V] = @util.FastMap[K, V]
 
 ///|
-fn[K, V] fast_map_new(capacity? : Int) -> FastMap[K, V] {
+fn[K, V] fast_map_new(capacity? : Int32) -> FastMap[K, V] {
   @util.fast_map_new(capacity?)
 }
 
 ///|
-pub const MH_MAGIC_64 : UInt = 0xfeedfacf
+pub const MH_MAGIC_64 : UInt32 = 0xfeedfacf
 
 ///|
-const MH_OBJECT : UInt = 0x1
+const MH_OBJECT : UInt32 = 0x1
 
 ///|
-const CPU_ARCH_ABI64 : Int = 0x01000000
+const CPU_ARCH_ABI64 : Int32 = 0x01000000
 
 ///|
-const CPU_TYPE_ARM : Int = 12
+const CPU_TYPE_ARM : Int32 = 12
 
 ///|
-const CPU_TYPE_ARM64 : Int = CPU_TYPE_ARM | CPU_ARCH_ABI64
+const CPU_TYPE_ARM64 : Int32 = CPU_TYPE_ARM | CPU_ARCH_ABI64
 
 ///|
-const CPU_SUBTYPE_ARM64_ALL : Int = 0
+const CPU_SUBTYPE_ARM64_ALL : Int32 = 0
 
 ///|
-const LC_SEGMENT_64 : UInt = 0x19
+const LC_SEGMENT_64 : UInt32 = 0x19
 
 ///|
-const LC_SYMTAB : UInt = 0x2
+const LC_SYMTAB : UInt32 = 0x2
 
 ///|
-const LC_SOURCE_VERSION : UInt = 0x2a
+const LC_SOURCE_VERSION : UInt32 = 0x2a
 
 ///|
-const LC_BUILD_VERSION : UInt = 0x32
+const LC_BUILD_VERSION : UInt32 = 0x32
 
 ///|
-const PLATFORM_MACOS : UInt = 1
+const PLATFORM_MACOS : UInt32 = 1
 
 ///|
-const VM_PROT_READ : Int = 1
+const VM_PROT_READ : Int32 = 1
 
 ///|
-const VM_PROT_WRITE : Int = 2
+const VM_PROT_WRITE : Int32 = 2
 
 ///|
-const VM_PROT_EXECUTE : Int = 4
+const VM_PROT_EXECUTE : Int32 = 4
 
 ///|
-const S_REGULAR : UInt = 0x0
+const S_REGULAR : UInt32 = 0x0
 
 ///|
-const S_ZEROFILL : UInt = 0x1
+const S_ZEROFILL : UInt32 = 0x1
 
 ///|
-const S_CSTRING_LITERALS : UInt = 0x2
+const S_CSTRING_LITERALS : UInt32 = 0x2
 
 ///|
-const S_ATTR_PURE_INSTRUCTIONS : UInt = 0x80000000
+const S_ATTR_PURE_INSTRUCTIONS : UInt32 = 0x80000000
 
 ///|
-const S_ATTR_SOME_INSTRUCTIONS : UInt = 0x00000400
+const S_ATTR_SOME_INSTRUCTIONS : UInt32 = 0x00000400
 
 ///|
-const N_EXT : Int = 0x01
+const N_EXT : Int32 = 0x01
 
 ///|
-const N_SECT : Int = 0x0e
+const N_SECT : Int32 = 0x0e
 
 ///|
-const N_UNDF : Int = 0x0
+const N_UNDF : Int32 = 0x0
 
 ///|
-const ARM64_RELOC_UNSIGNED : Int = 0
+const ARM64_RELOC_UNSIGNED : Int32 = 0
 
 ///|
-const ARM64_RELOC_BRANCH26 : Int = 2
+const ARM64_RELOC_BRANCH26 : Int32 = 2
 
 ///|
-const ARM64_RELOC_PAGE21 : Int = 3
+const ARM64_RELOC_PAGE21 : Int32 = 3
 
 ///|
-const ARM64_RELOC_PAGEOFF12 : Int = 4
+const ARM64_RELOC_PAGEOFF12 : Int32 = 4
 
 ///|
-const ARM64_RELOC_GOT_LOAD_PAGE21 : Int = 5
+const ARM64_RELOC_GOT_LOAD_PAGE21 : Int32 = 5
 
 ///|
-const ARM64_RELOC_GOT_LOAD_PAGEOFF12 : Int = 6
+const ARM64_RELOC_GOT_LOAD_PAGEOFF12 : Int32 = 6
 
 ///|
 pub(all) struct ObjSymbol {
-  id : Int
+  id : Int32
   name : String
   section : String?
-  value : Int
+  value : Int32
   is_external : Bool
 }
 
@@ -109,8 +109,8 @@ pub(all) struct ObjSymbol {
 priv struct MachoSectionInfo {
   sectname : String
   segname : String
-  flags : UInt
-  align : Int
+  flags : UInt32
+  align : Int32
   is_zerofill : Bool
 }
 
@@ -118,16 +118,16 @@ priv struct MachoSectionInfo {
 priv struct MachoSectionLayout {
   section : Section
   info : MachoSectionInfo
-  align_log2 : Int
-  offset : Int
-  size : Int
-  reloff : Int
-  nreloc : Int
-  index : Int
+  align_log2 : Int32
+  offset : Int32
+  size : Int32
+  reloff : Int32
+  nreloc : Int32
+  index : Int32
 }
 
 ///|
-fn align_up(value : Int, align : Int) -> Int {
+fn align_up(value : Int32, align : Int32) -> Int32 {
   if align <= 0 {
     value
   } else {
@@ -137,7 +137,7 @@ fn align_up(value : Int, align : Int) -> Int {
 }
 
 ///|
-fn align_log2(value : Int) -> Int {
+fn align_log2(value : Int32) -> Int32 {
   let mut v = if value <= 0 { 1 } else { value }
   let mut log = 0
   while v > 1 {
@@ -148,7 +148,7 @@ fn align_log2(value : Int) -> Int {
 }
 
 ///|
-fn write_padded_name(buf : @buffer.Buffer, name : String, len : Int) -> Unit {
+fn write_padded_name(buf : @buffer.Buffer, name : String, len : Int32) -> Unit {
   let name_len = name.length()
   let mut ascii = name_len <= len
   if ascii {
@@ -238,11 +238,11 @@ fn macho_section_info(name : String) -> MachoSectionInfo {
 }
 
 ///|
-fn build_strtab(symbols : Array[ObjSymbol]) -> (Bytes, Array[Int]) {
+fn build_strtab(symbols : Array[ObjSymbol]) -> (Bytes, Array[Int32]) {
   let buf = @buffer.new(size_hint=8 + symbols.length() * 8)
   buf.write_string_utf8(" "[:])
   buf.write_byte(0)
-  let offsets : Array[Int] = Array::new(capacity=symbols.length())
+  let offsets : Array[Int32] = Array::new(capacity=symbols.length())
   for sym in symbols {
     let off = buf.length()
     offsets.push(off)
@@ -261,8 +261,8 @@ fn build_strtab(symbols : Array[ObjSymbol]) -> (Bytes, Array[Int]) {
 ///|
 fn build_symtab(
   symbols : Array[ObjSymbol],
-  offsets : Array[Int],
-  section_index : FastMap[String, Int],
+  offsets : Array[Int32],
+  section_index : FastMap[String, Int32],
 ) -> Bytes {
   let buf = @buffer.new(size_hint=symbols.length() * 16)
   let mut idx = 0
@@ -288,7 +288,7 @@ fn build_symtab(
     buf.write_uint_le(strx.reinterpret_as_uint())
     buf.write_byte(n_type.to_byte())
     buf.write_byte(n_sect.to_byte())
-    buf.write_uint16_le((0 : Int).to_uint16())
+    buf.write_uint16_le((0 : Int32).to_uint16())
     buf.write_uint64_le(n_value.to_uint64())
     idx = idx + 1
   }
@@ -296,7 +296,7 @@ fn build_symtab(
 }
 
 ///|
-fn macho_reloc_type(kind : Int) -> (Int, Bool) {
+fn macho_reloc_type(kind : Int32) -> (Int32, Bool) {
   match kind {
     @arm64.R_AARCH64_ADR_GOT_PAGE => (ARM64_RELOC_GOT_LOAD_PAGE21, true)
     @arm64.R_AARCH64_LD64_GOT_LO12_NC => (ARM64_RELOC_GOT_LOAD_PAGEOFF12, false)
@@ -312,7 +312,7 @@ fn macho_reloc_type(kind : Int) -> (Int, Bool) {
 }
 
 ///|
-fn reloc_length(kind : Int) -> Int {
+fn reloc_length(kind : Int32) -> Int32 {
   match kind {
     @arm64.R_AARCH64_POINTER => 3
     _ => 2
@@ -321,12 +321,12 @@ fn reloc_length(kind : Int) -> Int {
 
 ///|
 fn pack_reloc_info(
-  symbolnum : Int,
+  symbolnum : Int32,
   pcrel : Bool,
-  length : Int,
+  length : Int32,
   is_extern : Bool,
-  r_type : Int,
-) -> UInt {
+  r_type : Int32,
+) -> UInt32 {
   let mut info = symbolnum & 0x00ffffff
   if pcrel {
     info = info | (1 << 24)
@@ -347,7 +347,7 @@ pub fn encode_macho_object(
   let (strtab, str_offsets) = build_strtab(symbols)
   let header_size = 32
   let segment_order : Array[String] = []
-  let segment_sections : FastMap[String, Array[Int]] = fast_map_new()
+  let segment_sections : FastMap[String, Array[Int32]] = fast_map_new()
   let layouts : Array[MachoSectionLayout] = []
   for sec in sections {
     let info = macho_section_info(sec.name)
@@ -443,7 +443,7 @@ pub fn encode_macho_object(
   let symoff = align_up(reloc_offset, 4)
   let section_index_map = collect_section_indices(layouts)
   let symtab = build_symtab(symbols, str_offsets, section_index_map)
-  let id_to_index : FastMap[Int, Int] = fast_map_new()
+  let id_to_index : FastMap[Int32, Int32] = fast_map_new()
   let mut i = 0
   while i < symbols.length() {
     id_to_index.set(symbols[i].id, i)
@@ -572,8 +572,8 @@ pub fn encode_macho_object(
 ///|
 fn collect_section_indices(
   layouts : Array[MachoSectionLayout],
-) -> FastMap[String, Int] {
-  let map : FastMap[String, Int] = fast_map_new()
+) -> FastMap[String, Int32] {
+  let map : FastMap[String, Int32] = fast_map_new()
   for layout in layouts {
     map.set(layout.section.name, layout.index)
   }
@@ -582,9 +582,9 @@ fn collect_section_indices(
 
 ///|
 fn segment_file_range(
-  indices : Array[Int],
+  indices : Array[Int32],
   layouts : Array[MachoSectionLayout],
-) -> (Int, Int) {
+) -> (Int32, Int32) {
   let mut start = -1
   let mut end = 0
   for idx in indices {
@@ -608,7 +608,7 @@ fn segment_file_range(
 }
 
 ///|
-fn segment_prot(name : String) -> (Int, Int) {
+fn segment_prot(name : String) -> (Int32, Int32) {
   if name == "__TEXT" {
     let prot = VM_PROT_READ | VM_PROT_EXECUTE
     (prot, prot)

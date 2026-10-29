@@ -80,7 +80,7 @@ let default_int_type = @sem.default_int_type
 fn ensure_struct_fields(
   ctx : SemContext,
   tag : String,
-  tag_id : Int,
+  tag_id : Int32,
   fields : Array[@ast.RecordItem]?,
   is_union~ : Bool,
   loc : @source.SrcLoc,
@@ -98,7 +98,7 @@ let eval_builtin_offsetof = @sem.eval_builtin_offsetof
 let find_field_index_cached = @sem.find_field_index_cached
 
 ///|
-fn[T] get_opt_by_id(arr : Array[T?], id : Int) -> T? {
+fn[T] get_opt_by_id(arr : Array[T?], id : Int32) -> T? {
   @sem.get_opt_by_id(arr, id)
 }
 
@@ -133,7 +133,7 @@ let pop_scope = @sem.pop_scope
 let push_scope = @sem.push_scope
 
 ///|
-fn[T] set_opt_by_id(arr : Array[T?], id : Int, value : T) -> Unit {
+fn[T] set_opt_by_id(arr : Array[T?], id : Int32, value : T) -> Unit {
   @sem.set_opt_by_id(arr, id, value)
 }
 
@@ -144,7 +144,7 @@ let record_local_binding = @sem.record_local_binding
 fn resolve_struct_fields(
   ctx : SemContext,
   tag : String,
-  tag_id : Int,
+  tag_id : Int32,
   fields : Array[@ast.RecordItem]?,
   is_union~ : Bool,
 ) -> Array[@ast.Field]? {
@@ -161,7 +161,7 @@ let strip_top_qualifiers = @sem.strip_top_qualifiers
 let strip_top_qualifiers_keep_attrs = @sem.strip_top_qualifiers_keep_attrs
 
 ///|
-fn[T] has_opt_by_id(arr : Array[T?], id : Int) -> Bool {
+fn[T] has_opt_by_id(arr : Array[T?], id : Int32) -> Bool {
   @sem.has_opt_by_id(arr, id)
 }
 

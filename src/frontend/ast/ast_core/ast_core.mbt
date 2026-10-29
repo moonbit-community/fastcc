@@ -19,13 +19,13 @@ pub(all) struct TypeQual {
   is_volatile : Bool
   is_restrict : Bool
   is_atomic : Bool
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) enum AlignSpec {
   Default
   Expr(expr~ : Expr)
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) enum Visibility {
@@ -33,7 +33,7 @@ pub(all) enum Visibility {
   Hidden
   Internal
   Protected
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) enum CallConv {
@@ -42,8 +42,8 @@ pub(all) enum CallConv {
   Stdcall
   Fastcall
   Thiscall
-  Regparm(count~ : Int)
-} derive(Show, Eq, ToJson)
+  Regparm(count~ : Int32)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub fn normalize_call_conv(call_conv : CallConv?) -> CallConv {
@@ -86,7 +86,7 @@ pub(all) struct Attributes {
   dll_export : Bool
   nodecorate : Bool
   nodebug : Bool
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub fn empty_attrs() -> Attributes {
@@ -115,25 +115,25 @@ pub fn empty_attrs() -> Attributes {
 
 ///|
 pub fn attrs_with(
-  aligned? : AlignSpec? = None,
-  packed? : Bool = false,
-  ms_struct? : Bool = false,
-  transparent_union? : Bool = false,
-  weak? : Bool = false,
-  visibility? : Visibility? = None,
-  section? : String? = None,
-  alias_name? : String? = None,
-  asm_label? : String? = None,
-  cleanup? : String? = None,
-  noreturn? : Bool = false,
-  constructor_attr? : Bool = false,
-  destructor? : Bool = false,
-  always_inline? : Bool = false,
-  call_conv? : CallConv? = None,
-  dll_import? : Bool = false,
-  dll_export? : Bool = false,
-  nodecorate? : Bool = false,
-  nodebug? : Bool = false,
+  aligned~ : AlignSpec? = None,
+  packed~ : Bool = false,
+  ms_struct~ : Bool = false,
+  transparent_union~ : Bool = false,
+  weak~ : Bool = false,
+  visibility~ : Visibility? = None,
+  section~ : String? = None,
+  alias_name~ : String? = None,
+  asm_label~ : String? = None,
+  cleanup~ : String? = None,
+  noreturn~ : Bool = false,
+  constructor_attr~ : Bool = false,
+  destructor~ : Bool = false,
+  always_inline~ : Bool = false,
+  call_conv~ : CallConv? = None,
+  dll_import~ : Bool = false,
+  dll_export~ : Bool = false,
+  nodecorate~ : Bool = false,
+  nodebug~ : Bool = false,
 ) -> Attributes {
   {
     aligned,
@@ -321,14 +321,14 @@ pub(all) enum CIntKind {
   Int
   Long
   LongLong
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) enum CFloatKind {
   Float
   Double
   LongDouble
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) enum StorageClass {
@@ -337,7 +337,7 @@ pub(all) enum StorageClass {
   Static
   Auto
   Register
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) enum CType {
@@ -346,20 +346,20 @@ pub(all) enum CType {
   Int(kind~ : CIntKind, unsigned~ : Bool)
   Float(kind~ : CFloatKind)
   Pointer(CType)
-  Array(elem~ : CType, size~ : Int?, size_expr~ : Expr?)
+  Array(elem~ : CType, size~ : Int32?, size_expr~ : Expr?)
   Struct(
     name~ : String,
-    id~ : Int,
+    id~ : Int32,
     fields~ : Array[RecordItem]?,
     attrs~ : Attributes
   )
   Union(
     name~ : String,
-    id~ : Int,
+    id~ : Int32,
     fields~ : Array[RecordItem]?,
     attrs~ : Attributes
   )
-  Enum(name~ : String, id~ : Int, items~ : Array[EnumItem]?)
+  Enum(name~ : String, id~ : Int32, items~ : Array[EnumItem]?)
   TypeofExpr(expr~ : Expr)
   Function(
     return_type~ : CType,
@@ -370,51 +370,51 @@ pub(all) enum CType {
   )
   Attributed(attrs~ : Attributes, base~ : CType)
   Qualified(qual~ : TypeQual, base~ : CType)
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) struct Field {
   name : String
-  id : Int
+  id : Int32
   ty : CType
   bit_width : Expr?
   attrs : Attributes
   loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) struct StaticAssert {
   expr : Expr
   message : String?
   loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) enum RecordItem {
   Field(Field)
   StaticAssert(StaticAssert)
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) struct EnumItem {
   name : String
-  id : Int
+  id : Int32
   value : Expr?
   loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) struct Param {
   name : String
-  id : Int
+  id : Int32
   ty : CType
   loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) struct FuncDef {
   name : String
-  id : Int
+  id : Int32
   return_type : CType
   params : Array[Param]
   varargs : Bool
@@ -424,12 +424,12 @@ pub(all) struct FuncDef {
   attrs : Attributes
   body : Stmt
   loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) struct FuncDecl {
   name : String
-  id : Int
+  id : Int32
   return_type : CType
   params : Array[Param]
   varargs : Bool
@@ -438,18 +438,18 @@ pub(all) struct FuncDecl {
   is_inline : Bool
   attrs : Attributes
   loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) struct VarDecl {
   name : String
-  id : Int
+  id : Int32
   ty : CType
   init : Initializer?
   storage : StorageClass
   attrs : Attributes
   loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) enum Decl {
@@ -465,13 +465,13 @@ pub(all) enum Decl {
   TagDef(ty~ : CType, loc~ : @source.SrcLoc)
   StaticAssert(StaticAssert)
   Asm(AsmStmt)
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) struct TranslationUnit {
   decls : Array[Decl]
-  expr_id_max : Int
-} derive(Show, Eq, ToJson)
+  expr_id_max : Int32
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) enum UnaryOp {
@@ -485,7 +485,7 @@ pub(all) enum UnaryOp {
   PreDec
   PostInc
   PostDec
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) enum BinaryOp {
@@ -519,97 +519,107 @@ pub(all) enum BinaryOp {
   BitOr
   LogAnd
   LogOr
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) enum Expr {
-  IntLit(value~ : String, node_id~ : Int, loc~ : @source.SrcLoc)
-  FloatLit(value~ : String, node_id~ : Int, loc~ : @source.SrcLoc)
-  CharLit(value~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
+  IntLit(value~ : String, node_id~ : Int32, loc~ : @source.SrcLoc)
+  FloatLit(value~ : String, node_id~ : Int32, loc~ : @source.SrcLoc)
+  CharLit(value~ : Int32, node_id~ : Int32, loc~ : @source.SrcLoc)
   StringLit(
     value~ : String,
-    length~ : Int,
-    node_id~ : Int,
+    length~ : Int32,
+    node_id~ : Int32,
     loc~ : @source.SrcLoc
   )
-  Ident(name~ : String, id~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
-  LabelAddr(name~ : String, id~ : Int, node_id~ : Int, loc~ : @source.SrcLoc)
+  Ident(name~ : String, id~ : Int32, node_id~ : Int32, loc~ : @source.SrcLoc)
+  LabelAddr(
+    name~ : String,
+    id~ : Int32,
+    node_id~ : Int32,
+    loc~ : @source.SrcLoc
+  )
   BuiltinTypesCompatibleP(
     a~ : CType,
     b~ : CType,
-    node_id~ : Int,
+    node_id~ : Int32,
     loc~ : @source.SrcLoc
   )
   BuiltinOffsetof(
     ty~ : CType,
     path~ : Array[String],
-    node_id~ : Int,
+    node_id~ : Int32,
     loc~ : @source.SrcLoc
   )
-  BuiltinVaArg(list~ : Expr, ty~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
-  Unary(op~ : UnaryOp, expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
-  Cast(ty~ : CType, expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
+  BuiltinVaArg(
+    list~ : Expr,
+    ty~ : CType,
+    node_id~ : Int32,
+    loc~ : @source.SrcLoc
+  )
+  Unary(op~ : UnaryOp, expr~ : Expr, node_id~ : Int32, loc~ : @source.SrcLoc)
+  Cast(ty~ : CType, expr~ : Expr, node_id~ : Int32, loc~ : @source.SrcLoc)
   CompoundLiteral(
     ty~ : CType,
     init~ : Initializer,
-    node_id~ : Int,
+    node_id~ : Int32,
     loc~ : @source.SrcLoc
   )
-  StmtExpr(stmts~ : Array[Stmt], node_id~ : Int, loc~ : @source.SrcLoc)
-  SizeofExpr(expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
-  SizeofType(ty~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
-  AlignofExpr(expr~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
-  AlignofType(ty~ : CType, node_id~ : Int, loc~ : @source.SrcLoc)
+  StmtExpr(stmts~ : Array[Stmt], node_id~ : Int32, loc~ : @source.SrcLoc)
+  SizeofExpr(expr~ : Expr, node_id~ : Int32, loc~ : @source.SrcLoc)
+  SizeofType(ty~ : CType, node_id~ : Int32, loc~ : @source.SrcLoc)
+  AlignofExpr(expr~ : Expr, node_id~ : Int32, loc~ : @source.SrcLoc)
+  AlignofType(ty~ : CType, node_id~ : Int32, loc~ : @source.SrcLoc)
   Binary(
     op~ : BinaryOp,
     left~ : Expr,
     right~ : Expr,
-    node_id~ : Int,
+    node_id~ : Int32,
     loc~ : @source.SrcLoc
   )
   Conditional(
     cond~ : Expr,
     then_expr~ : Expr,
     else_expr~ : Expr,
-    node_id~ : Int,
+    node_id~ : Int32,
     loc~ : @source.SrcLoc
   )
   Call(
     callee~ : Expr,
     args~ : Array[Expr],
-    node_id~ : Int,
+    node_id~ : Int32,
     loc~ : @source.SrcLoc
   )
-  Index(base~ : Expr, index~ : Expr, node_id~ : Int, loc~ : @source.SrcLoc)
+  Index(base~ : Expr, index~ : Expr, node_id~ : Int32, loc~ : @source.SrcLoc)
   Member(
     base~ : Expr,
     name~ : String,
-    id~ : Int,
+    id~ : Int32,
     is_arrow~ : Bool,
-    node_id~ : Int,
+    node_id~ : Int32,
     loc~ : @source.SrcLoc
   )
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) enum InitDesignator {
   Index(expr~ : Expr, loc~ : @source.SrcLoc)
   IndexRange(start~ : Expr, end~ : Expr, loc~ : @source.SrcLoc)
-  Field(name~ : String, id~ : Int, loc~ : @source.SrcLoc)
-} derive(Show, Eq, ToJson)
+  Field(name~ : String, id~ : Int32, loc~ : @source.SrcLoc)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) struct InitItem {
   designators : Array[InitDesignator]
   value : Initializer
   loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) enum Initializer {
   Expr(expr~ : Expr, loc~ : @source.SrcLoc)
   List(items~ : Array[InitItem], loc~ : @source.SrcLoc)
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) struct AsmOperand {
@@ -617,7 +627,7 @@ pub(all) struct AsmOperand {
   constraint : String
   expr : Expr
   loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) struct AsmStmt {
@@ -629,7 +639,7 @@ pub(all) struct AsmStmt {
   is_volatile : Bool
   is_goto : Bool
   loc : @source.SrcLoc
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 pub(all) enum Stmt {
@@ -664,7 +674,7 @@ pub(all) enum Stmt {
   TagDef(ty~ : CType, loc~ : @source.SrcLoc)
   StaticAssert(StaticAssert)
   Empty(loc~ : @source.SrcLoc)
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, ToJson, Debug)
 
 ///|
 let default_int_type_value : CType = Int(kind=Int, unsigned=false)

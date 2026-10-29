@@ -1,7 +1,7 @@
 ///|
 fn new_sem_ctx() -> (@sem.SemContext, @diag.DiagBag) {
   let bag = @diag.new_diag_bag()
-  let unit : @ast.TranslationUnit = { decls: [], expr_id_max: 0 }
+  let unit : @ast.TranslationUnit = { decls: [], expr_id_max: 0, }
   let ctx = @sem.check_translation_unit(unit, bag)
   (ctx, bag)
 }

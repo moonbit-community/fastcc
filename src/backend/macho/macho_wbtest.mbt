@@ -14,7 +14,7 @@
 // License along with this library.  If not, see <https://www.gnu.org/licenses/>.
 
 ///|
-fn read_u32_le(bytes : Bytes, offset : Int) -> UInt {
+fn read_u32_le(bytes : Bytes, offset : Int32) -> UInt32 {
   let b0 = bytes[offset].to_uint()
   let b1 = bytes[offset + 1].to_uint() << 8
   let b2 = bytes[offset + 2].to_uint() << 16
@@ -23,7 +23,7 @@ fn read_u32_le(bytes : Bytes, offset : Int) -> UInt {
 }
 
 ///|
-fn decode_reloc_info(info : UInt) -> (Int, Bool, Int, Bool, Int) {
+fn decode_reloc_info(info : UInt32) -> (Int32, Bool, Int32, Bool, Int32) {
   let symbolnum = (info & 0x00ff_ffff).reinterpret_as_int()
   let pcrel = ((info >> 24) & 1) == 1
   let length = ((info >> 25) & 3).reinterpret_as_int()
@@ -35,7 +35,7 @@ fn decode_reloc_info(info : UInt) -> (Int, Bool, Int, Bool, Int) {
 ///|
 test "macho header has segment and symtab" {
   let sec = @object.new_section(".text")
-  sec.data.push((0x14000000 : UInt))
+  sec.data.push((0x14000000 : UInt32))
   let symbols = [
     {
       id: 1,
@@ -48,16 +48,16 @@ test "macho header has segment and symtab" {
   let bytes = encode_macho_object([sec], symbols)
   assert_eq(read_u32_le(bytes, 0), MH_MAGIC_64)
   assert_eq(read_u32_le(bytes, 12), MH_OBJECT)
-  assert_eq(read_u32_le(bytes, 16), (4 : UInt))
+  assert_eq(read_u32_le(bytes, 16), (4 : UInt32))
   assert_eq(read_u32_le(bytes, 32), LC_SEGMENT_64)
-  assert_eq(read_u32_le(bytes, 96), (1 : UInt))
+  assert_eq(read_u32_le(bytes, 96), (1 : UInt32))
 }
 
 ///|
 test "macho section records reloc count" {
   let sec = @object.new_section(".text")
-  let reloc_sym = @object.Sym::{ id: 2 }
-  sec.data.push((0x14000000 : UInt))
+  let reloc_sym = @object.Sym::{ id: 2, }
+  sec.data.push((0x14000000 : UInt32))
   sec.relocs.push({
     offset: 0,
     kind: @arm64.R_AARCH64_ADR_GOT_PAGE,
@@ -65,10 +65,10 @@ test "macho section records reloc count" {
     addend: 0,
   })
   let symbols = [
-    { id: 2, name: "_ext", section: None, value: 0, is_external: true },
+    { id: 2, name: "_ext", section: None, value: 0, is_external: true, },
   ]
   let bytes = encode_macho_object([sec], symbols)
-  assert_eq(read_u32_le(bytes, 164), (1 : UInt))
+  assert_eq(read_u32_le(bytes, 164), (1 : UInt32))
 }
 
 ///|
@@ -98,9 +98,9 @@ test "macho maps arm64 relocation kinds" {
 ///|
 test "macho encodes GOT relocations as extern symbol relocs" {
   let sec = @object.new_section(".text")
-  let reloc_sym = @object.Sym::{ id: 2 }
-  sec.data.push((0x90000000 : UInt))
-  sec.data.push((0xf9400000 : UInt))
+  let reloc_sym = @object.Sym::{ id: 2, }
+  sec.data.push((0x90000000 : UInt32))
+  sec.data.push((0xf9400000 : UInt32))
   sec.relocs.push({
     offset: 0,
     kind: @arm64.R_AARCH64_ADR_GOT_PAGE,
@@ -114,7 +114,7 @@ test "macho encodes GOT relocations as extern symbol relocs" {
     addend: 0,
   })
   let symbols = [
-    { id: 2, name: "_ext", section: None, value: 0, is_external: true },
+    { id: 2, name: "_ext", section: None, value: 0, is_external: true, },
   ]
   let bytes = encode_macho_object([sec], symbols)
   let section_base = 32 + 72
