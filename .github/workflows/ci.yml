@@ -10,6 +10,9 @@ jobs:
   test:
     runs-on: macos-26
     timeout-minutes: 60
+    # A package using fastcc and the shared runtime must use the same allocator.
+    env:
+      MOONBIT_ALLOCATOR: system
     steps:
       - uses: actions/checkout@v4
       - name: Setup MoonBit
