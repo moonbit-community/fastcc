@@ -144,7 +144,7 @@ pub fn new_arm64_emitter_with_capacity(
       []
     },
     code_len: 0,
-    relocs: Array::new(capacity=reloc_cap),
+    relocs: Array(capacity=reloc_cap),
   }
 }
 

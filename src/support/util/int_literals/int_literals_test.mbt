@@ -48,5 +48,5 @@ test "int literal helpers" {
   assert_eq(@int_literals.parse_int_suffix("lllu"), (2, true))
   assert_eq(@int_literals.parse_int_suffix_range("123uLL", 3), (2, true))
   assert_eq(@int_literals.parse_int_suffix_range("123LLLL", 3), (2, false))
-  inspect(@int_literals.parse_int_suffix("llu"), content="(2, true)")
+  debug_inspect(@int_literals.parse_int_suffix("llu"), content="(2, true)")
 }

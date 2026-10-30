@@ -15,6 +15,6 @@
 
 ///|
 test "cmd exposes run_main" {
-  let entry : () -> Unit = @fastcc.run_main
+  let entry : () -> Unit = run_main
   ignore(entry)
 }

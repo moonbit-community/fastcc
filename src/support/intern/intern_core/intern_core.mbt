@@ -62,10 +62,10 @@ pub fn new_string_interner_with_capacity(capacity? : Int32) -> StringInterner {
       let cap = if value > 0 { value } else { 0 }
       {
         buckets: Array::make(tok_hash_size, 0),
-        next_by_id: Array::new(capacity=cap),
-        strings: Array::new(capacity=cap),
-        views: Array::new(capacity=cap),
-        hashes: Array::new(capacity=cap),
+        next_by_id: Array(capacity=cap),
+        strings: Array(capacity=cap),
+        views: Array(capacity=cap),
+        hashes: Array(capacity=cap),
       }
     }
   }
@@ -98,10 +98,10 @@ pub fn StringInterner::intern_view_with_id_hash(
     }
     id = self.next_by_id[id - 1]
   }
-  let owned = view.to_string()
+  let owned = view.to_owned()
   let id = self.strings.length() + 1
   self.strings.push(owned)
-  self.views.push(self.strings[id - 1].view())
+  self.views.push(self.strings[id - 1][:])
   self.hashes.push(hash)
   self.next_by_id.push(self.buckets[bucket])
   self.buckets[bucket] = id

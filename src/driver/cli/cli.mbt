@@ -32,7 +32,7 @@ pub struct CliConfig {
 pub(all) enum CliMacroAction {
   Define(name~ : String, value~ : String?)
   Undef(name~ : String)
-} derive(Show, Debug, Eq, ToJson)
+} derive(Debug, Eq, ToJson)
 
 ///|
 pub(all) enum CliParse {
@@ -397,4 +397,33 @@ pub fn parse_cli_args(host~ : &@host.Host, args : Array[String]) -> CliParse {
     bench,
     macro_actions,
   })
+}
+
+///|
+
+///|
+pub impl Show for CliMacroAction with fn output(self, logger) {
+  match self {
+    Define(name=arg0, value=arg1) => {
+      logger.write_string("Define(")
+      logger.write_string("name=")
+      logger.write_object(arg0)
+      logger.write_string(", value=")
+      match arg1 {
+        None => logger.write_string("None")
+        Some(value12) => {
+          logger.write_string("Some(")
+          logger.write_object(value12)
+          logger.write_string(")")
+        }
+      }
+      logger.write_string(")")
+    }
+    Undef(name=arg0) => {
+      logger.write_string("Undef(")
+      logger.write_string("name=")
+      logger.write_object(arg0)
+      logger.write_string(")")
+    }
+  }
 }

@@ -1,0 +1,13 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "embed_headers"
+
+// Values
+
+// Errors
+
+// Types and methods
+type CliOptions
+
+// Type aliases
+
+// Traits
