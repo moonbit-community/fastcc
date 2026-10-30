@@ -15,7 +15,7 @@
 
 ///|
 fn cstring_bytes(s : String) -> Bytes {
-  let buf = @buffer.new(size_hint=s.length() + 1)
+  let buf = Buffer(size_hint=s.length() + 1)
   buf.write_bytes(@encoding/utf8.encode(s))
   buf.write_byte((0 : Byte))
   buf.to_bytes()

@@ -62,7 +62,8 @@ pub(all) struct Token {
   loc : @source_core.SrcLoc
   line_start : Bool
   hidden : Int32
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub impl Show for Token
 
 pub(all) enum TokenKind {
   Eof
@@ -162,7 +163,8 @@ pub(all) enum TokenKind {
   CaretAssign
   Hash
   HashHash
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub impl Show for TokenKind
 
 // Type aliases
 

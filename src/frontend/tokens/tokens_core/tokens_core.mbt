@@ -112,7 +112,7 @@ pub(all) enum TokenKind {
   CaretAssign
   Hash
   HashHash
-} derive(Show, Eq, ToJson, Debug)
+} derive(Eq, ToJson, Debug)
 
 ///|
 pub(all) struct Token {
@@ -121,7 +121,7 @@ pub(all) struct Token {
   loc : @source.SrcLoc
   line_start : Bool
   hidden : Int32
-} derive(Show, Eq, ToJson, Debug)
+} derive(Eq, ToJson, Debug)
 
 ///|
 pub let empty_hidden : Int32 = 0
@@ -525,4 +525,127 @@ pub fn token_text_len_with(
     return interner.get(id).length()
   }
   token_kind_text_len(tok.kind)
+}
+
+///|
+
+///|
+
+///|
+pub impl Show for TokenKind with fn output(self, logger) {
+  match self {
+    Eof => logger.write_string("Eof")
+    Invalid => logger.write_string("Invalid")
+    Ident => logger.write_string("Ident")
+    IntLit => logger.write_string("IntLit")
+    FloatLit => logger.write_string("FloatLit")
+    CharLit => logger.write_string("CharLit")
+    StrLit => logger.write_string("StrLit")
+    KwIf => logger.write_string("KwIf")
+    KwElse => logger.write_string("KwElse")
+    KwWhile => logger.write_string("KwWhile")
+    KwFor => logger.write_string("KwFor")
+    KwDo => logger.write_string("KwDo")
+    KwContinue => logger.write_string("KwContinue")
+    KwBreak => logger.write_string("KwBreak")
+    KwReturn => logger.write_string("KwReturn")
+    KwGoto => logger.write_string("KwGoto")
+    KwSwitch => logger.write_string("KwSwitch")
+    KwCase => logger.write_string("KwCase")
+    KwDefault => logger.write_string("KwDefault")
+    KwExtern => logger.write_string("KwExtern")
+    KwStatic => logger.write_string("KwStatic")
+    KwUnsigned => logger.write_string("KwUnsigned")
+    KwSigned => logger.write_string("KwSigned")
+    KwConst => logger.write_string("KwConst")
+    KwVolatile => logger.write_string("KwVolatile")
+    KwRegister => logger.write_string("KwRegister")
+    KwAuto => logger.write_string("KwAuto")
+    KwInline => logger.write_string("KwInline")
+    KwNoreturn => logger.write_string("KwNoreturn")
+    KwRestrict => logger.write_string("KwRestrict")
+    KwAtomic => logger.write_string("KwAtomic")
+    KwVoid => logger.write_string("KwVoid")
+    KwChar => logger.write_string("KwChar")
+    KwInt => logger.write_string("KwInt")
+    KwFloat => logger.write_string("KwFloat")
+    KwDouble => logger.write_string("KwDouble")
+    KwBool => logger.write_string("KwBool")
+    KwShort => logger.write_string("KwShort")
+    KwLong => logger.write_string("KwLong")
+    KwStruct => logger.write_string("KwStruct")
+    KwUnion => logger.write_string("KwUnion")
+    KwTypedef => logger.write_string("KwTypedef")
+    KwEnum => logger.write_string("KwEnum")
+    KwSizeof => logger.write_string("KwSizeof")
+    KwAlignof => logger.write_string("KwAlignof")
+    KwTypeof => logger.write_string("KwTypeof")
+    KwAttribute => logger.write_string("KwAttribute")
+    KwStaticAssert => logger.write_string("KwStaticAssert")
+    KwAsm => logger.write_string("KwAsm")
+    LParen => logger.write_string("LParen")
+    RParen => logger.write_string("RParen")
+    LBrace => logger.write_string("LBrace")
+    RBrace => logger.write_string("RBrace")
+    LBracket => logger.write_string("LBracket")
+    RBracket => logger.write_string("RBracket")
+    Comma => logger.write_string("Comma")
+    Semicolon => logger.write_string("Semicolon")
+    Colon => logger.write_string("Colon")
+    Question => logger.write_string("Question")
+    Dot => logger.write_string("Dot")
+    Ellipsis => logger.write_string("Ellipsis")
+    Arrow => logger.write_string("Arrow")
+    Assign => logger.write_string("Assign")
+    Plus => logger.write_string("Plus")
+    Minus => logger.write_string("Minus")
+    Star => logger.write_string("Star")
+    Slash => logger.write_string("Slash")
+    Percent => logger.write_string("Percent")
+    PlusPlus => logger.write_string("PlusPlus")
+    MinusMinus => logger.write_string("MinusMinus")
+    PlusAssign => logger.write_string("PlusAssign")
+    MinusAssign => logger.write_string("MinusAssign")
+    StarAssign => logger.write_string("StarAssign")
+    SlashAssign => logger.write_string("SlashAssign")
+    PercentAssign => logger.write_string("PercentAssign")
+    Eq => logger.write_string("Eq")
+    Ne => logger.write_string("Ne")
+    Lt => logger.write_string("Lt")
+    Le => logger.write_string("Le")
+    Gt => logger.write_string("Gt")
+    Ge => logger.write_string("Ge")
+    ShiftLeft => logger.write_string("ShiftLeft")
+    ShiftRight => logger.write_string("ShiftRight")
+    ShiftLeftAssign => logger.write_string("ShiftLeftAssign")
+    ShiftRightAssign => logger.write_string("ShiftRightAssign")
+    Amp => logger.write_string("Amp")
+    Pipe => logger.write_string("Pipe")
+    Caret => logger.write_string("Caret")
+    Tilde => logger.write_string("Tilde")
+    Bang => logger.write_string("Bang")
+    AmpAmp => logger.write_string("AmpAmp")
+    PipePipe => logger.write_string("PipePipe")
+    AmpAssign => logger.write_string("AmpAssign")
+    PipeAssign => logger.write_string("PipeAssign")
+    CaretAssign => logger.write_string("CaretAssign")
+    Hash => logger.write_string("Hash")
+    HashHash => logger.write_string("HashHash")
+  }
+}
+
+///|
+pub impl Show for Token with fn output(self, logger) {
+  logger.write_string("{")
+  logger.write_string("kind: ")
+  logger.write_object(self.kind)
+  logger.write_string(", value: ")
+  logger.write_object(self.value)
+  logger.write_string(", loc: ")
+  logger.write_object(self.loc)
+  logger.write_string(", line_start: ")
+  logger.write_object(self.line_start)
+  logger.write_string(", hidden: ")
+  logger.write_object(self.hidden)
+  logger.write_string("}")
 }

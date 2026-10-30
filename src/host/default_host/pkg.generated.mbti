@@ -12,6 +12,11 @@ pub fn new() -> DefaultHost
 
 // Types and methods
 type DefaultHost
+pub fn DefaultHost::include_dir(Self) -> String
+pub fn DefaultHost::path_exists(Self, String) -> Bool
+pub fn DefaultHost::read_file_to_string(Self, String) -> String raise
+pub fn DefaultHost::remove_file(Self, String) -> Unit raise
+pub fn DefaultHost::write_bytes_to_file(Self, String, Bytes) -> Unit raise
 pub impl @host.Host for DefaultHost
 
 // Type aliases

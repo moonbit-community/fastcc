@@ -30,7 +30,14 @@ pub(all) struct SrcLoc {
   line : Int32
   col : Int32
   offset : Int32
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn SrcLoc::equal(Self, Self) -> Bool
+pub fn SrcLoc::not_equal(Self, Self) -> Bool
+pub fn SrcLoc::output(Self, &Logger) -> Unit
+pub fn SrcLoc::to_json(Self) -> Json
+pub fn SrcLoc::to_repr(Self) -> @debug.Repr
+pub fn SrcLoc::to_string(Self) -> String
+pub impl Show for SrcLoc
 
 // Type aliases
 

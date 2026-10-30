@@ -61,14 +61,28 @@ pub fn with_volatile(TypeQual) -> TypeQual
 pub(all) enum AlignSpec {
   Default
   Expr(expr~ : Expr)
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn AlignSpec::equal(Self, Self) -> Bool
+pub fn AlignSpec::not_equal(Self, Self) -> Bool
+pub fn AlignSpec::output(Self, &Logger) -> Unit
+pub fn AlignSpec::to_json(Self) -> Json
+pub fn AlignSpec::to_repr(Self) -> @debug.Repr
+pub fn AlignSpec::to_string(Self) -> String
+pub impl Show for AlignSpec
 
 pub(all) struct AsmOperand {
   name : String?
   constraint : String
   expr : Expr
   loc : @source_core.SrcLoc
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn AsmOperand::equal(Self, Self) -> Bool
+pub fn AsmOperand::not_equal(Self, Self) -> Bool
+pub fn AsmOperand::output(Self, &Logger) -> Unit
+pub fn AsmOperand::to_json(Self) -> Json
+pub fn AsmOperand::to_repr(Self) -> @debug.Repr
+pub fn AsmOperand::to_string(Self) -> String
+pub impl Show for AsmOperand
 
 pub(all) struct AsmStmt {
   template : String
@@ -79,7 +93,14 @@ pub(all) struct AsmStmt {
   is_volatile : Bool
   is_goto : Bool
   loc : @source_core.SrcLoc
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn AsmStmt::equal(Self, Self) -> Bool
+pub fn AsmStmt::not_equal(Self, Self) -> Bool
+pub fn AsmStmt::output(Self, &Logger) -> Unit
+pub fn AsmStmt::to_json(Self) -> Json
+pub fn AsmStmt::to_repr(Self) -> @debug.Repr
+pub fn AsmStmt::to_string(Self) -> String
+pub impl Show for AsmStmt
 
 pub(all) struct Attributes {
   aligned : AlignSpec?
@@ -101,7 +122,14 @@ pub(all) struct Attributes {
   dll_export : Bool
   nodecorate : Bool
   nodebug : Bool
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn Attributes::equal(Self, Self) -> Bool
+pub fn Attributes::not_equal(Self, Self) -> Bool
+pub fn Attributes::output(Self, &Logger) -> Unit
+pub fn Attributes::to_json(Self) -> Json
+pub fn Attributes::to_repr(Self) -> @debug.Repr
+pub fn Attributes::to_string(Self) -> String
+pub impl Show for Attributes
 
 pub(all) enum BinaryOp {
   Assign
@@ -134,13 +162,27 @@ pub(all) enum BinaryOp {
   BitOr
   LogAnd
   LogOr
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn BinaryOp::equal(Self, Self) -> Bool
+pub fn BinaryOp::not_equal(Self, Self) -> Bool
+pub fn BinaryOp::output(Self, &Logger) -> Unit
+pub fn BinaryOp::to_json(Self) -> Json
+pub fn BinaryOp::to_repr(Self) -> @debug.Repr
+pub fn BinaryOp::to_string(Self) -> String
+pub impl Show for BinaryOp
 
 pub(all) enum CFloatKind {
   Float
   Double
   LongDouble
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn CFloatKind::equal(Self, Self) -> Bool
+pub fn CFloatKind::not_equal(Self, Self) -> Bool
+pub fn CFloatKind::output(Self, &Logger) -> Unit
+pub fn CFloatKind::to_json(Self) -> Json
+pub fn CFloatKind::to_repr(Self) -> @debug.Repr
+pub fn CFloatKind::to_string(Self) -> String
+pub impl Show for CFloatKind
 
 pub(all) enum CIntKind {
   Char
@@ -148,7 +190,14 @@ pub(all) enum CIntKind {
   Int
   Long
   LongLong
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn CIntKind::equal(Self, Self) -> Bool
+pub fn CIntKind::not_equal(Self, Self) -> Bool
+pub fn CIntKind::output(Self, &Logger) -> Unit
+pub fn CIntKind::to_json(Self) -> Json
+pub fn CIntKind::to_repr(Self) -> @debug.Repr
+pub fn CIntKind::to_string(Self) -> String
+pub impl Show for CIntKind
 
 pub(all) enum CType {
   Void
@@ -164,7 +213,14 @@ pub(all) enum CType {
   Function(return_type~ : CType, params~ : Array[CType], varargs~ : Bool, is_old_style~ : Bool, call_conv~ : CallConv)
   Attributed(attrs~ : Attributes, base~ : CType)
   Qualified(qual~ : TypeQual, base~ : CType)
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn CType::equal(Self, Self) -> Bool
+pub fn CType::not_equal(Self, Self) -> Bool
+pub fn CType::output(Self, &Logger) -> Unit
+pub fn CType::to_json(Self) -> Json
+pub fn CType::to_repr(Self) -> @debug.Repr
+pub fn CType::to_string(Self) -> String
+pub impl Show for CType
 
 pub(all) enum CallConv {
   Default
@@ -173,7 +229,14 @@ pub(all) enum CallConv {
   Fastcall
   Thiscall
   Regparm(count~ : Int32)
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn CallConv::equal(Self, Self) -> Bool
+pub fn CallConv::not_equal(Self, Self) -> Bool
+pub fn CallConv::output(Self, &Logger) -> Unit
+pub fn CallConv::to_json(Self) -> Json
+pub fn CallConv::to_repr(Self) -> @debug.Repr
+pub fn CallConv::to_string(Self) -> String
+pub impl Show for CallConv
 
 pub(all) enum Decl {
   FuncDef(FuncDef)
@@ -183,14 +246,28 @@ pub(all) enum Decl {
   TagDef(ty~ : CType, loc~ : @source_core.SrcLoc)
   StaticAssert(StaticAssert)
   Asm(AsmStmt)
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn Decl::equal(Self, Self) -> Bool
+pub fn Decl::not_equal(Self, Self) -> Bool
+pub fn Decl::output(Self, &Logger) -> Unit
+pub fn Decl::to_json(Self) -> Json
+pub fn Decl::to_repr(Self) -> @debug.Repr
+pub fn Decl::to_string(Self) -> String
+pub impl Show for Decl
 
 pub(all) struct EnumItem {
   name : String
   id : Int32
   value : Expr?
   loc : @source_core.SrcLoc
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn EnumItem::equal(Self, Self) -> Bool
+pub fn EnumItem::not_equal(Self, Self) -> Bool
+pub fn EnumItem::output(Self, &Logger) -> Unit
+pub fn EnumItem::to_json(Self) -> Json
+pub fn EnumItem::to_repr(Self) -> @debug.Repr
+pub fn EnumItem::to_string(Self) -> String
+pub impl Show for EnumItem
 
 pub(all) enum Expr {
   IntLit(value~ : String, node_id~ : Int32, loc~ : @source_core.SrcLoc)
@@ -215,7 +292,14 @@ pub(all) enum Expr {
   Call(callee~ : Expr, args~ : Array[Expr], node_id~ : Int32, loc~ : @source_core.SrcLoc)
   Index(base~ : Expr, index~ : Expr, node_id~ : Int32, loc~ : @source_core.SrcLoc)
   Member(base~ : Expr, name~ : String, id~ : Int32, is_arrow~ : Bool, node_id~ : Int32, loc~ : @source_core.SrcLoc)
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn Expr::equal(Self, Self) -> Bool
+pub fn Expr::not_equal(Self, Self) -> Bool
+pub fn Expr::output(Self, &Logger) -> Unit
+pub fn Expr::to_json(Self) -> Json
+pub fn Expr::to_repr(Self) -> @debug.Repr
+pub fn Expr::to_string(Self) -> String
+pub impl Show for Expr
 
 pub(all) struct Field {
   name : String
@@ -224,7 +308,14 @@ pub(all) struct Field {
   bit_width : Expr?
   attrs : Attributes
   loc : @source_core.SrcLoc
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn Field::equal(Self, Self) -> Bool
+pub fn Field::not_equal(Self, Self) -> Bool
+pub fn Field::output(Self, &Logger) -> Unit
+pub fn Field::to_json(Self) -> Json
+pub fn Field::to_repr(Self) -> @debug.Repr
+pub fn Field::to_string(Self) -> String
+pub impl Show for Field
 
 pub(all) struct FuncDecl {
   name : String
@@ -237,7 +328,14 @@ pub(all) struct FuncDecl {
   is_inline : Bool
   attrs : Attributes
   loc : @source_core.SrcLoc
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn FuncDecl::equal(Self, Self) -> Bool
+pub fn FuncDecl::not_equal(Self, Self) -> Bool
+pub fn FuncDecl::output(Self, &Logger) -> Unit
+pub fn FuncDecl::to_json(Self) -> Json
+pub fn FuncDecl::to_repr(Self) -> @debug.Repr
+pub fn FuncDecl::to_string(Self) -> String
+pub impl Show for FuncDecl
 
 pub(all) struct FuncDef {
   name : String
@@ -251,42 +349,91 @@ pub(all) struct FuncDef {
   attrs : Attributes
   body : Stmt
   loc : @source_core.SrcLoc
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn FuncDef::equal(Self, Self) -> Bool
+pub fn FuncDef::not_equal(Self, Self) -> Bool
+pub fn FuncDef::output(Self, &Logger) -> Unit
+pub fn FuncDef::to_json(Self) -> Json
+pub fn FuncDef::to_repr(Self) -> @debug.Repr
+pub fn FuncDef::to_string(Self) -> String
+pub impl Show for FuncDef
 
 pub(all) enum InitDesignator {
   Index(expr~ : Expr, loc~ : @source_core.SrcLoc)
   IndexRange(start~ : Expr, end~ : Expr, loc~ : @source_core.SrcLoc)
   Field(name~ : String, id~ : Int32, loc~ : @source_core.SrcLoc)
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn InitDesignator::equal(Self, Self) -> Bool
+pub fn InitDesignator::not_equal(Self, Self) -> Bool
+pub fn InitDesignator::output(Self, &Logger) -> Unit
+pub fn InitDesignator::to_json(Self) -> Json
+pub fn InitDesignator::to_repr(Self) -> @debug.Repr
+pub fn InitDesignator::to_string(Self) -> String
+pub impl Show for InitDesignator
 
 pub(all) struct InitItem {
   designators : Array[InitDesignator]
   value : Initializer
   loc : @source_core.SrcLoc
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn InitItem::equal(Self, Self) -> Bool
+pub fn InitItem::not_equal(Self, Self) -> Bool
+pub fn InitItem::output(Self, &Logger) -> Unit
+pub fn InitItem::to_json(Self) -> Json
+pub fn InitItem::to_repr(Self) -> @debug.Repr
+pub fn InitItem::to_string(Self) -> String
+pub impl Show for InitItem
 
 pub(all) enum Initializer {
   Expr(expr~ : Expr, loc~ : @source_core.SrcLoc)
   List(items~ : Array[InitItem], loc~ : @source_core.SrcLoc)
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn Initializer::equal(Self, Self) -> Bool
+pub fn Initializer::not_equal(Self, Self) -> Bool
+pub fn Initializer::output(Self, &Logger) -> Unit
+pub fn Initializer::to_json(Self) -> Json
+pub fn Initializer::to_repr(Self) -> @debug.Repr
+pub fn Initializer::to_string(Self) -> String
+pub impl Show for Initializer
 
 pub(all) struct Param {
   name : String
   id : Int32
   ty : CType
   loc : @source_core.SrcLoc
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn Param::equal(Self, Self) -> Bool
+pub fn Param::not_equal(Self, Self) -> Bool
+pub fn Param::output(Self, &Logger) -> Unit
+pub fn Param::to_json(Self) -> Json
+pub fn Param::to_repr(Self) -> @debug.Repr
+pub fn Param::to_string(Self) -> String
+pub impl Show for Param
 
 pub(all) enum RecordItem {
   Field(Field)
   StaticAssert(StaticAssert)
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn RecordItem::equal(Self, Self) -> Bool
+pub fn RecordItem::not_equal(Self, Self) -> Bool
+pub fn RecordItem::output(Self, &Logger) -> Unit
+pub fn RecordItem::to_json(Self) -> Json
+pub fn RecordItem::to_repr(Self) -> @debug.Repr
+pub fn RecordItem::to_string(Self) -> String
+pub impl Show for RecordItem
 
 pub(all) struct StaticAssert {
   expr : Expr
   message : String?
   loc : @source_core.SrcLoc
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn StaticAssert::equal(Self, Self) -> Bool
+pub fn StaticAssert::not_equal(Self, Self) -> Bool
+pub fn StaticAssert::output(Self, &Logger) -> Unit
+pub fn StaticAssert::to_json(Self) -> Json
+pub fn StaticAssert::to_repr(Self) -> @debug.Repr
+pub fn StaticAssert::to_string(Self) -> String
+pub impl Show for StaticAssert
 
 pub(all) enum Stmt {
   Compound(stmts~ : Array[Stmt], loc~ : @source_core.SrcLoc)
@@ -309,7 +456,14 @@ pub(all) enum Stmt {
   TagDef(ty~ : CType, loc~ : @source_core.SrcLoc)
   StaticAssert(StaticAssert)
   Empty(loc~ : @source_core.SrcLoc)
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn Stmt::equal(Self, Self) -> Bool
+pub fn Stmt::not_equal(Self, Self) -> Bool
+pub fn Stmt::output(Self, &Logger) -> Unit
+pub fn Stmt::to_json(Self) -> Json
+pub fn Stmt::to_repr(Self) -> @debug.Repr
+pub fn Stmt::to_string(Self) -> String
+pub impl Show for Stmt
 
 pub(all) enum StorageClass {
   Default
@@ -317,19 +471,40 @@ pub(all) enum StorageClass {
   Static
   Auto
   Register
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn StorageClass::equal(Self, Self) -> Bool
+pub fn StorageClass::not_equal(Self, Self) -> Bool
+pub fn StorageClass::output(Self, &Logger) -> Unit
+pub fn StorageClass::to_json(Self) -> Json
+pub fn StorageClass::to_repr(Self) -> @debug.Repr
+pub fn StorageClass::to_string(Self) -> String
+pub impl Show for StorageClass
 
 pub(all) struct TranslationUnit {
   decls : Array[Decl]
   expr_id_max : Int32
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn TranslationUnit::equal(Self, Self) -> Bool
+pub fn TranslationUnit::not_equal(Self, Self) -> Bool
+pub fn TranslationUnit::output(Self, &Logger) -> Unit
+pub fn TranslationUnit::to_json(Self) -> Json
+pub fn TranslationUnit::to_repr(Self) -> @debug.Repr
+pub fn TranslationUnit::to_string(Self) -> String
+pub impl Show for TranslationUnit
 
 pub(all) struct TypeQual {
   is_const : Bool
   is_volatile : Bool
   is_restrict : Bool
   is_atomic : Bool
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn TypeQual::equal(Self, Self) -> Bool
+pub fn TypeQual::not_equal(Self, Self) -> Bool
+pub fn TypeQual::output(Self, &Logger) -> Unit
+pub fn TypeQual::to_json(Self) -> Json
+pub fn TypeQual::to_repr(Self) -> @debug.Repr
+pub fn TypeQual::to_string(Self) -> String
+pub impl Show for TypeQual
 
 pub(all) enum UnaryOp {
   Plus
@@ -342,7 +517,14 @@ pub(all) enum UnaryOp {
   PreDec
   PostInc
   PostDec
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn UnaryOp::equal(Self, Self) -> Bool
+pub fn UnaryOp::not_equal(Self, Self) -> Bool
+pub fn UnaryOp::output(Self, &Logger) -> Unit
+pub fn UnaryOp::to_json(Self) -> Json
+pub fn UnaryOp::to_repr(Self) -> @debug.Repr
+pub fn UnaryOp::to_string(Self) -> String
+pub impl Show for UnaryOp
 
 pub(all) struct VarDecl {
   name : String
@@ -352,14 +534,28 @@ pub(all) struct VarDecl {
   storage : StorageClass
   attrs : Attributes
   loc : @source_core.SrcLoc
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn VarDecl::equal(Self, Self) -> Bool
+pub fn VarDecl::not_equal(Self, Self) -> Bool
+pub fn VarDecl::output(Self, &Logger) -> Unit
+pub fn VarDecl::to_json(Self) -> Json
+pub fn VarDecl::to_repr(Self) -> @debug.Repr
+pub fn VarDecl::to_string(Self) -> String
+pub impl Show for VarDecl
 
 pub(all) enum Visibility {
   Default
   Hidden
   Internal
   Protected
-} derive(Eq, Show, ToJson, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn Visibility::equal(Self, Self) -> Bool
+pub fn Visibility::not_equal(Self, Self) -> Bool
+pub fn Visibility::output(Self, &Logger) -> Unit
+pub fn Visibility::to_json(Self) -> Json
+pub fn Visibility::to_repr(Self) -> @debug.Repr
+pub fn Visibility::to_string(Self) -> String
+pub impl Show for Visibility
 
 // Type aliases
 

@@ -19,7 +19,7 @@ pub(all) struct SrcLoc {
   line : Int32
   col : Int32
   offset : Int32
-} derive(Show, Eq, ToJson, Debug)
+} derive(Eq, ToJson, Debug)
 
 ///|
 pub(all) struct SourceFile {
@@ -49,4 +49,32 @@ pub fn add_file(map : SourceMap, path : String, text : String) -> SourceFile {
 ///|
 pub fn dummy_loc(file_id : Int32) -> SrcLoc {
   { file_id, line: 1, col: 1, offset: 0, }
+}
+
+///|
+pub extend SrcLoc with Debug::{to_repr}
+
+///|
+pub extend SrcLoc with Eq::{not_equal, equal}
+
+///|
+pub extend SrcLoc with Show::{to_string, output}
+
+///|
+pub extend SrcLoc with ToJson::{to_json}
+
+///|
+
+///|
+pub impl Show for SrcLoc with fn output(self, logger) {
+  logger.write_string("{")
+  logger.write_string("file_id: ")
+  logger.write_object(self.file_id)
+  logger.write_string(", line: ")
+  logger.write_object(self.line)
+  logger.write_string(", col: ")
+  logger.write_object(self.col)
+  logger.write_string(", offset: ")
+  logger.write_object(self.offset)
+  logger.write_string("}")
 }

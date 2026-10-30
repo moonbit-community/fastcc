@@ -20,7 +20,7 @@ pub struct FuncSig {
   varargs : Bool
   is_old_style : Bool
   call_conv : @ast.CallConv
-} derive(Show, Eq, ToJson)
+} derive(Eq, ToJson)
 
 ///|
 pub struct RecordDef {
@@ -49,7 +49,7 @@ pub(all) enum BuiltinCallKind {
   VaEnd
   FrameAddress
   ReturnAddress
-} derive(Show, Eq, ToJson)
+} derive(Eq, ToJson)
 
 ///|
 pub struct SemContext {
@@ -8264,5 +8264,48 @@ fn type_to_string(ty : @ast.CType) -> String {
       }
       "fn(\{rendered}) -> \{type_to_string(return_type)}"
     }
+  }
+}
+
+///|
+
+///|
+
+///|
+pub impl Show for FuncSig with fn output(self, logger) {
+  logger.write_string("{")
+  logger.write_string("return_type: ")
+  logger.write_object(self.return_type)
+  logger.write_string(", params: ")
+  logger.write_string("[")
+  for i6, value6 in self.params {
+    if i6 > 0 {
+      logger.write_string(", ")
+    }
+    logger.write_object(value6)
+  }
+  logger.write_string("]")
+  logger.write_string(", varargs: ")
+  logger.write_object(self.varargs)
+  logger.write_string(", is_old_style: ")
+  logger.write_object(self.is_old_style)
+  logger.write_string(", call_conv: ")
+  logger.write_object(self.call_conv)
+  logger.write_string("}")
+}
+
+///|
+pub impl Show for BuiltinCallKind with fn output(self, logger) {
+  match self {
+    ChooseExpr => logger.write_string("ChooseExpr")
+    Expect => logger.write_string("Expect")
+    ConstantP => logger.write_string("ConstantP")
+    Unreachable => logger.write_string("Unreachable")
+    SyncSynchronize => logger.write_string("SyncSynchronize")
+    VaStart => logger.write_string("VaStart")
+    VaCopy => logger.write_string("VaCopy")
+    VaEnd => logger.write_string("VaEnd")
+    FrameAddress => logger.write_string("FrameAddress")
+    ReturnAddress => logger.write_string("ReturnAddress")
   }
 }

@@ -15,5 +15,5 @@
 
 ///|
 fn main {
-  @cmd_fastcc.run_main()
+  @driver.run_main(@default_host.new())
 }

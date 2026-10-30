@@ -1,5 +1,6 @@
 import {
-  "hackwaly/fastcc/cmd/fastcc" @cmd_fastcc,
+  "hackwaly/fastcc/driver",
+  "hackwaly/fastcc/host/default_host",
 }
 
 pkgtype(kind: "executable")

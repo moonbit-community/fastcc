@@ -125,7 +125,8 @@ pub(all) enum BuiltinCallKind {
   VaEnd
   FrameAddress
   ReturnAddress
-} derive(Eq, Show, ToJson)
+} derive(Eq, ToJson)
+pub impl Show for BuiltinCallKind
 
 type EnumConstOverride
 
@@ -143,7 +144,8 @@ pub struct FuncSig {
   varargs : Bool
   is_old_style : Bool
   call_conv : @ast_core.CallConv
-} derive(Eq, Show, ToJson)
+} derive(Eq, ToJson)
+pub impl Show for FuncSig
 
 type LocalOverride
 

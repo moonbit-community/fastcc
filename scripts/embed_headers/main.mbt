@@ -37,13 +37,18 @@ async fn main {
   let args = @env.args()
 
   let cli_options = CliOptions::{ dir_path: "", output_file: "", }
-  loop args[:] {
-    ["-o", output_file, ..] => cli_options.output_file = output_file
-    [dir, .. args] => {
-      cli_options.dir_path = dir
-      continue args
+  for rest = args[:] {
+    match rest {
+      ["-o", output_file, ..] => {
+        cli_options.output_file = output_file
+        break
+      }
+      [dir, .. args] => {
+        cli_options.dir_path = dir
+        continue args
+      }
+      [] => panic()
     }
-    [] => panic()
   }
 
   if cli_options.dir_path == "" || cli_options.output_file == "" {
@@ -53,9 +58,9 @@ async fn main {
 
   let dir_path = @path.Path(cli_options.dir_path).resolve()
   let output_path = @path.Path(cli_options.output_file).resolve()
-  let files = {}
+  let files : Map[String, String] = Map([])
   collect_files_recursive(root_dir=dir_path, dir_path, files)
-  let buffer = StringBuilder::new()
+  let buffer = StringBuilder()
   buffer.write_string("{\n")
   for path, content in files {
     buffer.write_string("  ")
